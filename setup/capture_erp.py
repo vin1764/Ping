@@ -14,18 +14,22 @@ WHAT IT NEVER DOES
     OTP). During login it records only the NAMES of the form fields.
   - It never saves cookies, and it blanks out session tokens in addresses.
 
-HOW TO RUN (Mac/Linux; on Windows use `python` instead of `python3` and
-`.venv\\Scripts\\activate` instead of `source .venv/bin/activate`)
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install playwright
-    python -m playwright install chromium
+HOW TO RUN (on Mac/Linux type `python3` instead of `python`)
+    python -m pip install --user playwright
     python setup/capture_erp.py
+
+It uses the Google Chrome already installed on your computer, and Microsoft
+Edge if Chrome can't be started. To pick one yourself:
+    python setup/capture_erp.py --browser edge
+Only if you have neither: `python -m playwright install chromium`, then
+`--browser chromium` (that one is blocked on some managed work laptops).
 
 Everything is saved under ./captures/ (git is told to ignore that folder).
 """
 
+import argparse
 import asyncio
+import shutil
 import json
 import os
 import re
@@ -38,8 +42,15 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 try:
     from playwright.async_api import async_playwright
 except ImportError:
-    sys.exit("Playwright is not installed. Run:  pip install playwright  "
-             "and then:  python -m playwright install chromium")
+    sys.exit("Playwright is not installed. Run:  python -m pip install --user playwright")
+
+# name -> (what we call it, how Playwright starts it)
+BROWSERS = {
+    "chrome": ("Google Chrome", {"channel": "chrome"}),
+    "edge": ("Microsoft Edge", {"channel": "msedge"}),
+    "chromium": ("Playwright's own Chromium", {}),
+}
+DEFAULT_ORDER = ["chrome", "edge"]  # chromium only when asked for: managed laptops may block it
 
 START_URL = os.environ.get("PING_CAPTURE_START_URL", "https://erp.iitkgp.ac.in/IIT_ERP3/")
 ERP_HOST = urlsplit(START_URL).hostname or ""
@@ -266,29 +277,71 @@ CHECKLIST = """
 """
 
 
+def short_error(e: Exception) -> str:
+    text = str(e).strip()
+    return text.splitlines()[0][:200] if text else type(e).__name__
+
+
+async def open_browser(pw, order: list[str], rec: "Recorder"):
+    """Start the first browser in `order` that actually opens a page."""
+    headless = os.environ.get("PING_CAPTURE_HEADLESS") == "1"  # only for testing the script
+    failures = []
+    for key in order:
+        label, opts = BROWSERS[key]
+        opts = dict(opts, headless=headless)
+        if key == "chromium" and os.environ.get("PING_CAPTURE_CHROMIUM"):
+            opts["executable_path"] = os.environ["PING_CAPTURE_CHROMIUM"]
+        print(f" Starting {label}...")
+        browser = None
+        try:
+            browser = await pw.chromium.launch(**opts)
+            context = await browser.new_context(accept_downloads=True,
+                                                viewport={"width": 1366, "height": 850})
+            context.on("response", rec.on_response)
+            context.on("page", rec.attach)  # attaches the download saver to every tab
+            page = await context.new_page()
+            await page.goto("about:blank")
+            print(f" Using {label}.")
+            return browser, context, page
+        except Exception as e:
+            failures.append(f"   {label}: {short_error(e)}")
+            if browser:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+    print("\nCould not start a browser:\n" + "\n".join(failures))
+    print("\nIf Chrome or Edge is installed but still fails, your organisation may block")
+    print("automated control of it. Try the other one with --browser chrome / --browser edge.")
+    return None
+
+
 async def main():
+    parser = argparse.ArgumentParser(description="Ping - one-time ERP capture")
+    parser.add_argument("--browser", choices=list(BROWSERS),
+                        help="which browser to use (default: Chrome, then Edge)")
+    args = parser.parse_args()
+    order = [args.browser] if args.browser else DEFAULT_ORDER
+
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out = Path.cwd() / "captures" / f"erp-{stamp}"
     out.mkdir(parents=True, exist_ok=True)
+    rec = Recorder(out)
 
     print("\nPing - ERP capture\n" + "-" * 40)
-    print("First, words to hide in the saved copies (they become placeholders).")
-    roll = await ask(" Your roll number / ERP user id (Enter to skip): ")
-    extra = await ask(" Your name, email, phone - separated by commas (Enter to skip): ")
-    words = [(roll, "<<MY_ROLL_NO>>")] if roll else []
-    words += [(w.strip(), "<<MY_INFO>>") for w in extra.split(",") if len(w.strip()) >= 3]
-
-    rec = Recorder(out)
-    headless = os.environ.get("PING_CAPTURE_HEADLESS") == "1"  # only for testing the script
     async with async_playwright() as pw:
-        launch = {"headless": headless}
-        if os.environ.get("PING_CAPTURE_CHROMIUM"):
-            launch["executable_path"] = os.environ["PING_CAPTURE_CHROMIUM"]
-        browser = await pw.chromium.launch(**launch)
-        context = await browser.new_context(accept_downloads=True, viewport={"width": 1366, "height": 850})
-        context.on("response", rec.on_response)
-        context.on("page", rec.attach)
-        page = await context.new_page()  # context.on("page") attaches the download saver
+        opened = await open_browser(pw, order, rec)
+        if not opened:
+            shutil.rmtree(out, ignore_errors=True)
+            sys.exit(1)
+        browser, context, page = opened
+
+        print("\nWords to hide in the saved copies (they become placeholders).")
+        roll = await ask(" Your roll number / ERP user id (Enter to skip): ")
+        extra = await ask(" Your name, email, phone - separated by commas (Enter to skip): ")
+        words = [(roll, "<<MY_ROLL_NO>>")] if roll else []
+        words += [(w.strip(), "<<MY_INFO>>") for w in extra.split(",") if len(w.strip()) >= 3]
+
         await page.goto(START_URL, wait_until="domcontentloaded")
 
         print("\nSTEP 1 - Log in yourself in the browser window that just opened")

@@ -1,9 +1,12 @@
-"""Optional AI helper for the two things rules find hardest: deadlines written
-as free sentences, and company lists inside "Multiple Companies" notices.
+"""AI fallback for the two things rules find hardest: deadlines written as free
+sentences, and company lists inside "Multiple Companies" notices.
 
-OFF by default. It is only called when the rules come back empty for a
-notice, and it only ever sees that notice's text (never PDFs, never your
-data). To switch it on, set these (as GitHub Secrets/variables):
+Rules always go first. This is only called when the rules come back empty
+for a notice, at most MAX_CALLS times per run, and it only ever sees that
+notice's text (never PDFs, never your data).
+
+With the GEMINI_API_KEY secret set, Gemini's free tier is used automatically.
+To use another provider instead, set these (as GitHub Secrets/variables):
 
   PING_AI_PROVIDER = openai_compatible
   PING_AI_BASE_URL = e.g. https://generativelanguage.googleapis.com/v1beta/openai
@@ -37,24 +40,37 @@ Reply with JSON only:
 Use [] when there is nothing. Do not invent dates."""
 
 
+MAX_CALLS = 20
+stats = {"calls": 0, "answers": 0, "errors": 0}
+
+
 def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> dict | None:
     if cfg.get("provider") != "openai_compatible" or not cfg.get("base_url") or not cfg.get("key"):
         return None
-    body = {
-        "model": cfg.get("model") or "",
-        "temperature": 0,
-        "messages": [{"role": "user", "content": PROMPT.format(
-            ref=ref.isoformat(), companies=", ".join(companies[:300]), text=text[:6000])}],
-    }
-    try:
-        r = requests.post(cfg["base_url"].rstrip("/") + "/chat/completions", json=body, timeout=40,
-                          headers={"Authorization": f"Bearer {cfg['key']}"})
-        r.raise_for_status()
-        content = r.json()["choices"][0]["message"]["content"]
-        m = re.search(r"\{.*\}", content, re.S)
-        data = json.loads(m.group(0)) if m else None
-    except Exception:
+    if stats["calls"] >= MAX_CALLS:
         return None
+    stats["calls"] += 1
+    prompt = PROMPT.format(ref=ref.isoformat(), companies=", ".join(companies[:300]), text=text[:6000])
+    data = None
+    for model in [cfg.get("model") or ""] + list(cfg.get("fallback_models", [])):
+        body = {"model": model, "temperature": 0, "messages": [{"role": "user", "content": prompt}]}
+        try:
+            r = requests.post(cfg["base_url"].rstrip("/") + "/chat/completions", json=body, timeout=40,
+                              headers={"Authorization": f"Bearer {cfg['key']}"})
+            if r.status_code in (400, 404) and cfg.get("fallback_models"):
+                continue  # model name retired: try the next one
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"]
+            m = re.search(r"\{.*\}", content, re.S)
+            data = json.loads(m.group(0)) if m else None
+            break
+        except Exception:
+            data = None
+            break
+    if data is None:
+        stats["errors"] += 1
+        return None
+    stats["answers"] += 1
     if not isinstance(data, dict):
         return None
     good = []

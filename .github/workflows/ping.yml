@@ -10,7 +10,7 @@ on:
       mode:
         description: "What to do"
         type: choice
-        options: [run, check, load-sample, remove-sample]
+        options: [run, check, probe, load-sample, remove-sample]
         default: run
 
 concurrency:
@@ -43,9 +43,10 @@ jobs:
           MAIL_APP_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          # Optional AI helper (off unless you set these; see ping/ai.py)
+          # AI fallback for notices the rules can't read (Gemini if GEMINI_API_KEY is set; see ping/ai.py)
           PING_AI_PROVIDER: ${{ vars.PING_AI_PROVIDER }}
           PING_AI_BASE_URL: ${{ vars.PING_AI_BASE_URL }}
           PING_AI_MODEL: ${{ vars.PING_AI_MODEL }}
           PING_AI_KEY: ${{ secrets.PING_AI_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -m ping.run

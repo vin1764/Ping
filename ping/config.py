@@ -92,6 +92,13 @@ def load_secrets(require_erp: bool = True, require_store: bool = True) -> Secret
         "model": env.get("PING_AI_MODEL", "").strip(),
         "key": env.get("PING_AI_KEY", "").strip(),
     }
+    gemini = env.get("GEMINI_API_KEY", "").strip()
+    if gemini and not ai["provider"]:
+        # Gemini's free tier, through its OpenAI-compatible endpoint
+        ai = {"provider": "openai_compatible",
+              "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+              "model": ai["model"] or "gemini-2.5-flash", "key": gemini,
+              "fallback_models": ["gemini-flash-latest", "gemini-2.0-flash"]}
     return Secrets(user, pw, answers, mail, mail_pw.replace(" ", ""), sb_url, sb_key, ai)
 
 

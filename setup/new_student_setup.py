@@ -166,7 +166,7 @@ def github_steps(values: dict) -> None:
 
 def mail_filter(sender: str | None) -> None:
     print("\nStep 4 - stop the OTP mails cluttering your inbox (about 20 a day)")
-    who = sender or "the ERP's OTP sender"
+    who = sender or "erpkgp@adm.iitkgp.ac.in"
     print("  In your institute Gmail: search box > Show search options:")
     print(f"     From: {who}")
     print("     Subject: OTP")

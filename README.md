@@ -201,7 +201,7 @@ have free tiers). Only the notice text is sent, never PDFs or your data. See
 **You (already done):** secrets are in GitHub. Remaining:
 1. Supabase > SQL Editor > New query > paste [`sql/schema.sql`](sql/schema.sql) > Run.
 2. Fill your profile row (see above).
-3. Gmail filter for OTP mails: From = the ERP's OTP sender, Subject = OTP >
+3. Gmail filter for OTP mails: From = `erpkgp@adm.iitkgp.ac.in`, Subject = OTP >
    Skip the Inbox + Mark as read. Ping searches All Mail, so it still finds them.
 
 **Another student:**

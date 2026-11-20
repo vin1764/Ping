@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import sys
 import time
 import traceback
@@ -215,6 +216,11 @@ class Runner:
             out["cgpa_criteria"] = more["cgpa_criteria"]
             out["selection_details"] = more["selection_details"]
             out["has_written_test"] = more["has_written_test"]
+            if not out.get("cgpa_cutoff") and more.get("min_cgpa"):
+                try:  # popup said 0.0 but "more details" gives a minimum CGPA
+                    out["cgpa_cutoff"] = float(re.findall(r"\d+(?:\.\d+)?", more["min_cgpa"])[0]) or None
+                except (IndexError, ValueError):
+                    pass
             if not more["fields"]:
                 self.c("role_more_details_empty")
         except Exception as e:

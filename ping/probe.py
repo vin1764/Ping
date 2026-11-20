@@ -44,7 +44,7 @@ def probe(secrets) -> int:
     erp = ErpClient(Gate(), secrets, mb, log=print)
     try:
         erp.login()
-        print(f"OTP mail came from: {mb.last_otp_sender} | subject: {mb.last_otp_subject}")
+        print(f"OTP mail came from: {mb.last_otp_sender}")
         erp.open_placement()
         roles = parse_companies(erp.companies_xml())
         for r in roles[:2]:

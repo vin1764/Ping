@@ -155,60 +155,52 @@ def parse_role_popup(html: str) -> dict:
 
 
 # ------------------------------------------------------ "more details" popup
-# Not present in the capture; the user described it as many "label: value"
-# lines with a Selection Details section. Parsed generically, raw text kept.
+# JnfMoreDet.jsp (seen on the real ERP): <h4> section headings ("Job Profile",
+# "Job Description", "Other Details", "Selection Details"); under them rows of
+# <div class="col-xs-3 text-left"><div>Label :</div></div>
+# <div class="col-xs-3"><div><b>value</b></div></div>
 
 def parse_more_details(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style"]):
         tag.decompose()
-    lines: list[str] = []
-    for tr in soup.find_all("tr"):
-        cells = [c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"], recursive=False)]
-        cells = [c for c in cells if c]
-        if len(cells) == 2 and len(cells[0]) < 120:
-            lines.append(f"{cells[0].rstrip(':')}: {cells[1]}")
-        elif cells:
-            lines.append(" ".join(cells))
-    if not lines:
-        lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
     fields: dict[str, str] = {}
     sections: dict[str, dict] = {}
-    current = None
-    for line in lines:
-        if ":" in line and len(line.split(":", 1)[0]) < 120:
-            k, v = line.split(":", 1)
-            k, v = k.strip(), v.strip()
-            if not v:
-                current = k
-                sections.setdefault(current, {})
-                continue
-            (sections[current] if current else fields)[k] = v
-            fields.setdefault(k, v)
-        elif len(line) < 80 and line.isupper() or line.lower().endswith("details"):
-            current = line.strip()
-            sections.setdefault(current, {})
-    raw = "\n".join(lines)
-    selection = {}
-    for name, sec in sections.items():
-        if "selection" in name.lower():
-            selection.update(sec)
-    if not selection:
+    for label_div in soup.select("div.text-left"):
+        label = label_div.get_text(" ", strip=True).rstrip(":").strip()
+        if not label:
+            continue
+        value_div = label_div.find_next_sibling("div")
+        value = value_div.get_text(" ", strip=True) if value_div else ""
+        heading = label_div.find_previous("h4")
+        section = heading.get_text(" ", strip=True) if heading else "Other Details"
+        sections.setdefault(section, {})[label] = value
+        fields.setdefault(label, value)
+    if not fields:  # older/other layout: two-cell table rows
+        for tr in soup.find_all("tr"):
+            cells = [c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"], recursive=False)]
+            if len(cells) == 2 and cells[0] and len(cells[0]) < 120:
+                fields.setdefault(cells[0].rstrip(": "), cells[1])
+    raw = "\n".join(f"{k}: {v}" for k, v in fields.items())
+    selection = next((sec for name, sec in sections.items() if "selection" in name.lower()), None)
+    if selection is None:
         selection = {k: v for k, v in fields.items() if re.search(
-            r"shortlist|test|interview|group discussion|\bgd\b|mode|round|selection", k, re.I)}
+            r"shortlist|written|test|interview|group discussion|\bgd\b|round|mode", k, re.I)}
 
     def find(pattern):
         for k, v in fields.items():
             if re.search(pattern, k, re.I):
-                return v
+                return v or None
         return None
 
+    min_cgpa = find(r"minimum cgpa")
     return {
         "fields": fields,
         "sections": sections,
         "selection_details": selection,
         "backlog_rule": find(r"backlog"),
-        "cgpa_criteria": find(r"cgpa"),
+        "cgpa_criteria": " / ".join(x for x in (find(r"is there a cgpa"), min_cgpa) if x) or None,
+        "min_cgpa": min_cgpa,
         "has_written_test": has_written_test(selection, raw),
         "raw_text": raw[:20000],
     }

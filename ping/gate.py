@@ -10,6 +10,7 @@ before it leaves the machine, including redirects the ERP tries to send us to.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 
@@ -159,8 +160,18 @@ class RequestsTransport:
         self.timeout = timeout
 
     def send(self, method: str, url: str, data: dict | None, headers: dict | None) -> Reply:
-        r = self.session.request(method, url, data=data, headers=headers or {},
-                                 timeout=self.timeout, allow_redirects=False)
+        # Reads are retried on brief network errors (seen on the real ERP: 3 of 64 PDFs).
+        # Login steps (POST) are never repeated automatically.
+        tries = 3 if method == "GET" else 1
+        for attempt in range(tries):
+            try:
+                r = self.session.request(method, url, data=data, headers=headers or {},
+                                         timeout=self.timeout, allow_redirects=False)
+                break
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt == tries - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
         return Reply(r.status_code, r.url, {k.lower(): v for k, v in r.headers.items()}, r.content)
 
 

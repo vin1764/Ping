@@ -15,7 +15,7 @@ import time
 import traceback
 from datetime import datetime, timedelta, timezone
 
-from . import notify
+from . import ai, notify
 from .config import FIRST_RUN_LOOKBACK_DAYS, IST, ConfigError, load_dotenv, load_secrets
 from .erp import ErpClient, LoginError
 from .gate import Gate
@@ -95,6 +95,8 @@ class Runner:
         try:
             log("logging in")
             self.login_stats = self.erp.login()
+            if getattr(self.mailbox, "last_otp_sender", ""):
+                log(f"OTP mail came from: {self.mailbox.last_otp_sender} (use this for your mail filter)")
             log(f"logged in in {self.login_stats.seconds_total:.0f}s "
                 f"(waiting for OTP {self.login_stats.seconds_waiting_otp:.0f}s, "
                 f"Get OTP pressed {self.login_stats.otp_requests}x)")
@@ -179,7 +181,7 @@ class Runner:
             "otp_seconds": round(ls.seconds_waiting_otp, 1) if ls else None,
             "otp_requests": ls.otp_requests if ls else None,
             "gate_requests": self.gate.count,
-            "counts": {**self.counts, "items": self._item_counts(items),
+            "counts": {**self.counts, "items": self._item_counts(items), "ai": dict(ai.stats),
                        "seconds_total": round(time.monotonic() - t0, 1)},
             "problems": self.problems[:50],
         }
@@ -278,7 +280,9 @@ class Runner:
             # structure only, never contents
             log(f"  attachment {n['notice_id']} ({n['company'][:30]}): {res['format']}, {res['pages']}p, "
                 f"{res['text_chars']} chars, scanned={res['scanned']}, roll-like={res['roll_like_count']} "
-                f"-> {res['status']}" + (f" by {res['matched_by']}" if res['matched_by'] else ""))
+                f"-> {res['status']}" + (f" by {res['matched_by']}" if res['matched_by'] else "")
+                + (f" | table heading {res['header']} | found {sorted(res['details'])}" if res["status"] == "yes"
+                   else ""))
         return checks
 
     # ----------------------------------------------------------------- mail
@@ -425,6 +429,8 @@ class Runner:
             f"yes {c.get('pdf_yes', 0)} / no {c.get('pdf_no', 0)} / unknown {c.get('pdf_unknown', 0)}, "
             f"scanned {c.get('pdf_scanned', 0)}, skipped (not yours) {c.get('pdfs_skipped_not_relevant', 0)}",
             f"mailbox           : {c.get('mails_scanned', 0)} mails looked at, {c.get('mails_kept', 0)} kept",
+            f"AI fallback       : {c.get('ai', {}).get('calls', 0)} calls, {c.get('ai', {}).get('answers', 0)} answers, "
+            f"{c.get('ai', {}).get('errors', 0)} errors (only for notices the rules couldn't read)",
             f"feed              : always {it.get('always', 0)}, show {it.get('show', 0)}, hidden {it.get('hidden', 0)},"
             f" questions for you {it.get('review', 0)}",
             f"ERP requests      : {rec['gate_requests']} (all through the read-only gate)",
@@ -442,7 +448,7 @@ class Runner:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m ping.run")
     ap.add_argument("--mode", default=os.environ.get("PING_MODE") or "run",
-                    choices=["run", "check", "load-sample", "remove-sample"])
+                    choices=["run", "check", "probe", "load-sample", "remove-sample"])
     ap.add_argument("--memory", help="use a local JSON file instead of Supabase (testing)")
     args = ap.parse_args(argv)
     load_dotenv()
@@ -475,6 +481,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "check":
         print(f"secrets: ok ({len(secrets.security_answers)} security answers), database: {msg}")
         return 0 if ok else 2
+    if args.mode == "probe":
+        from .probe import probe
+        return probe(secrets)
     if not ok and trigger == "schedule":
         # Without a database every hourly run would be a full first run (~7 min of free
         # GitHub minutes and an OTP mail each). Remind instead; manual runs still go ahead.

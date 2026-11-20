@@ -1,0 +1,14 @@
+# Secrets - never commit
+.env
+.env.*
+*.secret
+secrets/
+
+# Real ERP captures (personal data, other students' names)
+captures/
+*.zip
+
+# Python
+.venv/
+__pycache__/
+*.pyc

@@ -61,6 +61,8 @@ SENSITIVE_KEY = re.compile(r"token|session|sso|auth|otp|pass|pwd|answer|ans\b|se
 TOKEN_IN_TEXT = re.compile(
     r"((?:[A-Za-z_]*(?:token|session|sso)[A-Za-z_]*)\s*=\s*)([^&\"'\s<>;]+)", re.IGNORECASE)
 JSESSION_IN_PATH = re.compile(r";jsessionid=[^?#&\"'\s<>]+", re.IGNORECASE)
+JS_TOKEN_ASSIGN = re.compile(  # myform.elements['ssoToken'].value = '...'
+    r"""((?:token|session|sso)[A-Za-z_]*['"]?\]?(?:\.value)?\s*[:=]\s*['"])([^'"]+)""", re.IGNORECASE)
 HIDDEN_INPUT_VALUE = re.compile(
     r"(<input\b[^>]*\b(?:name|id)\s*=\s*[\"']?[^\"'>]*(?:token|session|sso|otp)[^\"'>]*[\"']?[^>]*"
     r"\bvalue\s*=\s*[\"'])([^\"']*)", re.IGNORECASE)
@@ -73,6 +75,7 @@ def scrub_text(s: str) -> str:
     s = JSESSION_IN_PATH.sub(";jsessionid=REDACTED", s)
     s = TOKEN_IN_TEXT.sub(lambda m: m.group(1) + "REDACTED", s)
     s = HIDDEN_INPUT_VALUE.sub(lambda m: m.group(1) + "REDACTED", s)
+    s = JS_TOKEN_ASSIGN.sub(lambda m: m.group(1) + "REDACTED", s)
     return s
 
 
@@ -176,6 +179,16 @@ class Recorder:
             except Exception as e:  # downloads and some redirects have no body here
                 entry["note"] = f"body not available ({type(e).__name__})"
                 body = None
+            if body and "pdf" in ctype.lower() and not body.startswith(b"%PDF"):
+                # Chrome's built-in PDF viewer hands us its own wrapper page instead of the
+                # file. Fetch the same address again with the same logged-in session.
+                try:
+                    again = await resp.frame.page.context.request.get(resp.url)
+                    if (await again.body()).startswith(b"%PDF"):
+                        body = await again.body()
+                        entry["note"] = "PDF re-fetched (browser viewer intercepted it)"
+                except Exception as e:
+                    entry["note"] = f"PDF re-fetch failed ({type(e).__name__})"
             if body:
                 ext = guess_ext(ctype, resp.url)
                 path = self.out / "network" / f"{seq:04d}_{safe_name(resp.url)}{ext}"

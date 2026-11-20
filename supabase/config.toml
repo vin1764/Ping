@@ -1,0 +1,8 @@
+# Only what's needed to deploy the two dashboard functions.
+# The login check happens inside each function (is_ping_owner), so the
+# gateway's own JWT check is off (it doesn't support the new key types well).
+[functions.check-now]
+verify_jwt = false
+
+[functions.ask-ping]
+verify_jwt = false

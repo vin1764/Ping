@@ -30,6 +30,8 @@
     }
     return el;
   }
+  const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const companyHref = (name) => `#co-${slug(name)}`;
   const safeUrl = (u) => (/^(https?:|#|mailto:)/i.test(String(u)) ? String(u) : "#");
   const mount = (...nodes) => { const app = $("#app"); app.replaceChildren(...nodes); window.scrollTo(0, 0); };
 
@@ -131,7 +133,7 @@
 
   async function boot() {
     const params = new URLSearchParams(location.search);
-    const wantDemo = params.has("demo") || location.hash.startsWith("#/demo");
+    const wantDemo = params.has("demo") || location.hash === "#demo";
     const hasBackend = CFG.supabaseUrl && CFG.supabaseKey && window.supabase;
     if (wantDemo || !hasBackend) return startDemo(!hasBackend && !wantDemo);
     const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
@@ -224,12 +226,17 @@
   }
 
   // ------------------------------------------------------------ router
+  // Plain "#name" links only (they also work where the page is embedded): #feed, #companies, #profile, #co-<company>
   function route() {
-    const [, page, arg] = (location.hash || "#/feed").split("/");
-    document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.route === (page === "company" ? "companies" : page)));
-    if (page === "companies") return viewCompanies();
-    if (page === "company") return viewCompany(decodeURIComponent(arg || ""));
-    if (page === "profile") return viewProfile();
+    const hash = location.hash.slice(1) || "feed";
+    const page = hash.startsWith("co-") ? "companies" : hash;
+    document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.route === page));
+    if (hash.startsWith("co-")) {
+      const name = [...byCompany().keys()].find((c) => slug(c) === hash.slice(3));
+      return viewCompany(name || "");
+    }
+    if (hash === "companies") return viewCompanies();
+    if (hash === "profile") return viewProfile();
     return viewFeed();
   }
 
@@ -266,7 +273,7 @@
     const meta = [
       h("span", { class: `tag ${cls}` }, it.needs_review ? "Question" : LEVELS[it.level]),
       due ? h("span", { class: "due" + (soon ? " soon" : "") }, (it.due_at ? "Due " : "On ") + when(due)) : null,
-      it.company ? h("a", { href: `#/company/${encodeURIComponent(it.company)}` }, it.company) : null,
+      it.company ? h("a", { href: companyHref(it.company) }, it.company) : null,
       it.notice_id ? h("button", { onclick: () => openNotice(it.notice_id, it) }, "Open notice") : null,
       it.notice_id && it.pdf_status ? pdfLink(it) : null,
       ...mailLinks(it).map((u, k) => h("a", { href: u, target: "_blank", rel: "noopener" }, k ? "Link 2" : "Link from your mail")),
@@ -368,7 +375,7 @@
         .map(([c, roles]) => {
           const applied = roles.filter((r) => r.applied).length;
           const open = roles.filter((r) => !r.applied && dt(deadlineOf(r)) > now && r.eligible !== false);
-          return h("a", { class: "card company-link", href: `#/company/${encodeURIComponent(c)}` },
+          return h("a", { class: "card company-link", href: companyHref(c) },
             h("strong", {}, c),
             h("div", { class: "small muted" }, `${roles.length} role${roles.length > 1 ? "s" : ""}`,
               applied ? ` · applied to ${applied}` : "",
@@ -384,7 +391,7 @@
     const roles = byCompany().get(name) || [];
     const items = state.data.items.filter((i) => i.company === name && i.level !== "hidden").sort(sortNewest);
     mount(
-      h("p", {}, h("a", { href: "#/companies" }, "← All companies")),
+      h("p", {}, h("a", { href: "#companies" }, "← All companies")),
       h("h1", {}, name),
       roles.length ? h("div", { class: "table-wrap" }, h("table", {},
         h("tr", {}, ["Role", "Applied", "Deadline", "Pay (CTC)", "Eligible", "Details"].map((x) => h("th", {}, x))),

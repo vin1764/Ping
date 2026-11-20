@@ -137,3 +137,45 @@ alter table state enable row level security;
 alter table corrections enable row level security;
 
 insert into profile (id) values (1) on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------- dashboard
+-- Who may log in to the dashboard and see the data. Ping adds your
+-- MAIL_ADDRESS here on every run; add another email by inserting a row.
+create table if not exists allowed_users (
+  email text primary key,
+  created_at timestamptz default now()
+);
+alter table allowed_users enable row level security;
+
+create or replace function is_ping_owner() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from allowed_users where lower(email) = lower(auth.jwt() ->> 'email'));
+$$;
+grant execute on function is_ping_owner() to authenticated;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['profile','roles','notices','pdf_checks','items','emails','contacts','runs','corrections'] loop
+    execute format('drop policy if exists owner_read on %I', t);
+    execute format('create policy owner_read on %I for select to authenticated using (is_ping_owner())', t);
+  end loop;
+end $$;
+
+drop policy if exists owner_edit_profile on profile;
+create policy owner_edit_profile on profile for update to authenticated
+  using (is_ping_owner()) with check (is_ping_owner());
+drop policy if exists owner_mark_items on items;
+create policy owner_mark_items on items for update to authenticated
+  using (is_ping_owner()) with check (is_ping_owner());
+drop policy if exists owner_fix_notices on corrections;
+create policy owner_fix_notices on corrections for all to authenticated
+  using (is_ping_owner()) with check (is_ping_owner());
+
+-- The dashboard may only change these columns:
+revoke update on profile, items from authenticated;
+grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, interested_companies,
+              not_interested_companies, notice_types, updated_at) on profile to authenticated;
+grant update (dismissed, done) on items to authenticated;
+grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
+grant insert, update, delete on corrections to authenticated;

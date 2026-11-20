@@ -396,6 +396,10 @@ class Runner:
     def _login_failure_tracking(self, status: str) -> None:
         if not self.store_ok:
             return
+        try:  # the dashboard login with this address may read your data
+            self.store.upsert("allowed_users", [{"email": self.secrets.mail_address.strip().lower()}], key="email")
+        except Exception as e:
+            self.problems.append(f"could not register the dashboard login ({e})")
         n = self.store.get_state("login_failures_in_a_row", 0) or 0
         n = 0 if status == "ok" else n + 1
         self.store.set_state("login_failures_in_a_row", n)

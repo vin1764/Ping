@@ -156,7 +156,7 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
         ndetails = {"subject": n.get("subject"), "kind": kind, "venue": a.get("venue"),
                     "contacts": a.get("contacts"), "links": a.get("links"), "forms": a.get("forms"),
                     "deadlines": a.get("deadlines"), "method": a.get("method"),
-                    "notice_time": n.get("notice_time")}
+                    "notice_time": n.get("notice_time"), "notice_year": n.get("year"), "notice_key": n["id"]}
         if check:
             ndetails["pdf"] = {k: check.get(k) for k in ("status", "matched_by", "details", "error", "header", "my_row")}
 

@@ -207,3 +207,17 @@ def remove(store) -> int:
                                   "active_backlogs": False, "is_sample": False}])
         n += 1
     return n
+
+
+def export(path: str) -> None:
+    """Write the demo data as one JSON file for the dashboard's demo mode."""
+    import json
+    data = build()
+    data["generated_at"] = datetime.now(IST).isoformat()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1, default=str)
+
+
+if __name__ == "__main__":
+    import sys
+    export(sys.argv[1] if len(sys.argv) > 1 else "dashboard/demo-data.json")

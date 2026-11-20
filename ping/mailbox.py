@@ -85,6 +85,8 @@ class Mailbox:
         self.imap: imaplib.IMAP4_SSL | None = None
         self.folder = "INBOX"
         self.gmail = False
+        self.last_otp_sender = ""
+        self.last_otp_subject = ""
 
     # -- connection ----------------------------------------------------------
     def connect(self) -> None:
@@ -167,6 +169,7 @@ class Mailbox:
                         continue
                     code = extract_otp(mail.subject, mail.text)
                     if code:
+                        self.last_otp_sender, self.last_otp_subject = mail.sender, mail.subject
                         return code, mail.uid
             except imaplib.IMAP4.abort:
                 self.close()

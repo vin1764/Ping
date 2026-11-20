@@ -475,6 +475,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "check":
         print(f"secrets: ok ({len(secrets.security_answers)} security answers), database: {msg}")
         return 0 if ok else 2
+    if not ok and trigger == "schedule":
+        # Without a database every hourly run would be a full first run (~7 min of free
+        # GitHub minutes and an OTP mail each). Remind instead; manual runs still go ahead.
+        if notify.should_alert(store, "db", False):
+            notify.send_self(secrets.mail_address, secrets.mail_app_password, "Database not set up",
+                             "Ping is skipping its hourly runs until the database exists.\n"
+                             "Open Supabase > SQL Editor > New query, paste sql/schema.sql from the repo, press Run.")
+        log("Skipping this scheduled run: database not set up (see above).")
+        return 2
     rec = Runner(secrets, store, store_ok=ok, trigger=trigger).run()
     store.save()
     return 0 if rec["status"] == "ok" else 1

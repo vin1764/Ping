@@ -203,3 +203,12 @@ def test_sample_data_builds():
     assert levels == {"always", "show", "hidden"}
     assert all(len(i["title"]) <= 160 for i in data["items"])
     assert any(i["needs_review"] for i in data["items"])
+
+
+def test_exact_company_name_wins_before_loose_matching():
+    idx = CompanyIndex([role("Accenture Solutions Private Limited", "AI and Data"),
+                        role("Accenture India Private Limited", "Analyst"), role("Navi Limited", "SDE")])
+    assert idx.match("Accenture Solutions Private Limited").company == "Accenture Solutions Private Limited"
+    assert idx.match("ACCENTURE INDIA PRIVATE LIMITED").company == "Accenture India Private Limited"
+    assert idx.match("NAVI").company == "Navi Limited"          # shortened name: loose match
+    assert idx.match("Accenture").company is None                # really ambiguous: ask, don't guess

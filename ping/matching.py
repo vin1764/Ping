@@ -85,6 +85,16 @@ class CompanyIndex:
         return self._names.get(compact(company) or company, company)
 
     def match(self, name: str, hint_text: str = "") -> Match:
+        # 1. exact name as in the companies list, 2. same name ignoring capitals/spacing,
+        # 3. only then loose matching (in the real notices 102 of 385 needed it: "NAVI" for
+        #    "Navi Limited", "AIRBUS" for "Airbus India Private Limited").
+        name_s = (name or "").strip()
+        for exact in (lambda c: c == name_s,
+                      lambda c: re.sub(r"\s+", " ", c).strip().lower() == re.sub(r"\s+", " ", name_s).lower()):
+            hits = {self.canonical(r["company"]) for r in self.roles if exact(r["company"])}
+            if len(hits) == 1:
+                hit = hits.pop()
+                return Match(name, hit, 1.0, [(hit, 1.0)])
         scored = sorted(((c, similarity(name, c)) for c in self.by_company), key=lambda x: -x[1])
         scored = [x for x in scored if x[1] >= 0.4 and (x[1] >= 0.9 or self._rest_fits(name, x[0]))]
         if not scored:

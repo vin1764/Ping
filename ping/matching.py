@@ -86,7 +86,7 @@ class CompanyIndex:
 
     def match(self, name: str, hint_text: str = "") -> Match:
         scored = sorted(((c, similarity(name, c)) for c in self.by_company), key=lambda x: -x[1])
-        scored = [x for x in scored if x[1] >= 0.4]
+        scored = [x for x in scored if x[1] >= 0.4 and (x[1] >= 0.9 or self._rest_fits(name, x[0]))]
         if not scored:
             return Match(name, None, 0.0)
         top = scored[0][1]
@@ -99,6 +99,16 @@ class CompanyIndex:
             if len(hits) == 1:
                 return Match(name, hits[0], top, scored[:3])
         return Match(name, None, top, scored[:3])
+
+    def _rest_fits(self, name: str, company: str) -> bool:
+        """'ICICI BANK' vs 'ICICI LOMBARD': sharing only the first word is not enough unless
+        the notice's other words show up in one of that company's role names
+        ('ACCENTURE AI' and Accenture's 'I&E- AI and Data' role)."""
+        rest = set(tokens(name)) - set(tokens(company))
+        if not rest:
+            return True
+        role_words = {w for r in self.by_company.get(company, []) for w in tokens(r["designation"], True)}
+        return rest <= role_words
 
     def scan_text(self, text: str) -> list[str]:
         """Companies whose full core name appears in free text."""

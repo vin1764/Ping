@@ -126,6 +126,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
         items.append({**base, "id": f"role:{r['id']}:apply", "level": level, "category": "apply",
                       "title": clip(title), "details": details, "sort_at": dl["at"]})
         if level == "show" and due and now >= due - timedelta(hours=24):
+            items[-1]["level"] = "hidden"  # the reminder takes its place, so the role isn't listed twice
+            items[-1]["details"] = {**details, "hidden_because": "replaced by the 24h reminder"}
             items.append({**base, "id": f"role:{r['id']}:reminder24", "level": "show", "category": "reminder",
                           "title": clip(f"Reminder: {r['company']} {r['designation']} closes {fmt_when(due, now)}. "
                                         f"You haven't applied."),
@@ -289,7 +291,27 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
     for it in items:
         it.setdefault("details", {})
         it["title"] = clip(it["title"])
+        _expire(it, now)
     return items
+
+
+def _expire(it: dict, now: datetime) -> None:
+    """Past things drop out of the feed (kept as hidden): deadlines that have gone,
+    tests/talks that finished 12h+ ago, and list news older than 3 days."""
+    if it["level"] == "hidden" or it["category"] in ("apply", "reminder", "review"):
+        return
+    due, event = _dt(it.get("due_at")), _dt(it.get("event_at"))
+    sort = _dt(it.get("sort_at"))
+    why = None
+    if due and due < now:
+        why = "deadline gone"
+    elif event and event < now - timedelta(hours=12):
+        why = "already happened"
+    elif not due and not event and sort and sort < now - timedelta(days=3):
+        why = "older than 3 days"
+    if why:
+        it["level"] = "hidden"
+        it["details"] = {**it.get("details", {}), "hidden_because": why}
 
 
 def _room(check: dict | None) -> str:

@@ -12,3 +12,8 @@ captures/
 .venv/
 __pycache__/
 *.pyc
+
+# Local test output
+.pytest_cache/
+*.local.json
+local/

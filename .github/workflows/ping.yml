@@ -1,0 +1,51 @@
+name: Ping
+
+on:
+  schedule:
+    # GitHub's clock is UTC. 00:37-19:37 UTC = every hour from 06:07 to 01:07 IST (20 runs a day).
+    # Minute 37 avoids the top of the hour, when GitHub is busiest and runs get delayed.
+    - cron: "37 0-19 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to do"
+        type: choice
+        options: [run, check, load-sample, remove-sample]
+        default: run
+
+concurrency:
+  group: ping
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Run Ping
+        env:
+          PING_MODE: ${{ inputs.mode || 'run' }}
+          ERP_USER_ID: ${{ secrets.ERP_USER_ID }}
+          ERP_PASSWORD: ${{ secrets.ERP_PASSWORD }}
+          ERP_SECQ_1: ${{ secrets.ERP_SECQ_1 }}
+          ERP_SECQ_2: ${{ secrets.ERP_SECQ_2 }}
+          ERP_SECQ_3: ${{ secrets.ERP_SECQ_3 }}
+          MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
+          MAIL_APP_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Optional AI helper (off unless you set these; see ping/ai.py)
+          PING_AI_PROVIDER: ${{ vars.PING_AI_PROVIDER }}
+          PING_AI_BASE_URL: ${{ vars.PING_AI_BASE_URL }}
+          PING_AI_MODEL: ${{ vars.PING_AI_MODEL }}
+          PING_AI_KEY: ${{ secrets.PING_AI_KEY }}
+        run: python -m ping.run

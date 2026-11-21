@@ -300,6 +300,8 @@ def _handler(fake: FakeSupabase):
                     params.append(val)
                 elif op == "is" and val in ("true", "false", "null"):
                     conds.append(f"{col} is {val}")
+                elif v == "not.is.true":
+                    conds.append(f"{col} is not true")
             return (" where " + " and ".join(conds) if conds else ""), params
 
     return H

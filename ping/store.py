@@ -35,6 +35,8 @@ class MemoryStore:
                 rows = [r for r in rows if (r.get(k) or "") >= val]
             elif op == "is" and val == "true":
                 rows = [r for r in rows if r.get(k) is True]
+            elif v == "not.is.true":
+                rows = [r for r in rows if r.get(k) is not True]
         return copy.deepcopy(rows)
 
     def upsert(self, table: str, rows: list[dict], key: str = "id") -> int:

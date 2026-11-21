@@ -39,6 +39,7 @@ ROLE_LIST_COLUMNS = ("id", "yop", "com_id", "jnf_id", "company", "designation", 
                      "apply_end_text", "interview_date", "contract")
 
 
+REAL = {"is_sample": "not.is.true"}  # demo rows (is_sample) are never mixed into your feed
 PAUSE_AFTER_FAILURES = 3
 PAUSE_HOURS = 3
 
@@ -102,8 +103,8 @@ class Runner:
         status = "ok"
         profile = self.profile()
         roll = profile["roll"]
-        stored_roles = {r["id"]: r for r in self.store.select("roles")}
-        stored_notice_ids = {r["id"] for r in self.store.select("notices", columns="id")}
+        stored_roles = {r["id"]: r for r in self.store.select("roles", REAL)}
+        stored_notice_ids = {r["id"] for r in self.store.select("notices", REAL, columns="id")}
         first_run = not stored_notice_ids
         self.counts["first_run"] = first_run
         new_roles, fresh_notices, checks, list_roles = [], [], {}, []
@@ -375,16 +376,16 @@ class Runner:
             log(f"saving failed: {e}")
 
     def _rebuild(self, profile) -> list[dict]:
-        roles = self.store.select("roles")
-        notices = [n for n in self.store.select("notices") if n.get("analysis")]
-        checks = {c["notice_id"]: c for c in self.store.select("pdf_checks")}
-        emails = self.store.select("emails")
+        roles = self.store.select("roles", REAL)
+        notices = [n for n in self.store.select("notices", REAL) if n.get("analysis")]
+        checks = {c["notice_id"]: c for c in self.store.select("pdf_checks", REAL)}
+        emails = self.store.select("emails", REAL)
         corrections = {c["notice_id"]: c for c in self.store.select("corrections")} if self.store_ok else {}
         dstats: dict = {}
         items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats)
         # a role's deadline that moved since the last run becomes one "Update" message
         from .dedupe import changes_since_last_run
-        previous = {p["id"]: p for p in self.store.select("items")}
+        previous = {p["id"]: p for p in self.store.select("items", REAL)}
         moved = [u for u in changes_since_last_run(previous, items, self.now) if u["id"] not in previous]
         items += moved
         self.counts["dedupe"] = {k: v for k, v in dstats.items() if k != "examples"}
@@ -466,7 +467,8 @@ class Runner:
             f"scanned {c.get('pdf_scanned', 0)}, skipped (not yours) {c.get('pdfs_skipped_not_relevant', 0)}",
             f"mailbox           : {c.get('mails_scanned', 0)} mails looked at, {c.get('mails_kept', 0)} kept",
             f"AI fallback       : {c.get('ai', {}).get('calls', 0)} calls, {c.get('ai', {}).get('answers', 0)} answers, "
-            f"{c.get('ai', {}).get('errors', 0)} errors (only for notices the rules couldn't read)",
+            f"{c.get('ai', {}).get('errors', 0)} errors (only for notices the rules couldn't read)"
+            + (f"; last error: {c['ai']['last_error']}" if c.get('ai', {}).get('last_error') else ""),
             f"repeats merged    : {c.get('dedupe', {}).get('duplicates_merged', 0)} duplicates "
             f"({c.get('dedupe', {}).get('unsure_merges', 0)} of them unsure), {c.get('dedupe', {}).get('emails_merged', 0)}"
             f" emails, {c.get('dedupe', {}).get('updates', 0)} turned into updates, "

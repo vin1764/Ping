@@ -257,15 +257,23 @@ def auth_config(secrets) -> int:
     wanted = [live, live + "**"] + keep
     new_list = list(dict.fromkeys(wanted))
     say(f"before: site_url = {before_site or '(empty)'}; redirect allow-list = {before_list or '(empty)'}")
-    say(f"before: anonymous sign-ins {'on' if cur.get('external_anonymous_users_enabled') else 'off'}")
+    say(f"before: anonymous sign-ins {'on' if cur.get('external_anonymous_users_enabled') else 'off'}, "
+        f"new sign-ups {'off' if cur.get('disable_signup') else 'on'}, "
+        f"email confirmation {'off' if cur.get('mailer_autoconfirm') else 'required'}")
+    # An anonymous sign-in is a sign-up to Supabase, so sign-ups must be allowed for the demo. That's safe for the
+    # data: the owner rules only let emails in allowed_users read anything, the demo rules only anonymous
+    # sessions, and email sign-ups must confirm their address first (no automatic confirmation).
     r = requests.patch(url, headers=hdr, timeout=30, json={"site_url": live, "uri_allow_list": ",".join(new_list),
-                                                           "external_anonymous_users_enabled": True})
+                                                           "external_anonymous_users_enabled": True,
+                                                           "disable_signup": False, "mailer_autoconfirm": False})
     if r.status_code >= 300:
         say(f"updating the Auth settings failed: HTTP {r.status_code} {r.text[:200]}")
         return 1
     after = requests.get(url, headers=hdr, timeout=30).json()
     say(f"after:  site_url = {after.get('site_url')}; redirect allow-list = {(after.get('uri_allow_list') or '').split(',')}")
-    say(f"after:  anonymous sign-ins {'on' if after.get('external_anonymous_users_enabled') else 'OFF'}")
+    say(f"after:  anonymous sign-ins {'on' if after.get('external_anonymous_users_enabled') else 'OFF'}, "
+        f"new sign-ups {'off' if after.get('disable_signup') else 'on'}, "
+        f"email confirmation {'off' if after.get('mailer_autoconfirm') else 'required'}")
     # the reviewer login the one-click demo replaces
     base = secrets.supabase_url.rstrip("/") + "/auth/v1/admin/users"
     admin_hdr = {"apikey": secrets.supabase_key, "Authorization": f"Bearer {secrets.supabase_key}"}
@@ -276,7 +284,8 @@ def auth_config(secrets) -> int:
         say(f"old reviewer login deleted: HTTP {d.status_code}")
     if not old:
         say("old reviewer login: not there")
-    return 0 if after.get("site_url") == live and after.get("external_anonymous_users_enabled") else 1
+    ok = after.get("site_url") == live and after.get("external_anonymous_users_enabled") and not after.get("disable_signup")
+    return 0 if ok and not after.get("mailer_autoconfirm") else 1
 
 
 def cleanup_demo(secrets) -> int:

@@ -505,6 +505,16 @@ def main(argv: list[str] | None = None) -> int:
         store = MemoryStore()
     if args.mode == "check":
         print(f"secrets: ok ({len(secrets.security_answers)} security answers), database: {msg}")
+        if not args.memory:
+            from .authcheck import check_dashboard_auth
+            print("\n---- dashboard login check ----")
+            try:
+                for line in check_dashboard_auth(secrets.supabase_url, secrets.supabase_key,
+                                                 os.environ.get("SUPABASE_PUBLISHABLE_KEY", "").strip(),
+                                                 secrets.mail_address):
+                    print(line)
+            except Exception as e:
+                print(f"dashboard login check failed: {type(e).__name__}: {e}")
         return 0 if ok else 2
     if args.mode == "probe":
         from .probe import probe

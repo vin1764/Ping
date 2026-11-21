@@ -43,6 +43,7 @@ jobs:
           MAIL_APP_PASSWORD: ${{ secrets.MAIL_APP_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}  # only used by the 'check' mode
           # AI fallback for notices the rules can't read (Gemini if GEMINI_API_KEY is set; see ping/ai.py)
           PING_AI_PROVIDER: ${{ vars.PING_AI_PROVIDER }}
           PING_AI_BASE_URL: ${{ vars.PING_AI_BASE_URL }}

@@ -64,6 +64,7 @@ def _failure_note(status: str) -> str:
 JD_FETCH_PER_RUN = 40        # ERP files and public links read per run for job descriptions
 JD_SUMMARIES_PER_RUN = 40     # new JDs summarised by Gemini per run (the rest by rules, upgraded later)
 JD_AI_UPGRADES_PER_RUN = 20   # rules summaries redone by Gemini per run, open roles first
+JD_AI_SECONDS = 90            # time for Gemini JD summaries per run (keeps Check now to a couple of minutes)
 
 
 UNREACHABLE_MSG = "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly."
@@ -358,12 +359,14 @@ class Runner:
         todo.sort(key=order, reverse=True)
         retry.sort(key=order, reverse=True)
         ups, made = [], Counter()
+        t_end = time.monotonic() + JD_AI_SECONDS
+        ai_ok = lambda: made["ai_failed"] < 3 and time.monotonic() < t_end  # noqa: E731
         # every JD gets a summary this run: Gemini for the first ones, the JD's own labelled parts for the rest
         # (Gemini gets those on later runs, below)
         for i, (r, text, key) in enumerate(todo):
             s = None
-            if i < JD_SUMMARIES_PER_RUN and made["ai_failed"] < 3:
-                s = summarise(text, self.secrets.ai)
+            if i < JD_SUMMARIES_PER_RUN and ai_ok():
+                s = summarise(text, self.secrets.ai, timeout=20)
                 if s is None:
                     made["ai_failed"] += 1
             if s is None:
@@ -373,9 +376,9 @@ class Runner:
             ups.append({"id": r["id"], "jd_summary": s})
             r["jd_summary"] = s
         for r, text, key in retry[:max(0, JD_AI_UPGRADES_PER_RUN - made["ai"])]:
-            if made["ai_failed"] >= 3:
+            if not ai_ok():
                 break
-            s = summarise(text, self.secrets.ai)
+            s = summarise(text, self.secrets.ai, timeout=20)
             if s is None:
                 made["ai_failed"] += 1
                 continue                              # the rules summary stays
@@ -698,6 +701,8 @@ class Runner:
             f"yes {c.get('pdf_yes', 0)} / no {c.get('pdf_no', 0)} / unknown {c.get('pdf_unknown', 0)}, "
             f"scanned {c.get('pdf_scanned', 0)}, skipped (not yours) {c.get('pdfs_skipped_not_relevant', 0)}",
             f"mailbox           : {c.get('mails_scanned', 0)} mails looked at, {c.get('mails_kept', 0)} kept",
+            f"job descriptions  : {c.get('jd_found') or 'none looked up (no role changed)'}; summaries "
+            f"{c.get('jd_summaries') or 'none needed'}",
             f"AI fallback       : {c.get('ai', {}).get('calls', 0)} calls, {c.get('ai', {}).get('answers', 0)} answers, "
             f"{c.get('ai', {}).get('errors', 0)} errors (only for notices the rules couldn't read)"
             + (f"; last error: {c['ai']['last_error']}" if c.get('ai', {}).get('last_error') else ""),

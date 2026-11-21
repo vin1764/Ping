@@ -117,12 +117,15 @@
         this.q("items", (q) => q.order("first_seen", { ascending: true }).limit(3000)),
         this.q("roles", (q) => q.limit(2000)),
         this.q("profile"),
-        this.q("runs", (q) => q.order("started_at", { ascending: false }).limit(1)),
+        this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
       ]);
       // the demo is a snapshot: its profile row carries the time it was taken
       return { items, roles, profile: profile[0] || {}, runs,
                generated_at: this.demo ? profile[0]?.updated_at : undefined };
     }
+    // live updates (see startLive): the latest runs, and the items again once a run has finished
+    async liveRuns() { return this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)); }
+    async items() { return this.q("items", (q) => q.order("first_seen", { ascending: true }).limit(3000)); }
     async notice(noticeId) {
       const [n] = await this.q("notices", (q) => q.eq("notice_id", noticeId).limit(1));
       const checks = n ? await this.q("pdf_checks", (q) => q.eq("notice_id", n.id)) : [];
@@ -191,11 +194,8 @@
       if (!r.ok) throw Object.assign(new Error(out.error || `HTTP ${r.status}`), { status: r.status });
       return out;
     }
-    async checkNow() {
-      if (this.demo) return "The demo can't start a check: Ping only logs in to the ERP for its owner.";
-      await this.fn("check-now");
-      return "Started a run. New messages arrive in about 2 minutes (reload to see them).";
-    }
+    // starts the Ping workflow; the function creates the run's row ("queued") and returns its id
+    async checkNow() { return this.fn("check-now"); }
     async ask(q) {
       // the demo is a snapshot: "tomorrow" is the day after it, as everywhere else on the page
       const asOf = this.demo && state.asOf ? new Date(state.asOf).toISOString() : undefined;
@@ -305,10 +305,140 @@
     await decideOnboarding();
     window.addEventListener("hashchange", route);
     route();
+    startLive();
+  }
+
+  // ------------------------------------------------------------ live updates (no reloads)
+  // Supabase Realtime pushes new chat_messages and every change to runs. Row rules hold on the channel: a demo
+  // session receives only its own chat rows and the demo's runs. Items change only when a run writes them, so they
+  // are read again when a run finishes. On tab focus everything is read again (Realtime can drop while a laptop
+  // sleeps); if the socket fails, the page polls: every 15 s while a run is going, every 60 s otherwise.
+  const live = { ok: false, timer: null, syncing: false, newCount: 0, firstNew: null, syncJump: null, local: new Set(), channel: null };
+
+  function startLive() {
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+    window.addEventListener("focus", () => sync());
+    const sb = state.src.sb;
+    if (!sb || !state.src.liveRuns) return;                      // the offline ?demo=1 copy: nothing to listen to
+    live.channel = sb.channel("ping-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (p) => onChat(p.new))
+      .on("postgres_changes", { event: "*", schema: "public", table: "runs" }, (p) => onRun(p.new))
+      .subscribe((st) => {
+        const was = live.ok;
+        live.ok = st === "SUBSCRIBED";
+        if (live.ok && !was) sync();                             // (re)connected: catch up on anything missed
+        schedulePoll();
+      });
+    schedulePoll();
+  }
+
+  function schedulePoll() {
+    clearTimeout(live.timer);
+    if (live.ok || !state.src?.liveRuns) return;
+    live.timer = setTimeout(sync, LIVE.pollEvery(!!LIVE.current(state.data.runs, Date.now())));
+  }
+
+  async function sync() {
+    if (!state.src?.liveRuns || live.syncing || !state.data) return;
+    live.syncing = true;
+    try {
+      const before = LIVE.lastFinished(state.data.runs)?.id;
+      mergeRuns(await state.src.liveRuns(), true);
+      const chat = await state.src.chat();
+      for (const m of chat || []) addChatRow(m);
+      if (LIVE.lastFinished(state.data.runs)?.id !== before) state.data.items = await state.src.items();
+      applyLive();
+    } catch { /* offline for a moment: the next poll or focus tries again */ }
+    finally { live.syncing = false; schedulePoll(); }
+  }
+
+  function addChatRow(m) {
+    if (!m?.role || !m.text || !m.created_at) return false;
+    const k = msgKey(m.role, m.created_at);
+    if (state.chat.some((x) => msgKey(x.role, x.created_at) === k && x.text === m.text)) return false;
+    state.chat.push({ role: m.role, text: m.text, created_at: m.created_at });
+    return true;
+  }
+  function onChat(row) { if (addChatRow(row)) applyLive(); }
+
+  async function onRun(row) {
+    if (!row?.id) return;
+    const was = (state.data.runs || []).find((r) => r.id === row.id);
+    const ended = ["done", "failed"].includes(row.stage) && (!was || !["done", "failed"].includes(was.stage));
+    mergeRuns([row]);
+    // a run that just finished: read its new messages first, so they arrive right after its "Done" line
+    if (ended && row.stage === "done") state.data.items = await state.src.items().catch(() => state.data.items);
+    applyLive();
+  }
+
+  // runs, newest first; full=true replaces the list (keeping the demo's played-out checks)
+  function mergeRuns(rows, full) {
+    const byId = new Map((full ? (state.data.runs || []).filter((r) => live.local.has(r.id)) : state.data.runs || []).map((r) => [r.id, r]));
+    for (const r of rows || []) byId.set(r.id, { ...(byId.get(r.id) || {}), ...r });
+    const at = (r) => Math.max(Date.parse(r.requested_at || 0) || 0, Date.parse(r.started_at || 0) || 0, Date.parse(r.shown_at || 0) || 0);
+    state.data.runs = [...byId.values()].sort((a, b) => at(b) - at(a) || String(b.id).localeCompare(String(a.id)));
+    applyLive();
+  }
+
+  function markRead() {
+    state.readAt = new Date().toISOString();
+    state.src.setReadAt(state.readAt).catch(() => {});
+  }
+
+  // what changed, onto the page: the header, the buttons, and in the chat new bubbles at the bottom and changed
+  // ones redrawn in place, never moving what you're reading
+  function applyLive() {
+    if (!state.data) return;
+    showLastRun();
+    const page = location.hash.slice(1) || "chat";
+    if (page === "chat" && !state.onb) liveRender();
+    else navUnread(unreadOf(threadEntries()).unread.length);
+  }
+
+  function liveRender() {
+    const thread = $("#thread"), inner = thread?.querySelector(".thread-inner");
+    if (!inner || inner.classList.contains("onb")) return;
+    const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
+    const have = new Map([...inner.querySelectorAll("[data-key]")].map((n) => [n.dataset.key, n]));
+    const added = [];
+    keepPlace(thread, atBottom, () => {
+      for (const e of threadEntries()) {
+        const k = entryKey(e), old = have.get(k);
+        if (old) {
+          if (old.dataset.sig !== entrySig(e)) old.replaceWith(renderEntry(e));
+          continue;
+        }
+        const node = renderEntry(e);
+        node.classList.add("enter");
+        appendToday(inner, node);
+        added.push(node);
+      }
+    });
+    if (!added.length) return live.syncJump?.();
+    if (atBottom) {                                   // at the bottom: follow along
+      thread.scrollTop = thread.scrollHeight;
+      markRead();
+    } else {                                          // reading further up: say so, don't move
+      if (!live.newCount) live.firstNew = added[0];
+      live.newCount += added.filter((n) => !n.classList.contains("me")).length || 0;
+    }
+    live.syncJump?.();
+  }
+
+  // redraw without moving what's on screen: the first bubble you can see stays exactly where it is
+  function keepPlace(thread, atBottom, fn) {
+    if (atBottom) return fn();
+    const top = thread.getBoundingClientRect().top;
+    const anchor = [...thread.querySelectorAll("[data-key]")].find((n) => n.getBoundingClientRect().bottom > top);
+    const key = anchor?.dataset.key, before = anchor?.getBoundingClientRect().top;
+    fn();
+    const now = key && thread.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    if (now) thread.scrollTop += now.getBoundingClientRect().top - before;
   }
 
   // ------------------------------------------------------------ first-run onboarding (dashboard/onboarding.js)
   const OB = window.PingOnboarding;
+  const LIVE = window.PingLive;
   async function decideOnboarding() {
     state.onb = null;
     if (!OB || !state.src.saveOnboarding) return;          // the static ?demo=1 copy can't save answers
@@ -325,8 +455,8 @@
 
   function setupNav() {
     $("#nav").hidden = false;
-    const check = $("#check-now");
-    check.onclick = () => checkNow(check);
+    $("#check-now-top").hidden = false;
+    document.querySelectorAll("[data-check-now]").forEach((b) => { b.onclick = () => checkNow(); });
     const theme = $("#theme-btn");
     const label = () => {
       const t = themeNow();
@@ -343,11 +473,48 @@
     document.addEventListener("focusout", () => document.body.classList.remove("typing-focus"));
   }
 
-  async function checkNow(btn) {
-    if (btn) btn.disabled = true;
-    try { status(await state.src.checkNow()); }
-    catch (e) { status(e.status === 404 ? "Check now isn't set up yet (see README)." : `Couldn't start a run: ${e.message}`); }
-    finally { if (btn) setTimeout(() => { btn.disabled = false; }, 15000); }
+  // Check now, as a process in the chat: a Ping message whose steps update in place (from the run's own row, live),
+  // ending in "Done at 12:17 — 2 new items" or the reason it couldn't finish. The demo plays the same steps on its
+  // sample snapshot.
+  async function checkNow() {
+    if (LIVE.current(state.data.runs, Date.now()) || state.starting) return;
+    if ((location.hash || "#chat") !== "#chat") location.hash = "#chat";
+    if (state.src.kind === "demo") return demoCheck();
+    state.starting = true;
+    updateCheckButtons();
+    try {
+      const out = await state.src.checkNow();
+      if (out?.run_row && !state.data.runs.some((r) => r.id === out.run_row)) {
+        mergeRuns([{ id: out.run_row, trigger: "manual", mode: "run", status: "queued", stage: "queued",
+                     requested_at: new Date().toISOString() }]);
+      } else if (!out?.run_row) status("Started a check. Its messages appear here as it goes.");
+    } catch (e) {
+      status(e.status === 404 ? "Check now isn't set up yet (see README)." : `Couldn't start a check: ${e.message}`);
+    } finally {
+      state.starting = false;
+      applyLive();
+    }
+  }
+
+  function demoCheck() {
+    const run = { id: `demo-${Date.now()}`, demo: true, trigger: "manual", mode: "run", status: "queued", stage: "queued",
+                  requested_at: new Date().toISOString(), shown_at: new Date(nowDate().getTime() + 1000).toISOString() };
+    live.local.add(run.id);
+    mergeRuns([run]);
+    let i = 0;
+    const step = () => {
+      if (i < LIVE.DEMO_STAGES.length) {
+        const [stage, ms] = LIVE.DEMO_STAGES[i++];
+        Object.assign(run, { stage, status: stage === "queued" ? "queued" : "running" });
+        if (stage !== "queued" && !run.started_at) run.started_at = new Date().toISOString();
+        mergeRuns([{ ...run }]);
+        setTimeout(step, ms);
+      } else {
+        Object.assign(run, { stage: "done", status: "ok", finished_at: new Date().toISOString(), new_items: 0 });
+        mergeRuns([{ ...run }]);
+      }
+    };
+    step();
   }
 
   // light / dark: follows the system unless you pick one (kept in this browser only)
@@ -358,12 +525,26 @@
     else delete document.documentElement.dataset.theme;
   }
 
+  // the header: "checking the ERP now…" while a run is going, else the last finished check. No banner for a failed
+  // run: ERP hiccups are normal (Ping posts in the chat after 3 in a row, or at once if the ERP refuses the login).
   function showLastRun() {
-    const run = (state.data.runs || [])[0];
-    if (!run) return;
-    $("#subtitle").textContent = `last checked ${when(run.finished_at)}`;
-    // No banner for a failed run: ERP hiccups are normal. Ping posts in the chat after 3 in a row, or at once if
-    // the ERP refuses the login (see ping/run.py).
+    const cur = LIVE.current(state.data.runs, Date.now());
+    const last = LIVE.lastFinished((state.data.runs || []).filter((r) => !r.demo));   // the demo's played check isn't a real one
+    $("#subtitle").textContent = cur ? "checking the ERP now…" : last ? `last checked ${when(last.finished_at)}`
+      : state.asOf ? `snapshot of ${when(state.asOf)}` : "placement updates";
+    updateCheckButtons(cur);
+  }
+
+  // every Check now button (rail, header, Profile > Account): off while a run is going, with its step on it
+  function updateCheckButtons(cur = LIVE.current(state.data.runs, Date.now())) {
+    document.querySelectorAll("[data-check-now]").forEach((b) => {
+      b.disabled = !!cur || !!state.starting;
+      b.setAttribute("aria-busy", String(!!cur || !!state.starting));
+      const label = b.querySelector(".check-label") || b;
+      // the header's button (phones) is short; the rail and Profile > Account show the step too
+      label.textContent = state.starting ? "Starting…" : b.id === "check-now-top" ? (cur ? "Checking…" : "Check now")
+        : LIVE.buttonLabel(cur, Date.now());
+    });
   }
 
   function status(text) { const el = $("#status"); el.textContent = text; el.hidden = !text; }
@@ -554,7 +735,10 @@
   function threadEntries() {
     const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
     const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text }));
-    return [...items, ...talk].filter((e) => e.at).sort((a, b) =>
+    // a Check now (with its progress) and an hourly check that brought something new
+    const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, Date.now()))
+      .map((r) => ({ kind: "run", at: r.shown_at || r.requested_at || r.started_at, run: r }));
+    return [...items, ...talk, ...runs].filter((e) => e.at).sort((a, b) =>
       dt(a.at) - dt(b.at) || (a.kind === "item" && b.kind === "item" ? String(a.it.sort_at || "").localeCompare(String(b.it.sort_at || "")) : 0));
   }
 
@@ -592,7 +776,7 @@
         if (snapshot) group.append(snapshot);
         group.append(divider);
       }
-      group.append(e.kind === "item" ? itemBubble(e.it, e.at) : textBubble(e.kind, e.text, e.at));
+      group.append(renderEntry(e));
     }
     if (snapshot && !divider) (group || inner).append(snapshot);
     const thread = h("div", { class: "thread", id: "thread", role: "log", "aria-label": "Messages", "aria-live": "polite" }, inner);
@@ -615,7 +799,16 @@
       const tr = thread.getBoundingClientRect();
       const fromBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
       jump.style.bottom = `${composer.offsetHeight + 12}px`;
-      if (divider && divider.getBoundingClientRect().top > tr.bottom - 8) {
+      if (live.newCount && fromBottom < 80) {           // you've scrolled down to what arrived: it's read
+        live.newCount = 0;
+        live.firstNew = null;
+        markRead();
+      }
+      if (live.newCount && live.firstNew?.isConnected) {
+        jump.textContent = `↓ ${live.newCount} new`; jump.className = "pill-btn"; jump.hidden = false;
+        const first = live.firstNew;
+        jump.onclick = () => first.scrollIntoView({ block: "start", behavior: motion() });
+      } else if (divider && divider.getBoundingClientRect().top > tr.bottom - 8) {
         jump.textContent = `${unread.length} new ↓`; jump.className = "pill-btn"; jump.hidden = false;
         jump.onclick = () => divider.scrollIntoView({ block: "start", behavior: motion() });
       } else if (fromBottom > thread.clientHeight) {
@@ -624,6 +817,9 @@
       } else jump.hidden = true;
     };
     thread.addEventListener("scroll", syncJump, { passive: true });
+    live.newCount = 0;
+    live.firstNew = null;
+    live.syncJump = syncJump;
     // open at the first unread message, otherwise at the bottom (the latest thing that happened)
     requestAnimationFrame(() => {
       if (divider) (snapshot || divider).scrollIntoView({ block: "start" });
@@ -642,7 +838,30 @@
     d.parentElement.setAttribute("aria-label", n ? `Chat, ${n} new` : "Chat"); }
 
   function textBubble(role, text, at, enter) {
-    return h("div", { class: `msg ${role === "me" ? "me" : "ping"}${enter ? " enter" : ""}` }, h("span", { class: "text" }, text),
+    return h("div", { class: `msg ${role === "me" ? "me" : "ping"}${enter ? " enter" : ""}`, "data-key": msgKey(role, at), "data-sig": "1" },
+      h("span", { class: "text" }, text), h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
+  }
+
+  // every bubble has a key (what it is) and a signature (what it shows), so live updates add what's new and
+  // redraw only what changed, in place
+  const msgKey = (role, at) => `msg:${role === "me" ? "me" : "ping"}:${Date.parse(at)}`;
+  const itemSig = (it) => [retitle(it), it.level, it.done ? 1 : 0, it.details?.hidden_because || "", (it.details?.list || []).length].join("|");
+  const runSig = (r) => [r.stage, r.status, r.new_items, r.note, r.finished_at].join("|");
+  function entryKey(e) { return e.kind === "item" ? `item:${e.it.id}` : e.kind === "run" ? `run:${e.run.id}` : msgKey(e.kind, e.at); }
+  function entrySig(e) { return e.kind === "item" ? itemSig(e.it) : e.kind === "run" ? runSig(e.run) : "1"; }
+  function renderEntry(e) {
+    return e.kind === "item" ? itemBubble(e.it, e.at) : e.kind === "run" ? runBubble(e.run, e.at) : textBubble(e.kind, e.text, e.at);
+  }
+
+  function runBubble(run, at) {
+    const d = LIVE.describe(run, state.data.runs, Date.now());
+    return h("div", { class: `msg ping run r-${d.state}`, "data-key": `run:${run.id}`, "data-sig": runSig(run),
+                      role: d.state === "active" ? "status" : null },
+      h("div", { class: "kicker" }, h("span", { class: "k" }, d.kicker),
+        d.state === "active" ? h("span", { class: "spin", "aria-hidden": "true" }) : null),
+      h("span", { class: "text title" }, d.line),
+      d.steps ? h("ol", { class: "steps", "aria-label": "Progress" },
+        d.steps.map((st) => h("li", { class: `s-${st.state}`, "aria-current": st.state === "now" ? "step" : null }, st.label))) : null,
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
   }
 
@@ -684,7 +903,7 @@
       : kind === "new" ? "New roles" : LEVELS[it.level] || "For you";
     const open = state.open.has(it.id);
     const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
-      tabindex: "0", "aria-expanded": String(open), "data-kind": kind },
+      tabindex: "0", "aria-expanded": String(open), "data-kind": kind, "data-key": `item:${it.id}`, "data-sig": itemSig(it) },
       h("div", { class: "kicker" }, h("span", { class: "k" }, label),
         !past && due && (kind === "soon" || kind === "test") ? countPill(due, kind) : null),
       h("span", { class: "text title" }, retitle(it)),
@@ -1249,8 +1468,8 @@
     const themeChips = h("div", { class: "chips wrap", role: "group", "aria-label": "Theme", style: "padding:0" },
       [["system", "Auto"], ["light", "Light"], ["dark", "Dark"]].map(([t, l]) => h("button", { type: "button", class: "chip", "data-theme-choice": t,
         "aria-pressed": String(themeNow() === t), onclick: () => { setTheme(t); viewProfile(); } }, l)));
-    const checkBtn = h("button", { type: "button", class: "btn ghost", id: "account-check" }, "Check now");
-    checkBtn.onclick = () => checkNow(checkBtn);
+    const checkBtn = h("button", { type: "button", class: "btn ghost", id: "account-check", "data-check-now": true,
+      onclick: () => checkNow() }, h("span", { class: "check-label" }, "Check now"));
     const account = h("section", { class: "card pcard", id: "pc-account", "aria-labelledby": "pc-account-h" },
       h("div", { class: "pcard-head" }, h("h2", { id: "pc-account-h" }, "Account")),
       kv([["Signed in as", demo ? "Demo visitor (anonymous, read-only)" : "The owner"], ["Last check", run ? when(run.finished_at || run.started_at) : "Not yet"]]),
@@ -1261,6 +1480,7 @@
     mountPage(h("h1", {}, "Profile"), h("p", { class: "lede" },
       "Whether you applied comes from the ERP's companies list, not from here. Ping only reads the ERP."),
       h("div", { class: "pcards" }, about, looking, cvs, sched, account));
+    updateCheckButtons();
   }
 
   // "My CVs": up to 3 PDFs with labels, in the private "cvs" bucket (owner only; never in git; demo sessions can't

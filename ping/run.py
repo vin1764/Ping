@@ -50,6 +50,17 @@ REAL = {"is_sample": "not.is.true"}  # demo rows (is_sample) are never mixed int
 #    one chat message for that streak, and a "back online" message when a run works again.
 CREDENTIAL_KINDS = ("bad_user", "otp_refused", "unknown_question")
 STREAK_ALERT_AT = 3
+def _failure_note(status: str) -> str:
+    """What the dashboard says when a run you started couldn't finish (no chat message was posted for it)."""
+    kind = failure_kind(status)
+    why = status.removeprefix("failed: ")
+    if kind == "credentials":
+        return f"The ERP refused the login ({why}). Fix the secret, then press Check now again."
+    if why in ("login_failed", "no_otp", "page_changed") or re.search(r"Connection|Timeout|HTTP|SSL", why):
+        return f"Couldn't get into the ERP this time ({why}); that happens. I'll try again at the next hourly check."
+    return f"The check stopped before the end ({why}). I'll try again at the next hourly check."
+
+
 UNREACHABLE_MSG = "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly."
 BACK_ONLINE_MSG = "Back online: reached the ERP again after {n} failed runs."
 
@@ -95,6 +106,9 @@ class Runner:
             "pdf_yes", "pdf_no", "pdf_unknown", "pdfs_skipped_not_relevant", "notices_rules_unsure")}
         self.problems: list[str] = []
         self.login_stats = None
+        self.told: str | None = None        # the last message this run posted in the chat (failure policy)
+        self.new_in_chat = 0                # new messages in the chat from this run (the dashboard says "N new")
+        self.stage_off = False
 
     # ------------------------------------------------------------------ helpers
     def c(self, key: str, n: int = 1) -> None:
@@ -109,8 +123,26 @@ class Runner:
         return prof
 
     # --------------------------------------------------------------------- run
+    def _stage(self, stage: str, status: str = "running") -> None:
+        """Progress for the dashboard (it listens to the runs table): one small update per step. Best effort: a run
+        never fails because the progress couldn't be written."""
+        self.stage = stage
+        if not self.store_ok or getattr(self, "stage_off", False):
+            return
+        try:
+            self.store.upsert("runs", [{"id": self.run_id, "started_at": self.started.isoformat(), "trigger": self.trigger,
+                                        "mode": "run", "status": status, "stage": stage}])
+        except Exception as e:
+            self.stage_off = True       # e.g. the stage column isn't there yet (Admin > apply-sql adds it)
+            log(f"progress not saved ({type(e).__name__}); the run goes on")
+
     def run(self) -> dict:
         started = datetime.now(timezone.utc)
+        self.started = started
+        # Check now creates the run's row ("queued") before GitHub starts the run, and passes its id along
+        self.run_id = os.environ.get("PING_RUN_ROW", "").strip() or \
+            started.strftime("%Y%m%dT%H%M%S") + "-" + hashlib.sha1(os.urandom(8)).hexdigest()[:6]
+        self._stage("logging in")
         t0 = time.monotonic()
         status = "ok"
         profile = self.profile()
@@ -131,6 +163,7 @@ class Runner:
             self.erp.open_placement()
 
             # ---- companies list
+            self._stage("reading companies")
             list_roles = parse_companies(self.erp.companies_xml())
             self.c("roles_seen", len(list_roles))
             for r in list_roles:
@@ -144,6 +177,7 @@ class Runner:
                 f"(applied: {sum(1 for r in list_roles if r['applied'])})")
 
             # ---- notice board
+            self._stage("reading notices")
             board = parse_notices(self.erp.notices_xml())
             self.c("notices_seen", len(board))
             if first_run or len(board) - len(stored_notice_ids) > 400:
@@ -174,6 +208,7 @@ class Runner:
                     self.c("notices_rules_unsure")
 
             # ---- attachments (PDFs): yours first, other shortlists/schedules last
+            self._stage("reading PDFs")
             checks = self._check_attachments(fresh_notices, index, all_roles, profile, roll)
         except LoginError as e:
             status = f"failed: {e.kind}"
@@ -195,6 +230,7 @@ class Runner:
             emails = self._scan_mail(list_roles or list(stored_roles.values()))
 
         # ---- save + rebuild the feed
+        self._stage("saving")
         self._save(list_roles, new_roles, fresh_notices, checks, emails, stored_roles)
         items = self._rebuild(profile)
         self._login_failure_tracking(status)
@@ -202,7 +238,7 @@ class Runner:
         finished = datetime.now(timezone.utc)
         ls = self.login_stats
         record = {
-            "id": started.strftime("%Y%m%dT%H%M%S") + "-" + hashlib.sha1(os.urandom(8)).hexdigest()[:6],
+            "id": self.run_id,
             "started_at": started.isoformat(), "finished_at": finished.isoformat(),
             "trigger": self.trigger, "mode": "run", "status": status,
             "login_seconds": round(ls.seconds_total, 1) if ls else None,
@@ -214,11 +250,17 @@ class Runner:
                        "seconds_total": round(time.monotonic() - t0, 1)},
             "problems": self.problems[:50],
         }
+        # for the dashboard: done or failed, how many new messages, and why it failed (the chat's own words)
+        live = {"stage": "done" if status == "ok" else "failed", "new_items": self.new_in_chat,
+                "note": None if status == "ok" else (self.told or _failure_note(status))}
         if self.store_ok:
             try:
-                self.store.upsert("runs", [record])
+                self.store.upsert("runs", [{**record, **live}])
             except Exception as e:
-                log(f"could not save the run record: {e}")
+                try:                          # before Admin > apply-sql added the live columns
+                    self.store.upsert("runs", [record])
+                except Exception:
+                    log(f"could not save the run record: {e}")
         self._alerts(status)
         self._print_summary(record)
         return record
@@ -424,6 +466,10 @@ class Runner:
         self.counts["dedupe"] = {k: v for k, v in dstats.items() if k != "examples"}
         self.counts["dedupe"]["deadline_moves_between_runs"] = len(moved)
         self.counts["dedupe_examples"] = dstats.get("examples", [])[:5]
+        # what the chat shows that it didn't show before (role cards and reminders live inside the digests)
+        self.new_in_chat = sum(1 for it in items if it["id"] not in previous and it.get("level") != "hidden"
+                               and it.get("category") not in ("apply", "reminder") and not it.get("dismissed"))
+        self.counts["new_in_chat"] = self.new_in_chat
         stamp = datetime.now(timezone.utc).isoformat()
         # role eligibility + effective deadline, for the dashboard
         dls = effective_deadlines(roles, notices, CompanyIndex(roles))
@@ -494,11 +540,11 @@ class Runner:
                                                             "at": datetime.now(timezone.utc).isoformat(),
                                                             "error": last_error[:500]})
             self._tell(f"The ERP refused the login: {last_error.rstrip('.')}. I've paused the hourly checks. Fix it (GitHub "
-                       "secrets ERP_USER_ID / ERP_PASSWORD / ERP_SECQ_1-3), then start a run yourself: Menu > Check "
-                       "now, or Actions > Ping > Run workflow.",
+                       "secrets ERP_USER_ID / ERP_PASSWORD / ERP_SECQ_1-3), then start a run yourself: Check now "
+                       "(the chat's header, or Profile > Account), or Actions > Ping > Run workflow.",
                        "Login refused: hourly checks paused",
                        f"The ERP refused Ping's login ({status}).\n\n{last_error}\n\nHourly checks are paused so the "
-                       "account isn't locked. Fix the secret, then start a run by hand (dashboard Menu > Check now, "
+                       "account isn't locked. Fix the secret, then start a run by hand (dashboard: Check now, "
                        "or GitHub Actions > Ping > Run workflow); that run resumes the schedule.")
         else:
             if paused:  # a run you started got past the credentials check: the schedule is back on
@@ -523,6 +569,7 @@ class Runner:
 
     def _tell(self, chat_text: str, email_subject: str | None = None, email_body: str | None = None) -> None:
         """One message from Ping in the dashboard chat, and optionally one email."""
+        self.told = chat_text
         try:
             self.store.insert("chat_messages", [{"role": "ping", "text": chat_text}])
         except Exception as e:

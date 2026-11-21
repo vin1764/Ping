@@ -406,3 +406,26 @@ begin
   create policy ping_cvs_owner_delete on storage.objects for delete to authenticated
     using (bucket_id = 'cvs' and public.is_ping_owner());
 end $cvs$;
+
+-- Live updates on the dashboard (no reloads): each run reports its progress in its own row, and the page listens
+-- to chat_messages and runs with Supabase Realtime. Realtime applies the same row rules as reading: a demo session
+-- only ever receives its own chat rows and the demo's runs, never the owner's.
+alter table runs add column if not exists stage text;            -- queued, logging in, reading companies,
+                                                                  -- reading notices, reading PDFs, saving, done, failed
+alter table runs add column if not exists requested_at timestamptz;  -- Check now: when it was pressed
+alter table runs add column if not exists new_items int;          -- new messages in the chat from this run
+alter table runs add column if not exists note text;              -- why a run failed, in the words the chat uses
+do $rt$
+declare t text;
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    raise notice 'no supabase_realtime publication here: live updates skipped';
+    return;
+  end if;
+  foreach t in array array['chat_messages', 'runs'] loop
+    if not exists (select 1 from pg_publication_tables
+                   where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $rt$;

@@ -19,6 +19,10 @@ on:
         type: choice
         options: [manual, schedule]
         default: manual
+      run_row:
+        description: "Check now: the run's row the dashboard is already showing ('queued'); the run fills it in"
+        type: string
+        default: ""
 
 concurrency:
   group: ping
@@ -52,6 +56,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         env:
           PING_MODE: ${{ inputs.mode || 'run' }}
+          PING_RUN_ROW: ${{ inputs.run_row || '' }}
           # 'schedule' for GitHub's cron and for kick-run's hourly start, 'manual' for Check now / Run workflow
           PING_TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || inputs.source || 'manual' }}
           ERP_USER_ID: ${{ secrets.ERP_USER_ID }}

@@ -371,3 +371,45 @@ body.doc { display: block; overflow: auto; height: auto; min-height: 100%; }
     text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .doc-page code { overflow-wrap: break-word; }
 }
+
+/* live updates: the Check now process in the chat, and the header button on phones */
+.check-top { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; max-width: 46vw;
+  padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface);
+  color: var(--ink); font-size: var(--t-sm); font-weight: 600; cursor: pointer; }
+.check-top svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.check-top .check-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.check-top:disabled, [data-check-now]:disabled { opacity: 1; cursor: default; color: var(--muted); }
+.badge + .check-top { margin-left: var(--s2); }
+@media (min-width: 900px) { .check-top { display: none; } }
+.nav .check-label { display: block; max-width: 80px; text-align: center; white-space: normal; line-height: 14px; }
+.msg.run { border-left: 4px solid var(--accent); }
+.msg.run.r-failed { border-left-color: var(--danger); }
+.msg.run .kicker .k { color: var(--accent); }
+.msg.run.r-failed .kicker .k { color: var(--danger); }
+.msg.run .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent);
+  animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { list-style: none; display: flex; flex-wrap: wrap; gap: 4px var(--s3); margin: var(--s2) 0 0; padding: 0;
+  font-size: var(--t-xs); line-height: 16px; color: var(--muted); }
+.steps li { display: inline-flex; align-items: center; gap: 5px; }
+.steps li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.steps li.s-done::before { background: var(--accent); border-color: var(--accent); }
+.steps li.s-now { color: var(--ink); font-weight: 600; }
+.steps li.s-now::before { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* phones: the header never makes the page wider than the screen (the name, the demo chip and Check now share it) */
+body { grid-template-columns: minmax(0, 1fr); }
+.top { min-width: 0; }
+.brand { flex: 0 1 auto; min-width: 0; }
+.brand > span:last-child { min-width: 0; }
+.check-top { flex: 0 1 auto; min-width: 44px; }
+@media (max-width: 480px) {
+  .check-top { padding: 0 10px; }
+  .check-top .check-label { max-width: 96px; }
+  .top .sub { max-width: 40vw; }
+}
+@media (min-width: 900px) { body { grid-template-columns: var(--rail) minmax(0, 1fr); } }
+.top .badge { flex: none; }
+.check-top .check-label { max-width: none; }
+/* the name gives way first; the demo chip and Check now keep their words */
+.top .brand { flex: 1 1 0; }
+.top .badge, .check-top { flex: none; }

@@ -214,3 +214,35 @@ def test_a_manual_run_that_logs_in_resumes_the_schedule(emails):
     assert credentials_pause(store) is None
     assert _chat(store)[-1] == "Logged in again; hourly checks are back on."
     assert len(emails) == 1  # only the original alert
+
+
+def test_a_run_reports_its_progress_for_the_dashboard(monkeypatch):
+    """The dashboard listens to the runs table: each step updates the run's own row (the one Check now created when
+    there is one), the last update says done and how many new messages the chat got."""
+    monkeypatch.setenv("PING_RUN_ROW", "20261121T090000-check")
+    store = MemoryStore()
+    stages = []
+    orig = store.upsert
+
+    def spy(table, rows, *a, **k):
+        if table == "runs":
+            stages.extend((r["id"], r.get("stage")) for r in rows)
+        return orig(table, rows, *a, **k)
+    monkeypatch.setattr(store, "upsert", spy)
+    rec, store = run(FakeErp(NOW), store)
+    assert {i for i, _ in stages} == {"20261121T090000-check"}
+    assert [s for _, s in stages] == ["logging in", "reading companies", "reading notices", "reading PDFs", "saving", "done"]
+    row = store.select("runs")[0]
+    assert row["status"] == "ok" and row["new_items"] > 0 and row["note"] is None
+    # the next run finds nothing new
+    monkeypatch.delenv("PING_RUN_ROW")
+    rec2, store = run(FakeErp(NOW), store)
+    latest = next(r for r in store.select("runs") if r["id"] == rec2["id"])
+    assert latest["stage"] == "done" and latest["new_items"] == 0
+
+
+def test_a_failed_run_says_why_in_the_chat_words(monkeypatch):
+    fake = FakeErp(NOW)
+    rec, store = run(fake, s=secrets(answers=[SecurityAnswer("no such question", "x")] * 3))
+    row = next(r for r in store.select("runs") if r["id"] == rec["id"])
+    assert row["stage"] == "failed" and row["note"], row

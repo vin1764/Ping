@@ -14,6 +14,8 @@
     <a class="brand" href="#chat"><span class="avatar" aria-hidden="true">P</span>
       <span><strong>Ping</strong><span id="subtitle" class="sub">placement updates</span></span></a>
     <span id="mode-badge" class="badge" hidden></span>
+    <!-- phones: Check now in the header (desktop has it on the rail); its label follows the run live -->
+    <button id="check-now-top" class="check-top" type="button" data-check-now hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span class="check-label">Check now</span></button>
   </header>
   <div id="status" class="status" role="status" hidden></div>
   <main id="app"><p class="muted center">Loading…</p></main>
@@ -23,7 +25,7 @@
     <a href="#companies" data-route="companies"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V8l6-3v15M10 20V10l10 2v8M3 20h18M14 15h2M14 18h2"/></svg>Companies</a>
     <a href="#profile" data-route="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profile</a>
     <span class="rail-gap rail-only"></span>
-    <button id="check-now" class="nav-btn rail-only" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Check now</button>
+    <button id="check-now" class="nav-btn rail-only" type="button" data-check-now><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span class="check-label">Check now</span></button>
     <button id="theme-btn" class="nav-btn rail-only" type="button" aria-label="Theme: follows the system"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9,9,0,1,0,9,9,7,7,0,0,1-9-9z"/></svg><span class="theme-label">Theme</span></button>
   </nav>
 
@@ -34,6 +36,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="onboarding.js"></script>
   <script src="names.js"></script>
+  <script src="live.js"></script>
   <script src="answer_rules.js"></script>
   <script src="app.js"></script>
 </body>

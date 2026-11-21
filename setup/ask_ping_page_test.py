@@ -101,6 +101,8 @@ def main(argv: list[str]) -> int:
         cfg = page.evaluate("window.PING_CONFIG")
         import requests
         hdr = {"apikey": cfg["supabaseKey"], "Authorization": f"Bearer {token}"}
+        import base64, json as _json
+        own_id = _json.loads(base64.urlsafe_b64decode(token.split(".")[1] + "==")).get("sub")
         real = {}
         # every table: a demo session must see 0 real rows (tables it may not read at all answer with an error or
         # nothing; role_marks, demo_questions, allowed_users and state have no policy for it)
@@ -108,7 +110,13 @@ def main(argv: list[str]) -> int:
                   "corrections", "state", "allowed_users", "role_marks", "demo_questions", "session_prefs"):
             has_sample = t not in ("state", "allowed_users", "role_marks", "demo_questions", "session_prefs", "corrections")
             params = {"select": "is_sample", "is_sample": "not.is.true", "limit": "5"} if has_sample else {"select": "*", "limit": "5"}
+            if t == "session_prefs":
+                # the onboarding saves this session's own row ("Use the demo profile"): it may see that one, no other
+                params = {"select": "owner_id", "limit": "5"}
             r = requests.get(f"{cfg['supabaseUrl']}/rest/v1/{t}", headers=hdr, timeout=30, params=params)
+            if t == "session_prefs" and r.status_code == 200:
+                real[t] = sum(1 for row in r.json() if row.get("owner_id") != own_id)
+                continue
             real[t] = len(r.json()) if r.status_code == 200 else f"HTTP {r.status_code}"
         demo_rows = requests.get(f"{cfg['supabaseUrl']}/rest/v1/items", headers=hdr, timeout=30,
                                  params={"select": "id", "limit": "1000"}).json()

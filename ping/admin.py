@@ -105,6 +105,19 @@ def gemini_check(secrets) -> int:
     if not cfg.get("provider"):
         say("no GEMINI_API_KEY in the secrets")
         return 2
+    # which models this key can call right now (Google retires and renames them; a retired name answers 404)
+    import requests
+    r = requests.get("https://generativelanguage.googleapis.com/v1beta/models", timeout=30,
+                     headers={"x-goog-api-key": cfg.get("key", "")}, params={"pageSize": 1000})
+    if r.status_code == 200:
+        names = sorted(m["name"].split("/", 1)[1] for m in r.json().get("models", [])
+                       if "generateContent" in m.get("supportedGenerationMethods", []))
+        say(f"models this key can call ({len(names)}): {', '.join(names)}")
+        configured = [cfg.get("model")] + list(cfg.get("fallback_models", []))
+        gone = [m for m in configured if m and m not in names]
+        say("configured models missing from that list: " + (", ".join(gone) if gone else "none"))
+    else:
+        say(f"listing models: HTTP {r.status_code}")
     test = "The CV submission of Northwind (made-up) closes at five in the evening on the twenty-second of November, 2026."
     res = ai.refine_notice(test, datetime(2026, 11, 20, tzinfo=IST), ["Northwind"], cfg)
     say(f"models tried in order: {[cfg.get('model')] + list(cfg.get('fallback_models', []))}")

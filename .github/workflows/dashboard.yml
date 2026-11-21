@@ -2,7 +2,7 @@ name: Dashboard
 
 on:
   push:
-    paths: ["dashboard/**", "supabase/**", "ping/sample.py", "ping/items.py", "setup/check_public_build.py",
+    paths: ["dashboard/**", "supabase/**", "ping/sample.py", "ping/items.py", "setup/check_public_build.py", "setup/build_setup_page.py", "docs/SETUP.md",
             ".github/workflows/dashboard.yml"]
   workflow_dispatch:
 

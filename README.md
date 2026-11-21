@@ -33,6 +33,15 @@ It **only reads**. It cannot apply, submit, upload or accept anything (see [Safe
 | mailbox | 60 mails looked at, 8 kept as placement mail |
 | whole run | 11 min, 744 ERP requests, all through the read-only gate |
 
+**Then login stopped working.** After the first run and a probe run both
+logged in fine (05:01 and 05:15 IST), the next 5 attempts (05:26 to 05:37 IST)
+all got a fresh OTP mail within 2-4 seconds, but the ERP answered Log In with
+the empty login page and no error message. Waiting 15 s before Log In didn't
+help. The cause is unknown: possibly a limit on logins/OTPs in a short time
+(about 9 OTPs in 35 minutes while testing), or the ERP allowing only one
+session at a time. Ping now retries a failed Log In once, and after 3 failed
+runs in a row pauses its hourly runs for 3 hours and emails you.
+
 Also verified for real:
 - The "more details" popup's layout (read on 2 roles in a probe run). Its
   first reader was wrong and came back empty for all 201 roles; the reader is
@@ -59,6 +68,7 @@ Also verified for real:
 - The dashboard, in demo mode, clicked through in a real browser.
 
 ### Not verified yet
+- **That login works again**, and why it stopped (see above).
 - **Saving to Supabase**: the tables don't exist yet, so nothing real has been saved.
 - **The dashboard with real data, its login, Check now and Ask Ping**: they
   need the tables, a login and the two functions deployed (see
@@ -86,6 +96,10 @@ Also verified for real:
 
 ## What's left for you
 
+0. **Check you can log in to the ERP yourself**, in a browser. If it works,
+   log out there, then start a run (Actions > Ping > Run workflow, mode `run`)
+   and see whether Ping gets in. If the ERP shows you any message about too
+   many attempts or a blocked account, that's the cause.
 1. **Create the tables:** Supabase > SQL Editor > New query > paste all of
    [`sql/schema.sql`](sql/schema.sql) > Run. Until then the hourly runs skip
    themselves (to save free minutes) and email you once a day.

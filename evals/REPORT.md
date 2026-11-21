@@ -15,6 +15,35 @@ Also in this folder: `real_run.json` (numbers from the real runs: login time, no
 `notices.json` and `companies.json` (the parser eval inputs), `ask_ping/cases.json` (the Ask Ping questions,
 checks and where each expected answer comes from).
 
+## Ask Ping routing: rules first for facts (22 Nov)
+
+Every message is routed before any model call (`route()` in `supabase/functions/_shared/answer_rules.js`): FACT
+questions are answered by rules, OPEN ones go to the model with a FACTS block and a number check.
+
+| | single questions (the original 42) | all 57 single questions | conversation turns |
+|---|---|---|---|
+| answered by rules (FACT / ACT / ACK, JD and preference paths) | **42 of 42** (37 FACT, 5 ACT) | 56 of 57 | 37 of 39 |
+| sent to the model (OPEN) | 0 | 1 ("hmm") | 2 ("why not?", "and?") |
+| live, rules only (`--no-ai`, deployed function, demo sessions) | 42 of 42 pass | 57 of 57 pass | 33 of 39 pass; the 6 others are preference turns that got HTTP 429 (the demo's 100 questions an hour, used up by this run itself); offline they pass |
+| median time, live, from a client to the answer | 3.5 s (FACT), 3.4 s (ACT) | | 3.4 s (FACT) |
+
+The time is the round trip to the deployed function, nearly all of it the function's sign-in check and database reads
+before routing; the routing and the rules themselves take a few milliseconds (`node evals/ask_ping/route_offline.js`
+answers all 96 questions and turns in well under a second). Model latency is now capped at 15 s (10 s main model with
+one retry, 5 s lighter model, then rules); it can't be measured on the evals key until `GEMINI_API_KEY_EVALS` exists.
+
+The 17-vs-8 bug: the old role lists counted "for you" including roles already applied to ("17 for you, 9 applied"),
+the digest and Today count for you and not applied ("8 for you"). One definition now; E1 "what's due tonight?" and
+E2 "how many roles for me close tonight?" must say "8 for you": both pass.
+
+Live answers (demo session, 22 Nov, as of the snapshot 18:04):
+- "which cv for blackbuck" → rules, 3.3 s: "BlackBuck (Associate Manager BlackBuck Leadership Program): apply with Consulting CV." (was 62 s)
+- "what's due tonight?" → rules, 3.0 s: "Close tonight 20:00 (in 1h 55m), Sat 21 Nov — 8 for you, 9 applied:" then For you (8,
+  each with the CV to apply with), Applied (9, ✓ applied), Others (30). (was "17 for you, 9 applied", 17 s)
+
+Offline check on every case and conversation: `node evals/ask_ping/route_offline.js` (CI runs it). Rules-only live run:
+`python evals/ask_ping/run_ask_ping_evals.py --no-ai` (no Gemini key needed), results in `ask_ping/results_no_ai.json`.
+
 ## Job descriptions (22 Nov)
 
 Bug: "summarise JPMC's JD" answered "I don't have the JD". JPMC did have one (147 characters in the ERP's JD field,

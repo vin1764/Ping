@@ -41,10 +41,25 @@ def _row_has_name(row: list[str], name: str) -> bool:
     return bool(parts) and all(re.search(rf"\b{re.escape(p)}\b", joined) for p in parts)
 
 
-def _details_from(header: list[str], row: list[str]) -> dict:
+ROOM_TOKEN = re.compile(r"\b(?:NC|NR|LH|CR|V|S|F|G)\s?-?\d{1,4}[A-Z]?\b")
+
+
+def _details_from(header: list[str], row: list[str], needle: str = "") -> dict:
+    """Read room/slot/date/time from the columns that belong to YOUR entry. Real room lists put two
+    students side by side ("Roll No | Room No | | Roll No | Room No"), so take the columns nearest to
+    your cell, to the right first, never just the first Room column."""
     out = {}
-    for h, v in zip(header, row):
-        if not v:
+    mine = next((i for i, c in enumerate(row) if needle and needle.lower() in str(c).replace(" ", "").lower()), None)
+    order = list(range(len(row)))
+    if mine is not None:
+        order = sorted(order, key=lambda j: (j < mine, abs(j - mine)))
+        h = header[mine] if mine < len(header) else ""
+        if h and not re.search(r"roll|name|s\.?\s*no|sl\b|^no\.?$", h, re.I):
+            out["column"] = h  # e.g. a shortlist with one column per role: "SDE-1"
+    for j in order:
+        h = header[j] if j < len(header) else ""
+        v = row[j] if j < len(row) else ""
+        if not v or j == mine:
             continue
         if ROOM_HDR.search(h) and "room" not in out:
             out["room"] = v
@@ -54,12 +69,19 @@ def _details_from(header: list[str], row: list[str]) -> dict:
             out["date"] = v
         elif TIME_HDR.search(h) and "time" not in out:
             out["time"] = v
+    if "room" not in out:
+        rest = " ".join(str(c) for k, c in enumerate(row) if k != mine or len(row) == 1)
+        if needle:
+            rest = re.sub(re.escape(needle), " ", rest, flags=re.I)
+        m = ROOM_TOKEN.search(rest)
+        if m:
+            out["room"] = m.group(0)
     return out
 
 
 def _context_details(context: str) -> dict:
     out = {}
-    m = re.search(r"(?:Room|Venue|Lab|Hall)\s*(?:No\.?)?\s*[:\-]?\s*([A-Z0-9][\w\- /,]{0,40})", context, re.I)
+    m = re.search(r"(?:Room|Venue|Lab|Hall)\s*(?:No\.?)?\s*[:\-]\s*([A-Za-z0-9][\w\- /,]{0,40}\d[\w\-]*)", context)
     if m:
         out["room_or_venue_from_heading"] = m.group(1).strip()
     m = re.search(r"(Slot|Batch|Session|Panel)\s*[:\-]?\s*(\w{1,10})", context, re.I)
@@ -208,8 +230,9 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
         result.update({k: v for k, v in found.items() if k != "details"})
         result["status"] = "yes"
         det = {}
-        if found.get("header") and found.get("my_row"):
-            det.update(_details_from(found["header"], found["my_row"]))
+        if found.get("my_row"):
+            needle = roll if found.get("matched_by") == "roll" else ""
+            det.update(_details_from(found.get("header") or [], found["my_row"], needle))
         if found.get("context"):
             det.update({k: v for k, v in _context_details(found["context"]).items() if k not in det})
         result["details"] = det

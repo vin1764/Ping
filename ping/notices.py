@@ -16,12 +16,15 @@ FORM_RE = re.compile(r"forms\.gle|docs\.google\.com/forms|forms\.office|form", r
 PHONE_POC = re.compile(r"([A-Z][A-Za-z.]+(?:\s+[A-Z][A-Za-z.]+){0,2})\s*\(\s*((?:\+?91[\s-]?)?\d[\d\s-]{8,13}\d)\s*\)")
 VENUE_RE = re.compile(r"(?:Venue|Reporting Venue|Location)\s*[:\-]\s*([^\n]{2,80}?)"
                       r"(?=\s*(?:Date|Reporting|Time|POC|Students|Note|Deadline|Link|The |Please|CDC|$|\n|\.))")
+# "1. ATHER ENERGY (Profile: All)", "2. [TEST] GROWW (Profile: APM) (3:00 PM  4:00 PM)",
+# "1. [PPT] OLA (6:00 PM  7:00 PM)", "3. INTEL (All Profiles)". An entry needs a profile or a time.
 ENTRY_RE = re.compile(
-    r"(?:^|\n|(?<=[.)\s]))(?P<num>\d{1,2})\s*\.\s*"
+    r"(?:^|\n|(?<=[.)\s\d]))(?P<num>\d{1,2})\s*\.\s*"
     r"(?:\[(?P<tag>[^\]]{1,30})\]\s*)?"
     r"(?P<name>[A-Za-z0-9&.,'/\- ]{2,80}?)\s*"
-    r"\((?:Profiles?|Roles?)\s*:\s*(?P<profiles>[^)]*)\)"
-    r"(?:\s*\((?P<when>[^)]*\d[^)]*)\))?", re.I)
+    r"(?:\((?:(?:Profiles?|Roles?)\s*:\s*(?P<profiles>[^)]*)|(?P<allprof>All\s+Profiles?|All\s+Roles?))\))?\s*"
+    r"(?:\((?P<when>[^)]*\d[^)]*[AP]M[^)]*)\))?"
+    r"(?=\s*(?:\d{1,2}\s*\.|Note|Interested|CDC|All |Students|Links?|$|\n))", re.I)
 TIME_RANGE = re.compile(r"(\d{1,2}(?::\d{2})?\s*[AP]M)\s*(?:-|–|to)?\s*(\d{1,2}(?::\d{2})?\s*[AP]M)?(?:\s*,\s*(.*))?", re.I)
 ROLE_PHRASES = [
     re.compile(r"for the roles? of\s*\(([^)]+)\)", re.I),
@@ -43,7 +46,7 @@ def classify(subject: str, text: str) -> str:
     if s.startswith("additional requirement"):
         return "form"
     rooms_now = re.search(r"room allocation|seating", t, re.I) and not re.search(
-        r"room allocation[^.\n]{0,40}will be (?:released|shared)", t, re.I)
+        r"room allocations?[^.\n]{0,80}will be (?:released|shared|communicated|announced)", t, re.I)
     if s.startswith("shortlist"):
         return "test_rooms" if rooms_now else "shortlist"
     if s.startswith("result"):
@@ -61,11 +64,12 @@ def classify(subject: str, text: str) -> str:
     # Urgent / General / anything new: read the text
     if rooms_now:
         return "test_rooms"
-    if re.search(r"shortlist", t, re.I):
+    if re.search(r"shortlist|list of (?:the )?students (?:who are )?(?:eligible|shortlisted|selected)", t, re.I):
         return "shortlist"
     if re.search(r"\b(result|selected|offer(?:ed)? to)\b", t, re.I):
         return "result"
-    if re.search(r"extended|extension", t, re.I) and re.search(r"cv|submission|apply|deadline", t, re.I):
+    if re.search(r"(?:has|have) been extended|extended (?:till|until|up ?to)|date extension", t, re.I) \
+            and re.search(r"cv|submission|apply|deadline", t, re.I):
         return "deadline_extended"
     if re.search(r"open(?:ed)? for cv submission|cv submission .* opened", t, re.I):
         return "apply_open"
@@ -87,11 +91,14 @@ def parse_entries(text: str, ref: datetime, day: datetime | None) -> list[dict]:
     """Numbered lists: '1. ATHER ENERGY (Profile: All)', '2. [TEST] GROWW (Profile: X) (3:00 PM  4:00 PM)'."""
     out = []
     for m in ENTRY_RE.finditer(text or ""):
+        if not (m.group("profiles") is not None or m.group("allprof") or m.group("when")):
+            continue  # a numbered sentence, not a company entry
         name = re.sub(r"\s+", " ", m.group("name")).strip(" .,-")
         if not name or len(tokens(name)) == 0:
             continue
+        profiles = ["All"] if m.group("allprof") else split_profiles(m.group("profiles") or "")
         entry = {"name": name, "tag": (m.group("tag") or "").strip() or None,
-                 "profiles": split_profiles(m.group("profiles")), "when_text": m.group("when")}
+                 "profiles": profiles, "when_text": m.group("when")}
         if m.group("when"):
             tr = TIME_RANGE.search(m.group("when"))
             base = day
@@ -121,6 +128,8 @@ def role_phrases(text: str) -> list[str]:
 
 def analyze(notice: dict, text: str, index: CompanyIndex, roll: str = "", name: str = "",
             ai_cfg: dict | None = None) -> dict:
+    # invisible characters the ERP sprinkles into lists ("2. \u2060GROWW")
+    text = re.sub(r"[\u2060\u200b\ufeff]", "", text or "").replace("\u2007", " ")
     ref = datetime.fromisoformat(notice["notice_time"]) if notice.get("notice_time") else datetime.now()
     kind = classify(notice.get("subject", ""), text)
     moments = find_moments(text, ref)
@@ -165,6 +174,7 @@ def analyze(notice: dict, text: str, index: CompanyIndex, roll: str = "", name: 
 
     deadlines = [m for m in moments if m.kind == "deadline"]
     events = [m for m in moments if m.kind in ("event", "date") and m.has_time]
+    event_dates = [m for m in moments if m.kind in ("event", "date") and not m.has_time]
     method = "rules"
     misses = []
     if kind in ("apply_open", "deadline_extended", "form") and not deadlines:
@@ -204,6 +214,7 @@ def analyze(notice: dict, text: str, index: CompanyIndex, roll: str = "", name: 
         "entries": entries,
         "deadlines": [m.as_dict() for m in deadlines],
         "events": [m.as_dict() for m in events],
+        "event_dates": [m.as_dict() for m in event_dates],
         "todos": todos,
         "links": links,
         "forms": forms,

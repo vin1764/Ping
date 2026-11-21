@@ -190,8 +190,13 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             if not t.get("company") and not about_me:
                 continue  # a company that isn't in your companies list at all: not about you
 
+            # a day schedule tags each entry: "[PPT] OLA (6 PM)" is a talk even in a list of tests
+            tag = (t.get("tag") or "").upper()
+            tkind = "ppt" if tag.startswith("PPT") else "test" if tag.startswith("TEST") and kind in LIST_KINDS + ("ppt",) else kind
+            kind_for_target = tkind
+
             # -- lists: shortlist / room allocation / test schedule / result
-            if kind in LIST_KINDS:
+            if kind_for_target in LIST_KINDS:
                 what = {"shortlist": "shortlist", "result": "result", "test_rooms": "test room list",
                         "test": "test"}[kind]
                 room = _room(check)
@@ -213,7 +218,7 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                 items.append({**base, "id": nid, "level": level, "category": kind if kind != "test_rooms" else "test",
                               "title": clip(title), "sort_at": event_at or n.get("notice_time")})
                 produced = True
-            elif kind == "ppt":
+            elif kind_for_target == "ppt":
                 ev = fmt_when(_dt(event_at), now) if event_at else "time in notice"
                 venue = f", {a['venue']}" if a.get("venue") else ""
                 items.append({**base, "id": nid, "level": level, "category": "ppt",

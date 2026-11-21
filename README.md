@@ -343,7 +343,9 @@ text and your targets, never your name, roll number, CGPA or mail.
   company only (open deadlines, latest notice, your status), even misspelled or
   abbreviated ("msft"); a company Ping has no data on is said plainly; only a
   message it can't read at all gets "I couldn't tell what you meant" and what's due
-  soon (`supabase/functions/_shared/answer_rules.js`, also used by the page offline). Supabase stops a function after
+  soon (`supabase/functions/_shared/answer_rules.js`, also used by the page offline).
+  Such answers end with "(Gemini busy: answered from your ERP data by rules, not by
+  the model.)". Supabase stops a function after
   150 s; Ask Ping gives Gemini at most 100 s (45 s per model).
 - The thread is saved (the `chat_messages` table), so you see the whole
   history when you come back. New messages since your last visit get an

@@ -460,6 +460,6 @@ Question: ${ask}`;
   });
   console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", kind: ruled.kind, companies: ruled.companies.length,
     no_ai: noAi, tried, ms: Date.now() - t0 }));
-  return done(ruled.text + (noAi ? "" : "\n\n(Gemini was busy, so I answered straight from the ERP data.)"), "rules",
+  return done(ruled.text + (noAi ? "" : "\n\n(Gemini busy: answered from your ERP data by rules, not by the model.)"), "rules",
               { fallback: true, kind: ruled.kind });
 });

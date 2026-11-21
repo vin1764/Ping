@@ -66,7 +66,7 @@ jobs:
           git add dashboard/demo-data.json
           git diff --cached --quiet && { echo "demo data unchanged"; exit 0; }
           git commit -q -m "Demo data: anonymised snapshot of the real run"
-          git push
+          git pull -q --rebase && git push
       - name: Save the Ask Ping eval report
         if: inputs.task == 'ask-ping-evals'
         run: |

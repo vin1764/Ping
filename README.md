@@ -189,7 +189,7 @@ Two repositories, so this one can stay private:
   (`setup/check_public_build.py`): it stops the deploy if they contain a Supabase
   secret or service key, a Google key, "+91", any 10-digit number outside the
   made-up 90000 range, your roll number or email, a banned word, or any file other
-  than the seven expected.
+  than the eight expected.
 - **[vin1764/ping-dashboard](https://github.com/vin1764/ping-dashboard) (public)**
   holds **only the built files**: `index.html`, `app.js`, `style.css`, `config.js`
   (the Supabase URL and publishable key, which are public by design),

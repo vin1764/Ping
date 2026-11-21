@@ -133,6 +133,27 @@
         .eq("id", state.data.profile?.id ?? 1);
       if (error) throw new Error(error.message);
     }
+    // onboarding answers: the owner's profile row, or a demo session's own row (never the owner's profile)
+    async saveOnboarding(save) {
+      if (!Object.keys(save).length) return;
+      if (this.demo) {
+        const { data: { user } } = await this.sb.auth.getUser();
+        const { error } = await this.sb.from("session_prefs").upsert({ owner_id: user.id, ...save, updated_at: new Date().toISOString() });
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await this.sb.from("profile").update(save).eq("id", 1);
+      if (error) throw new Error(error.message);
+    }
+    async sessionPrefs() {
+      if (!this.demo) return null;
+      const { data } = await this.sb.from("session_prefs").select("*").limit(1);
+      return (data || [])[0] || {};
+    }
+    async latestRun() {
+      const { data } = await this.sb.from("runs").select("started_at,finished_at,status").order("started_at", { ascending: false }).limit(1);
+      return (data || [])[0] || null;
+    }
     // "For you" marks for the current targets, from the server's cache (the page never sees the cache itself)
     async marks() {
       const out = await this.fn("ask-ping", { marks: true });
@@ -263,7 +284,7 @@
     out.onclick = async () => { await sb.auth.signOut(); location.reload(); };
     await afterStart();
     // split the lists by the current marks once they arrive, but never while a question is waiting for its answer
-    loadMarks().then(() => { if (state.marks?.size && (location.hash || "#chat") === "#chat" && !state.sending) route(); });
+    loadMarks().then(() => { if (state.marks?.size && (location.hash || "#chat") === "#chat" && !state.sending && !state.onb) route(); });
   }
 
   async function afterStart() {
@@ -278,8 +299,24 @@
     } catch (e) { mount(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
     setupMenu();
     showLastRun();
+    await decideOnboarding();
     window.addEventListener("hashchange", route);
     route();
+  }
+
+  // ------------------------------------------------------------ first-run onboarding (dashboard/onboarding.js)
+  const OB = window.PingOnboarding;
+  async function decideOnboarding() {
+    state.onb = null;
+    if (!OB || !state.src.saveOnboarding) return;          // the static ?demo=1 copy can't save answers
+    if (state.src.demo) {
+      const sp = await state.src.sessionPrefs().catch(() => ({}));
+      if (sp?.onboarding_step === "done") return;
+      state.onb = { step: OB.startStep(sp || {}), ctx: { demo: true, ...(sp || {}) }, log: [], resumed: !!sp?.onboarding_step };
+      return;
+    }
+    const prof = state.data.profile || {};
+    if (OB.shouldRun(prof, state.chat.length)) state.onb = { step: OB.startStep(prof), ctx: { ...prof }, log: [], resumed: !!prof.onboarding_step };
   }
 
   function setupMenu() {
@@ -352,7 +389,114 @@
     if (hash === "feed") return viewFeed();
     if (hash === "companies") return viewCompanies();
     if (hash === "profile") return viewProfile();
+    if (state.onb) return viewOnboarding();
     return viewChat();
+  }
+
+  function viewOnboarding() {
+    const o = state.onb;
+    document.body.classList.add("chat-on");
+    const q = OB.question(o.step, o.ctx);
+    const inner = h("div", { class: "thread-inner onb", "data-onboarding": o.step });
+    inner.append(h("div", { class: "day" }, o.resumed && !o.log.length ? "Welcome back: let's finish setting up" : "Getting started"));
+    for (const m of o.log) inner.append(textBubble(m.role, m.text, m.at));
+    if (!o.done) inner.append(h("div", { class: "msg ping onb-q" }, q.lines.map((l) => h("p", {}, l)),
+      q.upload ? onbUpload() : null, h("span", { class: "time" }, clock(new Date()))));
+    const input = h("input", { id: "onb-input", autocomplete: "off", maxlength: "300", enterkeyhint: "send",
+      placeholder: q.free || "Tap an answer above", "aria-label": q.free || "Answer", disabled: !q.free });
+    const chips = h("div", { class: "chips", role: "group", "aria-label": "Quick replies" },
+      q.chips.map((c) => h("button", { type: "button", class: `chip${c.primary ? " primary" : ""}`, onclick: () => {
+        if (c.insert) { input.disabled = false; input.value = c.insert; input.focus(); return; }
+        onbAnswer({ value: c.value }, c.label);
+      } }, c.label)),
+      o.step === "first_check" ? h("button", { type: "button", class: "chip primary", onclick: () => onbFinish() }, "Go to my feed") : null);
+    const form = h("form", { onsubmit: (ev) => { ev.preventDefault(); const t = input.value.trim(); if (t) onbAnswer({ text: t }, t); } },
+      input, h("button", { class: "btn", disabled: !q.free }, "Send"));
+    const thread = h("div", { class: "thread", id: "thread" }, inner);
+    mount(thread, h("div", { class: "composer" }, chips, form));
+    requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
+    if (o.step === "first_check" && !o.done) onbFirstCheck();
+  }
+
+  function onbUpload() {
+    const file = h("input", { type: "file", accept: "application/pdf", id: "onb-cv", class: "visually-hidden",
+      onchange: async () => {
+        const f = file.files?.[0];
+        if (!f) return;
+        if (f.type !== "application/pdf" || f.size > 5 * 1024 * 1024) { onbSay("A PDF up to 5 MB, please."); return; }
+        try {
+          const { error } = await state.src.sb.storage.from("cvs").upload("cv1.pdf", f, { upsert: true, contentType: "application/pdf" });
+          if (error) throw new Error(error.message);
+          const cvs = [{ label: "CV 1", path: "cv1.pdf", uploaded_at: new Date().toISOString() }, ...((state.data.profile.cvs || []).slice(1))];
+          await state.src.saveOnboarding({ cvs, cv_names: cvs.map((c) => c.label) });
+          state.data.profile.cvs = cvs;
+          onbAnswer({ value: "uploaded" }, `Uploaded ${f.name}`);
+        } catch (e) { onbSay(`Couldn't upload: ${e.message}`); }
+      } });
+    return h("label", { class: "btn upload", for: "onb-cv" }, "Upload a CV (PDF)", file);
+  }
+
+  function onbSay(text) { state.onb.log.push({ role: "ping", text, at: new Date().toISOString() }); viewOnboarding(); }
+
+  async function onbAnswer(input, label) {
+    const o = state.onb;
+    const q = OB.question(o.step, o.ctx);
+    o.log.push({ role: "ping", text: q.lines.join(" "), at: new Date().toISOString() },
+               { role: "me", text: label, at: new Date().toISOString() });
+    const res = OB.answer(o.step, input, o.ctx);
+    try {
+      await state.src.saveOnboarding(res.save);
+    } catch (e) { o.log.push({ role: "ping", text: `Couldn't save that: ${e.message}`, at: new Date().toISOString() }); return viewOnboarding(); }
+    if (res.useDemo) { state.onb = null; location.hash = "#chat"; return route(); }
+    Object.assign(o.ctx, res.ctxPatch || {}, res.save);
+    if (!state.src.demo) Object.assign(state.data.profile, res.save);
+    if (res.askPing) {
+      try {
+        const out = await state.src.fn("ask-ping", { question: res.askPing });
+        o.log.push({ role: "ping", text: out.answer, at: new Date().toISOString() });
+        await loadMarks();
+      } catch (e) { o.log.push({ role: "ping", text: `Couldn't save that just now (${e.message}). You can tell me later.`, at: new Date().toISOString() }); }
+    }
+    if (res.next === o.step && !res.ctxPatch) {
+      o.log.push({ role: "ping", text: "Sorry, I didn't get that. Tap one of the answers, or Skip.", at: new Date().toISOString() });
+    }
+    o.step = res.next;
+    if (o.step === "first_check") o.since = Date.now();
+    if (o.step === "done") return onbFinish();
+    viewOnboarding();
+  }
+
+  // the last step: start a check (owner), wait until a run has finished, then explain the thread
+  async function onbFirstCheck() {
+    const o = state.onb;
+    if (o.polling) return;
+    o.polling = true;
+    const explain = async () => {
+      if (!state.onb) return;
+      o.log.push({ role: "ping", text: OB.question("first_check", o.ctx).lines.join(" "), at: new Date().toISOString() });
+      for (const l of OB.CLOSING) o.log.push({ role: "ping", text: l, at: new Date().toISOString() });
+      await state.src.saveOnboarding({ onboarding_step: "done" }).catch(() => {});
+      o.done = true;
+      viewOnboarding();
+    };
+    if (state.src.demo) return explain();
+    if (!o.started && o.since) { o.started = true; await state.src.checkNow().catch(() => {}); }
+    const since = o.since || 0;
+    for (let i = 0; i < 60 && state.onb === o; i++) {          // about 20 minutes
+      const run = await state.src.latestRun().catch(() => null);
+      if (run?.finished_at && (!since || dt(run.finished_at) > since - 60000)) {
+        state.data = await state.src.load();
+        return explain();
+      }
+      await new Promise((r) => setTimeout(r, 20000));
+    }
+  }
+
+  async function onbFinish() {
+    await state.src.saveOnboarding({ onboarding_step: "done" }).catch(() => {});
+    state.onb = null;
+    location.hash = "#chat";
+    route();
   }
 
   // ------------------------------------------------------------ chat (home)

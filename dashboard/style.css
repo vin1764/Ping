@@ -195,3 +195,13 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 420px) { .badge .long { display: none; } }
 @supports (height: 100dvh) { html, body { height: 100dvh; } }
+
+/* onboarding: quick-reply chips above the message box */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; max-width: 760px; margin: 0 auto 8px; width: 100%; }
+.chip { min-height: 44px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--card);
+  color: var(--text); font: inherit; cursor: pointer; }
+.chip.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.composer { flex-direction: column; }
+.onb-q p { margin: 0 0 6px; }
+.btn.upload { display: inline-flex; align-items: center; min-height: 44px; margin-top: 6px; cursor: pointer; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

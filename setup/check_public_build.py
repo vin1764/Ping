@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-EXPECTED = {"index.html", "app.js", "style.css", "config.js", "demo-data.json", "README.md", ".nojekyll"}
+EXPECTED = {"index.html", "app.js", "onboarding.js", "style.css", "config.js", "demo-data.json", "README.md", ".nojekyll"}
 LITERALS = ("sb_secret_", "service_role", "AIza", "+91")
 TEN = re.compile(r"(?<![\d\-./])\d(?:[ \-.]?\d){9}(?![ \-.]?\d)")
 DATE = re.compile(r"\d{1,2}[\-./]\d{1,2}[\-./]\d{4}|\d{4}[\-./]\d{1,2}[\-./]\d{1,2}")

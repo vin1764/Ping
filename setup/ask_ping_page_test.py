@@ -82,6 +82,13 @@ def main(argv: list[str]) -> int:
         page.on("pageerror", lambda e: print(f"  page error: {e}"))
         page.goto(url)
         page.click("#view-demo")
+        # a fresh demo session starts with the onboarding; its first bubble offers the demo profile in one tap
+        page.wait_for_selector("[data-onboarding]", timeout=30000)
+        first = page.locator(".chips .chip").first.inner_text()
+        onb_ok = first == "Use the demo profile" and page.get_attribute("[data-onboarding]", "data-onboarding") == "welcome"
+        failures += not onb_ok
+        print(f"onboarding: first question shown, first chip '{first}'{'' if onb_ok else '  <-- PROBLEM'}")
+        page.click(".chips .chip:has-text('Use the demo profile')")
         page.wait_for_selector("#ask-input", timeout=30000)
         chip = page.inner_text("#mode-badge")
         bubbles = page.locator(".msg.item").count()

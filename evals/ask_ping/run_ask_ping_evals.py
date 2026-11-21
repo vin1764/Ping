@@ -93,6 +93,13 @@ class DemoSessions:
         self.url, self.key, self._new, self.ids, self.used = url, key, demo_session, [], self.PER_SESSION
         self.token = ""
 
+    def fresh(self) -> str:
+        """A new session of its own (an empty chat thread), e.g. for one multi-turn conversation."""
+        hdr, uid = self._new(self.url, self.key)
+        self.ids.append(uid)
+        self.used = self.PER_SESSION  # the next single question gets a new session too
+        return hdr["Authorization"].removeprefix("Bearer ")
+
     def next_token(self) -> str:
         if self.used >= self.PER_SESSION:
             hdr, uid = self._new(self.url, self.key)
@@ -155,15 +162,41 @@ def main() -> int:
                         "failed": failed})
         print(f"{c['id']:3} {'PASS' if not failed else 'FAIL'} {secs:5.1f}s {model:26} {c['question']}"
               + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
-    (HERE / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    convs = []
+    for conv in spec.get("conversations", []):
+        token = sessions.fresh()
+        turns = []
+        for t in conv["turns"]:
+            # exactly like the dashboard: your message goes into the thread, then Ping answers, then its reply goes in
+            post_chat(url, key, token, "me", t["question"])
+            status, answer, model, secs = ask(url, key, token, t["question"], spec["snapshot_as_of"])
+            post_chat(url, key, token, "ping", answer)
+            failed = score(answer, t["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
+            turns.append({**t, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
+                          "failed": failed})
+            print(f"{conv['id']:3} turn {len(turns)} {'PASS' if not failed else 'FAIL'} {secs:5.1f}s {model:26} "
+                  f"{t['question']}" + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
+        convs.append({"id": conv["id"], "why": conv["why"], "turns": turns, "passed": all(not t["failed"] for t in turns)})
     print(sessions.forget_counts())
-    report = write_report(spec, results, demo_ok)
+    report = write_report(spec, results, demo_ok, convs)
+    (HERE / "results.json").write_text(json.dumps({"single_turn": results, "conversations": convs}, indent=1,
+                                                  ensure_ascii=False) + "\n", encoding="utf-8")
     passed = sum(1 for r in results if not r["failed"])
-    print(f"\n{passed} of {len(results)} cases passed. Wrote {report.relative_to(ROOT)}")
+    print(f"\nsingle-turn: {passed} of {len(results)} passed; conversations: {sum(c['passed'] for c in convs)} of "
+          f"{len(convs)} fully passed. Wrote {report.relative_to(ROOT)}")
     return 0
 
 
-def write_report(spec: dict, results: list[dict], demo_ok: bool) -> Path:
+def post_chat(url: str, key: str, token: str, role: str, text: str) -> None:
+    """A message in the demo session's own thread (a demo row, as the dashboard writes it)."""
+    r = requests.post(f"{url}/rest/v1/chat_messages", timeout=30, json=[{"role": role, "text": text, "is_sample": True}],
+                      headers={"apikey": key, "Authorization": f"Bearer {token}", "Prefer": "return=minimal"})
+    if r.status_code >= 300:
+        print(f"  (couldn't save the {role} message to the thread: HTTP {r.status_code} {r.text[:120]})")
+
+
+def write_report(spec: dict, results: list[dict], demo_ok: bool, convs: list[dict] | None = None) -> Path:
     by_cat = defaultdict(list)
     for r in results:
         by_cat[r["category"]].append(not r["failed"])
@@ -179,7 +212,10 @@ def write_report(spec: dict, results: list[dict], demo_ok: bool) -> Path:
         f"from one-click demo sessions (anonymised demo data), snapshot time fixed at {spec['snapshot_as_of']}. "
         "Re-run with Actions > Admin > ask-ping-evals, or `python evals/ask_ping/run_ask_ping_evals.py`._", "",
         "## In short", "",
-        f"- **{passed} of {len(results)} questions passed all their checks ({pct([not r['failed'] for r in results])}).**",
+        f"- **Single questions: {passed} of {len(results)} passed all their checks ({pct([not r['failed'] for r in results])}).**",
+        (f"- **Conversations (follow-ups in one thread): {sum(c['passed'] for c in convs)} of {len(convs)} passed every turn; "
+         f"{sum(not t['failed'] for c in convs for t in c['turns'])} of {sum(len(c['turns']) for c in convs)} turns passed.**"
+         if convs else "- Conversations: none in this run."),
         f"- Models that answered: " + ", ".join(f"{m} ({n})" for m, n in sorted(models.items(), key=lambda x: -x[1])),
         (f"- Latency: median {lat[len(lat) // 2]:.1f} s, slowest {lat[-1]:.1f} s" if lat else "- Latency: no answers"),
         "- Checks are deterministic (no model grades another model): required words or phrases, forbidden ones, "
@@ -198,6 +234,23 @@ def write_report(spec: dict, results: list[dict], demo_ok: bool) -> Path:
         lines += [f"### {r['id']} ({r['category']}): {r['question']}", "",
                   f"- failed: {'; '.join(r['failed'])}", f"- expected: {r['why']}",
                   f"- model {r['model']}, {r['seconds']} s", "", "> " + r["answer"].replace("\n", "\n> "), ""]
+    if convs:
+        lines += ["", "## Conversations (multi-turn)", "",
+                  "Each conversation runs in one fresh demo session; the function reads the thread from the database "
+                  "itself. A conversation passes only if every turn passes.", "",
+                  "| id | turns | first question | follow-up(s) | result |", "|---|---|---|---|---|"]
+        for c in convs:
+            qs = [t["question"].replace("|", "/") for t in c["turns"]]
+            res = "pass" if c["passed"] else "FAIL (turn " + ", ".join(str(i + 1) for i, t in enumerate(c["turns"]) if t["failed"]) + ")"
+            lines.append(f"| {c['id']} | {len(qs)} | {qs[0]} | {' / '.join(qs[1:])} | {res} |")
+        cfails = [(c, i, t) for c in convs for i, t in enumerate(c["turns"]) if t["failed"]]
+        lines += ["", "### Conversation failures", ""] + (["None."] if not cfails else [])
+        for c, i, t in cfails:
+            prev = c["turns"][i - 1] if i else None
+            lines += [f"#### {c['id']} turn {i + 1}: {t['question']}", "",
+                      f"- failed: {'; '.join(t['failed'])}", f"- expected: {c['why']}",
+                      (f"- previous turn: \"{prev['question']}\" → \"{prev['answer'][:200]}\"" if prev else ""),
+                      f"- model {t['model']}, {t['seconds']} s", "", "> " + t["answer"].replace("\n", "\n> "), ""]
     lines += ["", "## Every case", "", "| id | category | question | result | model | seconds |", "|---|---|---|---|---|---|"]
     for r in results:
         q = r["question"].replace("|", "/")

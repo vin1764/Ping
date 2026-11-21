@@ -547,5 +547,263 @@
    "change": "added the phrasings 'does not contain' / 'does not show any' to the 'nothing due' and 'not in the data' alternatives",
    "why": "those answers said plainly that nothing was due / the data had no such thing, which is the expected behaviour; the phrase list was incomplete, not the answers wrong"
   }
+ ],
+ "conversations": [
+  {
+   "id": "M1",
+   "why": "today Sat 21 Nov (snapshot 17:32): the only test is Groww at 15:00, already over",
+   "turns": [
+    {
+     "question": "any test today?",
+     "checks": {
+      "must_contain": [
+       "groww",
+       "15:00|3 pm|3:00 pm|3pm",
+       "over|passed|already|ended|done|finished|earlier"
+      ]
+     }
+    },
+    {
+     "question": "nothing else?",
+     "checks": {
+      "must_contain": [
+       "only|no other|no more|none|no further|nothing else today|no, "
+      ],
+      "must_not_contain": [
+       "\"nothing else\"",
+       "'nothing else'",
+       "about nothing else",
+       "does not contain",
+       "doesn't contain"
+      ],
+      "max_words": 45
+     }
+    }
+   ]
+  },
+  {
+   "id": "M2",
+   "why": "Meesho Senior Associate: 36 LPA total, 15.30 L fixed; then slice: APM 28,00,000, Analyst 25,00,000",
+   "turns": [
+    {
+     "question": "meesho ctc",
+     "checks": {
+      "numbers_present": [
+       "3600000"
+      ]
+     }
+    },
+    {
+     "question": "and slice?",
+     "checks": {
+      "numbers_present": [
+       "2800000",
+       "2500000"
+      ],
+      "must_not_contain": [
+       "\"and slice\"",
+       "'and slice'",
+       "about and slice"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M3",
+   "why": "nothing falls on Sun 22 Nov or Mon 23 Nov",
+   "turns": [
+    {
+     "question": "what's due tomorrow",
+     "checks": {
+      "must_contain": [
+       "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
+      ],
+      "max_words": 60
+     }
+    },
+    {
+     "question": "and the day after?",
+     "checks": {
+      "must_contain": [
+       "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries",
+       "23|monday"
+      ],
+      "must_not_contain": [
+       "\"the day after\"",
+       "'the day after'",
+       "about the day after",
+       "\"and the day after\"",
+       "'and the day after'",
+       "about and the day after"
+      ],
+      "max_words": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "M4",
+   "why": "Groww APM: no CG cut-off, eligibility unknown because the demo profile has no department/degree; applied; deadline Mon 16 Nov passed",
+   "turns": [
+    {
+     "question": "am I eligible for groww",
+     "checks": {
+      "must_contain": [
+       "groww"
+      ]
+     }
+    },
+    {
+     "question": "why not?",
+     "checks": {
+      "must_contain": [
+       "department|degree|profile"
+      ],
+      "must_not_contain": [
+       "\"why not\"",
+       "'why not'",
+       "about why not",
+       "does not contain any information about"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M5",
+   "why": "there are no notices for Harness; its only date is the application deadline Wed 14 Oct 12:00, long past",
+   "turns": [
+    {
+     "question": "latest notice for harness",
+     "checks": {
+      "must_contain": [
+       "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain|no notice|no notices"
+      ]
+     }
+    },
+    {
+     "question": "when is it?",
+     "checks": {
+      "must_contain": [
+       "14 oct|oct 14|14th oct|october 14|14 october|14-oct"
+      ],
+      "must_not_contain": [
+       "\"when is it\"",
+       "'when is it'",
+       "about when is it"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M6",
+   "why": "slice APM 22L fixed + 2L retention + 4L ESOPs; Analyst 19L base + 2L retention + 4L ESOPs = 25,00,000",
+   "turns": [
+    {
+     "question": "slice ctc breakdown",
+     "checks": {
+      "numbers_present": [
+       "2800000"
+      ]
+     }
+    },
+    {
+     "question": "same for analyst role?",
+     "checks": {
+      "must_contain": [
+       "analyst",
+       "esop"
+      ],
+      "numbers_present": [
+       "2500000",
+       "1900000"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M7",
+   "why": "Eternal test Thu 19 Nov 19:15 (passed), Nalanda Classroom Complex, your room NR 121",
+   "turns": [
+    {
+     "question": "when is the Eternal test",
+     "checks": {
+      "must_contain": [
+       "19:15|7:15"
+      ]
+     }
+    },
+    {
+     "question": "where?",
+     "checks": {
+      "must_contain": [
+       "nalanda"
+      ],
+      "must_not_contain": [
+       "\"where\"",
+       "'where'",
+       "about where"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M8",
+   "why": "topic change: after Eternal pay, 'what's due this week' is all Sat 21 Nov 20:00 and has nothing to do with Eternal",
+   "turns": [
+    {
+     "question": "eternal ctc",
+     "checks": {
+      "numbers_present": [
+       "5900000",
+       "4700000"
+      ]
+     }
+    },
+    {
+     "question": "ok. what's due this week?",
+     "checks": {
+      "must_contain": [
+       "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m",
+       "21|today"
+      ],
+      "must_not_contain": [
+       "eternal"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M9",
+   "why": "Diageo: Bonds No; Harness: Bonds No",
+   "turns": [
+    {
+     "question": "does diageo have a bond",
+     "checks": {
+      "must_contain": [
+       "no bond|bonds: no|bond: no|doesn't have a bond|does not have a bond|no service bond|without a bond|has no bond|bond amount: 0|bond amount of 0|no, diageo|diageo does not|diageo doesn't|also no bond|no bond either"
+      ]
+     }
+    },
+    {
+     "question": "and harness?",
+     "checks": {
+      "must_contain": [
+       "no bond|bonds: no|bond: no|doesn't have a bond|does not have a bond|no service bond|without a bond|has no bond|bond amount: 0|bond amount of 0|no, harness|harness does not|harness doesn't|also no bond|no bond either"
+      ],
+      "must_not_contain": [
+       "\"and harness\"",
+       "'and harness'",
+       "about and harness"
+      ]
+     }
+    }
+   ]
+  }
  ]
 }

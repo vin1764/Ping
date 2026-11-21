@@ -317,8 +317,10 @@ every role you're not ruled
 out of, once, Gemini reads its company, title and job description and answers
 yes/no with a reason of at most 8 words; the answer is cached on the role and
 asked again only when the role's text or your words change. Eligibility is
-applied first and is never overridden. A role with no job description on the ERP
-is judged on its title and tagged "(JD missing)". Every list (digests, new
+applied first and is never overridden. Ping finds the JD wherever the
+ERP keeps it (the JD field, the role's JD file, a public link, the company's file, the role's details), so only a
+role with none of these is judged on its title and tagged "(JD missing)" (11 of 210 on 22 Nov; ask Ping
+"summarise X's JD" for any role). Every list (digests, new
 roles, Ask Ping answers) then shows **For you** first, with the reason in grey,
 and **Others** one line per role (collapsed). Untick "Always list other roles
 separately" to see only their count. "Eligibility not verified for ..." is added

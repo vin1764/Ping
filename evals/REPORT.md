@@ -8,11 +8,55 @@ the model being tested).
 | **Parser evals** | How Ping reads the ERP's notices and PDFs with rules: company, kind of notice, deadline, test time, venue, form link, "are you in this PDF", your room. 31 development + 15 held-out real CDC notices (other students' details removed) and 7 PDF/Excel layouts seen in the real run. | **Held-out: 56 of 58 checks (97%)**, the fair number. Development: 143 of 143 (100%), optimistic because Ping was fixed using these. | [PARSER_REPORT.md](PARSER_REPORT.md) | `python evals/run_evals.py` |
 | **Ask Ping evals** | The chat's answers from the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data, the demo persona's targets and made-up CVs), with the snapshot time fixed: company facts, deadlines, notices and tests, refusing to invent things, refusing actions only when asked to act, times today, role lists in one format, the CV to apply with, and typos / two questions in one. 42 single questions and 21 conversations: 13 follow-up conversations ("nothing else?", "and slice?", "ok") and 8 preference-by-chat conversations (set, append, exclude, reminder hours, list others, reset, show, and a question that must NOT change anything). Deterministic checks. | **Single questions: 37 of 42 (88%). Conversations: 21 of 21 (39 of 39 turns).** Before conversation memory: 34 of 36 single, 4 of 9 conversations. | [ask_ping/REPORT.md](ask_ping/REPORT.md) | Actions > Admin > `ask-ping-evals` |
 | **Attachment audit** | The notice-attachment reader end to end on made-up files in messy real layouts (`tests/test_attachments.py`, fixtures in `tests/attachment_fixtures.py`): file types, your roll in every form and inside longer strings, a different longer roll that is not you, names exact and with a typo, your own row on merged cells / two students per line / a table broken across pages / section rows, a file listing several companies, 600 rows, a scanned list read with OCR, and what the feed says. | **31 of 31 tests pass** (10 of the first 27 failed before the fixes of 22 Nov). 600-row PDF read in about 1 s; a scanned page with OCR in about 2 s. | [below](#attachments-audit-22-nov) | `python -m pytest tests/test_attachments.py` |
+| **Job description coverage** | Whether each role has a JD Ping can read, on the real companies list (Admin > `jd-report`), and whether Ask Ping's JD answers are right (`ask_ping/cases.json` J1-J5, on the demo snapshot, which carries the real roles' JDs). | **199 of 210 roles have a usable JD (was 177 from the ERP's JD field alone); "(JD missing)" 31 -> 11. J1-J5: 5 of 5.** | [below](#job-descriptions-22-nov) | Admin > `jd-report`; `run_ask_ping_evals.py --only J` |
 | **Role relevance evals** | Whether "For you" (and the CV to apply with) follows the student's stated targets: two made-up personas with opposite targets (`relevance/personas.json`), 201 + 48 demo roles labelled for each persona's text, each persona's roles marked in one classifier call. | **demo persona: precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76). core-software persona: precision 100% (28 of 28), recall 100% (28 of 28).** | [relevance/REPORT.md](relevance/REPORT.md) | Actions > Admin > `relevance-evals` |
 
 Also in this folder: `real_run.json` (numbers from the real runs: login time, notices, PDFs, merged repeats),
 `notices.json` and `companies.json` (the parser eval inputs), `ask_ping/cases.json` (the Ask Ping questions,
 checks and where each expected answer comes from).
+
+## Job descriptions (22 Nov)
+
+Bug: "summarise JPMC's JD" answered "I don't have the JD". JPMC did have one (147 characters in the ERP's JD field,
+plus "Required Skill Set" and "Additional Information" in the role's details), but Ask Ping never received it. The
+fix is in the pipeline: Ping now looks for each role's JD wherever the ERP keeps it (`ping/jd.py`), stores it on the
+role (`jd_text`, `jd_source`, `jd_url`, `jd_note`, `jd_summary`), and answers from that.
+
+Real companies list, 210 roles (Admin > `jd-report`, 22 Nov 03:20 IST):
+
+| where the JD was found | roles |
+|---|---|
+| the ERP's JD field (already usable before) | 177 |
+| the role's JD file on the ERP (Arihant x7, Eternal x3, IQVIA x2, TATA AIG) or the company's file (Purplle) | 14 |
+| the role's details on the ERP (JPMC, ExxonMobil, MathWorks Engineer, Searce x4; Searce and MathWorks also keep a link Ping couldn't open) | 7 |
+| a public link (Pocket FM, a Google Drive PDF) | 1 |
+| only a link Ping can't open (LTM: Drive file over the size limit / not public; MathWorks Technical Writer: the careers site refuses) | 2 |
+| nowhere on the ERP ("-", ".", "NA", "PFA the JD" with no file, "As mentioned in Registration Email", "Will be shared at the time of opening applications") | 9 |
+| **usable JD** | **199 of 210** (before: 177) |
+
+"For you" marks are keyed on the JD text, so the 22 roles whose JD appeared were marked again on the same run:
+"(JD missing)" went from 31 roles to 11 (the 9 with none and the 2 links). Each JD has a summary (role & team, what
+you'd do, must-haves, location, eligibility, anything unusual): Gemini where it answered within the run's 90 seconds,
+the JD's own labelled parts otherwise, redone by Gemini on later runs (78 by Gemini and 121 by rules after the first
+runs; 20 more by Gemini each run).
+
+Ask Ping JD cases (deployed function, demo session, no model call: answered from the stored summary):
+
+| case | question | result |
+|---|---|---|
+| J1 | summarise JPMC's JD | PASS: what you'd do (3), must-haves, CG cut-off, "(From the ERP's role details.)", 87 words |
+| J2 | what's the JD for LTM | PASS: "The JD is a link I can't open: https://drive.google.com/..." |
+| J3 | what do they want for cars24 data science | PASS: "Cars24 (Data Science): no JD on the ERP." |
+| J4 | what's the JD for searce associate data engineer | PASS: summary from the details, then "The full JD is a link I can't open: https://docs.google.com/..." |
+| J5 | what do they want for arihant product manager | PASS: from the JNF file on the ERP; location Mumbai / Indore |
+
+J5 failed on its first run: Arihant's stored rules summary listed a lead-in ("We are looking for candidates who
+demonstrate") as a must-have after the rules had been fixed, because summaries are cached by JD text. Rules
+summaries now carry a version and are redone when the rules change.
+
+Role sheet: [JPMC](../docs/screenshots/jd-390x844-jpmc.png), [JPMC, full JD open](../docs/screenshots/jd-1280x800-jpmc-full-jd.png),
+[Searce, private link kept](../docs/screenshots/jd-390x844-searce-private-link.png),
+[LTM, link Ping can't open](../docs/screenshots/jd-390x844-ltm-unreadable.png).
 
 ## Attachments audit (22 Nov)
 

@@ -6,7 +6,7 @@ the model being tested).
 | suite | what it measures | current score | report | re-run |
 |---|---|---|---|---|
 | **Parser evals** | How Ping reads the ERP's notices and PDFs with rules: company, kind of notice, deadline, test time, venue, form link, "are you in this PDF", your room. 31 development + 15 held-out real CDC notices (other students' details removed) and 7 PDF/Excel layouts seen in the real run. | **Held-out: 56 of 58 checks (97%)**, the fair number. Development: 143 of 143 (100%), optimistic because Ping was fixed using these. | [PARSER_REPORT.md](PARSER_REPORT.md) | `python evals/run_evals.py` |
-| **Ask Ping evals** | The chat's answers from the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data, the demo persona's targets and made-up CVs), with the snapshot time fixed: company facts, deadlines, notices and tests, refusing to invent things, refusing actions only when asked to act, times today, role lists in one format, the CV to apply with, and typos / two questions in one. 42 single questions and 21 conversations: 13 follow-up conversations ("nothing else?", "and slice?", "ok") and 8 preference-by-chat conversations (set, append, exclude, reminder hours, list others, reset, show, and a question that must NOT change anything). Deterministic checks. | **Single questions: 38 of 42 (90%). Conversations: 20 of 21 (38 of 39 turns), all 8 preference conversations pass.** Before conversation memory: 34 of 36 single, 4 of 9 conversations. | [ask_ping/REPORT.md](ask_ping/REPORT.md) | Actions > Admin > `ask-ping-evals` |
+| **Ask Ping evals** | The chat's answers from the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data, the demo persona's targets and made-up CVs), with the snapshot time fixed: company facts, deadlines, notices and tests, refusing to invent things, refusing actions only when asked to act, times today, role lists in one format, the CV to apply with, and typos / two questions in one. 42 single questions and 21 conversations: 13 follow-up conversations ("nothing else?", "and slice?", "ok") and 8 preference-by-chat conversations (set, append, exclude, reminder hours, list others, reset, show, and a question that must NOT change anything). Deterministic checks. | **Single questions: 37 of 42 (88%). Conversations: 21 of 21 (39 of 39 turns).** Before conversation memory: 34 of 36 single, 4 of 9 conversations. | [ask_ping/REPORT.md](ask_ping/REPORT.md) | Actions > Admin > `ask-ping-evals` |
 | **Role relevance evals** | Whether "For you" (and the CV to apply with) follows the student's stated targets: two made-up personas with opposite targets (`relevance/personas.json`), 201 + 48 demo roles labelled for each persona's text, each persona's roles marked in one classifier call. | **demo persona: precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76). core-software persona: precision 100% (28 of 28), recall 100% (28 of 28).** | [relevance/REPORT.md](relevance/REPORT.md) | Actions > Admin > `relevance-evals` |
 
 Also in this folder: `real_run.json` (numbers from the real runs: login time, notices, PDFs, merged repeats),
@@ -52,3 +52,13 @@ one allowed fix round.
 Still failing: C2 (doesn't quote the 7.5 cut-off), D2 (gives counts, not the company names), D3 (the week's list
 without the time), L1 (a "relevant to me" list without Others: treated as narrowing, see docs/DECISIONS.md), and
 M8 turn 2. Checks unchanged.
+
+## Ask Ping: closing round (21 Nov, 23:11 IST)
+
+The 4 failures left after the evening runs were fixed, checks unchanged: C2 (eligibility now quotes the CG cut-off and
+your CGPA), D2 (what's due names the companies), D3 and M8 turn 2 (the week summary carries times; "this week"
+includes today). All four pass, and conversations are **21 of 21 (39 of 39 turns)**. Single questions: **37 of 42**.
+Four other cases that passed in the previous run failed in this one: N2 (room number left out), X2 ("I don't have
+any notice" instead of "nothing"), B2 and B3 (one CTC figure left out each). In this run Gemini's free tier
+answered 11 questions from fallback models (gemini-3.5-flash-lite, gemini-3.1-flash-lite) after rate-limiting
+the main one; B2 was answered by a fallback. L1 is as decided in docs/DECISIONS.md. No further fix round.

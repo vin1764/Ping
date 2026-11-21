@@ -48,8 +48,8 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026.
 |---|---|---|
 | parser, held-out real notices | 56 of 58 checks (97%) on 15 notices | `evals/PARSER_REPORT.md` |
 | parser, development set | 143 of 143 checks (100%) on 31 notices + 7 attachment layouts | `evals/PARSER_REPORT.md` |
-| Ask Ping, single questions | 38 of 42 (90%); failing: C2 (CG cut-off not quoted), D2 (company names), D3 (time), L1 (Others left out of a 'relevant to me' list) | `evals/ask_ping/REPORT.md` |
-| Ask Ping, multi-turn conversations | 20 of 21 conversations, 38 of 39 turns (incl. 8 of 8 preference-by-chat conversations and the wrong-detection check) | `evals/ask_ping/REPORT.md` |
+| Ask Ping, single questions | 37 of 42 (88%) in the last run (38 of 42 in the run before it) | `evals/ask_ping/REPORT.md` |
+| Ask Ping, multi-turn conversations | 21 of 21 conversations, 39 of 39 turns (incl. 8 of 8 preference-by-chat conversations and the wrong-detection check) | `evals/ask_ping/REPORT.md` |
 | Ask Ping, before conversation memory | 34 of 36 single; 4 of 9 conversations (13 of 18 turns) | `evals/REPORT.md` |
 | relevance, demo persona (product / consulting / analyst / finance) | precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76) | `evals/relevance/REPORT.md` |
 | relevance, core-software persona | precision 100% (28 of 28), recall 100% (28 of 28) | `evals/relevance/REPORT.md` |

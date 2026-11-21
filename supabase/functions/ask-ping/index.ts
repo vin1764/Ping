@@ -6,7 +6,7 @@
 // within 150 s. So dates are formatted with one shared formatter (making a new one per date was the
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
 import { caller, cors, json } from "../_shared/owner.ts";
-import { asksToAct, glance, roleLists, stripRefusal, todayNote } from "./wording.ts";
+import { asksToAct, glance, roleLists, stripRefusal, todayNote, wantsLists } from "./wording.ts";
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 
@@ -244,7 +244,9 @@ Deno.serve(async (req) => {
     if (!hasTargets || !m) return "not classified";
     return m.relevant ? `yes${m.best_cv ? `; apply with ${m.best_cv}` : ""}` : "no";
   };
-  const blocks = roleLists((roles.data || []) as any[], rmarks, asOf, hasTargets, prefs.list_other_roles !== false);
+  // the follow-up's own words may be short ("and tomorrow?"): the last question counts too
+  const blocks = wantsLists(`${ask} ${lastQuestion}`)
+    ? roleLists((roles.data || []) as any[], rmarks, asOf, hasTargets, prefs.list_other_roles !== false) : "";
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
     `${todayNote(r.effective_deadline, asOf)} | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"}` +
@@ -286,7 +288,8 @@ Always name the company (and role) you are answering about, even in a one-word a
 If what was asked about isn't in the data at all (a company, field or record Ping doesn't have), start with "I don't
 have" and what's missing ("I don't have Google in your companies list", "I don't have any notice for Harness"), then
 mention the closest thing the data does show. Never guess locations, scores, contacts or phone numbers.
-When the answer is simply "no" or "nothing" (no other test, nothing due), say it short and specific, and add the
+When nothing is due on the day asked about, start with "Nothing is due on <day>". When the answer is simply "no" or
+"nothing" (no other test, nothing due), say it short and specific, and add the
 next relevant thing if there is one: "No other tests today. Next one is X on Mon 24 Nov, 10:00." Never write a
 sentence about what the data does or doesn't contain for such an answer.
 Time: times today carry a note in the data, "(earlier today, already over)" or "(later today, in 1h 25m)". Use it:
@@ -296,8 +299,9 @@ below, with its count and time: "No other tests. 48 applications close at 20:00 
 applied." "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
 Lists of roles: "Role lists by closing time" below is ready-made. When an answer lists roles that close at one of
-those times, copy that time's block exactly: its heading (the deadline is said once, there), "For you" with
-"✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each. Don't add
+those times, copy that time's whole block exactly: its heading (the deadline is said once, there), "For you" with
+"✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each (keep Others unless
+the question narrows the list). Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
 CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what

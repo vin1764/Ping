@@ -120,7 +120,9 @@ export function roleLists(roles: ListRole[], marks: Map<string, { relevant: bool
   const blocks: string[] = [];
   for (const [iso, rs] of [...byTime.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const at = new Date(iso);
-    const when = `Close ${dayWord(at, now)} ${HM.format(at)}${todayNote(iso, now).replace(" (later today, in ", " (in ")}`;
+    const day = dayWord(at, now);
+    const when = `Close ${day} ${HM.format(at)}${todayNote(iso, now).replace(" (later today, in ", " (in ")}` +
+      (/^(tonight|today|tomorrow)$/.test(day) ? `, ${WD.format(at)}` : "");
     const mine = hasTargets ? rs.filter((r) => marks.get(r.id)?.relevant === true) : rs;
     const others = hasTargets ? rs.filter((r) => marks.get(r.id)?.relevant !== true) : [];
     const applied = mine.filter((r) => r.applied).length;
@@ -134,3 +136,8 @@ export function roleLists(roles: ListRole[], marks: Map<string, { relevant: bool
   }
   return blocks.join("\n\n");
 }
+
+// Only questions about deadlines or lists of roles get the ready-made lists (they're long; other questions are
+// answered better without them).
+const LISTY = /\b(due|clos\w*|deadline\w*|tonight|today|tomorrow|this week|next week|relevant|for me|apply\w*|roles?|open|which|anything|what else|list\w*|cv)\b/i;
+export const wantsLists = (q: string) => LISTY.test(q);

@@ -33,6 +33,20 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
 
 ---
 
+## First 5 minutes (a new student)
+
+1. **Run the setup** on your own copy of this repo: `python -m pip install --user -r requirements.txt`, then
+   `python setup/new_student_setup.py`. It asks for your ERP login, mailbox app password and Supabase project,
+   creates the tables (with an **empty profile**: nothing about you is pre-filled), your dashboard login, and
+   the GitHub secrets. Details: [docs/SETUP.md](docs/SETUP.md).
+2. **Open the dashboard** link it prints and sign in with the email it shows.
+3. **Tell Ping what you're looking for**, as your first chat message, in your own words, for example
+   "only show me <the kinds of roles you want>", "don't count <a kind you don't want> as relevant",
+   "remind me 3 hours before deadlines". Ping answers with one line saying exactly what it saved, and marks
+   every role "For you" or not. "what are my preferences?" shows them; "reset my preferences" clears them.
+   The Profile page shows the same fields (plus CGPA, department and degree for eligibility).
+4. **Done.** The first hourly run reads the last 14 days of notices; after that, only what's new.
+
 ## Status (honest)
 
 ### Today's numbers (real runs, 21 Nov 2026)

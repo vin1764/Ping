@@ -14,6 +14,7 @@ import re
 import sys
 import time
 import traceback
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from . import ai, notify
@@ -196,6 +197,7 @@ class Runner:
             "otp_requests": ls.otp_requests if ls else None,
             "gate_requests": self.gate.count,
             "counts": {**self.counts, "items": self._item_counts(items), "ai": dict(ai.stats),
+                       "erp_addresses": dict(Counter(self.gate.log)),
                        "seconds_total": round(time.monotonic() - t0, 1)},
             "problems": self.problems[:50],
         }
@@ -459,6 +461,8 @@ class Runner:
             f"feed              : always {it.get('always', 0)}, show {it.get('show', 0)}, hidden {it.get('hidden', 0)},"
             f" questions for you {it.get('review', 0)}",
             f"ERP requests      : {rec['gate_requests']} (all through the read-only gate)",
+            "ERP addresses visited (every request this run, by address):",
+            *[f"    {n:4d} x {path}" for path, n in sorted(rec.get("counts", {}).get("erp_addresses", {}).items())],
             f"total time        : {c.get('seconds_total')}s",
         ]
         if rec["problems"]:

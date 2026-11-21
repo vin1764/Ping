@@ -2,9 +2,9 @@ name: Ping
 
 on:
   schedule:
-    # GitHub's clock is UTC. 00:37-19:37 UTC = every hour from 06:07 to 01:07 IST (20 runs a day).
-    # Minute 37 avoids the top of the hour, when GitHub is busiest and runs get delayed.
-    - cron: "37 0-19 * * *"
+    # GitHub's clock is UTC. 00:41-19:41 UTC = every hour from 06:11 to 01:11 IST (20 runs a day).
+    # Minute 41 avoids the top of the hour, when GitHub is busiest and runs get delayed.
+    - cron: "41 0-19 * * *"
   workflow_dispatch:
     inputs:
       mode:

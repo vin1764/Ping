@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -42,6 +42,14 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
+          # log-scan only: the values it searches the logs for (masked by GitHub; never printed by Ping)
+          ERP_PASSWORD: ${{ inputs.task == 'log-scan' && secrets.ERP_PASSWORD || '' }}
+          ERP_SECQ_1: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_1 || '' }}
+          ERP_SECQ_2: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_2 || '' }}
+          ERP_SECQ_3: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_3 || '' }}
+          MAIL_APP_PASSWORD: ${{ inputs.task == 'log-scan' && secrets.MAIL_APP_PASSWORD || '' }}
+          PING_GITHUB_TOKEN: ${{ inputs.task == 'log-scan' && secrets.PING_GITHUB_TOKEN || '' }}
+          DASHBOARD_DEPLOY_TOKEN: ${{ inputs.task == 'log-scan' && secrets.DASHBOARD_DEPLOY_TOKEN || '' }}
         run: |
           python -m ping.admin "$TASK"
       - name: Save the demo data

@@ -9,6 +9,7 @@
   auth-config      Supabase Auth settings for the live dashboard: Site URL and redirect allow-list point at
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
+  log-scan         search the logs of the last 20 workflow runs for any secret value (prints counts only)
   relevance-evals  score "For you" per fixture persona (evals/relevance) and commit its report
   demo-refeed      rebuild the demo's feed with the current code (digests, "For you"), from the same snapshot:
                    example targets on the demo profile, Gemini marks the demo roles, loads and commits it
@@ -30,6 +31,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 import time
@@ -488,6 +490,46 @@ def relevance_evals(secrets) -> int:
     return subprocess.run([sys.executable, str(ROOT / "evals" / "relevance" / "run_relevance_evals.py")]).returncode
 
 
+def log_scan(secrets) -> int:
+    """Download the logs of the last 20 workflow runs and search them for every secret value this job has, and for
+    key-shaped text. Prints counts and run numbers only, never a value."""
+    import io as _io
+    import zipfile
+    token, repo = os.environ.get("GITHUB_TOKEN", ""), os.environ.get("GITHUB_REPOSITORY", "")
+    h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    names = ["ERP_USER_ID", "ERP_PASSWORD", "ERP_SECQ_1", "ERP_SECQ_2", "ERP_SECQ_3", "MAIL_ADDRESS", "MAIL_APP_PASSWORD",
+             "SUPABASE_SERVICE_KEY", "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY", "PING_GITHUB_TOKEN", "DASHBOARD_DEPLOY_TOKEN"]
+    values = {}
+    for n in names:
+        v = os.environ.get(n, "").strip()
+        if n.startswith("ERP_SECQ") and "::" in v:
+            v = v.split("::", 1)[1].strip()          # the answer is the secret part
+        if len(v) >= 6:
+            values[n] = v
+    patterns = {"Supabase secret key": re.compile(r"sb_secret_[A-Za-z0-9_-]{10,}"), "Supabase access token": re.compile(r"sbp_[a-f0-9]{20,}"),
+                "Google API key": re.compile(r"AIza[0-9A-Za-z_-]{30,}"), "GitHub token": re.compile(r"(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{20,}")}
+    runs = requests.get(f"https://api.github.com/repos/{repo}/actions/runs", headers=h, params={"per_page": 20}, timeout=30).json()
+    found, scanned = [], 0
+    for run in runs.get("workflow_runs", [])[:20]:
+        r = requests.get(run["logs_url"], headers=h, timeout=60)
+        if r.status_code != 200:
+            say(f"  run {run['run_number']} ({run['name']}): logs HTTP {r.status_code}")
+            continue
+        scanned += 1
+        with zipfile.ZipFile(_io.BytesIO(r.content)) as z:
+            text = "\n".join(z.read(n).decode("utf-8", "replace") for n in z.namelist())
+        for n, v in values.items():
+            if v in text:
+                found.append(f"run {run['name']} #{run['run_number']}: the value of {n}")
+        for what, rx in patterns.items():
+            if rx.search(text):
+                found.append(f"run {run['name']} #{run['run_number']}: something shaped like a {what}")
+    say(f"scanned the logs of {scanned} runs for the values of {len(values)} secrets ({', '.join(sorted(values))}) "
+        f"and for key-shaped text")
+    say("found: " + ("nothing" if not found else "; ".join(found)))
+    return 0 if not found else 1
+
+
 def rearm_schedule(secrets) -> int:
     """GitHub registers a workflow's cron when it sees the file on the default branch. ping.yml has been there
     since the repo was created and never fired, so the registration was lost; disable + enable re-registers it."""
@@ -530,7 +572,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

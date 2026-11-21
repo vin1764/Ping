@@ -95,9 +95,13 @@ def main(argv: list[str]) -> int:
         import requests
         hdr = {"apikey": cfg["supabaseKey"], "Authorization": f"Bearer {token}"}
         real = {}
-        for t in ("items", "roles", "notices", "pdf_checks", "profile", "runs", "emails", "contacts", "chat_messages"):
-            r = requests.get(f"{cfg['supabaseUrl']}/rest/v1/{t}", headers=hdr, timeout=30,
-                             params={"select": "is_sample", "is_sample": "not.is.true", "limit": "5"})
+        # every table: a demo session must see 0 real rows (tables it may not read at all answer with an error or
+        # nothing; role_marks, demo_questions, allowed_users and state have no policy for it)
+        for t in ("items", "roles", "notices", "pdf_checks", "profile", "runs", "emails", "contacts", "chat_messages",
+                  "corrections", "state", "allowed_users", "role_marks", "demo_questions", "session_prefs"):
+            has_sample = t not in ("state", "allowed_users", "role_marks", "demo_questions", "session_prefs", "corrections")
+            params = {"select": "is_sample", "is_sample": "not.is.true", "limit": "5"} if has_sample else {"select": "*", "limit": "5"}
+            r = requests.get(f"{cfg['supabaseUrl']}/rest/v1/{t}", headers=hdr, timeout=30, params=params)
             real[t] = len(r.json()) if r.status_code == 200 else f"HTTP {r.status_code}"
         demo_rows = requests.get(f"{cfg['supabaseUrl']}/rest/v1/items", headers=hdr, timeout=30,
                                  params={"select": "id", "limit": "1000"}).json()

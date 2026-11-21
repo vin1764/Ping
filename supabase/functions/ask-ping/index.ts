@@ -24,13 +24,27 @@ const PAY = /ctc|salary|gross|take ?home|bonus|bond|stipend|esop|stock|perk|bene
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 const LEGAL = new Set(["private", "pvt", "limited", "ltd", "inc", "llp", "india", "the", "and", "co", "company", "technologies", "services", "solutions"]);
 
+// Edit distance, for typos in company names ("eternl" -> "eternal")
+function close(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 2 || Math.min(a.length, b.length) < 5) return false;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return d[a.length][b.length] <= (a.length >= 8 ? 2 : 1);
+}
+
 function mentioned(question: string, companies: string[]): string[] {
-  const q = ` ${norm(question)} `;
+  const q = ` ${norm(question).replace(/'s\b/g, "")} `;
+  const words = q.trim().split(" ");
   return companies.filter((c) => {
     const n = norm(c);
     if (n && q.includes(` ${n} `)) return true;
     const first = n.split(" ").find((w) => w.length >= 3 && !LEGAL.has(w));
-    return !!first && q.includes(` ${first} `);
+    return !!first && (q.includes(` ${first} `) || words.some((w) => close(w, first)));
   });
 }
 
@@ -65,10 +79,23 @@ Deno.serve(async (req) => {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
   const names = mentioned(question, [...new Set((roles.data || []).map((r) => r.company as string))]).slice(0, 6);
-  const detail = names.length
-    ? await sb.from("roles").select("company,designation,more_details,bond,contract,backlog_rule").in("company", names).limit(20)
-    : { data: [] as any[], error: null };
-  if (detail.error) console.error(JSON.stringify({ event: "read_failed", table: "roles(details)", error: detail.error.message }));
+  const since = new Date(asOf.getTime() - 21 * 86_400_000).toISOString();
+  const [detail, lists, notices] = await Promise.all([
+    names.length
+      ? sb.from("roles").select("company,designation,more_details,bond,contract,backlog_rule,cgpa_cutoff,allowed," +
+          "selection_details,applied,effective_deadline").in("company", names).limit(20)
+      : Promise.resolve({ data: [] as any[], error: null }),
+    // your results on shortlists / test room lists (also the ones already past), newest first
+    sb.from("items").select("title,company,pdf_status,event_at,details").not("pdf_status", "is", null)
+      .gte("sort_at", since).order("sort_at", { ascending: false }).limit(60),
+    names.length
+      ? sb.from("notices").select("company,subject,notice_time,text").in("company", names.map((n) => n.toUpperCase())
+          .concat(names)).order("notice_time", { ascending: false }).limit(6)
+      : Promise.resolve({ data: [] as any[], error: null }),
+  ]);
+  for (const [name, r] of [["roles(details)", detail], ["list results", lists], ["notices", notices]] as const) {
+    if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
+  }
 
   // Your own row from each list PDF (room, slot, time...). Never anyone else's.
   const myRow = (d: any) => {
@@ -83,14 +110,32 @@ Deno.serve(async (req) => {
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
     ` | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"} | CTC ${r.ctc ?? "?"} ${r.currency ?? ""}`);
+  const past = (iso?: string | null) => (iso && new Date(iso) < asOf ? " (already passed)" : "");
+  const depts = (allowed: any[]) => [...new Set((allowed || []).map((a) => a.department).filter(Boolean))].join("; ");
   const detailLines = (detail.data || []).map((r: any) =>
-    `- ${r.company} | ${r.designation} | ${payLines(r.more_details) || "no pay details given"}` +
-    `${r.bond ? ` | bond: ${r.bond}` : ""}${r.contract ? ` | contract: ${r.contract}` : ""}`);
+    `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
+    `${past(r.effective_deadline)} | CG cut-off: ${r.cgpa_cutoff ?? "none given"} | backlogs: ${r.backlog_rule || "not stated"}` +
+    ` | written test: ${r.selection_details?.["Written Test"] ?? "not stated"}` +
+    ` | pay: ${payLines(r.more_details) || "no pay details given"}` +
+    `${r.bond ? ` | bond: ${r.bond}` : ""}${r.contract ? ` | contract: ${r.contract}` : ""}` +
+    ` | departments allowed: ${depts(r.allowed) || "not stated"}`);
+  const listLines = (lists.data || []).map((i: any) =>
+    `- ${i.title}${i.event_at ? ` (test/event at ${ist(i.event_at)}${past(i.event_at)})` : ""}` +
+    ` [${i.pdf_status === "yes" ? "you ARE on this list" : i.pdf_status === "no" ? "you are NOT on this list" : "list not readable"}]` +
+    `${i.details?.venue ? ` (venue ${i.details.venue})` : ""}${myRow(i.details)}` +
+    `${i.details?.notice_time ? ` (posted ${ist(i.details.notice_time)})` : ""}`);
+  const noticeLines = (notices.data || []).slice(0, 3).map((n: any) =>
+    `- ${ist(n.notice_time)} | ${n.company} | ${n.subject}: ${(n.text || "").replace(/\s+/g, " ").slice(0, 600)}`);
 
   const prompt = `You are Ping, a placement assistant for one IIT Kharagpur student. Answer ONLY from the data below.
-Be short and concrete: dates in IST, money in rupees as written (e.g. 22,00,000 or 22 LPA). For pay questions, list
-every component the data gives (fixed / take-home, bonuses, ESOPs, bond) per role.
-If the answer isn't in the data, say so in one sentence and mention what the data does show.
+Be short and concrete: dates in IST, times as HH:MM in 24-hour form (e.g. 20:00), money in rupees as written
+(e.g. 22,00,000 or 22 LPA). For pay questions, list every component the data gives (fixed / take-home, bonuses,
+ESOPs, bond) per role. When a deadline or test is before Now, say it has already passed.
+If the answer isn't in the data, say so in one sentence and mention what the data does show. Never guess
+locations, scores, contacts or phone numbers.
+Ping is read-only: it can never apply, withdraw, accept or decline offers, fill or submit forms, upload or change a CV,
+or change anything on the ERP or anywhere else. If asked to do any of that, start with "Ping is read-only, so I can't"
+followed by what was asked, then add anything useful from the data (deadline, form link).
 Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
 All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric" }).format(asOf)} unless they say otherwise.
 
@@ -101,7 +146,10 @@ ${feed.join("\n") || "(empty)"}
 
 All roles in the companies list:
 ${roleLines.join("\n") || "(empty)"}
-${detailLines.length ? `\nPay and bond details for the companies in the question (from the ERP's "more details"):\n${detailLines.join("\n")}\n` : ""}
+${detailLines.length ? `\nDetails for the companies in the question (from the ERP's "more details"):\n${detailLines.join("\n")}\n` : ""}
+Your results on shortlists and test room lists in the last 21 days, newest first:
+${listLines.join("\n") || "(none)"}
+${noticeLines.length ? `\nLatest notices for the companies in the question, newest first:\n${noticeLines.join("\n")}\n` : ""}
 Question: ${question}`;
 
   const tried: string[] = [];

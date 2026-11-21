@@ -127,7 +127,7 @@
    "question": "what's due tomorrow",
    "checks": {
     "must_contain": [
-     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
     ],
     "max_words": 60
    },
@@ -216,7 +216,7 @@
    "question": "what's due on 25 November",
    "checks": {
     "must_contain": [
-     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
     ],
     "max_words": 60
    },
@@ -307,7 +307,7 @@
    "question": "what's the CTC at Google",
    "checks": {
     "must_contain": [
-     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
     ],
     "must_not_contain": [
      "lpa",
@@ -324,7 +324,7 @@
    "question": "what's due on 30 November",
    "checks": {
     "must_contain": [
-     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
     ],
     "max_words": 60
    },
@@ -336,7 +336,7 @@
    "question": "where is the Diageo job located",
    "checks": {
     "must_contain": [
-     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
     ],
     "must_not_contain": [
      "bangalore",
@@ -361,7 +361,7 @@
    "question": "what was my score in the Eternal test",
    "checks": {
     "must_contain": [
-     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
     ],
     "must_not_contain": [
      "/100",
@@ -378,7 +378,7 @@
    "question": "what's the CTC at Netflix",
    "checks": {
     "must_contain": [
-     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
     ],
     "must_not_contain": [
      "lpa",
@@ -395,7 +395,7 @@
    "question": "who is the CDC contact for Groww and their phone number",
    "checks": {
     "must_contain": [
-     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
     ],
     "must_not_contain": [
      "+91",
@@ -530,6 +530,22 @@
     ]
    },
    "why": "Diageo: applied yes; Bonds No"
+  }
+ ],
+ "check_changes": [
+  {
+   "after_run": 1,
+   "cases": [
+    "D1",
+    "D8",
+    "X2",
+    "X1",
+    "X4",
+    "X5",
+    "X6"
+   ],
+   "change": "added the phrasings 'does not contain' / 'does not show any' to the 'nothing due' and 'not in the data' alternatives",
+   "why": "those answers said plainly that nothing was due / the data had no such thing, which is the expected behaviour; the phrase list was incomplete, not the answers wrong"
   }
  ]
 }

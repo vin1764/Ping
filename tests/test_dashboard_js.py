@@ -1,4 +1,4 @@
-"""The dashboard's pure JavaScript (dashboard/onboarding.js) is tested with Node's own test runner (tests/js/)."""
+"""The dashboard's pure JavaScript (dashboard/onboarding.js, dashboard/names.js) is tested with Node's own test runner (tests/js/)."""
 
 import shutil
 import subprocess

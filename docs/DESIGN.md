@@ -86,8 +86,11 @@ people who ask for reduced motion), and nothing above them shifts.
 
 ## Pages
 
-- **Companies**: a search box, filter chips [For you] [Applied] [Closing soon] [All], one row per role (company —
-  role, close time with countdown, CTC, "Apply with" label, badges). Tapping a row opens a **role sheet** (a bottom
+- **Companies**: a search box, filter chips [For you] [Applied] [Closing soon] [All], one row per role. The company
+  is the primary line (bold, body size) with the CTC right-aligned on it; the role sits below, one step smaller and
+  regular weight; then close time with countdown, badges and "Apply with". The role sheet's header keeps the same
+  order (company, then role). Company names are cleaned for display only (`dashboard/names.js`): a website in
+  brackets ("Auro Group(www.AuroIM.com)") and double spaces go; the raw ERP name stays in the data. Tapping a row opens a **role sheet** (a bottom
   sheet on phones, a side panel on desktop) with everything Ping knows: CTC breakdown, eligibility and why,
   deadlines and where they came from, the company's notices, your results on its lists, the source.
 - **Profile**: cards (About you · What I'm looking for · CVs · Schedule & reminders · Account), each edited in place

@@ -40,6 +40,8 @@
   }
   const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const companyHref = (name) => `#co-${slug(name)}`;
+  // company names for display only ("Auro Group(www.AuroIM.com)" -> "Auro Group"): dashboard/names.js
+  const { cleanName, cleanRowText } = window.PingNames || { cleanName: (x) => String(x || ""), cleanRowText: (x) => String(x || "") };
   const safeUrl = (u) => (/^(https?:|#|mailto:|\?)/i.test(String(u)) ? String(u) : "#");
   const mount = (...nodes) => { const app = $("#app"); app.replaceChildren(...nodes); };
   // every page but the chat: one centred column that scrolls (the chat scrolls its own thread)
@@ -746,7 +748,7 @@
     // a row: "Company — Role", a ✓ applied badge, and the reason / which CV on a second line
     const row = (r) => {
       const applied = r.tag === "done" || roleById().get(r.id)?.applied;
-      return h("div", { class: `li ${r.tag || ""}` }, h("span", { class: "rt" }, r.text),
+      return h("div", { class: `li ${r.tag || ""}` }, h("span", { class: "rt" }, cleanRowText(r.text)),
         applied ? h("span", { class: "pill applied" }, "✓ applied") : null,
         r.note ? h("span", { class: "why" }, r.note) : null);
     };
@@ -992,9 +994,10 @@
     const cls = r.applied ? "applied" : targetsOn() && forYou(r) ? "you" : closingSoon(r) ? "soon" : "plain";
     const cv = bestCv(r);
     return h("button", { type: "button", class: `role-row r-${cls}`, "data-role": r.id, onclick: () => openRole(r),
-      "aria-label": `${r.company}, ${r.designation}. Details` },
-      h("span", {}, h("span", { class: "co" }, r.company), h("span", { class: "rn" }, r.designation)),
+      "aria-label": `${cleanName(r.company)}, ${r.designation}. Details` },
+      h("span", { class: "co" }, cleanName(r.company)),
       h("span", { class: "ctc" }, ctcShort(r)),
+      h("span", { class: "rn" }, r.designation),
       h("span", { class: "meta" },
         dl ? h("span", { class: "num" }, `${open ? "Closes" : "Closed"} ${when(dl)}`) : h("span", {}, "No deadline yet"),
         dl && open && !r.applied ? countPill(dl, "soon") : null,
@@ -1021,7 +1024,7 @@
     const count = h("p", { class: "lede", id: "roles-count" });
     function draw() {
       const q = state.companyQuery.trim().toLowerCase();
-      const match = (r) => !q || `${r.company} ${r.designation}`.toLowerCase().includes(q);
+      const match = (r) => !q || `${r.company} ${cleanName(r.company)} ${r.designation}`.toLowerCase().includes(q);
       chips.replaceChildren(...FILTERS.map(([key, label, fn]) => h("button", { type: "button", class: "chip", "data-filter": key,
         "aria-pressed": String(state.roleFilter === key), onclick: () => { state.roleFilter = key; state.roleLimit = 60; draw(); } },
         label, h("span", { class: "n" }, roles.filter((r) => match(r) && fn(r)).length))));
@@ -1063,8 +1066,8 @@
     const depts = new Set((r.allowed || []).map((a) => a.department));
     const close = h("button", { type: "button", class: "close", "aria-label": "Close", onclick: () => sheet.close() }, "×");
     sheet.replaceChildren(
-      h("div", { class: "sheet-head" }, h("div", {}, h("div", { class: "co muted small" }, r.company),
-        h("h2", { id: "sheet-title" }, r.designation)), close),
+      h("div", { class: "sheet-head" }, h("div", {}, h("h2", { id: "sheet-title", class: "co" }, cleanName(r.company)),
+        h("div", { class: "rn" }, r.designation)), close),
       h("div", { class: "sheet-body" },
         h("div", { class: "chips wrap", style: "padding:0" },
           r.applied ? h("span", { class: "pill applied" }, "✓ applied") : null,
@@ -1097,7 +1100,7 @@
           h("pre", { class: "notice" }, r.job_description.slice(0, 4000)))) : null,
         sec("Source", h("p", { class: "muted small", style: "margin:0" },
           `The ERP's companies list${r.last_seen ? `, last read ${when(r.last_seen)}` : ""}. Ping only reads the ERP: apply there. `),
-          h("a", { href: companyHref(r.company), onclick: () => sheet.close() }, `All roles at ${r.company}`))));
+          h("a", { href: companyHref(r.company), onclick: () => sheet.close() }, `All roles at ${cleanName(r.company)}`))));
     if (!sheet.dataset.wired) {
       sheet.dataset.wired = "1";
       sheet.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); });   // a tap on the backdrop
@@ -1112,7 +1115,7 @@
     const items = state.data.items.filter((i) => i.company === name && i.level !== "hidden").sort(sortNewest);
     mountPage(
       h("p", { class: "page-links" }, h("a", { href: "#companies" }, "← Companies")),
-      h("h1", {}, name || "Not found"),
+      h("h1", {}, name ? cleanName(name) : "Not found"),
       h("p", { class: "lede" }, `${roles.length} role${roles.length === 1 ? "" : "s"}. Tap one for pay, eligibility and deadlines.`),
       roles.length ? h("div", { class: "roles" }, roles.map(roleRow)) : h("p", { class: "empty" }, "No roles for this company in the companies list."),
       h("h2", {}, "Updates"),

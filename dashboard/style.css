@@ -239,16 +239,16 @@ h3 { font-size: var(--t-md); line-height: 24px; font-weight: 600; margin: 0; }
 
 /* companies: one row per role */
 .roles { display: grid; gap: var(--s2); }
-.role-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s3); align-items: start; width: 100%; text-align: left;
+.role-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s3); align-items: baseline; width: 100%; text-align: left;
   background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--r-card);
   padding: var(--s3) var(--s4); cursor: pointer; color: var(--ink); min-height: 44px; }
 .role-row:hover { border-color: var(--line-strong); }
 .role-row.r-you { border-left-color: var(--accent); }
 .role-row.r-applied { border-left-color: var(--applied); }
 .role-row.r-soon { border-left-color: var(--soon); }
-.role-row .co, .role-row .rn { display: block; }
-.role-row .co { font-size: var(--t-sm); line-height: 20px; color: var(--muted); font-weight: 600; }
-.role-row .rn { font-weight: 600; }
+.role-row .co { grid-column: 1; font-size: var(--t-md); line-height: 22px; font-weight: 600; color: var(--ink); }
+.role-row .ctc { grid-column: 2; grid-row: 1; justify-self: end; }
+.role-row .rn { grid-column: 1 / -1; font-size: var(--t-sm); line-height: 20px; font-weight: 400; color: var(--ink); }
 .role-row .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); align-items: center; font-size: var(--t-sm);
   line-height: 20px; color: var(--muted); margin-top: var(--s1); }
 .role-row .ctc { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -268,6 +268,8 @@ dialog.sheet[open] { animation: sheet-up .2s ease-out; }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; gap: var(--s3); background: var(--surface);
   padding: var(--s4) var(--s4) var(--s3); border-bottom: 1px solid var(--line); }
 .sheet-head h2 { margin: 0; }
+.sheet-head .co { font-size: var(--t-lg); line-height: 26px; font-weight: 600; }
+.sheet-head .rn { font-size: var(--t-md); line-height: 24px; font-weight: 400; color: var(--ink); }
 .sheet-head .close { margin-left: auto; flex: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
   color: var(--ink); cursor: pointer; font-size: 20px; line-height: 1; }
 .sheet-body { padding: var(--s4); padding-bottom: max(var(--s5), env(safe-area-inset-bottom, 0px)); display: grid; gap: var(--s4); }

@@ -9,6 +9,8 @@
   auth-config      Supabase Auth settings for the live dashboard: Site URL and redirect allow-list point at
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
+  demo-clock       set the demo's "now" (the demo profile's updated_at) to the snapshot time in
+                   dashboard/demo-data.json, without rebuilding the demo
   cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
                    (also runs daily inside Supabase, see schedule-setup)
   schedule-setup   schedule the hourly Ping run and the daily demo cleanup inside Supabase (pg_cron + the kick-run
@@ -318,6 +320,26 @@ def cleanup_demo(secrets) -> int:
     return 0
 
 
+def demo_clock(secrets) -> int:
+    """The one-click demo shows, and asks Ping, as of the snapshot time. It reads that time from the demo profile's
+    updated_at; demo builds made before that field was written left an older time there."""
+    data = json.loads((ROOT / "dashboard" / "demo-data.json").read_text(encoding="utf-8"))
+    when = data["generated_at"]
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    before = (store.select("profile", {"is_sample": "is.true"}, columns="id,updated_at") or [{}])[0]
+    if not before.get("id"):
+        say("no demo profile in the database (run build-demo)")
+        return 1
+    r = requests.patch(secrets.supabase_url.rstrip("/") + "/rest/v1/profile", timeout=30,
+                       params={"id": f"eq.{before['id']}", "is_sample": "is.true"},
+                       headers={"apikey": secrets.supabase_key, "Authorization": f"Bearer {secrets.supabase_key}",
+                                "Content-Type": "application/json", "Prefer": "return=representation"},
+                       json={"updated_at": when})
+    after = r.json()[0]["updated_at"] if r.status_code < 300 and r.json() else f"HTTP {r.status_code} {r.text[:200]}"
+    say(f"demo snapshot time: {before.get('updated_at')} -> {after} (demo-data.json generated_at {when})")
+    return 0 if r.status_code < 300 else 1
+
+
 def _function_url(secrets, name: str) -> str:
     return f"{secrets.supabase_url.rstrip('/')}/functions/v1/{name}"
 
@@ -426,7 +448,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

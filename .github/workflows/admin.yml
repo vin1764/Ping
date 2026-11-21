@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo, schedule-setup, schedule-status]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo, demo-clock, schedule-setup, schedule-status]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo

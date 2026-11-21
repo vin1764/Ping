@@ -118,6 +118,7 @@ Actions > **Admin** > Run workflow, pick a task:
 | `ask-ping-page` | opens the **live** dashboard in a real browser: checks the owner sign-in screen (without signing in), clicks View demo, confirms the demo session gets 0 real rows, types "slice ctc breakdown" and "what's due tomorrow", then "any tests today?" followed by "anything else?" and "nothing else?" (follow-ups that need the conversation), and prints the replies |
 | `ask-ping-evals` | runs the Ask Ping evals from demo sessions and commits `evals/ask_ping/REPORT.md` |
 | `auth-config` | Supabase Auth for the live dashboard: Site URL and redirect list, anonymous sign-ins on |
+| `demo-clock` | sets the one-click demo's "now" to the snapshot time in `dashboard/demo-data.json` (the demo shows, and Ask Ping answers, as of that time) without rebuilding the demo |
 | `cleanup-demo` | deletes demo sessions older than 7 days and their chat (also runs daily, from Supabase's scheduler) |
 | `schedule-setup` | sets up the hourly start in Supabase: a new shared secret for `kick-run` (function secret + database Vault), the two scheduled jobs from `sql/schedule.sql`, then a dry run of kick-run that starts nothing |
 | `schedule-status` | lists the scheduled jobs, their last 10 runs in Supabase, and the last Ping runs on GitHub with what started each |

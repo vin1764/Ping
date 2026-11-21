@@ -340,7 +340,8 @@ def load_to_db(store, data: dict) -> dict:
     counts = {}
     for table in ("items", "pdf_checks", "notices", "roles", "runs", "contacts", "emails"):
         store.delete(table, {"is_sample": "is.true"})
-    store.upsert("profile", [data["profile"]])
+    # the demo's "now": a demo session reads the snapshot time from the profile's updated_at
+    store.upsert("profile", [{**data["profile"], "updated_at": data["profile"].get("updated_at") or data["generated_at"]}])
     for table, key in (("roles", "id"), ("notices", "id"), ("pdf_checks", "notice_id"), ("items", "id"),
                        ("runs", "id")):
         rows = data[table]

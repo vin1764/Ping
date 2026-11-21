@@ -4,7 +4,7 @@ Ping evals: does Ping read real placement notices and PDFs the way a careful per
 
     python evals/run_evals.py
 
-Prints the results and writes evals/REPORT.md (plain English, for reviewers).
+Prints the results and writes evals/PARSER_REPORT.md (plain English, for reviewers; evals/REPORT.md is the index).
 
 What is tested
   - 31 real CDC notices from 7-21 Nov 2026 (other students' details removed). For each, a person's
@@ -230,7 +230,7 @@ def main():
     held_total = [ok for v in held.values() for ok in v]
     n_tuned = sum(1 for c in notices if not c.get("held_out"))
     pct = lambda xs: f"{100 * sum(xs) / len(xs):.0f}%" if xs else "n/a"  # noqa: E731
-    lines = ["# Ping evals", "",
+    lines = ["# Parser evals: notices and PDFs", "",
              f"_Run on {datetime.now(IST).strftime('%d %b %Y, %H:%M IST')}. Re-run with `python evals/run_evals.py`._", "",
              "## In short", "",
              f"- **Held-out real notices (never used to tune Ping): {sum(held_total)} of {len(held_total)} checks right "
@@ -283,7 +283,7 @@ def main():
               "rebuild the table layouts seen in the real run with made-up roll numbers and names.",
               "- Company answers use the student's real companies list (company and role names only)."]
     report = "\n".join(lines) + "\n"
-    (HERE / "REPORT.md").write_text(report, encoding="utf-8")
+    (HERE / "PARSER_REPORT.md").write_text(report, encoding="utf-8")
     print(report)
     return 0
 

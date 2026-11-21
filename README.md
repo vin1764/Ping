@@ -24,8 +24,9 @@ It signs in to the real dashboard but the database only lets it see the
 anonymised demo rows, and it can't change anything. It needs the dashboard to
 be hosted (see [What's left](#whats-left)).
 
-Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md) (plain words, re-run
-with `python evals/run_evals.py`).
+Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md), the index of both suites in plain words:
+parser evals (`python evals/run_evals.py`) and Ask Ping evals (Actions > Admin > `ask-ping-evals`).
+The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), generated from the source.
 
 ---
 
@@ -44,7 +45,7 @@ with `python evals/run_evals.py`).
 | repeats merged | 177 notice messages became **162**: 15 repeats merged, 39 real changes sent as updates (29 deadline moves, 10 time changes), 0 unsure |
 | rooms re-read | **8 of 15** rooms saved earlier showed the neighbouring student's room (two students per line); fixed, and every run now re-reads saved rows |
 | AI fallback | the rules couldn't read 1 notice; Gemini read it right (Tata AIG, Senior Engineer Trainee - Analytics, 17 Nov 16:00) |
-| evals | held-out real notices **56 of 58 checks right (97%)**; development set 143 of 143 ([report](evals/REPORT.md)) |
+| evals | held-out real notices **56 of 58 checks right (97%)**; development set 143 of 143 ([report](evals/PARSER_REPORT.md)); Ask Ping evals in [evals/ask_ping](evals/ask_ping/REPORT.md) |
 
 ### Works, verified on the real ERP / real project
 - Login with security question and mailbox OTP, reading everything, logging out.
@@ -414,7 +415,7 @@ that hasn't built one yet falls back to made-up sample data (`ping/sample.py`).
 | `supabase/functions/` | Check now and Ask Ping server functions |
 | `setup/capture_erp.py` | one-time page capture used to build Ping |
 | `setup/new_student_setup.py` | setup for the next student |
-| `evals/` | real notices with expected answers, PDF layouts, `REPORT.md` |
+| `evals/` | parser evals (real notices, PDF layouts) and Ask Ping evals (`ask_ping/`); `REPORT.md` is the index |
 | `tests/` | offline tests, including a full run against a fake ERP and setup against a fake Supabase |
 
 Run the tests: `python -m pip install -r requirements-dev.txt && python -m pytest -q`.

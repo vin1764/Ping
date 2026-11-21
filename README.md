@@ -150,7 +150,7 @@ questions an hour). It can't start a run, read real rows, or reach the CV bucket
 
 ## What's left
 
-1. **Your profile:** department, degree, CGPA, backlogs (dashboard > Menu > Profile).
+1. **Your profile:** department, degree, CGPA, backlogs (dashboard > Profile).
 2. **The deploy token** (`DASHBOARD_DEPLOY_TOKEN`, see [Live dashboard](#live-dashboard))
    expires; renew it before then and save the new value under the same name.
 3. **OTP mail filter:** in your institute Gmail, From `erpkgp@adm.iitkgp.ac.in`,
@@ -346,8 +346,11 @@ text and your targets, never your name, roll number, CGPA or mail.
 - When a deadline moves or a venue changes, Ping posts one **Update** message
   saying what changed; the earlier message stays, greyed and marked "Since updated".
   Things that are over stay in the history, greyed ("Deadline passed", "Over").
-- **Menu:** All updates (with the three level filters), Companies (a page per
-  company: roles, applied, deadline, pay, eligibility), Profile, Check now.
+- **Navigation:** a bottom bar on phones, a slim left rail on desktop: Chat ·
+  Companies (every role, a search box, filters For you / Applied / Closing soon /
+  All, and a sheet per role with pay, eligibility, deadlines, notices and source) ·
+  Profile (cards edited in place; Account has Check now, All updates, the theme
+  and sign out). Look and feel: [docs/DESIGN.md](docs/DESIGN.md).
 - **View demo** (sign-in screen): a one-click anonymous session on the anonymised
   snapshot, with a "Demo - sample data, read-only" chip; its chat is kept for that
   session. `?demo=1` opens the same snapshot from a file, without the database. Both
@@ -449,7 +452,7 @@ Two kinds of failed run are handled differently (`ping/run.py`):
 | what happened | what Ping does |
 |---|---|
 | **The ERP is down or flaky:** unreachable, blank login page, Log In not accepted, no OTP mail | Nothing visible at first, and the schedule never pauses: the next hourly run tries again. After **3 failed runs in a row**: one email and one chat message, "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly." Once per streak. When a run works again: one chat message, "Back online". |
-| **The ERP refused who you are:** wrong user id, password or security answer refused (no OTP sent), a security question none of your 3 answers match | **At once:** one email and one chat message saying what was refused, and the hourly runs **pause** (so the account isn't locked by repeated tries). Fix the secret, then start a run yourself (dashboard Menu > Check now, or Actions > Ping > Run workflow); a run you start resumes the schedule. |
+| **The ERP refused who you are:** wrong user id, password or security answer refused (no OTP sent), a security question none of your 3 answers match | **At once:** one email and one chat message saying what was refused, and the hourly runs **pause** (so the account isn't locked by repeated tries). Fix the secret, then start a run yourself (dashboard Profile > Account > Check now, or Check now on the desktop rail, or Actions > Ping > Run workflow); a run you start resumes the schedule. |
 
 Ping sends these emails from your institute mailbox to itself. It also emails
 (at most once a day) if the database isn't set up. Scheduled runs that fail

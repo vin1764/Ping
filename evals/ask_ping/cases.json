@@ -761,6 +761,41 @@
     ]
    },
    "why": "neither a company nor an intent: says so, then what's due soon, every line with its company's name."
+  },
+  {
+   "id": "F7",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "what's due tomorrow",
+   "checks": {
+    "must_contain": [
+     "Nothing due tomorrow",
+     "Sun 22 Nov"
+    ],
+    "must_not_contain": [
+     "Pine Labs",
+     "I couldn't tell"
+    ]
+   },
+   "why": "no company, a deadline intent and a day: nothing in the feed or roles falls on Sun 22 Nov. The Pine Labs submission that day is for a shortlist the student isn't on (hidden in the feed), so it must not be listed."
+  },
+  {
+   "id": "F8",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "any tests today?",
+   "checks": {
+    "must_contain": [
+     "Groww test",
+     "15:00",
+     "over"
+    ],
+    "must_not_contain": [
+     "NexusOne",
+     "I couldn't tell"
+    ]
+   },
+   "why": "the Groww test (15:00) was earlier today, so it's listed as over; the NexusOne test isn't the student's (hidden in the feed)."
   }
  ],
  "check_changes": [

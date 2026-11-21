@@ -161,7 +161,7 @@
     const q = norm(question);
     const start = new Date(`${dayKey(now)}T00:00:00+05:30`).getTime();
     if (/\btomorrow\b/.test(q)) return { from: start + 86400000, to: start + 2 * 86400000, label: `tomorrow (${DAYNAME.format(new Date(start + 86400000))})` };
-    if (/\b(today|tonight)\b/.test(q)) return { from: now.getTime(), to: start + 86400000, label: `today (${DAYNAME.format(now)})` };
+    if (/\b(today|tonight)\b/.test(q)) return { from: now.getTime(), dayStart: start, to: start + 86400000, label: `today (${DAYNAME.format(now)})` };
     if (/\bnext week\b/.test(q)) return { from: start + 7 * 86400000 - ((new Date(start).getUTCDay() + 6) % 7) * 0, to: start + 14 * 86400000, label: "in the next two weeks" };
     if (/\b(this week|week)\b/.test(q)) return { from: now.getTime(), to: now.getTime() + 7 * 86400000, label: "in the next 7 days" };
     return null;
@@ -193,6 +193,9 @@
       const at = i.due_at && new Date(i.due_at).getTime();
       if (!at || at <= now || at < from || at >= to || !i.company) continue;
       if (!["todo", "form", "deadline"].includes(i.category) || PAST.test(i.hidden_because || "")) continue;
+      // hidden with no reason = not about you (e.g. a submission for a shortlist you're not on); hidden because a
+      // digest or list message carries it = still yours
+      if (i.level === "hidden" && !/digest|message|collapse|merged/.test(i.hidden_because || "")) continue;
       const roles = (i.role_ids || []).map((id) => roleById.get(id)?.designation).filter(Boolean);
       const paren = /\(([^)]+)\)/.exec(i.title || "");
       out.push({ ent: entOf(i.company), at, kind: kindOf(i), roles: roles.length ? roles : paren ? [paren[1]] : [] });
@@ -310,8 +313,10 @@
         : `Nothing due ${r.label} in the ERP data (last checked ${checked}).` };
     }
     if (intents.has("test") || intents.has("shortlist")) {
-      const from = range ? range.from : now.getTime() - 86400000, to = range ? range.to : now.getTime() + 7 * 86400000;
+      // tests earlier today count too (marked "over"): "any tests today?" at 17:30 still names the 15:00 one
+      const from = range ? (range.dayStart ?? range.from) : now.getTime() - 86400000, to = range ? range.to : now.getTime() + 7 * 86400000;
       const ev = (data.items || []).filter((i) => ["test", "shortlist", "result"].includes(i.category) && i.event_at &&
+        (i.level !== "hidden" || /digest|message|collapse|merged|already happened/.test(i.hidden_because || "")) &&
         new Date(i.event_at).getTime() >= from && new Date(i.event_at).getTime() < to)
         .sort((a, b) => String(a.event_at).localeCompare(String(b.event_at)));
       const label = range ? range.label : "from yesterday to the next 7 days";

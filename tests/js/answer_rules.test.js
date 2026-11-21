@@ -22,6 +22,12 @@ const data = {
       due_at: "2026-11-22T18:00:00+05:30", role_ids: ["r1"], subject: "Google form" },
     { id: "i2", company: "Meesho", category: "todo", title: "Meesho (Senior Associate - BM): submit by Sun 22 Nov 18:00.",
       due_at: "2026-11-22T18:00:00+05:30", role_ids: ["r1"], subject: "Submission" },
+    // a submission for a shortlist the student isn't on: hidden in the feed, so not "due" for them
+    { id: "i4", company: "Pine Labs", category: "todo", title: "Pine Labs (SDE): submit by Sun 22 Nov 20:00.",
+      due_at: "2026-11-22T20:00:00+05:30", level: "hidden" },
+    // hidden only because the form digest carries it: still due
+    { id: "i5", company: "BlackBuck", category: "todo", title: "BlackBuck (Associate Manager): fill the form by Sun 22 Nov 12:00.",
+      due_at: "2026-11-22T12:00:00+05:30", level: "hidden", hidden_because: "in the form digest", role_ids: ["r3"] },
     { id: "i3", company: "Microsoft Corporation", category: "test", title: "Microsoft Corporation test room list is out (Software Engineer). You're not on it.",
       event_at: "2026-11-10T18:00:00+05:30", pdf_status: "no" },
   ],
@@ -74,14 +80,25 @@ test("typos, aliases and shared words", () => {
 test("no company: the intent decides; nothing understood: labelled, then what's due soon", () => {
   const tom = ask("what's due tomorrow?");
   assert.strictEqual(tom.kind, "intent");
-  assert.match(tom.text, /^Due tomorrow \(Sun 22 Nov\):\n- Meesho \(Senior Associate - BM\): form \+ submission \+ application by Sun 22 Nov 18:00/);
+  assert.match(tom.text, /^Due tomorrow \(Sun 22 Nov\):\n- BlackBuck[^\n]*\n- Meesho \(Senior Associate - BM\): form \+ submission \+ application by Sun 22 Nov 18:00/);
+  assert.doesNotMatch(tom.text, /Pine Labs/);
+  assert.match(tom.text, /- BlackBuck \(Associate Manager\): form by Sun 22 Nov 12:00/);
   const d = ask("hmm");
   assert.strictEqual(d.kind, "digest");
   assert.match(d.text, /^I couldn't tell what you meant\. Here's what's due soon:/);
   // never a count without names: every line names its company
   for (const line of d.text.split("\n").slice(1)) assert.match(line, /^- (Meesho|BlackBuck|Ather Energy|Auro Group) \(/);
+  assert.doesNotMatch(d.text, /Pine Labs/);
   assert.match(d.text, /Auro Group \(Data Analyst, Product Manager\): application by Sat 21 Nov 20:00 \(in 2h 30m\) · applied to 1 of 2/);
   assert.match(ask("which cv should i use").text, /^Which company\?/);
+});
+
+test("tests today include the one earlier today, marked over; tests not about you are left out", () => {
+  const d2 = { ...data, items: [...data.items,
+    { id: "t1", company: "Groww", category: "test", title: "Groww test (APM) Sat 21 Nov 15:00.", event_at: "2026-11-21T15:00:00+05:30", level: "always" },
+    { id: "t2", company: "NexusOne", category: "test", title: "NexusOne test (Data Engineer) Sat 21 Nov 19:00.", event_at: "2026-11-21T19:00:00+05:30", level: "hidden" }] };
+  const a = R.answer("any tests today?", d2);
+  assert.match(a.text, /^Tests and lists today \(Sat 21 Nov\):\n- Groww test \(APM\) Sat 21 Nov 15:00\. \(over\)$/);
 });
 
 test("schedule notices are not companies", () => {

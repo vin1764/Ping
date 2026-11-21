@@ -90,6 +90,8 @@ class SupabaseStore:
             body = r.text[:300]
             if r.status_code == 404 or "PGRST205" in body or "42P01" in body:
                 raise StoreNotReady(f"table '{table}' missing - run sql/schema.sql in Supabase ({body})")
+            if "42501" in body:
+                raise StoreNotReady(f"no permission on table '{table}' - run sql/fix_grants.sql in Supabase")
             raise RuntimeError(f"Supabase {method} {table} failed: {r.status_code} {body}")
         return r
 

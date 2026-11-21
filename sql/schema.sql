@@ -179,3 +179,9 @@ grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, i
 grant update (dismissed, done) on items to authenticated;
 grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
 grant insert, update, delete on corrections to authenticated;
+
+-- Ping's secret key needs explicit access too: newer Supabase projects don't
+-- grant API roles access to tables created with SQL.
+grant usage on schema public to service_role, authenticated;
+grant select, insert, update, delete on all tables in schema public to service_role;
+alter default privileges in schema public grant select, insert, update, delete on tables to service_role;

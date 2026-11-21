@@ -45,8 +45,9 @@ CONTACT_LINE_RE = re.compile(
     r"contact (?:persons?|details|us)|for (?:any )?(?:queries|doubts)[^:\n]{0,30}|contacts?)\s*[:\-–]\s*)"
     r"([^\n]{1,200}?)(?=CDC\b|\\n|\n|(?<=[\w\])])\.(?:\s|$)|$)")
 CONTACT_RE = re.compile(r"[A-Z][A-Za-z.]+(?:\s+[A-Z][A-Za-z.]+){0,2}\s*\(\s*\[phone removed\]\s*\)")
-MEETING_RE = re.compile(r"(?i)\b(meeting|webinar|conference)\s*(id|number|no\.?)\s*[:\-]?\s*[\d ]{6,}\d")
-PASSCODE_RE = re.compile(r"(?i)\b(pass ?code|meeting password|password|pwd)\s*[:\-]\s*\S+")
+# Meeting IDs and passcodes, also when the ERP glues them to the text around them ("...111Passcode: Ab12...")
+MEETING_RE = re.compile(r"(?i)(meeting|webinar|conference|)\s*(id|number|no\.?)\s*[:\-]\s*\d{3}[\d ]{5,}\d")
+PASSCODE_RE = re.compile(r"(?i)(?<![a-z])(pass ?code|meeting password|password|pwd)\s*[:\-]\s*\S+")
 MEETING_URL = re.compile(r"(?i)teams\.(?:microsoft|live)\.com|zoom\.us|meet\.google\.com|webex\.com|gotomeet")
 # meeting links written without https:// ("meet.google.com/abc-defg-hij"), glued to the next word or not
 BARE_MEETING_RE = re.compile(r"(?i)(?:[\w-]+\.)?(?:teams\.(?:microsoft|live)\.com|zoom\.us|meet\.google\.com|webex\.com)"
@@ -95,7 +96,7 @@ class Scrubber:
         if len(self.name) > 3:
             s = re.sub(re.escape(self.name), FAKE_NAME, s, flags=re.I)
         s = BARE_MEETING_RE.sub("[meeting link removed]", s)
-        s = MEETING_RE.sub(lambda m: f"{m.group(1)} {m.group(2)}: [removed]", s)
+        s = MEETING_RE.sub(lambda m: f"{(m.group(1) + ' ') if m.group(1) else ''}{m.group(2)}: [removed]", s)
         s = PASSCODE_RE.sub(lambda m: f"{m.group(1)}: [removed]", s)
         s = PHONE_RE.sub("[phone removed]", s)
         s = TEN_DIGITS_RE.sub(lambda m: m.group(0) if DATEISH.search(s[max(0, m.start() - 6):m.end() + 6])
@@ -276,6 +277,10 @@ def final_check(data) -> list[str]:
         problems.append(f"{len(emails)} email addresses left")
     if MEETING_URL.search(text):
         problems.append("a meeting link is left")
+    if re.search(r"(?i)pass ?code\s*[:\-]\s*(?!\[removed\])\S", text):
+        problems.append("a meeting passcode is left")
+    if re.search(r"(?i)\bid\s*[:\-]\s*\d{3}[\d ]{5,}\d", text):
+        problems.append("a meeting ID is left")
     return problems
 
 

@@ -41,6 +41,8 @@ def test_meetings_and_recruiting_emails_are_removed():
     assert "zoom.us" not in out and "meet.google" not in out and "teams.microsoft" not in out
     assert "Meeting ID: [removed]" in out and "Passcode: [removed]" in out and "Xy12Ab" not in out
     assert "careers@example.com" in out and "acme-test.com" not in out
+    glued = scrub("held at 1 PM.Link: https://teams.microsoft.com/meet/123?p=QMeeting ID: 900 111 222 333 444Passcode: Ab12CdAll")
+    assert "900 111" not in glued and "Ab12Cd" not in glued and "ID: [removed]" in glued, glued
     assert "https://forms.gle/AB12CD34EF56" in scrub("form https://forms.gle/AB12CD34EF56")  # other links stay
 
 
@@ -76,6 +78,7 @@ def test_final_check_fails_the_build_on_any_leftover():
     assert final_check({"x": "https://example.org/?id=9000012357"})  # links are checked too
     for name in DENYLIST:
         assert final_check({"x": f"contact {name.lower()} please"}), name
+    assert final_check({"x": "ID: 900 111 222 333 444"}) and final_check({"x": "Passcode: Ab12Cd"})
     assert final_check({"x": "mail hr@acme-test.com"}) and not final_check({"x": "mail careers@example.com"})
 
 

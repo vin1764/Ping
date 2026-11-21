@@ -380,7 +380,16 @@ class Runner:
         checks = {c["notice_id"]: c for c in self.store.select("pdf_checks")}
         emails = self.store.select("emails")
         corrections = {c["notice_id"]: c for c in self.store.select("corrections")} if self.store_ok else {}
-        items = build_items(roles, notices, checks, profile, self.now, emails, corrections)
+        dstats: dict = {}
+        items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats)
+        # a role's deadline that moved since the last run becomes one "Update" message
+        from .dedupe import changes_since_last_run
+        previous = {p["id"]: p for p in self.store.select("items")}
+        moved = [u for u in changes_since_last_run(previous, items, self.now) if u["id"] not in previous]
+        items += moved
+        self.counts["dedupe"] = {k: v for k, v in dstats.items() if k != "examples"}
+        self.counts["dedupe"]["deadline_moves_between_runs"] = len(moved)
+        self.counts["dedupe_examples"] = dstats.get("examples", [])[:5]
         stamp = datetime.now(timezone.utc).isoformat()
         # role eligibility + effective deadline, for the dashboard
         dls = effective_deadlines(roles, notices, CompanyIndex(roles))
@@ -458,6 +467,10 @@ class Runner:
             f"mailbox           : {c.get('mails_scanned', 0)} mails looked at, {c.get('mails_kept', 0)} kept",
             f"AI fallback       : {c.get('ai', {}).get('calls', 0)} calls, {c.get('ai', {}).get('answers', 0)} answers, "
             f"{c.get('ai', {}).get('errors', 0)} errors (only for notices the rules couldn't read)",
+            f"repeats merged    : {c.get('dedupe', {}).get('duplicates_merged', 0)} duplicates "
+            f"({c.get('dedupe', {}).get('unsure_merges', 0)} of them unsure), {c.get('dedupe', {}).get('emails_merged', 0)}"
+            f" emails, {c.get('dedupe', {}).get('updates', 0)} turned into updates, "
+            f"{c.get('dedupe', {}).get('deadline_moves_between_runs', 0)} deadline moves since last run",
             f"feed              : always {it.get('always', 0)}, show {it.get('show', 0)}, hidden {it.get('hidden', 0)},"
             f" questions for you {it.get('review', 0)}",
             f"ERP requests      : {rec['gate_requests']} (all through the read-only gate)",

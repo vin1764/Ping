@@ -14,7 +14,8 @@ from .matching import CompanyIndex, is_generic, roles_named_in, tokens
 URL_RE = re.compile(r"https?://[^\s<>\"')\]]+?(?=(?:Deadline|Interested|Note|Venue|POC|CDC)\b|[\s<>\"')\]]|$)")
 FORM_RE = re.compile(r"forms\.gle|docs\.google\.com/forms|forms\.office|form", re.I)
 PHONE_POC = re.compile(r"([A-Z][A-Za-z.]+(?:\s+[A-Z][A-Za-z.]+){0,2})\s*\(\s*((?:\+?91[\s-]?)?\d[\d\s-]{8,13}\d)\s*\)")
-VENUE_RE = re.compile(r"(?:Venue|Reporting Venue|Location)\s*[:\-]\s*([^\n]{2,80}?)(?=\s*(?:Date|Reporting|Time|POC|Students|Note|$|\n))", re.I)
+VENUE_RE = re.compile(r"(?:Venue|Reporting Venue|Location)\s*[:\-]\s*([^\n]{2,80}?)"
+                      r"(?=\s*(?:Date|Reporting|Time|POC|Students|Note|Deadline|Link|The |Please|CDC|$|\n|\.))")
 ENTRY_RE = re.compile(
     r"(?:^|\n|(?<=[.)\s]))(?P<num>\d{1,2})\s*\.\s*"
     r"(?:\[(?P<tag>[^\]]{1,30})\]\s*)?"

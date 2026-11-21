@@ -18,7 +18,7 @@
   const TZ = "Asia/Kolkata";
   const $ = (s) => document.querySelector(s);
   const LEVELS = { always: "Always show", show: "Apply by", hidden: "Hidden" };
-  const PAST = /deadline gone|already happened|older than 3 days|replaced by the 24h reminder/;
+  const PAST = /deadline gone|already happened|older than 3 days|replaced by the 24h reminder|updated by a later message/;
 
   // ------------------------------------------------------------ tiny DOM helper (no innerHTML: notice text is untrusted)
   function h(tag, attrs, ...kids) {
@@ -344,7 +344,8 @@
     const cls = it.needs_review ? "review" : it.level;
     const past = isPast(it);
     const why = it.details?.hidden_because || "";
-    const pastLabel = /reminder/.test(why) ? "Replaced by reminder" : /deadline/.test(why) ? "Deadline passed" : "Over";
+    const pastLabel = /updated/.test(why) ? "Updated below" : /reminder/.test(why) ? "Replaced by reminder"
+      : /deadline/.test(why) ? "Deadline passed" : "Over";
     const kicker = past ? pastLabel : it.needs_review ? "Question" : LEVELS[it.level];
     const open = state.open.has(it.id);
     const bubble = h("div", { class: `msg ping item ${cls}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
@@ -375,6 +376,10 @@
     if ((d.reasons || []).length) lines.push(h("div", {}, h("strong", {}, "Eligibility: "), [...d.reasons, ...(d.flags || [])].join("; ")));
     if (d.deadline_source && d.deadline_source !== "companies list") lines.push(h("div", { class: "muted" }, `Deadline from ${d.deadline_source}`));
     if ((d.contacts || []).length) lines.push(h("div", {}, h("strong", {}, "Contacts: "), d.contacts.map((c) => `${c.name} ${c.phone}`).join(", ")));
+    if ((d.changes || []).length) lines.push(h("div", {}, h("strong", {}, "What changed: "), d.changes.join("; ")));
+    if (d.previous_title) lines.push(h("div", { class: "muted" }, `Before: ${d.previous_title}`));
+    if ((d.merged || []).length) lines.push(h("div", { class: "muted" },
+      `Also posted ${d.merged.length} more time${d.merged.length > 1 ? "s" : ""} (merged here, not sent again)`));
     if (d.hidden_because) lines.push(h("div", { class: "muted" }, `Not shown any more: ${d.hidden_because}`));
     const links = [
       it.notice_id ? h("button", { type: "button", onclick: () => openNotice(it.notice_id) }, "Open notice") : null,

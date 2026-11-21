@@ -78,7 +78,8 @@ def effective_deadlines(roles: list[dict], notices: list[dict], index: CompanyIn
 
 
 def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profile: dict, now: datetime,
-                emails: list[dict] | None = None, corrections: dict | None = None) -> list[dict]:
+                emails: list[dict] | None = None, corrections: dict | None = None,
+                stats: dict | None = None) -> list[dict]:
     corrections = corrections or {}
     emails = emails or []
     index = CompanyIndex(roles)
@@ -172,7 +173,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             pdf_yes = pdf_status == "yes"
             about_me = pdf_yes or a.get("mentions_me")
             mail_links = _mail_links(emails, company, n.get("notice_time")) if a.get("email_hint") else []
-            det = {**ndetails, "role_match": why, "mail_links": mail_links, "applied": bool(applied)}
+            det = {**ndetails, "role_match": why, "mail_links": mail_links, "applied": bool(applied),
+                   "profiles": [p for p in (t.get("profiles") or []) if p.strip().lower() != "all"]}
             base = {**nbase, "company": company, "role_ids": [r["id"] for r in (applied or picked)],
                     "event_at": event_at, "due_at": None, "details": det}
             nid = f"notice:{n['id']}:{ti}"
@@ -291,7 +293,16 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
     for it in items:
         it.setdefault("details", {})
         it["title"] = clip(it["title"])
+    # Is it really new? Collapse repeats (re-posted notices, extensions repeating the original,
+    # emails repeating a notice) and turn real changes into one "Update" message. This runs over
+    # everything that was ever sent, before old messages are marked as past, so a repeat of last
+    # week's notice is still recognised.
+    from .dedupe import dedupe
+    items, dstats = dedupe(items, now)
+    for it in items:
         _expire(it, now)
+    if stats is not None:
+        stats.update(dstats)
     return items
 
 

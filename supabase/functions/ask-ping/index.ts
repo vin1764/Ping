@@ -238,6 +238,56 @@ Deno.serve(async (req) => {
       return json({ answer: saved ? `${saved}\n\n${jd.text}` : jd.text, model: "jd-summary", ...(saved ? { prefs, prefs_changed: true } : {}) });
     }
   }
+  // ---- the router: FACT questions are answered here by rules, with no model call (answer_rules.js route)
+  const hasTargets = !!prefs.targets && prefs.feed_mode !== "all";
+  const rmarks = hasTargets
+    ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks
+    : new Map();
+  const [allItems, allNotices, lastRun] = await Promise.all([
+    sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
+      "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
+      "notice_time:details->>notice_time,pdf:details->pdf").eq("dismissed", false)
+      .order("first_seen", { ascending: false }).limit(1000),
+    sb.from("notices").select("notice_id,company,subject,notice_time").order("notice_time", { ascending: false }).limit(1000),
+    sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1),
+  ]);
+  for (const [name, r] of [["items(rules)", allItems], ["notices(rules)", allNotices], ["runs", lastRun]] as const) {
+    if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
+  }
+  const run: any = lastRun.data?.[0];
+  const factsData: any = {
+    now: asOf,
+    // a demo session can't read the runs: its "last checked" is the snapshot's time
+    lastChecked: run?.finished_at || run?.started_at || (role === "demo" ? asOf.toISOString() : null),
+    profile: { ...(profile.data?.[0] || {}) }, prefs: { listOthers: prefs.list_other_roles !== false },
+    roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline,
+      for_you: hasTargets ? rmarks.get(r.id)?.relevant === true : undefined,
+      cv: rmarks.get(r.id)?.relevant ? rmarks.get(r.id)?.best_cv || null : null, jd_location: r.jd_summary?.location || null })),
+    items: allItems.data || [],
+    notices: allNotices.data || [],
+  };
+  // the questions before this one, newest first (follow-ups resolve against them)
+  const previous = [...kept].reverse().filter((m) => m.role === "me").map((m) => m.text);
+  const routed = Rules.route(ask, previous, factsData);
+  // the details a FACT answer about a company needs (pay, bond, departments, backlogs), for those companies only
+  const withDetails = async (hits: any[]) => {
+    const raw = [...new Set(hits.flatMap((e: any) => [...e.raw]))];
+    if (!raw.length) return;
+    const d = await sb.from("roles").select("id,more_details,allowed,backlog_rule,contract").in("company", raw).limit(60);
+    if (d.error) console.error(JSON.stringify({ event: "read_failed", table: "roles(facts)", error: d.error.message }));
+    const byId = new Map((d.data || []).map((x: any) => [x.id, x]));
+    factsData.roles = factsData.roles.map((r: any) => byId.has(r.id)
+      ? { ...r, pay: byId.get(r.id).more_details?.fields || {}, allowed: byId.get(r.id).allowed, backlog_rule: byId.get(r.id).backlog_rule } : r);
+  };
+  if (routed.kind !== "open") {
+    await withDetails(routed.spec?.hits || []);
+    const out = Rules.routed(routed, ask, factsData);
+    console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", route: routed.kind, why: routed.why,
+      intents: routed.spec?.intents || [], kind: out.kind, ms: Date.now() - t0 }));
+    return json({ answer: saved ? `${saved}\n\n${out.text}` : out.text, model: "rules", route: routed.kind,
+                  ...(saved ? { prefs, prefs_changed: true } : {}) });
+  }
+
   const companies = [...new Set((roles.data || []).map((r) => r.company as string))];
   // a follow-up that names no company ("same for analyst role?") is about the previous question's companies
   let names = mentioned(ask, companies).slice(0, 6);
@@ -274,10 +324,6 @@ Deno.serve(async (req) => {
   // "For you" or not: the same answer the feed uses (cached on the role by the hourly run, ping/relevance.py),
   // valid only for the targets the student has now
   const prof = { ...(profile.data?.[0] || {}), ...prefs } as any;
-  const hasTargets = !!prefs.targets && prefs.feed_mode !== "all";
-  const rmarks = hasTargets
-    ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks
-    : new Map();
   // reasons stay in the feed; the chat only needs yes / no
   const forYou = (r: any) => {
     const m = rmarks.get(r.id);
@@ -454,25 +500,10 @@ Question: ${ask}`;
 
   // No AI answer: the rules answer the question asked (a company: only that company; no company: what was asked
   // about; nothing understood: says so, then what's due soon). Same code as the dashboard's offline answers.
-  const [allItems, allNotices, lastRun] = await Promise.all([
-    sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids," +
-      "hidden_because:details->>hidden_because,subject:details->>subject").eq("dismissed", false)
-      .order("first_seen", { ascending: false }).limit(1000),
-    sb.from("notices").select("company,subject,notice_time").order("notice_time", { ascending: false }).limit(1000),
-    sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1),
-  ]);
-  for (const [name, r] of [["items(rules)", allItems], ["notices(rules)", allNotices], ["runs", lastRun]] as const) {
-    if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
-  }
-  const run: any = lastRun.data?.[0];
-  const ruled = Rules.answer(ask, {
-    now: asOf,
-    // a demo session can't read the runs: its "last checked" is the snapshot's time
-    lastChecked: run?.finished_at || run?.started_at || (role === "demo" ? asOf.toISOString() : null),
-    roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline, cv: rmarks.get(r.id)?.relevant ? rmarks.get(r.id)?.best_cv : null })),
-    items: allItems.data || [],
-    notices: allNotices.data || [],
-  });
+  // the rules answer for what the router made of it (a follow-up: the last question's companies and intent)
+  await withDetails(routed.spec?.hits || []);
+  const ruled = routed.spec && (routed.spec.intents?.length || routed.spec.hits?.length)
+    ? Rules.answer(ask, factsData, routed.spec) : Rules.answer(ask, factsData);
   console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", kind: ruled.kind, companies: ruled.companies.length,
     no_ai: noAi, tried, ms: Date.now() - t0 }));
   return done(ruled.text + (noAi ? "" : "\n\n(Gemini busy: answered from your ERP data by rules, not by the model.)"), "rules",

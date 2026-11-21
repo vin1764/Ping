@@ -80,16 +80,16 @@ test("typos, aliases and shared words", () => {
 test("no company: the intent decides; nothing understood: labelled, then what's due soon", () => {
   const tom = ask("what's due tomorrow?");
   assert.strictEqual(tom.kind, "intent");
-  assert.match(tom.text, /^Due tomorrow \(Sun 22 Nov\):\n- BlackBuck[^\n]*\n- Meesho \(Senior Associate - BM\): form \+ submission \+ application by Sun 22 Nov 18:00/);
+  // the applications closing (the digest's format), then the forms and submissions due
+  assert.match(tom.text, /^Close tomorrow 18:00, Sun 22 Nov — 1 role, 0 applied:\n- Meesho — Senior Associate - BM\n\nForms and submissions due tomorrow \(Sun 22 Nov\):\n- BlackBuck \(Associate Manager\): form by Sun 22 Nov 12:00\n- Meesho \(Senior Associate - BM\): form \+ submission by Sun 22 Nov 18:00$/);
   assert.doesNotMatch(tom.text, /Pine Labs/);
-  assert.match(tom.text, /- BlackBuck \(Associate Manager\): form by Sun 22 Nov 12:00/);
   const d = ask("hmm");
   assert.strictEqual(d.kind, "digest");
   assert.match(d.text, /^I couldn't tell what you meant\. Here's what's due soon:/);
   // never a count without names: every line names its company
   for (const line of d.text.split("\n").slice(1)) assert.match(line, /^- (Meesho|BlackBuck|Ather Energy|Auro Group) \(/);
   assert.doesNotMatch(d.text, /Pine Labs/);
-  assert.match(d.text, /Auro Group \(Data Analyst, Product Manager\): application by Sat 21 Nov 20:00 \(in 2h 30m\) · applied to 1 of 2/);
+  assert.match(d.text, /Auro Group \(Data Analyst, Product Manager\): application by Sat 21 Nov 20:00 \(today, in 2h 30m\) · applied to 1 of 2/);
   assert.match(ask("which cv should i use").text, /^Which company\?/);
 });
 
@@ -98,7 +98,7 @@ test("tests today include the one earlier today, marked over; tests not about yo
     { id: "t1", company: "Groww", category: "test", title: "Groww test (APM) Sat 21 Nov 15:00.", event_at: "2026-11-21T15:00:00+05:30", level: "always" },
     { id: "t2", company: "NexusOne", category: "test", title: "NexusOne test (Data Engineer) Sat 21 Nov 19:00.", event_at: "2026-11-21T19:00:00+05:30", level: "hidden" }] };
   const a = R.answer("any tests today?", d2);
-  assert.match(a.text, /^Tests and lists today \(Sat 21 Nov\):\n- Groww test \(APM\) Sat 21 Nov 15:00\. \(over\)$/);
+  assert.match(a.text, /^Tests and lists today \(Sat 21 Nov\):\n- Groww test \(APM\) Sat 21 Nov 15:00\. \(earlier today, over\)$/);
 });
 
 test("schedule notices are not companies", () => {

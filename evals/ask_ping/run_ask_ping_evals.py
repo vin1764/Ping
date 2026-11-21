@@ -124,8 +124,13 @@ class DemoSessions:
         return f"removed this run's demo question counts (HTTP {r.status_code}, {len(self.ids)} sessions)"
 
 
+NO_AI = "--no-ai" in sys.argv     # every question and turn with no_ai: the rules only, no model call, no Gemini key
+LAST = {"route": ""}             # the route the function took for the last answer (fact / act / ack / open)
+
+
 def ask(url: str, key: str, token: str, question: str, as_of: str, no_ai: bool = False) -> tuple[int, str, str, float]:
     """(HTTP status, answer or error, model, seconds). One retry if Gemini is busy or the call fails."""
+    no_ai = no_ai or NO_AI
     if PACE and not no_ai:
         time.sleep(PACE)
     for attempt in (1, 2):
@@ -137,6 +142,7 @@ def ask(url: str, key: str, token: str, question: str, as_of: str, no_ai: bool =
             body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
             secs = time.monotonic() - t
             if r.status_code == 200:
+                LAST["route"] = body.get("route") or ("open" if body.get("fallback") else "")
                 return 200, body.get("answer", ""), body.get("model", "?"), secs
             err = body.get("error") or r.text[:200]
         except requests.RequestException as e:
@@ -160,7 +166,7 @@ def main() -> int:
     cases = [c for c in spec["cases"] if not only or any(c["id"] == o or c["id"].startswith(o) for o in only)]
     # every eval question runs on the evals Gemini key, never the live one (ping/evals_key.py). A run of
     # "no_ai" cases only never reaches a model (the function answers them by rules), so it needs no key.
-    if not (only and all(c.get("no_ai") for c in cases)):
+    if not NO_AI and not (only and all(c.get("no_ai") for c in cases)):
         from ping.evals_key import eval_headers
         EVAL_HEADERS.update(eval_headers())
     demo = (ROOT / "dashboard" / "demo-data.json").read_bytes()
@@ -175,7 +181,7 @@ def main() -> int:
         status, answer, model, secs = ask(url, key, sessions.next_token(), c["question"],
                                           c.get("as_of") or spec["snapshot_as_of"], c.get("no_ai", False))
         failed = score(answer, c["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
-        results.append({**c, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
+        results.append({**c, "status": status, "answer": answer, "model": model, "route": LAST["route"], "seconds": round(secs, 1),
                         "failed": failed})
         print(f"{c['id']:3} {'PASS' if not failed else 'FAIL'} {secs:5.1f}s {model:26} {c['question']}"
               + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
@@ -190,7 +196,7 @@ def main() -> int:
             status, answer, model, secs = ask(url, key, token, t["question"], conv.get("as_of") or spec["snapshot_as_of"])
             post_chat(url, key, token, "ping", answer)
             failed = score(answer, t["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
-            turns.append({**t, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
+            turns.append({**t, "status": status, "answer": answer, "model": model, "route": LAST["route"], "seconds": round(secs, 1),
                           "failed": failed})
             print(f"{conv['id']:3} turn {len(turns)} {'PASS' if not failed else 'FAIL'} {secs:5.1f}s {model:26} "
                   f"{t['question']}" + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
@@ -201,6 +207,14 @@ def main() -> int:
             print(f"\n{r['id']} {r['question']}  [{r['model']}]  {'PASS' if not r['failed'] else 'FAIL: ' + '; '.join(r['failed'])}\n{r['answer']}")
         print(f"\n{sum(not r['failed'] for r in results)} of {len(results)} passed")
         return 0 if all(not r["failed"] for r in results) else 1
+    if NO_AI:   # a rules-only run: its own results file, the main report stays as the last full run wrote it
+        (HERE / "results_no_ai.json").write_text(json.dumps({"single_turn": results, "conversations": convs}, indent=1,
+                                                            ensure_ascii=False) + "\n", encoding="utf-8")
+        passed = sum(1 for r in results if not r["failed"])
+        tp = sum(not t["failed"] for c in convs for t in c["turns"])
+        print(f"\nno_ai: single-turn {passed} of {len(results)} passed; conversation turns {tp} of "
+              f"{sum(len(c['turns']) for c in convs)}. Wrote evals/ask_ping/results_no_ai.json")
+        return 0
     report = write_report(spec, results, demo_ok, convs)
     (HERE / "results.json").write_text(json.dumps({"single_turn": results, "conversations": convs}, indent=1,
                                                   ensure_ascii=False) + "\n", encoding="utf-8")

@@ -893,6 +893,37 @@
    },
    "why": "Arihant's JD field says 'Find Attached'; the JD is the role's JNF file on the ERP, read and summarised.",
    "no_ai": true
+  },
+  {
+   "id": "E1",
+   "category": "counts (the digest's for-you count)",
+   "question": "what's due tonight?",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "checks": {
+    "must_contain": [
+     "8 for you",
+     "Close tonight 20:00"
+    ],
+    "must_not_contain": [
+     "17 for you"
+    ]
+   },
+   "why": "The 20:00 reminder digest says '38 applications you haven't applied to close tonight — 8 for you' and Today says '8 for you · 9 applied'. Ask Ping must give the same 8 (for you and not applied yet), not 17 (for you including the 9 already applied). Bug seen live on 22 Nov: 'Close tonight 20:00 — 17 for you, 9 applied'."
+  },
+  {
+   "id": "E2",
+   "category": "counts (the digest's for-you count)",
+   "question": "how many roles for me close tonight?",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "checks": {
+    "must_contain": [
+     "8 for you"
+    ],
+    "must_not_contain": [
+     "17 for you"
+    ]
+   },
+   "why": "The same count asked as a count: 8, as in the digest."
   }
  ],
  "check_changes": [

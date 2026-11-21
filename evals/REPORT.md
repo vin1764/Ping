@@ -6,7 +6,7 @@ the model being tested).
 | suite | what it measures | current score | report | re-run |
 |---|---|---|---|---|
 | **Parser evals** | How Ping reads the ERP's notices and PDFs with rules: company, kind of notice, deadline, test time, venue, form link, "are you in this PDF", your room. 31 development + 15 held-out real CDC notices (other students' details removed) and 7 PDF/Excel layouts seen in the real run. | **Held-out: 56 of 58 checks (97%)**, the fair number. Development: 143 of 143 (100%), optimistic because Ping was fixed using these. | [PARSER_REPORT.md](PARSER_REPORT.md) | `python evals/run_evals.py` |
-| **Ask Ping evals** | The chat's answers from the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data), with the snapshot time fixed: company facts, deadlines, notices and tests, refusing to invent things, refusing actions only when asked to act (Ping is read-only), times today ("was at 15:00, so it's over" / "in 1h 25m"), and typos / two questions in one. 39 single questions and 13 two-turn conversations (follow-ups like "nothing else?", "and slice?", "why not?", "ok") with deterministic checks (required and forbidden phrases, numbers in any format, word limits). | **Single questions: 35 of 39 (90%). Conversations: 13 of 13 (26 of 26 turns).** Before conversation memory: 34 of 36 single, 4 of 9 conversations (13 of 18 turns). | [ask_ping/REPORT.md](ask_ping/REPORT.md) | Actions > Admin > `ask-ping-evals`, or `python evals/ask_ping/run_ask_ping_evals.py` |
+| **Ask Ping evals** | The chat's answers from the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data, the demo persona's targets and made-up CVs), with the snapshot time fixed: company facts, deadlines, notices and tests, refusing to invent things, refusing actions only when asked to act, times today, role lists in one format, the CV to apply with, and typos / two questions in one. 42 single questions and 21 conversations: 13 follow-up conversations ("nothing else?", "and slice?", "ok") and 8 preference-by-chat conversations (set, append, exclude, reminder hours, list others, reset, show, and a question that must NOT change anything). Deterministic checks. | **Single questions: 38 of 42 (90%). Conversations: 20 of 21 (38 of 39 turns), all 8 preference conversations pass.** Before conversation memory: 34 of 36 single, 4 of 9 conversations. | [ask_ping/REPORT.md](ask_ping/REPORT.md) | Actions > Admin > `ask-ping-evals` |
 | **Role relevance evals** | Whether "For you" (and the CV to apply with) follows the student's stated targets: two made-up personas with opposite targets (`relevance/personas.json`), 201 + 48 demo roles labelled for each persona's text, each persona's roles marked in one classifier call. | **demo persona: precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76). core-software persona: precision 100% (28 of 28), recall 100% (28 of 28).** | [relevance/REPORT.md](relevance/REPORT.md) | Actions > Admin > `relevance-evals` |
 
 Also in this folder: `real_run.json` (numbers from the real runs: login time, notices, PDFs, merged repeats),
@@ -41,3 +41,14 @@ today" gives the count (48 roles at 23 companies close at 20:00) but not the com
 "what's due on 25 / 30 November" answer "I don't have any deadlines for 25 November" where the check expects
 "nothing / no deadline" (D8, X2): a side effect of the fix's "start with I don't have" rule. Not changed after the
 one allowed fix round.
+
+## Ask Ping: preferences, list format and CVs (21 Nov, evening)
+
+| run | single questions | conversations |
+|---|---|---|
+| with preferences by chat, ready-made role lists, CVs | 34 of 42 | 20 of 21 (38 of 39 turns) |
+| after one fix (lists only for deadline/role questions, date in the list heading, "Nothing is due on <day>") | **38 of 42** | **20 of 21 (38 of 39 turns)** |
+
+Still failing: C2 (doesn't quote the 7.5 cut-off), D2 (gives counts, not the company names), D3 (the week's list
+without the time), L1 (a "relevant to me" list without Others: treated as narrowing, see docs/DECISIONS.md), and
+M8 turn 2. Checks unchanged.

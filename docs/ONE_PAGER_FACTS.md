@@ -47,8 +47,8 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026.
 |---|---|---|
 | parser, held-out real notices | 56 of 58 checks (97%) on 15 notices | `evals/PARSER_REPORT.md` |
 | parser, development set | 143 of 143 checks (100%) on 31 notices + 7 attachment layouts | `evals/PARSER_REPORT.md` |
-| Ask Ping, single questions | ASK_SINGLE | `evals/ask_ping/REPORT.md` |
-| Ask Ping, multi-turn conversations | ASK_CONV | `evals/ask_ping/REPORT.md` |
+| Ask Ping, single questions | 38 of 42 (90%); failing: C2 (CG cut-off not quoted), D2 (company names), D3 (time), L1 (Others left out of a 'relevant to me' list) | `evals/ask_ping/REPORT.md` |
+| Ask Ping, multi-turn conversations | 20 of 21 conversations, 38 of 39 turns (incl. 8 of 8 preference-by-chat conversations and the wrong-detection check) | `evals/ask_ping/REPORT.md` |
 | Ask Ping, before conversation memory | 34 of 36 single; 4 of 9 conversations (13 of 18 turns) | `evals/REPORT.md` |
 | relevance, demo persona (product / consulting / analyst / finance) | precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76) | `evals/relevance/REPORT.md` |
 | relevance, core-software persona | precision 100% (28 of 28), recall 100% (28 of 28) | `evals/relevance/REPORT.md` |
@@ -57,7 +57,7 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026.
 
 | what | value | source |
 |---|---|---|
-| Ask Ping answer, per model | ASK_LATENCY | `evals/ask_ping/results.json` |
+| Ask Ping answer, per model | gemini-flash-lite-latest: median 5.1 s, 90th percentile 11.4 s, max 49.1 s (70 answers); answers decided by rules (preferences, read-only): median 3.4 s, max 31.9 s incl. re-marking 197 roles (11 answers). All 81 answers came from these two; no fallback model was needed | `evals/ask_ping/results.json` |
 | "For you" marks for the page | 2.4 s (197 roles, from the cache) | live call, 21 Nov 14:34 UTC |
 | preference change incl. re-marking 197 roles in one Gemini call | 30.2 s | live call, 21 Nov 14:34 UTC |
 

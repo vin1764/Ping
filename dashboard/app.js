@@ -709,7 +709,7 @@
           const open = roles.filter((r) => !r.applied && dt(deadlineOf(r)) > now && r.eligible !== false);
           return h("a", { class: "card company-link", href: companyHref(c) }, h("strong", {}, c),
             h("div", { class: "small muted" }, `${roles.length} role${roles.length > 1 ? "s" : ""}`,
-              applied ? ` · applied to ${applied}` : "", open.length ? ` · ${open.length} open for you` : ""));
+              applied ? ` · applied to ${applied}` : "", open.length ? ` · ${open.length} open to you` : ""));
         }));
     }
     draw();

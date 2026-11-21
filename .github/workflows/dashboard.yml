@@ -3,8 +3,6 @@ name: Dashboard
 on:
   push:
     paths: ["dashboard/**", "supabase/**", "ping/sample.py", "ping/items.py", ".github/workflows/dashboard.yml"]
-  schedule:
-    - cron: "41 21 * * *"   # daily 03:11 IST: rebuild so the demo's dates stay current
   workflow_dispatch:
 
 permissions:

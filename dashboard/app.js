@@ -51,15 +51,14 @@
   function when(v) {
     const d = dt(v);
     if (!d || isNaN(d)) return "";
-    const days = (d - new Date()) / 86400000;
+    // always with the date, same as Ping's messages ("Sat 21 Nov 20:00")
     const time = d.toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
     const wd = d.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "short" });
-    if (days >= 0 && days < 6) return `${wd} ${time}`;
     return `${wd} ${d.toLocaleDateString("en-GB", { timeZone: TZ, day: "2-digit", month: "short" })} ${time}`;
   }
   const clock = (v) => dt(v).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
   function dayLabel(v) {
-    const d = dt(v), today = istDay(new Date()), yest = istDay(new Date(Date.now() - 86400000));
+    const d = dt(v), today = istDay(nowDate()), yest = istDay(new Date(nowDate() - 86400000));
     const k = istDay(d);
     if (k === today) return "Today";
     if (k === yest) return "Yesterday";
@@ -180,7 +179,10 @@
   }
 
   // ------------------------------------------------------------ state + boot
-  const state = { src: null, data: null, filter: "visible", companyQuery: "", chat: [], open: new Set() };
+  const state = { src: null, data: null, filter: "visible", companyQuery: "", chat: [], open: new Set(), asOf: null };
+  // The demo and the reviewer login show a snapshot: "now" is when it was taken, so its deadlines don't all
+  // read "passed" a week later.
+  const nowDate = () => new Date(state.asOf || Date.now());
 
   async function boot() {
     const params = new URLSearchParams(location.search);
@@ -241,6 +243,10 @@
       state.data = await state.src.load();
       state.chat = await state.src.chat();
       state.readAt = await state.src.readAt();
+      if (state.src.kind !== "real") {
+        const run = (state.data.runs || [])[0] || {};
+        state.asOf = dt(state.data.generated_at || run.finished_at || run.started_at)?.getTime() || null;
+      }
     } catch (e) { mount(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
     setupMenu();
     showLastRun();
@@ -312,7 +318,9 @@
   }
 
   // ------------------------------------------------------------ chat (home)
-  const itemTime = (it) => it.first_seen || it.details?.notice_time || it.sort_at;
+  // a notice's own time first: Ping's first run posts two weeks of notices at once, and they should still
+  // read in the order the CDC posted them (later, notice time and first seen are within the hour anyway)
+  const itemTime = (it) => it.details?.notice_time || it.first_seen || it.sort_at;
   const isPast = (it) => it.level === "hidden" && PAST.test(it.details?.hidden_because || "");
   // A past item stays in the chat only if Ping posted it while it still mattered. A role whose deadline
   // had already gone when Ping first saw it was never news, so it isn't a message.
@@ -342,16 +350,21 @@
     const unread = entries.filter((e) => e.kind === "item" && (!readAt || dt(e.at) > readAt));
     const inner = h("div", { class: "thread-inner" });
     let lastDay = null, divider = null;
+    const snapshot = state.asOf && h("div", { class: "day snapshot" }, `${state.src.kind === "demo" ? "Demo" : "Reviewer view"}: ` +
+      `an anonymised snapshot of a real run, shown as it was on ${when(state.asOf)}. Fake roll number, name and CGPA; ` +
+      "other students and all mail removed.");
     if (!entries.length) inner.append(h("div", { class: "day" }, "No messages yet. Ping posts here when something is about you."));
     for (const e of entries) {
       const day = dayLabel(e.at);
       if (day !== lastDay) { inner.append(h("div", { class: "day" }, day)); lastDay = day; }
       if (!divider && unread.length && e === unread[0]) {
         divider = h("div", { class: "unread", id: "unread" }, `${unread.length} unread message${unread.length > 1 ? "s" : ""}`);
+        if (snapshot) inner.append(snapshot);
         inner.append(divider);
       }
       inner.append(e.kind === "item" ? itemBubble(e.it, e.at) : textBubble(e.kind, e.text, e.at));
     }
+    if (snapshot && !divider) inner.append(snapshot);
     const thread = h("div", { class: "thread", id: "thread" }, inner);
     const input = h("input", { id: "ask-input", autocomplete: "off", maxlength: "300", enterkeyhint: "send",
       placeholder: "Ask Ping: what's due tomorrow?", "aria-label": "Message Ping" });
@@ -359,7 +372,7 @@
     mount(thread, h("div", { class: "composer" }, form));
     // open at the first unread message, otherwise at the bottom (the latest thing that happened)
     requestAnimationFrame(() => {
-      if (divider) divider.scrollIntoView({ block: "start" });
+      if (divider) (snapshot || divider).scrollIntoView({ block: "start" });
       else thread.scrollTop = thread.scrollHeight;
     });
     const latest = entries.length ? entries[entries.length - 1].at : null;
@@ -378,7 +391,7 @@
     const cls = it.needs_review ? "review" : it.level;
     const past = isPast(it);
     const why = it.details?.hidden_because || "";
-    const pastLabel = /updated/.test(why) ? "Updated below" : /reminder/.test(why) ? "Replaced by reminder"
+    const pastLabel = /updated/.test(why) ? "Since updated" : /reminder/.test(why) ? "Replaced by reminder"
       : /deadline/.test(why) ? "Deadline passed" : "Over";
     const kicker = past ? pastLabel : it.needs_review ? "Question" : LEVELS[it.level];
     const open = state.open.has(it.id);
@@ -476,7 +489,7 @@
 
   function itemCard(it) {
     const due = itemDue(it);
-    const soon = due && dt(due) - new Date() < 86400000 && dt(due) > new Date();
+    const soon = due && dt(due) - nowDate() < 86400000 && dt(due) > nowDate();
     const cls = it.needs_review ? "review" : it.level;
     const meta = [
       h("span", { class: `tag ${cls}` }, it.needs_review ? "Question" : LEVELS[it.level]),
@@ -572,7 +585,7 @@
     const grid = h("div", { class: "grid" });
     function draw() {
       const q = state.companyQuery.toLowerCase();
-      const now = new Date();
+      const now = nowDate();
       grid.replaceChildren(...[...map.entries()].filter(([c]) => c.toLowerCase().includes(q)).sort(([a], [b]) => a.localeCompare(b))
         .map(([c, roles]) => {
           const applied = roles.filter((r) => r.applied).length;
@@ -671,7 +684,7 @@
   // Used in demo mode and whenever the AI helper isn't reachable.
   function answerLocally(question, data) {
     const q = question.toLowerCase();
-    const now = new Date();
+    const now = nowDate();
     const live = data.items.filter((i) => i.level !== "hidden" && !i.dismissed);
     const companies = [...new Set(data.roles.map((r) => r.company))];
     const words = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2);
@@ -719,7 +732,17 @@
                        .sort((a, b) => dt(a.due_at || a.event_at) - dt(b.due_at || b.event_at));
       return hits.length ? `Due or happening ${label}:\n` + hits.map((i) => `• ${i.title}`).join("\n") : `Nothing due or scheduled ${label}.`;
     }
-    if (/shortlist|test|room/.test(q)) {
+    if (/room|venue|where/.test(q)) {
+      const hits = live.filter((i) => ["shortlist", "test", "result"].includes(i.category));
+      if (!hits.length) return "No current tests for you.";
+      return hits.map((i) => {
+        const room = i.details?.pdf?.details?.room;
+        const where = room ? `room ${room}` : i.pdf_status === "no" ? "you're not on its list"
+          : "no room list yet (I'll post when it's out)";
+        return `• ${i.title.replace(/\.$/, "")}: ${where}.`;
+      }).join("\n");
+    }
+    if (/shortlist|test/.test(q)) {
       const hits = live.filter((i) => ["shortlist", "test", "result"].includes(i.category));
       return hits.length ? hits.map((i) => `• ${i.title}`).join("\n") : "No current shortlists or tests for you.";
     }

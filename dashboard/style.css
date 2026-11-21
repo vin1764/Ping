@@ -167,3 +167,4 @@ pre.notice { white-space: pre-wrap; font: inherit; background: var(--bg); paddin
 dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--text);
   width: min(680px, calc(100vw - 32px)); max-height: 85vh; padding: 16px; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
+.day.snapshot { max-width: 520px; text-align: center; line-height: 1.4; }

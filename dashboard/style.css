@@ -568,6 +568,6 @@ body:has(form.login) main { background-color: var(--wall); background-image: var
 
 /* the installable app: Ping's own messages (install, notifications), queued sends */
 .msg.sys .chips { margin-top: var(--s2); padding: 0; }
-.msg .ios-steps { display: block; width: 100%; max-width: 340px; height: auto; margin: var(--s2) 0 0; border-radius: var(--r-ctl); background: #fff; }
+.msg .ios-steps, .pcard .ios-steps { display: block; width: 100%; max-width: 340px; height: auto; margin: var(--s2) 0 0; border-radius: var(--r-ctl); background: #fff; }
 .msg.queued { opacity: .75; }
 .msg.queued .time::before { content: "⏳ "; }

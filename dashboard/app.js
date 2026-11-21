@@ -965,31 +965,72 @@
     }
     navUnread(0);
   }
-  // "Install Ping": a Ping message on the second visit, once (dismissed = never again). Android and desktop Chrome:
-  // the browser's own install prompt; iPhone/iPad Safari: the two taps, with a picture.
+  // "Install Ping": a Ping message from the second visit on. The button says "Install" only when the browser has
+  // handed over its install dialog (beforeinstallprompt: Chrome/Edge on Android, Windows, Mac); otherwise the message
+  // shows the steps for this device (docs/HELP.md, help.js). "Not now" hides it for 7 days; an install, for good.
+  // Profile > Install Ping always has the same steps.
   const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const INSTALL_SNOOZE_DAYS = 7;
+  const installHidden = () => {
+    const v = store.get("ping-install", "");
+    if (v === "installed") return true;
+    return !!(v && v.snoozeUntil && Date.parse(v.snoozeUntil) > Date.now());
+  };
+  const snoozeInstall = () => store.set("ping-install", { snoozeUntil: new Date(Date.now() + INSTALL_SNOOZE_DAYS * 86400000).toISOString() });
+  // a browser that can install sites at all: the dialog is here, or it's iPhone/iPad Safari, or Chrome/Edge/Samsung
+  // on a desktop or Android (where the menu has "Install"); Firefox can't, so it isn't offered there
+  const installable = () => !!state.installEvent || isIOS() ||
+    (/android|windows|macintosh|cros|linux/i.test(navigator.userAgent) && /chrome|crios|edg|samsungbrowser/i.test(navigator.userAgent) && !/firefox|fxios/i.test(navigator.userAgent));
+  const installSteps = () => {
+    const help = window.PingHelp?.install;
+    const plat = thisPlatform();
+    return (help?.platforms?.[plat] || help?.platforms?.other || "Use your browser's menu: Install Ping.");
+  };
+  // the body of the install message and of Profile > Install Ping: the real button, or the steps for this device
+  function installBody(onGone, { profile = false } = {}) {
+    const box = h("div", { class: "install-body" });
+    const draw = () => {
+      if (standalone() || store.get("ping-install", "") === "installed") {
+        box.replaceChildren(h("p", { class: "summary" }, "Installed: Ping opens like an app from your home screen, dock or Start menu."));
+        return;
+      }
+      const ev = state.installEvent;
+      const text = ev ? "Install me? I'll open like an app, straight to this chat, and work offline for what you've already seen."
+        : `${profile ? "" : "Install me as an app: "}${installSteps()}`;
+      const chips = h("div", { class: "chips wrap" },
+        ev ? h("button", { type: "button", class: "chip primary", "data-install": "prompt", onclick: async () => {
+          state.installEvent = null;                       // the dialog can be opened once per event
+          try { ev.prompt(); } catch { draw(); return; }
+          const { outcome } = await ev.userChoice.catch(() => ({}));
+          if (outcome === "accepted") { store.set("ping-install", "installed"); if (onGone) onGone(); else draw(); }
+          else draw();                                     // dismissed: the steps, since the button can't work again
+        } }, "Install") : null,
+        !profile ? h("button", { type: "button", class: "chip", "data-install": "later", onclick: () => { snoozeInstall(); onGone?.(); } }, "Not now") : null);
+      box.replaceChildren(
+        h(profile ? "p" : "span", { class: profile ? "summary" : "text" }, text),
+        !ev && isIOS() ? h("img", { class: "ios-steps", src: "icons/ios-install.svg", alt: "Tap Share, then Add to Home Screen", width: 340, height: 150 }) : null,
+        chips.children.length ? chips : null);
+    };
+    box.redraw = draw;
+    draw();
+    return box;
+  }
   function offerInstall(inner) {
-    if (standalone() || state.offline || Number(store.get("ping-visits", 0)) < 2 || store.get("ping-install", "") ||
-        inner.querySelector(".install") || !(state.installEvent || isIOS())) return false;
-    const close = (how) => { store.set("ping-install", how); bubble.remove(); };
+    if (standalone() || state.offline || Number(store.get("ping-visits", 0)) < 2 || installHidden() ||
+        inner.querySelector(".install") || !installable()) return false;
     const at = new Date().toISOString();
     const bubble = h("div", { class: "msg ping sys install enter", role: "group", "aria-label": "Install Ping" },
       h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping")),
-      h("span", { class: "text" }, state.installEvent
-        ? "Install me? I'll open like an app, straight to this chat, and work offline for what you've already seen."
-        : "Add me to your Home Screen: I'll open like an app, and can notify you there. In Safari:"),
-      isIOS() && !state.installEvent ? h("img", { class: "ios-steps", src: "icons/ios-install.svg", alt: "Tap Share, then Add to Home Screen", width: 340, height: 150 }) : null,
-      h("div", { class: "chips wrap" },
-        state.installEvent ? h("button", { type: "button", class: "chip primary", onclick: async () => {
-          const ev = state.installEvent; state.installEvent = null;
-          ev.prompt(); const { outcome } = await ev.userChoice.catch(() => ({}));
-          close(outcome === "accepted" ? "installed" : "dismissed");
-        } }, "Install") : h("button", { type: "button", class: "chip primary", onclick: () => close("shown-ios") }, "Got it"),
-        h("button", { type: "button", class: "chip", onclick: () => close("dismissed") }, "Not now")),
+      installBody(() => bubble.remove()),
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
     appendToday(inner, bubble);
     return true;
+  }
+  // Profile > Install Ping: always there (until installed), so the steps are always findable
+  function installCard() {
+    return h("section", { class: "card pcard", id: "pc-install", "aria-labelledby": "pc-install-h" },
+      h("div", { class: "pcard-head" }, h("h2", { id: "pc-install-h" }, "Install Ping")), installBody(null, { profile: true }));
   }
 
   // ------------------------------------------------------------ push notifications (docs/PUSH.md): the owner's own
@@ -1074,10 +1115,16 @@
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     state.installEvent = e;
+    // an install message or Profile card already showing the steps gets the real button now
+    document.querySelectorAll(".install-body").forEach((b) => b.redraw?.());
     const inner = document.querySelector("#thread .thread-inner");
     if (inner) offerInstall(inner);
   });
-  window.addEventListener("appinstalled", () => { store.set("ping-install", "installed"); document.querySelector(".msg.install")?.remove(); });
+  window.addEventListener("appinstalled", () => {
+    store.set("ping-install", "installed");
+    document.querySelector(".msg.install")?.remove();
+    document.querySelectorAll(".install-body").forEach((b) => b.redraw?.());
+  });
 
   const motion = () => (window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
   // to a message (or the bottom): smooth for a short way, at once for a long one (a long smooth scroll is slow)
@@ -1869,7 +1916,7 @@
 
     mountPage(h("h1", {}, "Profile"), h("p", { class: "lede" },
       "Whether you applied comes from the ERP's companies list, not from here. Ping only reads the ERP."),
-      h("div", { class: "pcards" }, about, looking, cvs, sched, pushCard(demo), account));
+      h("div", { class: "pcards" }, about, looking, cvs, sched, pushCard(demo), installCard(), account));
     updateCheckButtons();
   }
 

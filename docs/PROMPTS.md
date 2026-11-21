@@ -92,14 +92,14 @@ CV text:
 ## 4. Ask Ping (the chat on the dashboard)
 
 - **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini keys are Supabase function secrets and never reach the browser
-- **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If no model answers, the function answers from the data by rules (`supabase/functions/_shared/answer_rules.js`) and says so; the page uses the same rules if the function can't be reached. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
+- **When:** Only OPEN questions typed in the dashboard chat (summaries, "why", comparisons, advice, a follow-up with nothing new): every message is routed first (`route()` in `supabase/functions/_shared/answer_rules.js`), and FACT questions (what's due, tests and rooms, shortlists, CTC and its parts, bond, eligibility, which CV, applied, notices, a company's roles, counts), requests to act and "ok" are answered by rules with no model call. If no model answers, or the reply has a number that isn't in its FACTS, the rules answer instead. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
 - **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part.
 - **Expected output:** Plain text, shown as Ping's chat reply. No JSON.
 - **Models, in fallback order:** `gemini-flash-latest` → `gemini-3.1-flash-lite`
 - endpoint: Gemini `generateContent`; key `GEMINI_API_KEY` for students and demo visitors, `GEMINI_API_KEY_EVALS` for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_AI_MODEL` replaces the main model
-- order: the main model (gemini-flash-latest); when it's busy (429, 5xx, timeout) again after 1 s, 3 s, 6 s; then the lighter model once (`PING_AI_LITE_MODEL`, set to gemini-3.1-flash-lite by the deploy; gemini-flash-lite-latest if unset); then the rules answer
+- order: the main model (gemini-flash-latest) for at most 10 s in all, once more after 500 ms when it's busy (429, 5xx, timeout); then the lighter model once with 5 s (`PING_AI_LITE_MODEL`, set to gemini-3.1-flash-lite by the deploy; gemini-flash-lite-latest if unset); then the rules answer
 - generation: `{ temperature: 0.2, maxOutputTokens: 4096 }`
-- timeout per call: 45 s; whole answer: 100 s (Supabase stops a function at 150 s)
+- after the reply: every number, time and amount in it must be in the prompt's FACTS part, or the rules answer replaces it (logged `model_count_mismatch`)
 
 **Prompt, verbatim:**
 

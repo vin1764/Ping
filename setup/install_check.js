@@ -48,6 +48,7 @@ async function open(b, { visits = 2, install = undefined, event = false } = {}) 
   const text = await msg.innerText().catch(() => "");
   check(/⋮ menu → "Install Ping…"/.test(text) && /address bar/.test(text), `  with the Windows steps: "${text.split("\n").find((l) => l.includes("⋮"))?.slice(0, 90)}…"`);
   check(await msg.locator('[data-install="prompt"]').count() === 0, "  and no Install button (it couldn't open anything)");
+  check(!/\bnull\b|undefined/.test(text), "  no stray text in it");
   await msg.scrollIntoViewIfNeeded();
   await p.screenshot({ path: path.join(OUT, "install-steps-windows-1280.png") });
   await msg.locator('[data-install="later"]').click();

@@ -1007,10 +1007,10 @@
           else draw();                                     // dismissed: the steps, since the button can't work again
         } }, "Install") : null,
         !profile ? h("button", { type: "button", class: "chip", "data-install": "later", onclick: () => { snoozeInstall(); onGone?.(); } }, "Not now") : null);
-      box.replaceChildren(
+      box.replaceChildren(...[
         h(profile ? "p" : "span", { class: profile ? "summary" : "text" }, text),
         !ev && isIOS() ? h("img", { class: "ios-steps", src: "icons/ios-install.svg", alt: "Tap Share, then Add to Home Screen", width: 340, height: 150 }) : null,
-        chips.children.length ? chips : null);
+        chips.children.length ? chips : null].filter(Boolean));
     };
     box.redraw = draw;
     draw();

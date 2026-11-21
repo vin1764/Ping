@@ -28,6 +28,12 @@ alter table profile add column if not exists targets text;
 alter table profile add column if not exists list_other_roles boolean default true;
 -- your CVs: [{label, path (in the private "cvs" bucket), uploaded_at, summary, summarised_for}] (ping/cvs.py)
 alter table profile add column if not exists cvs jsonb default '[]';
+-- first-run onboarding in the chat, and the student's own feed and schedule (all changeable later in the chat)
+alter table profile add column if not exists onboarding_step text;            -- null: not started; 'done' when finished
+alter table profile add column if not exists feed_mode text default 'personal'; -- 'personal' (For you first) or 'all'
+alter table profile add column if not exists check_every_minutes int default 60; -- 30, 60 or 120 (kick-run follows it)
+alter table profile add column if not exists check_from text default '06:00';   -- IST, the hours Ping may check the ERP
+alter table profile add column if not exists check_to text default '01:00';
 
 create table if not exists roles (
   id text primary key,             -- yop:com_id:jnf_id
@@ -184,7 +190,8 @@ create policy owner_fix_notices on corrections for all to authenticated
 -- The dashboard may only change these columns:
 revoke update on profile, items from authenticated;
 grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, interested_companies,
-              not_interested_companies, notice_types, reminder_hours, targets, list_other_roles, cvs, updated_at) on profile to authenticated;
+              not_interested_companies, notice_types, reminder_hours, targets, list_other_roles, cvs, onboarding_step, feed_mode, check_every_minutes,
+              check_from, check_to, updated_at) on profile to authenticated;
 grant update (dismissed, done) on items to authenticated;
 grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
 grant insert, update, delete on corrections to authenticated;
@@ -357,6 +364,14 @@ create table if not exists session_prefs (
   list_other_roles boolean,
   updated_at timestamptz default now()
 );
+-- the demo's onboarding answers stay in the session too
+alter table session_prefs add column if not exists onboarding_step text;
+alter table session_prefs add column if not exists feed_mode text;
+alter table session_prefs add column if not exists department text;
+alter table session_prefs add column if not exists degree text;
+alter table session_prefs add column if not exists check_every_minutes int;
+alter table session_prefs add column if not exists check_from text;
+alter table session_prefs add column if not exists check_to text;
 alter table session_prefs enable row level security;
 revoke all on session_prefs from anon, authenticated;
 grant select, insert, update, delete on session_prefs to authenticated;

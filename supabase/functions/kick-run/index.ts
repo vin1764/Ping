@@ -1,11 +1,23 @@
-// "kick-run": Supabase's own scheduler (pg_cron, see sql/schedule.sql) calls this every hour at :41 UTC from 00:41
-// to 19:41 (06:11-01:11 IST). It starts the Ping workflow on GitHub, the same way the dashboard's Check now does
-// and with the same GitHub token, unless a Ping run is already going or started in the last 50 minutes (GitHub's
-// own cron line in ping.yml is kept as a backup and uses the same rule). The runs it starts count as scheduled
+// "kick-run": Supabase's own scheduler (pg_cron, see sql/schedule.sql) calls this every 30 minutes. It starts the
+// Ping workflow on GitHub, the same way the dashboard's Check now does and with the same GitHub token, when the
+// student's own schedule says so (profile: how often, between which hours; set during onboarding, in the chat or on
+// the Profile page; default every hour, 06:00-01:00 IST) and no Ping run is going (guard.ts; GitHub's own cron
+// line in ping.yml is kept as a backup and uses the same rule). The runs it starts count as scheduled
 // runs: a refused-credentials pause still holds and failures stay quiet.
 // Only callers with the shared secret (PING_CRON_SECRET, also kept in the database's Vault) get in.
+import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { json } from "../_shared/owner.ts";
-import { decide } from "./guard.ts";
+import { decide, type Schedule } from "./guard.ts";
+
+// the owner's schedule (the real profile row); the default when it can't be read
+async function schedule(): Promise<Schedule> {
+  const key = Deno.env.get("PING_SERVICE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!key) return {};
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, key);
+  const { data } = await sb.from("profile").select("check_every_minutes,check_from,check_to").eq("id", 1).limit(1);
+  const p: any = data?.[0] || {};
+  return { every_minutes: p.check_every_minutes, from: p.check_from, to: p.check_to };
+}
 
 Deno.serve(async (req) => {
   const secret = Deno.env.get("PING_CRON_SECRET");
@@ -25,10 +37,11 @@ Deno.serve(async (req) => {
     return json({ error: `GitHub said ${list.status} when listing runs` }, 502);
   }
   const runs = (await list.json()).workflow_runs || [];
-  const d = decide(runs, new Date());
+  const plan = await schedule();
+  const d = decide(runs, new Date(), undefined, plan);
   if (!d.start || task === "check") {
-    console.log(JSON.stringify({ event: task === "check" ? "kick_check" : "kick_skipped", why: d.why, start: d.start }));
-    return json({ started: false, would_start: d.start, why: d.why });
+    console.log(JSON.stringify({ event: task === "check" ? "kick_check" : "kick_skipped", why: d.why, start: d.start, plan }));
+    return json({ started: false, would_start: d.start, why: d.why, schedule: plan });
   }
   const r = await fetch(`${base}/dispatches`, {
     method: "POST", headers: gh, body: JSON.stringify({ ref, inputs: { mode: "run", source: "schedule" } }),

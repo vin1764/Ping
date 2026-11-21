@@ -7,8 +7,9 @@ grant usage on schema cron to postgres;
 
 select cron.unschedule(jobid) from cron.job where jobname in ('ping-hourly', 'ping-demo-cleanup');
 
--- every hour at :41 UTC from 00:41 to 19:41 = 06:11 to 01:11 IST; kick-run skips if a run is going or recent
-select cron.schedule('ping-hourly', '41 0-19 * * *', $job$
+-- every 30 minutes, all day (:11 and :41 UTC = :41 and :11 IST); kick-run starts a run only when the student's own
+-- schedule says so (profile: check_every_minutes, check_from, check_to; default hourly, 06:00-01:00 IST)
+select cron.schedule('ping-hourly', '11,41 * * * *', $job$
   select net.http_post(
     url := '{{FUNCTION_URL}}',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-ping-cron',

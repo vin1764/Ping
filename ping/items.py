@@ -312,7 +312,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
     from . import digests
     from .relevance import tag
     from .cvs import cvs_text
-    targets = profile.get("targets") or ""
+    # "Everything from the ERP" (onboarding, or "show me everything" in the chat): no For you / Others split
+    targets = "" if profile.get("feed_mode") == "all" else (profile.get("targets") or "")
     cvtext = cvs_text(profile.get("cvs"))
     members = {}
     for r in roles:

@@ -76,25 +76,30 @@ Deno.serve(async (req) => {
   // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
   // own changes on top (session_prefs: never the owner's profile, never another session's).
   const uid = role === "demo" ? (await sb.auth.getUser()).data.user?.id : null;
-  const base = await sb.from("profile").select("targets,reminder_hours,list_other_roles,cvs").limit(1);
+  const FIELDS = "targets,reminder_hours,list_other_roles,feed_mode,check_every_minutes,check_from,check_to";
+  let base = await sb.from("profile").select(`${FIELDS},cvs`).limit(1);
+  // before Admin > apply-sql has added the newer columns, read the ones that exist
+  if (base.error) base = await sb.from("profile").select("targets,reminder_hours,list_other_roles,cvs").limit(1) as any;
   // CV summaries (never the files): the owner's, or the demo's made-up ones
   const cvs = cvsText(base.data?.[0]?.cvs);
   const cvLabels = (base.data?.[0]?.cvs || []).map((c: any) => c.label).filter(Boolean);
-  let prefs: Prefs = { targets: base.data?.[0]?.targets ?? null, reminder_hours: base.data?.[0]?.reminder_hours ?? null,
-                       list_other_roles: base.data?.[0]?.list_other_roles ?? null };
+  const pick = (o: any): Prefs => Object.fromEntries(FIELDS.split(",").map((k) => [k, o?.[k] ?? null])) as Prefs;
+  let prefs: Prefs = pick(base.data?.[0]);
   if (role === "demo") {
-    const own = await sb.from("session_prefs").select("targets,reminder_hours,list_other_roles").limit(1);
-    const o = own.data?.[0];
-    if (o) prefs = { targets: o.targets ?? null, reminder_hours: o.reminder_hours ?? prefs.reminder_hours,
-                     list_other_roles: o.list_other_roles ?? prefs.list_other_roles };
+    // the session's own answers on top of the demo profile, field by field
+    let own = await sb.from("session_prefs").select(FIELDS).limit(1);
+    if (own.error) own = await sb.from("session_prefs").select("targets,reminder_hours,list_other_roles").limit(1) as any;
+    const o: any = own.data?.[0] || {};
+    for (const k of FIELDS.split(",")) if (o[k] != null) (prefs as any)[k] = o[k];
   }
   const classifiable = async () => (await sb.from("roles")
     .select("id,company,designation,job_description,more_details,eligible").limit(400)).data?.filter((r: any) => r.eligible !== false) || [];
 
   // The page asks for the "For you" marks of the caller's current targets (cache only, no Gemini) to split its lists.
   if (body?.marks === true) {
-    const roles = prefs.targets ? await classifiable() : [];
-    const { marks } = prefs.targets ? await markRoles(roles, prefs.targets, [], "", 0, cvs) : { marks: new Map() };
+    const split = prefs.targets && prefs.feed_mode !== "all";
+    const roles = split ? await classifiable() : [];
+    const { marks } = split ? await markRoles(roles, prefs.targets!, [], "", 0, cvs) : { marks: new Map() };
     return json({ prefs, marks: Object.fromEntries(marks) });
   }
   const question = String(body?.question || "");
@@ -234,7 +239,7 @@ Deno.serve(async (req) => {
   // "For you" or not: the same answer the feed uses (cached on the role by the hourly run, ping/relevance.py),
   // valid only for the targets the student has now
   const prof = { ...(profile.data?.[0] || {}), ...prefs } as any;
-  const hasTargets = !!prefs.targets;
+  const hasTargets = !!prefs.targets && prefs.feed_mode !== "all";
   const rmarks = hasTargets
     ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks
     : new Map();

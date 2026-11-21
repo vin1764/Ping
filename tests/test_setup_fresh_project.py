@@ -108,6 +108,27 @@ def test_one_command_setup_on_an_empty_project(project):
     ok = requests.patch(f"{fake.url}/rest/v1/profile", headers=user, params={"id": "eq.1"}, json=prefs)
     assert ok.status_code == 204, ok.text
     assert {k: store.select("profile", {"id": "eq.1"})[0][k] for k in prefs} == prefs
+    # onboarding step (f) as the student: check every 30 minutes, 08:00-22:00 IST; the scheduler's guard reads exactly
+    # that (ping/schedule_guard.py, the mirror of kick-run's guard) and follows it
+    sched = {"check_every_minutes": 30, "check_from": "08:00", "check_to": "22:00", "onboarding_step": "reminders"}
+    ok = requests.patch(f"{fake.url}/rest/v1/profile", headers=user, params={"id": "eq.1"}, json=sched)
+    assert ok.status_code == 204, ok.text
+    import os
+    from datetime import timedelta as _td, timezone as _tz
+    from ping import schedule_guard
+    saved_env = {k: os.environ.get(k) for k in ("SUPABASE_URL", "SUPABASE_SERVICE_KEY")}
+    os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"] = fake.url, fs.SECRET
+    try:
+        plan = schedule_guard.owner_schedule()
+    finally:
+        for k, v in saved_env.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+    assert plan == {"every_minutes": 30, "from": "08:00", "to": "22:00"}
+    ist = _tz(_td(hours=5, minutes=30))
+    t10 = datetime(2026, 11, 21, 10, 11, tzinfo=ist)
+    last = [{"id": 1, "status": "completed", "created_at": (t10 - _td(minutes=30)).isoformat()}]
+    assert schedule_guard.decide(last, t10, schedule=plan)[0]                                  # 30 min later: runs
+    assert not schedule_guard.decide([], datetime(2026, 11, 21, 23, 11, tzinfo=ist), schedule=plan)[0]  # after 22:00
     chat = requests.post(f"{fake.url}/rest/v1/chat_messages", headers=user, json=[{"role": "me", "text": "hi"}])
     assert chat.status_code == 201, chat.text
     # ... but not change what Ping found, and someone without a login sees nothing

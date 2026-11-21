@@ -449,7 +449,7 @@ class Runner:
     def _classify(self, roles: list[dict], profile: dict) -> None:
         """'For you' or not, for every role you could apply to (cached on the role; see ping/relevance.py)."""
         from . import relevance
-        targets = profile.get("targets") or ""
+        targets = "" if profile.get("feed_mode") == "all" else (profile.get("targets") or "")
         not_int = profile.get("not_interested_companies") or []
         open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False
                  and not any(n and n.lower() in (r.get("company") or "").lower() for n in not_int)]

@@ -7,6 +7,8 @@
   gemini-check     call Gemini once and show exactly what comes back, plus retry the notices the rules missed
   functions-check  the Ask Ping / Check now functions on Supabase: deployed versions, which secrets they have
                    (names only), their logs from the last 24 hours, and two test questions as the reviewer
+  rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
+                   hourly schedule again, then show what GitHub reports about it
   ask-ping-page    open the dashboard page in a real browser, sign in as the reviewer, type the two test
                    questions into the chat and print the replies shown on screen
 """
@@ -259,11 +261,49 @@ def ask_ping_page(secrets) -> int:
                            "slice ctc breakdown", "what's due tomorrow"]).returncode
 
 
+def rearm_schedule(secrets) -> int:
+    """GitHub registers a workflow's cron when it sees the file on the default branch. ping.yml has been there
+    since the repo was created and never fired, so the registration was lost; disable + enable re-registers it."""
+    token, repo = os.environ.get("GITHUB_TOKEN", ""), os.environ.get("GITHUB_REPOSITORY", "")
+    if not token or not repo:
+        say("needs GITHUB_TOKEN and GITHUB_REPOSITORY (run this on GitHub: Actions > Admin)")
+        return 2
+    gh = requests.Session()
+    gh.headers.update({"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                       "X-GitHub-Api-Version": "2022-11-28"})
+    base = f"https://api.github.com/repos/{repo}"
+    info = gh.get(f"{base}", timeout=30).json()
+    wf = gh.get(f"{base}/actions/workflows/ping.yml", timeout=30).json()
+    say(f"repo: default branch {info.get('default_branch')}, private {info.get('private')}, "
+        f"archived {info.get('archived')}, pushed {info.get('pushed_at')}")
+    say(f"Ping workflow before: state {wf.get('state')}, updated {wf.get('updated_at')}")
+    runs = gh.get(f"{base}/actions/workflows/ping.yml/runs", params={"event": "schedule", "per_page": 1}, timeout=30).json()
+    say(f"scheduled runs so far: {runs.get('total_count')}")
+    for action in ("disable", "enable"):
+        r = gh.put(f"{base}/actions/workflows/ping.yml/{action}", timeout=30)
+        say(f"{action}: HTTP {r.status_code}{'' if r.status_code < 300 else ' ' + r.text[:200]}")
+        if r.status_code >= 300:
+            return 1
+        time.sleep(3)
+    wf = gh.get(f"{base}/actions/workflows/ping.yml", timeout=30).json()
+    say(f"Ping workflow after: state {wf.get('state')}, updated {wf.get('updated_at')}")
+    from datetime import timedelta, timezone
+    now = datetime.now(timezone.utc)
+    nxt = now.replace(minute=41, second=0, microsecond=0)
+    if nxt <= now:
+        nxt += timedelta(hours=1)
+    while not 0 <= nxt.hour <= 19:
+        nxt += timedelta(hours=1)
+    say("GitHub's API does not report a 'next run' time for schedules; from the cron '41 0-19 * * *' the next "
+        f"tick is {nxt:%H:%M} UTC ({nxt.astimezone(IST):%H:%M} IST). GitHub may start it a few minutes late.")
+    return 0 if wf.get("state") == "active" else 1
+
+
 def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

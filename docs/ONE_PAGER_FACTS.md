@@ -18,16 +18,17 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026.
 | what starts a run | Supabase pg_cron -> `kick-run` function -> workflow_dispatch; GitHub cron as backup | `sql/schedule.sql`, `supabase/functions/kick-run/` |
 | guard against double runs | skip if a run is going or started < 50 min ago | `supabase/functions/kick-run/guard.ts`, `ping/schedule_guard.py` |
 | first pg_cron-started run | 21 Nov 13:41:04 UTC (19:11 IST), Ping run #13, success, 57 s | GitHub Actions run 44910079892 |
+| pg_cron ticks after the #14 fix | 15:41 UTC (21:11 IST): kick-run answered "a Ping run started 33 min ago", nothing started (the guard, after manual run #15); 16:41 UTC (22:11 IST): started run #16, success | Admin > schedule-status (cron.job_run_details, kick-run's replies) |
 
-## Runs so far (GitHub Actions, Ping workflow, up to 21 Nov 15:10 UTC)
+## Runs so far (GitHub Actions, Ping workflow, up to 21 Nov 17:40 UTC)
 
 | fact | value | source |
 |---|---|---|
-| runs | 15 | Actions > Ping |
-| succeeded | 7 (#2, #3, #9, #11, #12, #13, #15) | same |
+| runs | 16 | Actions > Ping |
+| succeeded | 8 (#2, #3, #9, #11, #12, #13, #15, #16) | same |
 | failed | 7 (#1, #4-#8 before the login fixes of 20-21 Nov; #14 at 14:41 UTC on 21 Nov, a digest key-format bug, fixed in a95ce06 and verified by #15) | same |
 | cancelled | 1 (#10) | same |
-| success rate | 7 of 15 overall; 5 of 6 completed runs since #9 | same |
+| success rate | 8 of 16 overall; 6 of 7 completed runs since #9 | same |
 | first full run | 12.1 min; 201 roles, 1,624 notices seen, 260 read in full, 64 PDFs (64 read, 19 name the student), 84 mails looked at, 10 kept, 742 ERP requests | `evals/real_run.json` |
 | later runs | under 1 min (run #13: 42.5 s, 9 new notices, 3 PDFs; run #15: 35.5 s, 16 ERP requests) | run #13 and #15 log summaries |
 | login | 19.4 s, of which 12.7 s waiting for the OTP mail; Get OTP pressed once | run #13 log summary |

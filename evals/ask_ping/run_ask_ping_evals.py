@@ -154,18 +154,20 @@ def main() -> int:
     if not (url and key):
         print("needs SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY")
         return 2
-    # every eval question runs on the evals Gemini key, never the live one (ping/evals_key.py)
-    from ping.evals_key import eval_headers
-    EVAL_HEADERS.update(eval_headers())
     spec = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
+    # --only F1,F2 or --only F (an id prefix): run just those cases and no conversations
+    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
+    cases = [c for c in spec["cases"] if not only or any(c["id"] == o or c["id"].startswith(o) for o in only)]
+    # every eval question runs on the evals Gemini key, never the live one (ping/evals_key.py). A run of
+    # "no_ai" cases only never reaches a model (the function answers them by rules), so it needs no key.
+    if not (only and all(c.get("no_ai") for c in cases)):
+        from ping.evals_key import eval_headers
+        EVAL_HEADERS.update(eval_headers())
     demo = (ROOT / "dashboard" / "demo-data.json").read_bytes()
     demo_ok = hashlib.sha256(demo).hexdigest() == spec["demo_data_sha256"]
     if not demo_ok:
         print("WARNING: dashboard/demo-data.json changed since the expected answers were written; "
               "rebuilding the demo can change the right answers")
-    # --only F1,F2 or --only F (an id prefix): run just those cases and no conversations
-    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
-    cases = [c for c in spec["cases"] if not only or any(c["id"] == o or c["id"].startswith(o) for o in only)]
     sessions = DemoSessions(url, key)
     results = []
     for c in cases:

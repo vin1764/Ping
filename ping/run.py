@@ -342,8 +342,8 @@ class Runner:
     def _jd_summaries(self, roles: list[dict]) -> None:
         """A short summary per JD (role & team, what you'd do, must-haves, location, eligibility, anything unusual),
         made once per JD text: by Gemini when it answers, else from the JD's own labelled lines."""
-        from .jd import detail_text, rules_summary, summarise, text_key, usable
-        todo, retry = [], []
+        from .jd import RULES_VERSION, detail_text, rules_summary, summarise, text_key, usable
+        todo, retry, todo_rules = [], [], []
         for r in roles:
             text = (r.get("jd_text") or "") + ("\n\n" + detail_text(r) if r.get("jd_source") == "inline" else "")
             if not usable(text):
@@ -353,6 +353,8 @@ class Runner:
             if old.get("key") != key:
                 todo.append((r, text, key))
             elif old.get("model") == "rules":
+                if old.get("rules_version") != RULES_VERSION:
+                    todo_rules.append((r, text, key))     # the rules changed: redo it now (no model call)
                 retry.append((r, text, key))        # made by rules while Gemini was busy: Gemini gets another go
         # open roles first: those are the ones you might apply to
         order = lambda x: str(x[0].get("effective_deadline") or x[0].get("apply_end") or "")  # noqa: E731
@@ -375,6 +377,11 @@ class Runner:
             made["rules" if s.get("model") == "rules" else "ai"] += 1
             ups.append({"id": r["id"], "jd_summary": s})
             r["jd_summary"] = s
+        for r, text, key in todo_rules:
+            s = {**rules_summary(text, r.get("designation") or ""), "key": key}
+            made["rules_redone"] += 1
+            ups.append({"id": r["id"], "jd_summary": s})
+            r["jd_summary"] = s
         for r, text, key in retry[:max(0, JD_AI_UPGRADES_PER_RUN - made["ai"])]:
             if not ai_ok():
                 break
@@ -386,6 +393,7 @@ class Runner:
             made["ai_upgraded"] += 1
             ups.append({"id": r["id"], "jd_summary": s})
             r["jd_summary"] = s
+        ups = list({u["id"]: u for u in ups}.values())     # one row per role (the last summary made wins)
         if ups:
             try:
                 self.store.upsert("roles", ups)

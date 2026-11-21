@@ -799,7 +799,7 @@
   },
   {
    "id": "J1",
-   "category": "job description",
+   "category": "job description (answered from the stored JD, no model call)",
    "question": "summarise JPMC's JD",
    "checks": {
     "must_contain": [
@@ -817,11 +817,12 @@
     ],
     "max_words": 125
    },
-   "why": "JPMC's own JD field is 147 characters; Ping takes the JD from the role's details (what they do, required skill set) and answers from the stored summary: what you'd do, must-haves, the CG cut-off, at most 120 words plus the source line."
+   "why": "JPMC's own JD field is 147 characters; Ping takes the JD from the role's details (what they do, required skill set) and answers from the stored summary: what you'd do, must-haves, the CG cut-off, at most 120 words plus the source line.",
+   "no_ai": true
   },
   {
    "id": "J2",
-   "category": "job description",
+   "category": "job description (answered from the stored JD, no model call)",
    "question": "what's the JD for LTM",
    "checks": {
     "must_contain": [
@@ -834,11 +835,12 @@
      "no JD on the ERP"
     ]
    },
-   "why": "LTM's JD is only a Google Drive link that Ping couldn't read; it says so and gives the link."
+   "why": "LTM's JD is only a Google Drive link that Ping couldn't read; it says so and gives the link.",
+   "no_ai": true
   },
   {
    "id": "J3",
-   "category": "job description",
+   "category": "job description (answered from the stored JD, no model call)",
    "question": "what do they want for cars24 data science",
    "checks": {
     "must_contain": [
@@ -850,11 +852,12 @@
      "(-)"
     ]
    },
-   "why": "Cars24's JD field is '-' with no file, link or details: no JD on the ERP."
+   "why": "Cars24's JD field is '-' with no file, link or details: no JD on the ERP.",
+   "no_ai": true
   },
   {
    "id": "J4",
-   "category": "job description",
+   "category": "job description (answered from the stored JD, no model call)",
    "question": "what's the JD for searce associate data engineer",
    "checks": {
     "must_contain": [
@@ -868,11 +871,12 @@
      "Evlos"
     ]
    },
-   "why": "The JD is summarised from the role's details, and the fuller JD behind a private Google Docs link is named with its address; only the role asked about."
+   "why": "The JD is summarised from the role's details, and the fuller JD behind a private Google Docs link is named with its address; only the role asked about.",
+   "no_ai": true
   },
   {
    "id": "J5",
-   "category": "job description",
+   "category": "job description (answered from the stored JD, no model call)",
    "question": "what do they want for arihant product manager",
    "checks": {
     "must_contain": [
@@ -887,7 +891,8 @@
      "We are looking for candidates who demonstrate"
     ]
    },
-   "why": "Arihant's JD field says 'Find Attached'; the JD is the role's JNF file on the ERP, read and summarised."
+   "why": "Arihant's JD field says 'Find Attached'; the JD is the role's JNF file on the ERP, read and summarised.",
+   "no_ai": true
   }
  ],
  "check_changes": [

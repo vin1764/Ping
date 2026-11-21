@@ -373,6 +373,9 @@ def _short(x: str, n: int = 12) -> str:
     return " ".join(w[:n]) + ("…" if len(w) > n else "")
 
 
+RULES_VERSION = 2      # bump when rules_summary changes: stored rules summaries are redone (no model call)
+
+
 def rules_summary(text: str, designation: str = "") -> dict:
     """Without a model: the same fields, taken from the JD's own labelled parts (never written fresh)."""
     parts = _parts(text)
@@ -390,4 +393,4 @@ def rules_summary(text: str, designation: str = "") -> dict:
                                                  r"night|contract of", l, re.I)]
     return {"role_team": designation or None, "do": [_short(x) for x in do[:3]], "must_have": [_short(x) for x in must[:5]],
             "location": _short(loc, 10) if loc else None, "eligibility": _short(elig, 16) if elig else None,
-            "unusual": [_short(x) for x in unusual[:3]], "model": "rules"}
+            "unusual": [_short(x) for x in unusual[:3]], "model": "rules", "rules_version": RULES_VERSION}

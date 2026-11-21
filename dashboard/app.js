@@ -351,7 +351,10 @@
     if (/reminder/.test(why) && it.due_at) return seen < +dt(it.due_at) - 86400000;  // else the reminder alone says it
     return true;
   };
-  const inChat = (it) => !it.dismissed && (it.level !== "hidden" || (isPast(it) && wasLive(it)));
+  // one card per role ("X opened", "Reminder: X closes") isn't a chat message any more: the new-roles message and
+  // the deadline digests list them (the Feed and Companies pages still show every role)
+  const inChat = (it) => !it.dismissed && it.category !== "apply" && it.category !== "reminder" &&
+    (it.level !== "hidden" || (isPast(it) && wasLive(it)));
 
   function threadEntries() {
     const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
@@ -418,6 +421,7 @@
       tabindex: "0", "aria-expanded": String(open) },
       h("div", { class: `kicker ${past ? "hidden" : cls}` }, kicker),
       h("span", { class: "text" }, it.title),
+      listBlock(it),
       h("span", { class: "time" }, clock(at)));
     const toggle = (ev) => {
       if (ev.target.closest("a, button, .more")) return;
@@ -428,6 +432,24 @@
     bubble.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(ev); } });
     if (open) bubble.append(itemDetails(it));
     return bubble;
+  }
+
+  // A digest / "new roles" / "3 shortlists out" message: its list, grouped (for you first, others collapsed),
+  // then any note and the source of the dates
+  function listBlock(it) {
+    const d = it.details || {};
+    if (!(d.list || []).length && !d.source) return null;
+    const row = (r) => h("div", { class: `li ${r.tag || ""}` }, h("span", {}, r.text),
+      r.note ? h("span", { class: "why" }, ` — ${r.note}`) : null);
+    const groups = (d.list || []).map((g) => {
+      const rows = (g.rows || []).map(row);
+      if (g.collapsed && rows.length) {
+        return h("details", { class: "grp", onclick: (ev) => ev.stopPropagation() }, h("summary", {}, g.head), rows);
+      }
+      return h("div", { class: "grp" }, g.head ? h("div", { class: "gh" }, g.head) : null, rows);
+    });
+    return h("div", { class: "list" }, groups, d.note ? h("div", { class: "why" }, d.note) : null,
+      d.source ? h("div", { class: "src" }, d.source) : null);
   }
 
   function itemDetails(it) {
@@ -669,6 +691,9 @@
         h("label", { class: "check" }, h("input", { type: "checkbox", name: "active_backlogs", id: "pf-backlogs", checked: !!p.active_backlogs }), "I have active backlogs")),
       h("div", { class: "row3" }, [0, 1, 2].map((i) => field(`cv${i}`, `CV ${i + 1} name`, cv[i]))),
       h("div", { class: "row2" },
+        field("reminder_hours", "Remind me before a deadline", p.reminder_hours ?? 2,
+          { type: "number", step: "0.5", min: "0.5", max: "48" }, "Hours before it closes: one reminder per deadline, listing what you haven't applied to")),
+      h("div", { class: "row2" },
         h("label", {}, "Interested companies", h("span", { class: "hint" }, "One per line"),
           h("textarea", { name: "interested_companies", id: "pf-interested", rows: 5 }, lists(p.interested_companies))),
         h("label", {}, "Not interested", h("span", { class: "hint" }, "One per line. Their roles are hidden."),
@@ -689,6 +714,7 @@
         cgpa: cgpa ? Number(cgpa) : null, active_backlogs: f.get("active_backlogs") === "on",
         cv_names: [0, 1, 2].map((i) => String(f.get(`cv${i}`) || "").trim()).filter(Boolean),
         interested_companies: split("interested_companies"), not_interested_companies: split("not_interested_companies"),
+        reminder_hours: Number(f.get("reminder_hours")) > 0 ? Number(f.get("reminder_hours")) : 2,
       };
       try {
         await state.src.saveProfile(patch);

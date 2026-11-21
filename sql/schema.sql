@@ -18,9 +18,11 @@ create table if not exists profile (
   interested_companies text[] default '{}',
   not_interested_companies text[] default '{}',
   notice_types text[] default '{PLACEMENT}',
+  reminder_hours numeric default 2,   -- one reminder this many hours before each deadline batch
   is_sample boolean default false,
   updated_at timestamptz default now()
 );
+alter table profile add column if not exists reminder_hours numeric default 2;
 
 create table if not exists roles (
   id text primary key,             -- yop:com_id:jnf_id
@@ -175,7 +177,7 @@ create policy owner_fix_notices on corrections for all to authenticated
 -- The dashboard may only change these columns:
 revoke update on profile, items from authenticated;
 grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, interested_companies,
-              not_interested_companies, notice_types, updated_at) on profile to authenticated;
+              not_interested_companies, notice_types, reminder_hours, updated_at) on profile to authenticated;
 grant update (dismissed, done) on items to authenticated;
 grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
 grant insert, update, delete on corrections to authenticated;

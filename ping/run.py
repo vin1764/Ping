@@ -413,10 +413,11 @@ class Runner:
         emails = self.store.select("emails", REAL)
         corrections = {c["notice_id"]: c for c in self.store.select("corrections")} if self.store_ok else {}
         dstats: dict = {}
-        items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats)
+        previous = {p["id"]: p for p in self.store.select("items", REAL)}
+        items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats,
+                            previous=previous)
         # a role's deadline that moved since the last run becomes one "Update" message
         from .dedupe import changes_since_last_run
-        previous = {p["id"]: p for p in self.store.select("items", REAL)}
         moved = [u for u in changes_since_last_run(previous, items, self.now) if u["id"] not in previous]
         items += moved
         self.counts["dedupe"] = {k: v for k, v in dstats.items() if k != "examples"}
@@ -434,7 +435,12 @@ class Runner:
             if role_updates:
                 self.store.upsert("roles", role_updates)
             if items:
-                self.store.upsert("items", [{**it, "updated_at": stamp} for it in items])
+                # first_seen is when a message was first sent: kept from the last run, else this run. Digests
+                # and "new roles" messages carry their own (the run that made them).
+                nowiso = self.now.astimezone(timezone.utc).isoformat()
+                self.store.upsert("items", [{**it, "updated_at": stamp,
+                                             "first_seen": (previous.get(it["id"]) or {}).get("first_seen")
+                                             or it.get("first_seen") or nowiso} for it in items])
         except Exception as e:
             self.problems.append(f"saving the feed failed: {e}")
         return items

@@ -79,7 +79,7 @@ def effective_deadlines(roles: list[dict], notices: list[dict], index: CompanyIn
 
 def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profile: dict, now: datetime,
                 emails: list[dict] | None = None, corrections: dict | None = None,
-                stats: dict | None = None) -> list[dict]:
+                stats: dict | None = None, previous: dict[str, dict] | None = None) -> list[dict]:
     corrections = corrections or {}
     emails = emails or []
     index = CompanyIndex(roles)
@@ -308,6 +308,18 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
     items, dstats = dedupe(items, now)
     for it in items:
         _expire(it, now)
+    # fewer, fuller messages: deadline digests, one "new roles" message per run, same-run list collapses
+    from . import digests
+    members = {}
+    for r in roles:
+        e = elig[r["id"]]
+        if e["eligible"] is False or _in(r["company"], not_int):
+            continue
+        dl = deadlines[r["id"]]
+        members[r["id"]] = {"id": r["id"], "company": r["company"], "label": r["designation"], "due": _dt(dl["at"]),
+                            "source": dl["source"], "applied": bool(r.get("applied")), "eligible": e["eligible"],
+                            "first_seen": r.get("first_seen")}
+    items = digests.build(items, members, previous or {}, profile, now)
     if stats is not None:
         stats.update(dstats)
     return items

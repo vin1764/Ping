@@ -213,7 +213,7 @@ Every item has a level and a one-line title (under 160 characters):
 | level | what |
 |---|---|
 | `always` | anything about a role you applied to (shortlist, test, extension, result), or anything that names your roll number |
-| `show` | eligible, not applied, deadline ahead, not marked not-interested ("apply by X"); the 24h reminder (it replaces the "apply by" item); "is this notice about X?" questions |
+| `show` | eligible, not applied, deadline ahead, not marked not-interested ("apply by X", shown on the Feed and Companies pages; in the chat these roles come as digests, below); "is this notice about X?" questions |
 | `hidden` | kept but not shown: not eligible, deadline gone, not interested, not yours, tests that finished 12h+ ago, list news older than 3 days |
 
 Which role a notice is about: the role named in the text; else, for tests and
@@ -240,6 +240,23 @@ that says what changed. Notices naming different profiles stay separate. When
 unsure, Ping treats them as the same and keeps a note. On the last 14 days of
 real notices this merged 15 repeats and sent 39 changes as updates; each run's
 summary reports its own counts.
+
+**Fewer, fuller messages** (`ping/digests.py`). Roles never get a card each in
+the chat:
+
+| message | when |
+|---|---|
+| **New roles** | once per run: "5 new roles listed at 3 companies", each with its close time (one role: a message of its own) |
+| **Deadline digest** | once per batch (same kind: application / form / test, same close date and time), when it comes within 24 hours: "15 applications close tonight, Sat 21 Nov 20:00 — you've applied to none", then the list. Not sent if that run's new-roles message already listed the whole batch |
+| **Reminder** | once, *N* hours before the batch closes (Profile: "Remind me before a deadline", default 2), listing only what you still haven't applied to |
+| **Update** | once per change to an announced batch: a deadline extension moves roles to another time, or a role is added that no new-roles message announced. Never a second full digest |
+| **Lists out** | several shortlists or test lists in one run: "3 shortlists out: ..." |
+
+Nothing is sent on the other hourly runs: every message has a fixed id and keeps
+what it said when it was first sent. Each list ends with its source: "ERP check
+17:50 · companies list · notices 1791, 1795". Tested in `tests/test_digests.py`
+(same-deadline grouping, reminder timing over a day of hourly runs, an extension
+as one update, nothing repeated).
 
 ## The dashboard
 

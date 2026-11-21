@@ -91,14 +91,15 @@ CV text:
 
 ## 4. Ask Ping (the chat on the dashboard)
 
-- **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini key is a Supabase function secret and never reaches the browser
-- **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If it fails, the page answers with simple rules instead and says so. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
+- **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini keys are Supabase function secrets and never reach the browser
+- **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If no model answers, the function answers from the data by rules (`supabase/functions/_shared/answer_rules.js`) and says so; the page uses the same rules if the function can't be reached. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
 - **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part.
 - **Expected output:** Plain text, shown as Ping's chat reply. No JSON.
-- **Models, in fallback order:** `PING_AI_MODEL` → `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemma-4-31b-it`
-- endpoint: Gemini `generateContent` (`GEMINI_API_KEY`); `PING_AI_MODEL` replaces the first model
+- **Models, in fallback order:** `gemini-flash-latest` → `gemini-3.1-flash-lite`
+- endpoint: Gemini `generateContent`; key `GEMINI_API_KEY` for students and demo visitors, `GEMINI_API_KEY_EVALS` for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_AI_MODEL` replaces the main model
+- order: the main model (gemini-flash-latest); when it's busy (429, 5xx, timeout) again after 1 s, 3 s, 6 s; then the lighter model once (`PING_AI_LITE_MODEL`, set to gemini-3.1-flash-lite by the deploy; gemini-flash-lite-latest if unset); then the rules answer
 - generation: `{ temperature: 0.2, maxOutputTokens: 4096 }`
-- timeout per model: 45 s; whole answer: 100 s (Supabase stops a function at 150 s); an error, a timeout or an empty reply moves on to the next model
+- timeout per call: 45 s; whole answer: 100 s (Supabase stops a function at 150 s)
 
 **Prompt, verbatim:**
 

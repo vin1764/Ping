@@ -40,7 +40,10 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # every Admin task (evals, demo-refeed, relevance re-marks, checks) uses the evals key, never the live one;
+          # calls through ask-ping prove they hold it (ping/evals_key.py), so the function uses it there too
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_EVALS }}
+          GEMINI_API_KEY_EVALS: ${{ secrets.GEMINI_API_KEY_EVALS }}
           GITHUB_TOKEN: ${{ github.token }}
           # log-scan only: the values it searches the logs for (masked by GitHub; never printed by Ping)
           ERP_PASSWORD: ${{ inputs.task == 'log-scan' && secrets.ERP_PASSWORD || '' }}
@@ -48,6 +51,8 @@ jobs:
           ERP_SECQ_2: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_2 || '' }}
           ERP_SECQ_3: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_3 || '' }}
           MAIL_APP_PASSWORD: ${{ inputs.task == 'log-scan' && secrets.MAIL_APP_PASSWORD || '' }}
+          # the live Gemini key only to search the logs for it; Admin never calls Gemini with it
+          GEMINI_API_KEY_LIVE: ${{ inputs.task == 'log-scan' && secrets.GEMINI_API_KEY || '' }}
           PING_GITHUB_TOKEN: ${{ inputs.task == 'log-scan' && secrets.PING_GITHUB_TOKEN || '' }}
           DASHBOARD_DEPLOY_TOKEN: ${{ inputs.task == 'log-scan' && secrets.DASHBOARD_DEPLOY_TOKEN || '' }}
         run: |

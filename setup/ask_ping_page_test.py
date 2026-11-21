@@ -79,6 +79,11 @@ def main(argv: list[str]) -> int:
         page = browser.new_page(viewport={"width": 390, "height": 844})
         calls = []
         page.on("response", lambda r: "/functions/v1/ask-ping" in r.url and calls.append(r.status))
+        # this check runs on the evals Gemini key: its calls to the function carry the proof (ping/evals_key.py)
+        sys.path.insert(0, str(ROOT))
+        from ping.evals_key import eval_headers
+        proof = eval_headers()
+        page.route("**/functions/v1/**", lambda route: route.continue_(headers={**route.request.headers, **proof}))
         page.on("pageerror", lambda e: print(f"  page error: {e}"))
         page.goto(url)
         page.click("#view-demo")

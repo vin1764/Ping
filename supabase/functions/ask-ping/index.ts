@@ -9,6 +9,7 @@ import { caller, cors, json } from "../_shared/owner.ts";
 import { asksToAct, glance, roleLists, stripRefusal, todayNote, wantsLists } from "./wording.ts";
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
+import { evalsProof } from "./evals_key.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/answer_rules.js";
 const Rules = (globalThis as any).PingRules;
@@ -27,6 +28,7 @@ const LITE = Deno.env.get("PING_AI_LITE_MODEL") || "gemini-flash-lite-latest";
 const BACKOFF_MS = [1_000, 3_000, 6_000];
 const LITE_RESERVE_MS = 20_000;
 const busy = (status: number) => status === 429 || status >= 500;
+
 const HISTORY_TURNS = 10;      // messages of the thread sent along (both sides)
 const HISTORY_CHARS = 8_000;   // about 2,000 tokens; the oldest messages go first
 const PER_MODEL_MS = 45_000;
@@ -79,7 +81,18 @@ Deno.serve(async (req) => {
   const who = await caller(req);
   if (!who) return json({ error: "not allowed" }, 403);
   const { sb, role } = who;
-  const key = Deno.env.get("GEMINI_API_KEY");
+  const claim = req.headers.get("x-ping-evals");
+  const evalsKey = Deno.env.get("GEMINI_API_KEY_EVALS");
+  let keyName = "live";
+  let key = Deno.env.get("GEMINI_API_KEY");
+  if (claim) {
+    if (!evalsKey || claim !== await evalsProof(evalsKey)) {
+      console.error(JSON.stringify({ event: "evals_key_refused", why: evalsKey ? "proof doesn't match" : "GEMINI_API_KEY_EVALS not set" }));
+      return json({ error: "an eval request needs GEMINI_API_KEY_EVALS on both sides (it never falls back to the live key)" }, 403);
+    }
+    key = evalsKey;
+    keyName = "evals";
+  }
   if (!key) return json({ error: "GEMINI_API_KEY is not set for this function" }, 500);
   const body = await req.json().catch(() => ({}));
 
@@ -129,7 +142,7 @@ Deno.serve(async (req) => {
         : "The demo has answered its 100 questions for this hour across all visitors. Please try again in a little while.",
         limited: true }, 429);
     } else if (take) {
-      console.log(JSON.stringify({ event: "demo_question", session: take.session, all: take.all }));
+      console.log(JSON.stringify({ event: "demo_question", key: keyName, session: take.session, all: take.all }));
     }
   }
 
@@ -175,7 +188,7 @@ Deno.serve(async (req) => {
       saved += m.marks.size === roles.length
         ? ` ${yes} of ${roles.length} roles are now for you.`
         : " The roles will be re-marked at the next check (Gemini didn't answer in time).";
-      console.log(JSON.stringify({ event: "prefs_saved", role, fields: Object.keys(parsed.changes), cached: m.cached,
+      console.log(JSON.stringify({ event: "prefs_saved", key: keyName, role, fields: Object.keys(parsed.changes), cached: m.cached,
                                    classified: m.classified, error: m.error }));
     } else {
       console.log(JSON.stringify({ event: "prefs_saved", role, fields: Object.keys(parsed.changes) }));
@@ -415,10 +428,10 @@ Question: ${ask}`;
       const res = await call(LITE, Math.min(PER_MODEL_MS, left));
       if (res.answer) return answered(res.answer, LITE);
     }
-    console.error(JSON.stringify({ event: "no_answer", role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
+    console.error(JSON.stringify({ event: "no_answer", key: keyName, role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
   }
   function answered(answer: string, model: string) {
-    console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, act,
+    console.log(JSON.stringify({ event: "answered", key: keyName, role, model, tried, history: kept.length, act,
       items: items.data?.length ?? 0, roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0,
       prompt_chars: prompt.length, ms: Date.now() - t0 }));
     return done(answer, model);
@@ -445,7 +458,7 @@ Question: ${ask}`;
     items: allItems.data || [],
     notices: allNotices.data || [],
   });
-  console.log(JSON.stringify({ event: "answered", role, model: "rules", kind: ruled.kind, companies: ruled.companies.length,
+  console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", kind: ruled.kind, companies: ruled.companies.length,
     no_ai: noAi, tried, ms: Date.now() - t0 }));
   return done(ruled.text + (noAi ? "" : "\n\n(Gemini was busy, so I answered straight from the ERP data.)"), "rules",
               { fallback: true, kind: ruled.kind });

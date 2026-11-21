@@ -274,7 +274,9 @@ def ask_as_demo(url: str, questions: list[str]) -> list[tuple[str, int, float, s
     out = []
     for q in questions:
         t = time.monotonic()
-        a = requests.post(f"{url.rstrip('/')}/functions/v1/ask-ping", timeout=180, json={"question": q}, headers=hdr)
+        from .evals_key import eval_headers   # Admin checks run on the evals Gemini key, not the live one
+        a = requests.post(f"{url.rstrip('/')}/functions/v1/ask-ping", timeout=180, json={"question": q},
+                          headers={**hdr, **eval_headers()})
         out.append((q, a.status_code, time.monotonic() - t, a.text[:1500]))
     return out
 
@@ -296,7 +298,8 @@ def functions_check(secrets) -> int:
     names = sorted(x.get("name", "") for x in requests.get(f"{API}/v1/projects/{ref}/secrets", headers=hdr,
                                                             timeout=30).json())
     say(f"secrets the functions can read on Supabase (names only): {', '.join(names)}")
-    say(f"  GEMINI_API_KEY on the Supabase side: {'yes' if 'GEMINI_API_KEY' in names else 'NO'}")
+    for n in ("GEMINI_API_KEY", "GEMINI_API_KEY_EVALS", "PING_AI_LITE_MODEL"):
+        say(f"  {n} on the Supabase side: {'yes' if n in names else 'NO'}")
     ask_id = next((i for i, slug in ids.items() if slug == "ask-ping"), None)
 
     say("\nask-ping requests, last 23 h (newest first):")
@@ -314,8 +317,23 @@ def functions_check(secrets) -> int:
         msg = " ".join(str(x.get("event_message") or "").split())[:400]
         say(f"  {_when(x.get('timestamp'))} [{x.get('level') or x.get('severity')}/{x.get('event_type')}] {msg}")
 
+    # which Gemini key each answer used: evals and Admin checks must show "evals", never "live"
+    rows = _source_logs(ref, token, "function_logs", ask_id, "event_message", 1000)
+    tally: dict = {}
+    for x in rows:
+        try:
+            ev = json.loads(str(x.get("event_message") or "").strip())
+        except ValueError:
+            continue
+        if ev.get("event") in ("answered", "no_answer"):
+            k = (ev.get("key") or "(before the split)", ev.get("role") or "?")
+            tally[k] = tally.get(k, 0) + 1
+    say("\nask-ping answers by Gemini key, last 23 h (key, caller: answers):")
+    for (k, who), n in sorted(tally.items()):
+        say(f"  {k}, {who}: {n}")
+
     if os.environ.get("SUPABASE_PUBLISHABLE_KEY"):
-        say("\ntest questions from a one-click demo session (demo data, same function):")
+        say("\ntest questions from a one-click demo session on the evals key (demo data, same function):")
         try:
             for q, code, secs, body in ask_as_demo(secrets.supabase_url, ["slice ctc breakdown", "what's due tomorrow"]):
                 say(f"  Q: {q}\n  -> HTTP {code} in {secs:.1f}s: {body}")
@@ -498,7 +516,8 @@ def log_scan(secrets) -> int:
     token, repo = os.environ.get("GITHUB_TOKEN", ""), os.environ.get("GITHUB_REPOSITORY", "")
     h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     names = ["ERP_USER_ID", "ERP_PASSWORD", "ERP_SECQ_1", "ERP_SECQ_2", "ERP_SECQ_3", "MAIL_ADDRESS", "MAIL_APP_PASSWORD",
-             "SUPABASE_SERVICE_KEY", "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY", "PING_GITHUB_TOKEN", "DASHBOARD_DEPLOY_TOKEN"]
+             "SUPABASE_SERVICE_KEY", "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY_EVALS", "GEMINI_API_KEY_LIVE", "PING_GITHUB_TOKEN",
+             "DASHBOARD_DEPLOY_TOKEN"]
     values = {}
     for n in names:
         v = os.environ.get(n, "").strip()

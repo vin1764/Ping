@@ -57,7 +57,9 @@ answers a wrong password with "Invalid login credentials". The result of the lat
 | SUPABASE_URL, SUPABASE_SERVICE_KEY | GitHub Actions secrets; the service key also as function secret PING_SERVICE_KEY | hourly run, Admin tasks; ask-ping (cache, first profile row) | no |
 | SUPABASE_PUBLISHABLE_KEY | GitHub secret; also in the public dashboard's `config.js` (public by design) and function secret PING_PUBLISHABLE_KEY | the browser and the functions (with the caller's own login) | only in the built `config.js` of the public repo |
 | SUPABASE_ACCESS_TOKEN | GitHub Actions secret | deploys the functions; Admin tasks (SQL, auth settings, logs) | no |
-| GEMINI_API_KEY | GitHub Actions secret; Supabase function secret | notice reader fallback, classifier, CV summaries; Ask Ping | no |
+| GEMINI_API_KEY (the live key) | GitHub Actions secret; Supabase function secret | the hourly run (notice reader fallback, classifier, CV summaries); Ask Ping for the owner and demo visitors | no |
+| GEMINI_API_KEY_EVALS (a second key, its own quota) | GitHub Actions secret; Supabase function secret | every Admin task (Ask Ping and relevance evals, demo-refeed, gemini-check, the page and function checks): Admin's `GEMINI_API_KEY` is this key; calls through ask-ping send `x-ping-evals`, an HMAC of "ping-evals" made with it, and the function then answers with it and logs `key: "evals"`. An eval request without a valid proof is refused (HTTP 403), never answered on the live key | no |
+| PING_AI_LITE_MODEL = `gemini-3.1-flash-lite` (a setting, not a secret) | Supabase function secret, set by the deploy (`dashboard.yml`) | Ask Ping's lighter model: main model with retries, then this once, then the rules answer | yes (the value is in `dashboard.yml`) |
 | PING_GITHUB_TOKEN | GitHub Actions secret; Supabase function secret | Check now and kick-run (start the Ping workflow) | no |
 | DASHBOARD_DEPLOY_TOKEN | GitHub Actions secret | pushes the built dashboard to the public repo | no |
 | PING_CRON_SECRET | Supabase function secret + Vault (`ping_cron_secret`) | pg_cron's call to kick-run | no |
@@ -72,9 +74,9 @@ secrets above and for key-shaped text; it prints counts only.
 | what | limit |
 |---|---|
 | demo questions | 15 per session per hour, 100 per hour for all demo sessions (`demo_take_question()`); a preference change counts as one more |
-| Ask Ping | 100 s for the whole answer, 45 s per model, then the next model (Supabase stops a function at 150 s); classification from the chat: 60 s |
+| Ask Ping | 100 s for the whole answer, 45 s per call; the main model again after 1 s, 3 s and 6 s when busy, then the lighter model once (20 s kept for it), then the rules answer (Supabase stops a function at 150 s); classification from the chat: 60 s |
 | hourly run, AI | notice reader: at most 20 calls and 300 s a run; classifier: 240 s a run; CV summary: 60 s per model |
-| models, in order | gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-31b-it |
+| models, in order | Ask Ping: gemini-flash-latest, then gemini-3.1-flash-lite (`PING_AI_LITE_MODEL`). Role marks and the hourly run: gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-31b-it |
 | CV upload | PDF only, 5 MB, 3 CVs |
 
 ## Cleanup

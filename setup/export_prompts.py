@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 AI_PY = ROOT / "ping" / "ai.py"
 CONFIG_PY = ROOT / "ping" / "config.py"
+DASH_YML = ROOT / ".github" / "workflows" / "dashboard.yml"
 ASK_TS = ROOT / "supabase" / "functions" / "ask-ping" / "index.ts"
 OUT = ROOT / "docs" / "PROMPTS.md"
 
@@ -118,27 +119,37 @@ def cv_prompt() -> dict:
 def ask_ping_prompt() -> dict:
     src = ASK_TS.read_text(encoding="utf-8")
     models_src = _one(r"const MODELS = \[(.*?)\];", src, "MODELS", re.S)
-    models = re.findall(r'"([^"]+)"', models_src)
+    main = _one(r'\|\| "([^"]+)"', models_src, "the main model")
+    lite_default = _one(r'const LITE = Deno\.env\.get\("PING_AI_LITE_MODEL"\) \|\| "([^"]+)"', src, "LITE")
+    # the value the deploy sets on the Supabase function secrets (.github/workflows/dashboard.yml)
+    lite = _one(r'"PING_AI_LITE_MODEL=([^"]+)"', DASH_YML.read_text(encoding="utf-8"), "PING_AI_LITE_MODEL in dashboard.yml")
+    backoff = [int(x.replace("_", "")) // 1000 for x in
+               re.findall(r"[\d_]+", _one(r"const BACKOFF_MS = \[(.*?)\];", src, "BACKOFF_MS"))]
     budget = int(_one(r"const BUDGET_MS = ([\d_]+);", src, "BUDGET_MS").replace("_", ""))
     per = int(_one(r"const PER_MODEL_MS = ([\d_]+);", src, "PER_MODEL_MS").replace("_", ""))
     gen = _one(r"generationConfig: (\{[^}]*\})", src, "generationConfig")
     prompt = _one(r"const prompt = `(.*?)`;\n", src, "the ask-ping prompt", re.S)
     return {
         "title": "Ask Ping (the chat on the dashboard)",
-        "where": "`supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini key "
-                 "is a Supabase function secret and never reaches the browser",
-        "when": "Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If it "
-                "fails, the page answers with simple rules instead and says so. Demo sessions: 15 questions per session "
-                "per hour, 100 per hour for all demo sessions together.",
+        "where": "`supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini keys "
+                 "are Supabase function secrets and never reach the browser",
+        "when": "Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If no "
+                "model answers, the function answers from the data by rules (`supabase/functions/_shared/answer_rules.js`) "
+                "and says so; the page uses the same rules if the function can't be reached. Demo sessions: 15 questions "
+                "per session per hour, 100 per hour for all demo sessions together.",
         "input": "`${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: "
                  "the owner's real data, or the anonymised demo for a demo session). See the template for each part.",
         "output": "Plain text, shown as Ping's chat reply. No JSON.",
-        "models": models,
+        "models": [main, lite],
         "settings": [
-            "endpoint: Gemini `generateContent` (`GEMINI_API_KEY`); `PING_AI_MODEL` replaces the first model",
+            "endpoint: Gemini `generateContent`; key `GEMINI_API_KEY` for students and demo visitors, `GEMINI_API_KEY_EVALS` "
+            "for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_AI_MODEL` replaces "
+            "the main model",
+            f"order: the main model ({main}); when it's busy (429, 5xx, timeout) again after "
+            f"{', '.join(f'{b} s' for b in backoff)}; then the lighter model once (`PING_AI_LITE_MODEL`, set to {lite} "
+            f"by the deploy; {lite_default} if unset); then the rules answer",
             f"generation: `{gen}`",
-            f"timeout per model: {per // 1000} s; whole answer: {budget // 1000} s (Supabase stops a function at 150 s); "
-            "an error, a timeout or an empty reply moves on to the next model",
+            f"timeout per call: {per // 1000} s; whole answer: {budget // 1000} s (Supabase stops a function at 150 s)",
         ],
         "prompt": prompt,
     }

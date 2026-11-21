@@ -1,6 +1,6 @@
 # Build prompts
 
-Every prompt the owner gave the coding agent (Claude Code) in the session that built Ping, verbatim and in order,
+Every prompt the owner gave the coding agent in the session that built Ping, verbatim and in order,
 with the time each was sent. Only the owner's messages: no replies, tool output, automatic notices or hook
 messages. Messages marked *sent while the agent was working* were typed while a task was running and reached it
 mid-task.

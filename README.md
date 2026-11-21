@@ -27,7 +27,7 @@ up to 15 questions per visitor per hour and 100 per hour for all visitors
 together. A static copy with no login is also at
 https://claude.ai/artifact/TWGCZxEawg7zZrrjSDnur7 (the owner shares it from its Share menu).
 
-Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md), the index of all three suites in plain words:
+**Submission:** [`docs/SUBMISSION.md`](docs/SUBMISSION.md) (the live link, what to try, every document). Evals: [`evals/REPORT.md`](evals/REPORT.md), the index of all three suites in plain words:
 parser evals (`python evals/run_evals.py`), Ask Ping evals (Actions > Admin > `ask-ping-evals`) and role relevance
 evals per persona (Actions > Admin > `relevance-evals`). Security: [`docs/SECURITY.md`](docs/SECURITY.md); setup for a
 new student: [`docs/SETUP.md`](docs/SETUP.md).

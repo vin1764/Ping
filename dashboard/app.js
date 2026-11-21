@@ -245,6 +245,7 @@
   // and moves on from there in real time, so its countdowns tick like the real ones.
   const nowDate = () => new Date(state.asOf ? state.asOf + (Date.now() - state.openedAt) : Date.now());
   const liveNow = () => nowDate().getTime();      // the clock runs are judged by (the demo's own, or the real one)
+  window.PingNow = liveNow;                       // read-only, for the page checks (setup/live_page_test.py)
 
   async function boot() {
     const params = new URLSearchParams(location.search);

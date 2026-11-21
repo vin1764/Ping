@@ -1,10 +1,14 @@
 // "Check now": starts the Ping workflow on GitHub. The GitHub token lives only here
 // (a Supabase function secret), never in the browser.
-import { cors, json, ownerClient } from "../_shared/owner.ts";
+import { caller, cors, json } from "../_shared/owner.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (!(await ownerClient(req))) return json({ error: "not allowed" }, 403);
+  const who = await caller(req);
+  if (who?.role === "demo") {
+    return json({ error: "The demo can't start a check: Ping only logs in to the ERP for its owner." }, 403);
+  }
+  if (!who) return json({ error: "not allowed" }, 403);
   const repo = Deno.env.get("PING_GITHUB_REPO");
   const token = Deno.env.get("PING_GITHUB_TOKEN");
   const ref = Deno.env.get("PING_GITHUB_REF") || "main";

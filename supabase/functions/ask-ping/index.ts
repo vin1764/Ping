@@ -66,8 +66,24 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const question = String(body?.question || "");
   if (!question || question.length > 500) return json({ error: "ask a question (max 500 characters)" }, 400);
-  // The reviewer sees a snapshot; "tomorrow" means the day after the snapshot, like on the page.
-  const asOf = role === "reviewer" && body?.as_of && !isNaN(Number(new Date(body.as_of))) ? new Date(body.as_of) : new Date();
+  // The demo is a snapshot; "tomorrow" means the day after the snapshot, like on the page.
+  const asOf = role === "demo" && body?.as_of && !isNaN(Number(new Date(body.as_of))) ? new Date(body.as_of) : new Date();
+
+  // Demo sessions share the Gemini quota with everyone trying the demo: 15 questions per session per hour and
+  // 100 per hour for all demo sessions together (counted in the database; no question text is kept).
+  if (role === "demo") {
+    const { data: take, error: takeErr } = await sb.rpc("demo_take_question");
+    if (takeErr) console.error(JSON.stringify({ event: "demo_limit_check_failed", error: takeErr.message }));
+    else if (take && take.ok === false) {
+      console.log(JSON.stringify({ event: "demo_limited", why: take.why, session: take.session, all: take.all }));
+      return json({ error: take.why === "session"
+        ? "That's the demo's limit of 15 questions an hour for one visitor. Try again in a while, or open the demo again later."
+        : "The demo has answered its 100 questions for this hour across all visitors. Please try again in a little while.",
+        limited: true }, 429);
+    } else if (take) {
+      console.log(JSON.stringify({ event: "demo_question", session: take.session, all: take.all }));
+    }
+  }
 
   const [items, roles, profile] = await Promise.all([
     sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")

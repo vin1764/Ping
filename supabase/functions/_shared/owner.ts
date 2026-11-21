@@ -12,28 +12,19 @@ export function json(body: unknown, status = 200) {
 }
 
 // Uses the caller's own login token, so Row Level Security applies exactly as in the dashboard:
-// the owner reads only real rows, a reviewer only the anonymised demo rows.
+// the owner reads only real rows, a demo session only the anonymised demo rows.
 function client(req: Request) {
   const auth = req.headers.get("Authorization") ?? "";
   const key = Deno.env.get("PING_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
   return createClient(Deno.env.get("SUPABASE_URL")!, key, { global: { headers: { Authorization: auth } } });
 }
 
-export async function ownerClient(req: Request) {
-  const sb = client(req);
-  const { data, error } = await sb.rpc("is_ping_owner");
-  return error || data !== true ? null : sb;
-}
-
-export async function ownerOrReviewerClient(req: Request) {
-  return (await caller(req))?.sb ?? null;
-}
-
-// Who is calling: the owner (real rows) or the reviewer (anonymised demo rows), or nobody.
+// Who is calling: the owner (real rows), a one-click demo session (anonymous sign-in: the anonymised demo
+// rows only, read-only, by the database's own rules), or nobody.
 export async function caller(req: Request) {
   const sb = client(req);
   const owner = await sb.rpc("is_ping_owner");
   if (!owner.error && owner.data === true) return { sb, role: "owner" as const };
-  const reviewer = await sb.rpc("is_ping_reviewer");
-  return !reviewer.error && reviewer.data === true ? { sb, role: "reviewer" as const } : null;
+  const demo = await sb.rpc("is_ping_demo");
+  return !demo.error && demo.data === true ? { sb, role: "demo" as const } : null;
 }

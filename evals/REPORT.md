@@ -1,6 +1,6 @@
 # Ping evals
 
-_Run on 21 Nov 2026, 12:44 IST. Re-run with `python evals/run_evals.py`._
+_Run on 21 Nov 2026, 12:59 IST. Re-run with `python evals/run_evals.py`._
 
 ## In short
 
@@ -125,6 +125,10 @@ These come from Ping's own logs. There is no answer key for them, so they show w
 - Feed after the run: 14 always-show, 43 apply-by, 331 kept hidden, 3 questions for the student.
 
 **Duplicate merging, on the real notices of the last 14 days:** 177 messages without merging; 15 repeats merged and 39 real changes sent as updates (29 deadline moves, 10 time changes). Unsure merges: 0.
+
+**Rooms already saved by the real run:** of 15 room matches saved before the two-students-per-line fix, 8 showed the neighbouring student's room. Every run now re-reads saved rows with the current rules, so these are corrected.
+
+**AI fallback:** the rules couldn't read 1 notice; Gemini got it right (notice 1706 (Date extension, Multiple Companies): Tata AIG, Senior Engineer Trainee - Analytics, 17 Nov 16:00).
 
 ## How this was made
 

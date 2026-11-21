@@ -269,6 +269,12 @@ def main():
               f"{dd['notice_messages_without_merging']} messages without merging; {dd['repeats_merged']} repeats merged "
               f"and {dd['changes_sent_as_updates']} real changes sent as updates ({dd['of_which_deadline_moves']} deadline "
               f"moves, {dd['of_which_time_changes']} time changes). Unsure merges: {dd['unsure_merges']}.", "",
+              f"**Rooms already saved by the real run:** of {real['saved_rooms_reread']['room_matches_saved']} room "
+              f"matches saved before the two-students-per-line fix, {real['saved_rooms_reread']['were_another_students_room']} "
+              "showed the neighbouring student's room. Every run now re-reads saved rows with the current rules, so "
+              "these are corrected.", "",
+              f"**AI fallback:** the rules couldn't read {real['ai_fallback']['notices_rules_could_not_read']} notice; "
+              f"Gemini got it right ({real['ai_fallback']['example']}).", "",
               "## How this was made", "",
               "- Notices: real CDC notices; other students' names, roll numbers and phone numbers were removed first. "
               "The expected answers were written by reading each notice. Ping's answers come from the same code the "

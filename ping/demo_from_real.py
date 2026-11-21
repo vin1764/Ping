@@ -98,6 +98,37 @@ def _fake_row(header: list | None, row: list | None) -> list | None:
     return out
 
 
+def _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll):
+    """Rebuild the feed with today's rules (same code as the hourly run), keeping when each
+    message was first posted so the chat reads in the right order."""
+    from datetime import timedelta
+    from .items import build_items
+    from .matching import CompanyIndex
+    from .notices import analyze
+    now = datetime.now(IST)
+    profile = {"roll": real_roll, "notice_types": ["PLACEMENT"], **{k: v for k, v in real_profile.items() if v is not None}}
+    index = CompanyIndex(roles)
+    for n in notices:
+        if (n.get("analysis") or {}).get("method") != "ai" and (n.get("text") or n.get("preview")):
+            n["analysis"] = analyze(n, n.get("text") or n.get("preview"), index, real_roll, profile.get("name") or "")
+    items = build_items(roles, [n for n in notices if n.get("analysis")], {c["notice_id"]: c for c in checks},
+                        profile, now)
+    starts = {r["id"]: r.get("apply_start") for r in roles}
+    for it in items:
+        old = stored_items.get(it["id"]) or {}
+        first = old.get("first_seen")
+        if not first:
+            d = it.get("details") or {}
+            if it["category"] == "reminder" and it.get("due_at"):
+                first = (datetime.fromisoformat(it["due_at"]) - timedelta(hours=24)).isoformat()
+            else:
+                first = d.get("notice_time") or (starts.get((it.get("role_ids") or [None])[0])) or now.isoformat()
+        if datetime.fromisoformat(first) > now:
+            first = now.isoformat()
+        it["first_seen"] = first
+    return [i for i in items if i.get("category") != "email"]
+
+
 def _prefix(v):
     return v if v is None or str(v).startswith(PREFIX) else f"{PREFIX}{v}"
 
@@ -109,7 +140,8 @@ def build_from_store(store, real_roll: str, mail: str) -> dict:
     roles = store.select("roles", REAL)
     notices = store.select("notices", REAL)
     checks = store.select("pdf_checks", REAL)
-    items = [i for i in store.select("items", REAL) if i.get("category") != "email"]
+    stored_items = {i["id"]: i for i in store.select("items", REAL)}
+    items = _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll)
     runs = sorted(store.select("runs", REAL), key=lambda r: r.get("started_at") or "", reverse=True)[:1]
 
     for r in roles:

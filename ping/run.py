@@ -378,6 +378,13 @@ class Runner:
     def _rebuild(self, profile) -> list[dict]:
         roles = self.store.select("roles", REAL)
         notices = [n for n in self.store.select("notices", REAL) if n.get("analysis")]
+        # Re-read stored notices with today's rules (cheap: text only), so fixes apply to past notices too.
+        # Answers that came from the AI fallback are kept as they are.
+        index = CompanyIndex(roles)
+        for n in notices:
+            if n["analysis"].get("method") != "ai" and (n.get("text") or n.get("preview")):
+                n["analysis"] = analyze(n, n.get("text") or n.get("preview"), index, profile["roll"],
+                                        profile.get("name") or "")
         checks = {c["notice_id"]: c for c in self.store.select("pdf_checks", REAL)}
         emails = self.store.select("emails", REAL)
         corrections = {c["notice_id"]: c for c in self.store.select("corrections")} if self.store_ok else {}

@@ -24,6 +24,7 @@ from .gate import Gate
 LOGIN_ENTRY = "/IIT_ERP3/"
 REQUESTED_URL = "https://erp.iitkgp.ac.in/IIT_ERP3/"
 TP_LINK = "https://erp.iitkgp.ac.in/TrainingPlacementSSO/TPStudent.jsp"
+MIN_OTP_TO_LOGIN = 15  # seconds between pressing Get OTP and pressing Log In
 
 
 class LoginError(Exception):
@@ -64,7 +65,7 @@ def _clean_question(raw: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _login_failure_hint(reply) -> str:
+def _login_failure_hint(reply, user_id: str = "") -> str:
     """What the ERP showed after Log In, without echoing anything we typed."""
     from urllib.parse import urlsplit
     text = re.sub(r"(?is)<(script|style).*?</\1>", " ", reply.text)
@@ -73,8 +74,12 @@ def _login_failure_hint(reply) -> str:
     m = re.search(r"[^.]{0,80}\b(invalid|incorrect|wrong|expired|mismatch|not match|blocked|locked|"
                   r"try again|already|error|fail\w*)\b[^.]{0,80}", text, re.I)
     where = urlsplit(reply.url).path
-    return (f"HTTP {reply.status} at {where}; ERP says: \"{m.group(0).strip()[:200]}\"" if m
-            else f"HTTP {reply.status} at {where}; no home page and no error text")
+    if m:
+        return f"HTTP {reply.status} at {where}; ERP says: \"{m.group(0).strip()[:200]}\""
+    shown = text.strip()[:300]
+    if user_id:
+        shown = re.sub(re.escape(user_id), "<ROLL>", shown, flags=re.I)
+    return f"HTTP {reply.status} at {where}; no home page. Page starts: \"{shown}\""
 
 
 class ErpClient:
@@ -158,10 +163,15 @@ class ErpClient:
         if not code:
             raise LoginError("No OTP email arrived after pressing Get OTP twice", "no_otp")
 
+        # The ERP can mail the OTP within ~3s, possibly before it has saved the code; a person
+        # never types it that fast. Log In no sooner than MIN_OTP_TO_LOGIN after Get OTP.
+        wait = MIN_OTP_TO_LOGIN - (datetime.now(IST) - clicked).total_seconds()
+        if wait > 0:
+            time.sleep(wait)
         form["email_otp"] = code
         done = self.gate.post("/SSOAdministration/auth.htm", form)
         if "/IIT_ERP3/home.htm" not in done.url and "logout.htm" not in done.text:
-            raise LoginError(f"Login failed: {_login_failure_hint(done)}", "login_failed")
+            raise LoginError(f"Login failed: {_login_failure_hint(done, self.secrets.erp_user_id)}", "login_failed")
         self.logged_in = True
         stats.seconds_total = time.monotonic() - t0
         return stats

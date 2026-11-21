@@ -18,6 +18,12 @@ def secrets(answers=None):
     return Secrets(ROLL, "pw", answers, "me@kgpian.iitkgp.ac.in", "app", ai={})
 
 
+@pytest.fixture(autouse=True)
+def _no_wait(monkeypatch):
+    import ping.erp as erp_mod
+    monkeypatch.setattr(erp_mod, "MIN_OTP_TO_LOGIN", 0)
+
+
 def run(fake, store=None, s=None):
     store = store or MemoryStore()
     store.upsert("profile", [{"id": 1, "department": "Computer Science and Engineering", "degree": "B.Tech",

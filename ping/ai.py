@@ -41,7 +41,17 @@ Use [] when there is nothing. Do not invent dates."""
 
 
 MAX_CALLS = 20
-stats = {"calls": 0, "answers": 0, "errors": 0, "last_error": None}
+stats = {"calls": 0, "answers": 0, "errors": 0, "last_error": None, "attempts": []}
+
+
+def _msg(r) -> str:
+    """Gemini's own error message ("This model ... is no longer available", "high demand"), not the JSON."""
+    try:
+        body = r.json()
+        body = body[0] if isinstance(body, list) and body else body
+        return str(body["error"]["message"])[:200]
+    except Exception:
+        return r.text[:200]
 
 
 def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> dict | None:
@@ -57,18 +67,18 @@ def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> 
         try:
             r = requests.post(cfg["base_url"].rstrip("/") + "/chat/completions", json=body, timeout=40,
                               headers={"Authorization": f"Bearer {cfg['key']}"})
-            if r.status_code in (400, 404) and cfg.get("fallback_models"):
-                stats["last_error"] = f"{model}: HTTP {r.status_code} {r.text[:160]}"
-                continue  # model name retired: try the next one
             if r.status_code >= 400:
-                stats["last_error"] = f"{model}: HTTP {r.status_code} {r.text[:160]}"
+                stats["last_error"] = f"{model}: HTTP {r.status_code} {_msg(r)}"
+                stats["attempts"] = (stats["attempts"] + [stats["last_error"]])[-10:]
+                if r.status_code in (400, 404, 429, 500, 503):
+                    continue  # model name retired, or busy right now: try the next one
             r.raise_for_status()
             content = r.json()["choices"][0]["message"]["content"]
             m = re.search(r"\{.*\}", content, re.S)
             data = json.loads(m.group(0)) if m else None
             break
         except Exception as e:
-            stats["last_error"] = stats["last_error"] or f"{model}: {type(e).__name__}: {str(e)[:160]}"
+            stats["last_error"] = f"{model}: {type(e).__name__}: {str(e)[:160]}"
             data = None
             break
     if data is None:

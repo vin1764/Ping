@@ -223,3 +223,28 @@ def test_saved_room_from_an_older_reading_is_corrected():
              "details": {"room": "NR 324", "room_or_venue_from_heading": "Roll No Room No"}}
     assert refresh_details(saved, "22xy10042")["details"] == {"room": "NR 422"}
     assert refresh_details({"status": "no", "details": {}}, "22XY10042") == {"status": "no", "details": {}}
+
+
+def test_ai_moves_to_the_next_model_when_one_is_retired_or_busy(monkeypatch):
+    """Real errors from 21 Nov: gemini-2.5-flash 404 'no longer available to new users', then 503 'high demand'."""
+    from ping import ai
+
+    class R:
+        def __init__(self, code, body):
+            self.status_code, self._b, self.text = code, body, str(body)
+        def json(self):
+            return self._b
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(self.status_code)
+
+    replies = iter([R(404, [{"error": {"message": "This model is no longer available to new users."}}]),
+                    R(503, [{"error": {"message": "This model is currently experiencing high demand."}}]),
+                    R(200, {"choices": [{"message": {"content": '{"deadlines": [], "companies": [{"name": "Acme"}]}'}}]})])
+    monkeypatch.setattr(ai.requests, "post", lambda *a, **k: next(replies))
+    monkeypatch.setattr(ai, "stats", {"calls": 0, "answers": 0, "errors": 0, "last_error": None, "attempts": []})
+    cfg = {"provider": "openai_compatible", "base_url": "https://x", "key": "k", "model": "a", "fallback_models": ["b", "c"]}
+    out = ai.refine_notice("text", REF, [], cfg)
+    assert out["companies"] == [{"name": "Acme"}]
+    assert [a.split(":")[0] for a in ai.stats["attempts"]] == ["a", "b"]
+    assert "high demand" in ai.stats["attempts"][1]

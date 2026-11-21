@@ -121,7 +121,10 @@ def gemini_check(secrets) -> int:
         return 2
     test = "The CV submission of Northwind (made-up) closes at five in the evening on the twenty-second of November, 2026."
     res = ai.refine_notice(test, datetime(2026, 11, 20, tzinfo=IST), ["Northwind"], cfg)
-    say(f"test call ({cfg.get('model')}): {'answered' if res else 'FAILED'}; {res}; last error: {ai.stats['last_error']}")
+    say(f"models tried in order: {[cfg.get('model')] + list(cfg.get('fallback_models', []))}")
+    say(f"test call: {'answered' if res else 'FAILED'}; {res}")
+    for a in ai.stats["attempts"]:
+        say(f"  model said: {a}")
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     missed = [n for n in store.select("notices", REAL) if (n.get("analysis") or {}).get("rule_misses")]
     say(f"notices the rules couldn't read: {len(missed)}")

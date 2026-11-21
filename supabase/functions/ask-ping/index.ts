@@ -3,7 +3,9 @@
 // (never PDFs, never other students' data).
 import { cors, json, ownerOrReviewerClient } from "../_shared/owner.ts";
 
-const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
+// Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
+// free tier is sometimes overloaded (503), so try a few names in turn.
+const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash"];
 
 function ist(iso?: string | null) {
   if (!iso) return "";
@@ -53,6 +55,7 @@ ${roleLines.join("\n") || "(empty)"}
 
 Question: ${question}`;
 
+  let last = 0;
   for (const model of MODELS) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: "POST",
@@ -60,11 +63,11 @@ Question: ${question}`;
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }],
                              generationConfig: { temperature: 0.2, maxOutputTokens: 600 } }),
     });
-    if (r.status === 404 || r.status === 400) continue; // model retired: try the next
+    if ([400, 404, 429, 500, 503].includes(r.status)) { last = r.status; continue; } // retired or busy: next
     if (!r.ok) return json({ error: `Gemini said ${r.status}` }, 502);
     const out = await r.json();
     const answer = out?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("") || "";
     return json({ answer: answer.trim() || "I couldn't come up with an answer." });
   }
-  return json({ error: "no Gemini model available" }, 502);
+  return json({ error: last === 503 || last === 429 ? "Gemini is busy right now, try again in a minute" : "no Gemini model available" }, 502);
 });

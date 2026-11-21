@@ -1,7 +1,7 @@
 // "Ask Ping": answers questions about YOUR feed and roles with Gemini.
 // The Gemini key lives only here. Only your own items/roles/profile are sent
 // (never PDFs, never other students' data).
-import { cors, json, ownerClient } from "../_shared/owner.ts";
+import { cors, json, ownerOrReviewerClient } from "../_shared/owner.ts";
 
 const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 
@@ -13,7 +13,7 @@ function ist(iso?: string | null) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  const sb = await ownerClient(req);
+  const sb = await ownerOrReviewerClient(req);
   if (!sb) return json({ error: "not allowed" }, 403);
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) return json({ error: "GEMINI_API_KEY is not set for this function" }, 500);

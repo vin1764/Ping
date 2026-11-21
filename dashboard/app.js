@@ -89,8 +89,11 @@
     async setReadAt(t) { store.set("ping-demo-read", t); }
   }
 
+  const READ_ONLY = "Reviewer login is read-only: changes aren't saved.";
   class SupabaseSource {
-    constructor(sb) { this.sb = sb; this.kind = "real"; this.chatOk = true; }
+    constructor(sb, reviewer = false) {
+      this.sb = sb; this.kind = reviewer ? "reviewer" : "real"; this.reviewer = reviewer; this.chatOk = !reviewer;
+    }
     async q(table, fn) {
       let query = this.sb.from(table).select("*");
       if (fn) query = fn(query);
@@ -113,14 +116,18 @@
       return { notice: n, check: checks[0] };
     }
     async saveProfile(p) {
-      const { error } = await this.sb.from("profile").update({ ...p, updated_at: new Date().toISOString() }).eq("id", 1);
+      if (this.reviewer) throw new Error(READ_ONLY);
+      const { error } = await this.sb.from("profile").update({ ...p, updated_at: new Date().toISOString() })
+        .eq("id", state.data.profile?.id ?? 1);
       if (error) throw new Error(error.message);
     }
     async markItem(id, patch) {
+      if (this.reviewer) throw new Error(READ_ONLY);
       const { error } = await this.sb.from("items").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
     }
     async correct(noticeKey, fix) {
+      if (this.reviewer) throw new Error(READ_ONLY);
       const { error } = await this.sb.from("corrections").upsert({ notice_id: noticeKey, ...fix });
       if (error) throw new Error(error.message);
     }
@@ -136,6 +143,7 @@
       return out;
     }
     async checkNow() {
+      if (this.reviewer) return "Reviewers can't start runs: Ping only logs in to the ERP for its owner.";
       await this.fn("check-now");
       return "Started a run. New messages arrive in about 2 minutes (reload to see them).";
     }
@@ -149,11 +157,13 @@
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
     async chat() {
+      if (this.reviewer) return store.get("ping-reviewer-chat", []);
       const { data, error } = await this.sb.from("chat_messages").select("role,text,created_at").order("created_at").limit(1000);
       if (error) { this.chatOk = false; return store.get("ping-chat", []); }
       return data;
     }
     async addChat(m) {
+      if (this.reviewer) { store.set("ping-reviewer-chat", [...store.get("ping-reviewer-chat", []), m].slice(-500)); return; }
       if (this.chatOk) {
         const { error } = await this.sb.from("chat_messages").insert({ role: m.role, text: m.text, created_at: m.created_at });
         if (!error) return;
@@ -161,9 +171,10 @@
       }
       store.set("ping-chat", [...store.get("ping-chat", []), m].slice(-500));
     }
-    async readAt() { return state.data.profile?.chat_read_at || store.get("ping-read", null); }
+    async readAt() { return (!this.reviewer && state.data.profile?.chat_read_at) || store.get(this.reviewer ? "ping-reviewer-read" : "ping-read", null); }
     async setReadAt(t) {
-      store.set("ping-read", t);
+      store.set(this.reviewer ? "ping-reviewer-read" : "ping-read", t);
+      if (this.reviewer) return;
       await this.sb.from("profile").update({ chat_read_at: t }).eq("id", 1);
     }
   }
@@ -199,7 +210,12 @@
 
   async function startReal(sb) {
     const { data: ok, error } = await sb.rpc("is_ping_owner");
-    if (error || !ok) {
+    let reviewer = false;
+    if (!error && !ok) {
+      const r = await sb.rpc("is_ping_reviewer");
+      reviewer = !r.error && r.data === true;
+    }
+    if (error || (!ok && !reviewer)) {
       mount(h("div", { class: "login card" },
         h("h1", {}, "Not allowed"),
         h("p", {}, "This login isn't on Ping's list of allowed users. Ping adds the MAIL_ADDRESS from your " +
@@ -208,7 +224,12 @@
         h("button", { class: "btn", onclick: async () => { await sb.auth.signOut(); location.reload(); } }, "Sign out")));
       return;
     }
-    state.src = new SupabaseSource(sb);
+    state.src = new SupabaseSource(sb, reviewer);
+    if (reviewer) {
+      $("#mode-badge").textContent = "Reviewer";
+      $("#mode-badge").title = "Anonymised demo data, read-only";
+      $("#mode-badge").hidden = false;
+    }
     const out = $("#sign-out");
     out.hidden = false;
     out.onclick = async () => { await sb.auth.signOut(); location.reload(); };

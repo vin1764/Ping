@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -35,10 +36,23 @@ def apply_sql(secrets) -> int:
         say("SUPABASE_ACCESS_TOKEN is not set in the repo secrets")
         return 2
     sa.create_database(secrets.supabase_url, token)
+    # The data API caches the list of tables; ask it to reload, then confirm from the database itself.
+    sa.run_sql(secrets.supabase_url, token, "notify pgrst, 'reload schema';")
+    rows = sa.run_sql(secrets.supabase_url, token,
+                      "select t, to_regclass('public.' || t) is not null as present from unnest(array["
+                      "'chat_messages','reviewer_users','allowed_users','items','profile']) t")
+    say("  in the database: " + ", ".join(f"{r['t']}={'yes' if r['present'] else 'NO'}" for r in rows))
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     for t in ("chat_messages", "reviewer_users", "items", "profile"):
-        store.select(t, {"limit": "1"})
-        say(f"  {t}: OK")
+        for attempt in range(10):
+            try:
+                store.select(t, {"limit": "1"})
+                say(f"  {t}: reachable through the data API")
+                break
+            except Exception as e:
+                if attempt == 9:
+                    raise
+                time.sleep(3)
     say("schema.sql applied (tables, permissions, owner/reviewer rules, chat). Your data was not touched.")
     return 0
 

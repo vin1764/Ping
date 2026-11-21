@@ -51,6 +51,7 @@ def run_sql(url: str, token: str, sql: str) -> list:
 
 def create_database(url: str, token: str) -> None:
     run_sql(url, token, SCHEMA.read_text(encoding="utf-8"))
+    run_sql(url, token, "notify pgrst, 'reload schema';")  # the data API caches the table list
 
 
 def api_keys(url: str, token: str) -> dict:

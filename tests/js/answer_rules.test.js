@@ -124,7 +124,10 @@ test("JD questions: the stored summary (≤120 words), a link that can't be open
   assert.ok(a.text.split(/\s+/).length <= 125, a.text);          // 120 words + the "(From ...)" source line
   assert.strictEqual(R.answer("what's the JD for searce associate data engineer", d).text,
     "Searce (Associate Data Engineer): The JD is a link I can't open: https://docs.google.com/document/d/14dVgbE3ZQouUB93/edit");
-  assert.match(R.answer("what do they want for cars24", d).text, /^Cars24 \(Data Science\): no JD on the ERP/);
+  assert.strictEqual(R.answer("what do they want for cars24", d).text, "Cars24 (Data Science): no JD on the ERP.");
+  const d3 = { ...data, roles: [{ id: "j5", company: "Accenture", designation: "AI and Data", jd_source: "none", jd_note: "As mentioned in Registration Email" }] };
+  assert.strictEqual(R.answer("summarise accenture's jd", d3).text,
+    'Accenture (AI and Data): no JD on the ERP (the ERP says: "As mentioned in Registration Email").');
   assert.match(R.answer("summarise google's jd", d).text, /^I don't have Google/);
   // the JD came from the ERP's details, the fuller JD is a private link; a model that sent [] for "no location"
   const d2 = { ...data, roles: [{ id: "j4", company: "Searce Inc.", designation: "Associate Data Engineer", jd_source: "detail",

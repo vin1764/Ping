@@ -381,6 +381,9 @@ def rules_summary(text: str, designation: str = "") -> dict:
     # with no responsibilities section: the sentences about the work, not the company's introduction
     do = _items(by("do")) or [x for x in intro if WORK.search(x)] or intro
     must = _items(by("must"), commas=len(by("must")) == 1, min_words=1)   # bullets are items already; one run-on line is split
+    # a lead-in ("We are looking for candidates who demonstrate") isn't a skill
+    must = [x for x in must if not re.match(r"(?i)(we(?: are|'re) looking for|candidates? (?:who|should)|the (?:ideal )?candidate)\b.*"
+                                            r"(?:demonstrate|have|has|possess|be|:)$", x)]
     loc = next((l for l in by("location") if len(l) <= 80), None)
     elig = next((l for l in by("eligibility") if len(l) <= 120), None)
     unusual = [l for _, l in parts if re.search(r"\bbond\b|\bshifts?\b|rotation|relocat|travel|service agreement|"

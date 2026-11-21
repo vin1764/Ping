@@ -254,9 +254,13 @@
     const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     if (!s) {
       if (role.jd_text) return `${who}: ${String(role.jd_text).split(/\s+/).slice(0, 90).join(" ")}…` + linkNote;
-      return `${who}: no JD on the ERP${role.jd_note ? ` (${String(role.jd_note).slice(0, 80)})` : ""}.`;
+      const note = String(role.jd_note || "").trim();
+      // the ERP's own words when they say something ("As mentioned in Registration Email"), not "-" or "NA"
+      const said = /[a-z]{3}/i.test(note) && !/^(n\/?a|nil|none|no jd on the erp)$/i.test(note) ? ` (the ERP says: "${note.slice(0, 80)}")` : "";
+      return `${who}: no JD on the ERP${said}.`;
     }
-    const lines = [`${who}: ${one(s.role_team) || role.designation}`];
+    const team = one(s.role_team);
+    const lines = [team && team.toLowerCase() !== String(role.designation || "").toLowerCase() ? `${who}: ${team}` : `${who}:`];
     if ((s.do || []).length) lines.push("What you'd do:", ...s.do.slice(0, 3).map((x) => `- ${x}`));
     if ((s.must_have || []).length) lines.push(`Must-have: ${s.must_have.slice(0, 5).join("; ")}`);
     if (one(s.location)) lines.push(`Location: ${one(s.location)}`);

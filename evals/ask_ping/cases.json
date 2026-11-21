@@ -1,7 +1,7 @@
 {
  "about": "Ask Ping evals: questions against the anonymised demo data (what the one-click demo shows), each with deterministic checks. Expected values were written by reading dashboard/demo-data.json, not by running the model.",
  "snapshot_as_of": "2026-11-21T17:32:18+05:30",
- "demo_data_sha256": "2d75c6c11017228331bf38b273c69307f9e38f15b358f98af3c75c745742fe05",
+ "demo_data_sha256": "806fd12193a84f319daaaa4814fce29d396e72ed1815040ae3cc0b69549775af",
  "check_rules": {
   "must_contain": "every entry must appear in the answer (case-insensitive); an entry 'a|b|c' passes if any alternative appears",
   "must_not_contain": "no entry may appear (case-insensitive)",
@@ -796,6 +796,98 @@
     ]
    },
    "why": "the Groww test (15:00) was earlier today, so it's listed as over; the NexusOne test isn't the student's (hidden in the feed)."
+  },
+  {
+   "id": "J1",
+   "category": "job description",
+   "question": "summarise JPMC's JD",
+   "checks": {
+    "must_contain": [
+     "JP MorganChase",
+     "What you'd do",
+     "financial models",
+     "Must-have",
+     "Excel|excel",
+     "From the ERP's role details"
+    ],
+    "must_not_contain": [
+     "I don't have the JD",
+     "no JD on the ERP",
+     "can't open"
+    ],
+    "max_words": 125
+   },
+   "why": "JPMC's own JD field is 147 characters; Ping takes the JD from the role's details (what they do, required skill set) and answers from the stored summary: what you'd do, must-haves, the CG cut-off, at most 120 words plus the source line."
+  },
+  {
+   "id": "J2",
+   "category": "job description",
+   "question": "what's the JD for LTM",
+   "checks": {
+    "must_contain": [
+     "LTM",
+     "The JD is a link I can't open",
+     "https://drive.google.com/file/d/"
+    ],
+    "must_not_contain": [
+     "What you'd do",
+     "no JD on the ERP"
+    ]
+   },
+   "why": "LTM's JD is only a Google Drive link that Ping couldn't read; it says so and gives the link."
+  },
+  {
+   "id": "J3",
+   "category": "job description",
+   "question": "what do they want for cars24 data science",
+   "checks": {
+    "must_contain": [
+     "Cars24 (Data Science): no JD on the ERP"
+    ],
+    "must_not_contain": [
+     "What you'd do",
+     "can't open",
+     "(-)"
+    ]
+   },
+   "why": "Cars24's JD field is '-' with no file, link or details: no JD on the ERP."
+  },
+  {
+   "id": "J4",
+   "category": "job description",
+   "question": "what's the JD for searce associate data engineer",
+   "checks": {
+    "must_contain": [
+     "Searce (Associate Data Engineer)",
+     "data pipelines",
+     "Python",
+     "The full JD is a link I can't open: https://docs.google.com/document/d/"
+    ],
+    "must_not_contain": [
+     "Associate Cloud Engineer",
+     "Evlos"
+    ]
+   },
+   "why": "The JD is summarised from the role's details, and the fuller JD behind a private Google Docs link is named with its address; only the role asked about."
+  },
+  {
+   "id": "J5",
+   "category": "job description",
+   "question": "what do they want for arihant product manager",
+   "checks": {
+    "must_contain": [
+     "PRODUCT MANAGER",
+     "roadmap",
+     "Mumbai / Indore",
+     "From the JD file on the ERP"
+    ],
+    "must_not_contain": [
+     "Backend Engineer",
+     "no JD on the ERP",
+     "We are looking for candidates who demonstrate"
+    ]
+   },
+   "why": "Arihant's JD field says 'Find Attached'; the JD is the role's JNF file on the ERP, read and summarised."
   }
  ],
  "check_changes": [

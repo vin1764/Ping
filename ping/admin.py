@@ -138,7 +138,7 @@ def demo_refeed(secrets) -> int:
         if not counts.get("unanswered"):
             break
         time.sleep(30)
-    left = [r for r in open_ if relevance.needs(r, DEMO_TARGETS)]
+    left = [r for r in open_ if relevance.needs(r, DEMO_TARGETS, cvs_text(profile["cvs"]))]
     if left:
         say(f"{len(left)} roles still unclassified; not written (run demo-refeed again)")
         return 1
@@ -150,8 +150,10 @@ def demo_refeed(secrets) -> int:
     # twice: the second time with the snapshot's own items as "the last run", so every message keeps the time
     # Ping first saw it (a backlog read on the first run stays in its place instead of collapsing)
     first = build_items(roles, notices, checks, profile, now, [], {}, previous={})
-    seen = {it["id"]: {"first_seen": old[plain(it["id"])]["first_seen"]} for it in first
-            if plain(it["id"]) in old and old[plain(it["id"])].get("first_seen")}
+    # only ordinary items carry their time over; Ping's own list messages are rebuilt from the snapshot
+    seen = {it["id"]: {"id": it["id"], "first_seen": old[plain(it["id"])]["first_seen"]} for it in first
+            if it.get("category") not in ("digest", "listing", "collapse")
+            and plain(it["id"]) in old and old[plain(it["id"])].get("first_seen")}
     items = build_items(roles, notices, checks, profile, now, [], {}, previous=seen)
     for it in items:
         it["first_seen"] = (old.get(plain(it["id"])) or {}).get("first_seen") or it.get("first_seen") or now.isoformat()

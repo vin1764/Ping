@@ -26,7 +26,7 @@ def main() -> int:
     from ping.cvs import cvs_text
     from ping.config import load_dotenv, load_secrets
     load_dotenv()
-    cfg = load_secrets().ai
+    cfg = load_secrets(require_erp=False, require_store=False).ai     # only the Gemini settings are needed
     spec = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
     personas = {p["id"]: p for p in json.loads((HERE / "personas.json").read_text(encoding="utf-8"))["personas"]}
     roles = {r["id"]: r for r in json.loads((ROOT / "dashboard" / "demo-data.json").read_text(encoding="utf-8"))["roles"]}

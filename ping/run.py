@@ -38,6 +38,19 @@ ROLE_LIST_COLUMNS = ("id", "yop", "com_id", "jnf_id", "company", "designation", 
                      "apply_end_text", "interview_date", "contract")
 
 
+PAUSE_AFTER_FAILURES = 3
+PAUSE_HOURS = 3
+
+
+def login_paused(store) -> bool:
+    """After 3 failed logins in a row, scheduled runs stop trying for 3 hours."""
+    n = store.get_state("login_failures_in_a_row", 0) or 0
+    last = store.get_state("last_login_failure_at")
+    if n < PAUSE_AFTER_FAILURES or not last:
+        return False
+    return datetime.now(timezone.utc) - datetime.fromisoformat(last) < timedelta(hours=PAUSE_HOURS)
+
+
 def now_ist() -> datetime:
     return datetime.now(IST)
 
@@ -403,6 +416,8 @@ class Runner:
         n = self.store.get_state("login_failures_in_a_row", 0) or 0
         n = 0 if status == "ok" else n + 1
         self.store.set_state("login_failures_in_a_row", n)
+        if status != "ok":
+            self.store.set_state("last_login_failure_at", datetime.now(timezone.utc).isoformat())
         self.counts["login_failures_in_a_row"] = n
 
     def _alerts(self, status: str) -> None:
@@ -503,6 +518,15 @@ def main(argv: list[str] | None = None) -> int:
                              "Open Supabase > SQL Editor > New query, paste sql/schema.sql from the repo, press Run.")
         log("Skipping this scheduled run: database not set up (see above).")
         return 2
+    if ok and trigger == "schedule" and login_paused(store):
+        log(f"Login failed {store.get_state('login_failures_in_a_row')} runs in a row: scheduled runs are paused "
+            f"for {PAUSE_HOURS}h so the ERP isn't hammered. A run you start yourself still tries.")
+        if notify.should_alert(store, "paused", True):
+            notify.send_self(secrets.mail_address, secrets.mail_app_password, "Paused after failed logins",
+                             f"Ping's last {store.get_state('login_failures_in_a_row')} logins failed, so hourly runs "
+                             f"are paused for {PAUSE_HOURS} hours. Check that you can log in to the ERP yourself, then "
+                             "start a run from GitHub (Actions > Ping > Run workflow).")
+        return 1
     rec = Runner(secrets, store, store_ok=ok, trigger=trigger).run()
     store.save()
     return 0 if rec["status"] == "ok" else 1

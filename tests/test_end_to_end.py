@@ -119,3 +119,15 @@ def test_login_failure_after_otp_is_retried_once(monkeypatch):
     rec, _ = run(fake)
     assert rec["status"] == "ok", rec["problems"]
     assert state["auth"] == 2
+
+
+def test_scheduled_runs_pause_after_three_failed_logins():
+    from datetime import datetime, timedelta, timezone
+    from ping.run import login_paused
+    store = MemoryStore()
+    assert not login_paused(store)
+    store.set_state("login_failures_in_a_row", 3)
+    store.set_state("last_login_failure_at", datetime.now(timezone.utc).isoformat())
+    assert login_paused(store)
+    store.set_state("last_login_failure_at", (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat())
+    assert not login_paused(store)

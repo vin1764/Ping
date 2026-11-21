@@ -2,81 +2,76 @@
 
 Ping logs into the IIT Kharagpur ERP for you every hour, reads the placement
 companies list, the CDC notice board, the PDFs attached to notices and your
-institute mailbox, and keeps only what is about **you**:
+institute mailbox, and keeps only what is about **you**. It tells you in a
+chat, like WhatsApp:
 
-- "Accordion opened, eligible for Data & AI Analyst (CG 7+, all depts). Apply by Fri 16:00."
-- "You're on the Pine Labs shortlist (SDE). Test Sat 10:00, Nalanda, room V2."
-- "Pine Labs shortlist is out (SDE). You're not on it."
-- "ICICI Lombard (Actuarial Analyst): fill the form by Sat 16:00."
-
-Everything goes into your own Supabase database, and a small dashboard shows it.
-
-**Try the demo (made-up data, no login):** https://claude.ai/artifact/TWGCZxEawg7zZrrjSDnur7
-(the owner has to share it from its Share menu before other people can open it).
-Once GitHub Pages is on, the same demo is also at `https://vin1764.github.io/Ping_ERPbot/?demo=1`.
+- "Accordion opened, eligible for Data & AI Analyst (CG 7+, all depts). Apply by Fri 27 Nov 16:00."
+- "You're on the Eternal test room list (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121."
+- "Update - Ather Energy deadline: deadline moved from Fri 20 Nov 18:00 to Sat 21 Nov 20:00."
+- "Reminder: ICICI LOMBARD Actuarial Analyst closes Sat 21 Nov 16:00. You haven't applied."
 
 It **only reads**. It cannot apply, submit, upload or accept anything (see [Safety](#safety)).
+
+**Demo, no login:** https://claude.ai/artifact/TWGCZxEawg7zZrrjSDnur7 (the owner
+shares it from its Share menu). It is an anonymised snapshot of a real run on
+21 Nov 2026: real companies, roles, pay, deadlines and notice wording; fake roll
+number, name and CGPA; every other student's name, roll number and phone number
+and everything from the mailbox removed. It shows the feed as it was at that
+moment, so it doesn't go stale.
+
+**Reviewer login:** `reviewer@ping-demo.example` (password shared separately).
+It signs in to the real dashboard but the database only lets it see the
+anonymised demo rows, and it can't change anything. It needs the dashboard to
+be hosted (see [What's left](#whats-left)).
+
+Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md) (plain words, re-run
+with `python evals/run_evals.py`).
 
 ---
 
 ## Status (honest)
 
-### Verified on the real ERP (first real run, 21 Nov 2026, 05:01 IST)
+### Today's numbers (real runs, 21 Nov 2026)
 
 | | |
 |---|---|
-| login, start to finish | **16.9 s**, of which **11.9 s** waiting for the OTP mail; Get OTP pressed once |
-| OTP mail | from `erpkgp@adm.iitkgp.ac.in`, code in the subject line |
-| companies list | **201 roles** seen, 201 new (first run), 65 applied; 0 popup failures |
-| notice board | **1,624 notices** seen, **262 new** (first run reads only the last 14 days); rules unsure on 1 |
-| attachments | **64 checked, 61 read: yes 17 / no 44 / unknown 0**; all were real text PDFs (none scanned); 3 failed to download (brief network errors, now retried) |
-| mailbox | 60 mails looked at, 8 kept as placement mail |
-| whole run | 11 min, 744 ERP requests, all through the read-only gate |
+| login, start to finish | **19.8 s**, of which **12.6 s** waiting for the OTP mail; Get OTP pressed once |
+| companies list | **201 roles**, details read for all 201, 68 applied |
+| notice board | **1,624 notices** seen, **260** read in full (the first run reads only the last 14 days) |
+| attachments | **64 checked, 64 read: on the list 19 / not on it 45 / unreadable 0**; none were scanned |
+| mailbox | 84 mails looked at, 10 kept as placement mail |
+| whole run | 12 min, 742 ERP requests, every one through the read-only gate |
+| repeats merged | 177 notice messages became **162**: 15 repeats merged, 39 real changes sent as updates (29 deadline moves, 10 time changes), 0 unsure |
+| rooms re-read | **8 of 15** rooms saved earlier showed the neighbouring student's room (two students per line); fixed, and every run now re-reads saved rows |
+| AI fallback | the rules couldn't read 1 notice; Gemini read it right (Tata AIG, Senior Engineer Trainee - Analytics, 17 Nov 16:00) |
+| evals | held-out real notices **56 of 58 checks right (97%)**; development set 143 of 143 ([report](evals/REPORT.md)) |
 
-**Then login stopped working.** After the first run and a probe run both
-logged in fine (05:01 and 05:15 IST), the next 5 attempts (05:26 to 05:37 IST)
-all got a fresh OTP mail within 2-4 seconds, but the ERP answered Log In with
-the empty login page and no error message. Waiting 15 s before Log In didn't
-help. The cause is unknown: possibly a limit on logins/OTPs in a short time
-(about 9 OTPs in 35 minutes while testing), or the ERP allowing only one
-session at a time. Ping now retries a failed Log In once, and after 3 failed
-runs in a row pauses its hourly runs for 3 hours and emails you.
+### Works, verified on the real ERP / real project
+- Login with security question and mailbox OTP, reading everything, logging out.
+- Saving to Supabase; the dashboard login reads it (check run: database ok).
+- "More details" popup (CGPA cut-off, backlog rule, written test) for all 201 roles.
+- Ask Ping and Check now functions deployed and answering (Ask Ping falls back
+  to simple rules when Gemini is busy).
+- The reviewer login, checked on the real project: it sees 440 demo items and
+  0 real ones; an attempt to edit the demo profile changed nothing.
+- Chat tables applied to the real project from GitHub (Actions > Admin > apply-sql).
 
-Also verified for real:
-- The "more details" popup's layout (read on 2 roles in a probe run). Its
-  first reader was wrong and came back empty for all 201 roles; the reader is
-  now rewritten for the real layout and tested, but **not yet re-run on the ERP**.
-- The Gemini key works (it turned "five in the evening on the twenty-second of
-  November, 2026" into 22 Nov 17:00).
-- The "database not set up" email reached the mailbox.
-
-### Verified on copies of real pages (your capture) and in tests
-- Reading the companies list, role popups (designation, pay, CGPA cut-off,
-  allowed departments, the ERP's own "cut-off greater than yours" warning),
-  the notice board and a notice's full text.
-- Dates from real notice wording ("till 4:00 PM, 21st November, 2026",
-  "Deadline: 21st November 2026, 4:00 PM", "by 5:00 PM today", "scheduled from
-  7:15 PM onwards on 19th November, 2026", schedule lists like
-  "(12:30 AM  1:30 AM, 10th November)").
-- "Multiple Companies" notices split into one item per company.
-- Company names: exact name first, then the same name ignoring capitals, then
-  loose matching. In the capture, of 385 notices about a company in your list,
-  138 used the exact name, 139 differed only in capitals and 102 were
-  shortened ("NAVI" for "Navi Limited"). Real ambiguity ("Accenture" when
-  there are three Accenture entities) becomes an "is it about X?" question.
-- The read-only gate refuses every action address found in the real pages.
-- The dashboard, in demo mode, clicked through in a real browser.
-
-### Not verified yet
-- **That login works again**, and why it stopped (see above).
-- **Saving to Supabase**: the tables don't exist yet, so nothing real has been saved.
-- **The dashboard with real data, its login, Check now and Ask Ping**: they
-  need the tables, a login and the two functions deployed (see
-  [What's left for you](#whats-left-for-you)).
-- **Room / slot / time from your rows in real PDFs**: 17 real "yes" results,
-  but the first run didn't log which table headings were found. The next run
-  logs the headings (never anyone's names).
-- **Eligibility on real roles**: needs your profile (department, degree, CGPA).
+### Not working or not verified yet
+- **The hourly schedule hasn't fired once.** Every run so far was started by
+  hand. See [What's left](#whats-left).
+- **Login refusals.** Between 05:26 and 05:37 IST the ERP refused 5 Log Ins in
+  a row after a valid OTP, with no message; it worked again at 12:05. Cause
+  unknown (maybe too many OTPs in a short time while testing). Ping now retries
+  once, and after 3 failed runs pauses for 3 hours and emails you.
+- **Company names the rules can't place.** 2 of 15 held-out notices: "JPMC"
+  (JP MorganChase) and "ACCENTURE AEH". Ping asks "which company is that?"
+  instead of guessing. Deliberately not tuned to the held-out set.
+- **Eligibility** says "not sure" for most roles until your profile has your
+  department and degree (the Profile page).
+- **The dashboard isn't hosted yet**, so real data and the reviewer login
+  can't be opened in a browser (the demo can).
+- **One-command setup** was tested against an empty Supabase-like database
+  (real Postgres with Supabase's rules), not yet a brand-new real project.
 
 ### Known ways it can break
 - The ERP changes a page. The run stops ("page changed") and emails you.
@@ -89,47 +84,49 @@ Also verified for real:
   yours, unless the notice or its PDF names your roll number.
 - Name-only shortlists are matched on the name in your profile; a different
   spelling gives a wrong "no".
+- Gemini's free tier is sometimes slow or busy; Ping gives AI at most 5 minutes
+  a run and falls back to rules.
 - Supabase free projects pause after a week with no activity. Hourly runs keep
   it awake; if it ever pauses, open the project and press Restore.
 
 ---
 
-## What's left for you
+## What's left
 
-0. **Check you can log in to the ERP yourself**, in a browser. If it works,
-   log out there, then start a run (Actions > Ping > Run workflow, mode `run`)
-   and see whether Ping gets in. If the ERP shows you any message about too
-   many attempts or a blocked account, that's the cause.
-1. **Create the tables:** Supabase > SQL Editor > New query > paste all of
-   [`sql/schema.sql`](sql/schema.sql) > Run. Until then the hourly runs skip
-   themselves (to save free minutes) and email you once a day.
-2. **Your profile:** department, degree, CGPA, backlogs (in the dashboard's
-   Profile page, or Supabase > Table Editor > profile).
-3. **Dashboard login:** Supabase > Authentication > Users > Add user > your
-   institute email (the `MAIL_ADDRESS` secret) + a password, tick Auto Confirm.
-   Then in Authentication > Sign In / Providers, turn **off** "Allow new users to sign up".
-4. **Host the dashboard:** Settings > Pages > Source: **GitHub Actions**, then
-   Actions > Dashboard > Run workflow. Private repos need GitHub Pro, which is
-   free with the GitHub Student Developer Pack. If that's not available, any
-   free static host works: connect the repo to Cloudflare Pages or Netlify,
-   build command `bash dashboard/build.sh`, output folder `_site`, environment
+1. **Turn the hourly schedule on.** Actions > Ping > the "..." menu (top right)
+   > Disable workflow, then the same menu > Enable workflow. GitHub sometimes
+   doesn't register a schedule for a new repository or after edits to the
+   schedule; this re-registers it. (This branch is already the default branch,
+   which GitHub requires for schedules.)
+2. **Your profile:** department, degree, CGPA, backlogs (dashboard > Menu > Profile).
+3. **Host the dashboard** so real data and the reviewer login work in a
+   browser: Settings > Pages > Source: **GitHub Actions** (private repos need
+   GitHub Pro, free with the GitHub Student Developer Pack), then Actions >
+   Dashboard > Run workflow. Or any free static host (Cloudflare Pages,
+   Netlify): build command `bash dashboard/build.sh`, output folder `_site`,
    variables `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
-5. **Check now + Ask Ping** (optional): add two repo secrets, then run
-   Actions > Dashboard:
-   - `SUPABASE_ACCESS_TOKEN`: Supabase > Account > Access Tokens > Generate.
-   - `PING_GITHUB_TOKEN`: GitHub > Settings > Developer settings > Fine-grained
-     tokens > only this repository > Repository permissions > **Actions: Read and write**.
-6. **OTP mail filter:** in your institute Gmail, From `erpkgp@adm.iitkgp.ac.in`,
+4. **OTP mail filter:** in your institute Gmail, From `erpkgp@adm.iitkgp.ac.in`,
    Subject `OTP` > Create filter > Skip the Inbox + Mark as read. Ping searches
    All Mail, so it still finds them.
+
+### Admin tasks (no Supabase screens needed)
+Actions > **Admin** > Run workflow, pick a task:
+
+| task | what it does |
+|---|---|
+| `apply-sql` | creates or updates all tables and rules from `sql/schema.sql`, then checks them |
+| `create-reviewer` | creates (or resets) the read-only demo login with the email and password you type, then signs in as it to prove it sees only demo rows and can't change them |
+| `build-demo` | builds the anonymised demo from your real data, checks it for your roll number, email, name and any other roll or phone number (writes nothing if it finds one), loads it for the reviewer and commits `dashboard/demo-data.json` |
+| `gemini-check` | one test call to Gemini, then retries the notices the rules couldn't read, printing every model's answer |
 
 ---
 
 ## How it runs
 
 GitHub Actions (free for private repos: 2,000 minutes/month) runs
-`python -m ping.run` every hour from 06:07 to 01:07 IST, 20 times a day. The
-first run took 11 minutes; later runs only read what's new, so expect 1-3
+`python -m ping.run` every hour from 06:11 to 01:11 IST, 20 times a day (minute
+41 UTC, away from the top of the hour when GitHub is busiest). The first run
+took 12 minutes; later runs only read what's new, so expect 1-3
 minutes, roughly 600-1,800 minutes a month.
 
 To run it yourself: **Actions > Ping > Run workflow**, pick a mode:
@@ -139,8 +136,8 @@ To run it yourself: **Actions > Ping > Run workflow**, pick a mode:
 | `run` | a normal run |
 | `check` | only checks the secrets and the database, no ERP login |
 | `probe` | logs in and prints the layout of one "more details" popup (company info only), for fixing the reader if the ERP changes it |
-| `load-sample` | puts the made-up demo data into the database |
-| `remove-sample` | removes exactly the demo data again |
+| `load-sample` | puts the made-up sample data into the database (for a fresh copy; the anonymised demo comes from Admin > build-demo) |
+| `remove-sample` | removes exactly the demo rows again |
 
 The dashboard's **Check now** button presses the same button.
 
@@ -158,7 +155,9 @@ The dashboard's **Check now** button presses the same button.
    number, then your name. Keep only your row and the table heading.
 5. Log out.
 6. Look in your mailbox (read-only) for placement mail since the last run.
-7. Rebuild the feed and save everything to Supabase.
+7. Rebuild the feed and save everything to Supabase. Stored notices and the
+   saved rows from PDFs are re-read with the current rules every time, so a
+   fix to the rules also corrects older messages.
 
 ## The feed
 
@@ -200,8 +199,10 @@ summary reports its own counts.
 `dashboard/` is a plain web page (HTML + JavaScript, no build step). It opens on
 **a chat with Ping**, like WhatsApp:
 
-- Every "for you" item is a message from Ping with its time, newest at the
-  bottom. Tap a message to see the details (deadline, venue, your row from the
+- Every "for you" item is a message from Ping, newest at the bottom, in the
+  order the CDC posted them. Labels: **You applied** (about a role you applied
+  to), **Open for you** (you can still apply), **Question** (Ping isn't sure
+  which company a notice means; tap to answer). Tap a message to see the details (deadline, venue, your row from the
   PDF, eligibility, contacts) and links to the notice, the PDF and any form.
 - Type at the bottom: "what's due tomorrow", "did I apply to Accenture",
   "which room for the Eternal test", "what's the CTC at Airbus". Gemini answers
@@ -209,16 +210,20 @@ summary reports its own counts.
   simple rules answer instead and the reply says so.
 - The thread is saved (the `chat_messages` table), so you see the whole
   history when you come back. New messages since your last visit get an
-  "unread" marker.
+  "unread" marker (on a first visit, only the last day counts as unread).
 - When a deadline moves or a venue changes, Ping posts one **Update** message
-  saying what changed; the earlier message stays, marked "Updated below".
+  saying what changed; the earlier message stays, greyed and marked "Since updated".
+  Things that are over stay in the history, greyed ("Deadline passed", "Over").
 - **Menu:** All updates (with the three level filters), Companies (a page per
   company: roles, applied, deadline, pay, eligibility), Profile, Check now.
-- **Demo mode** (`?demo=1`): demo data, no login; the thread is kept in that browser.
+- **Demo mode** (`?demo=1`): the anonymised snapshot, no login; the thread is
+  kept in that browser. The demo and the reviewer login show the snapshot as it
+  was when it was taken (a note at the top of the unread messages says so).
 
 Real data needs a login. The page reads your Supabase directly with the
 publishable key (that key is meant to be public), and database rules only let
-emails in the `allowed_users` table see anything. Check now and the AI answers
+emails in the `allowed_users` table see your data; emails in `reviewer_users`
+see only the demo rows (`is_sample = true`) and can't change anything. Check now and the AI answers
 run as two small Supabase functions (`supabase/functions/`) that hold the
 GitHub token and the Gemini key, and check that the caller is you.
 
@@ -313,16 +318,18 @@ failing twice in a row, the ERP refusing the OTP.
 
 Rules go first. Only when they find no deadline in a CV/extension/form notice,
 or no companies in a "Multiple Companies" notice, is the notice sent to Gemini
-(the `GEMINI_API_KEY` secret; model `gemini-2.5-flash`, falling back to newer
-names if Google retires it). Each run's summary counts how often that
-happened. To use another provider, set the variables `PING_AI_PROVIDER`,
+(the `GEMINI_API_KEY` secret; model `gemini-flash-latest`, then
+`gemini-flash-lite-latest`, then `gemini-2.0-flash` when one is retired, busy
+or slow; at most 20 calls and 5 minutes a run). Each run's summary counts how
+often that happened and the last error. Google retired `gemini-2.5-flash` for
+new keys in November 2026, which is what the first run's one AI error was. To use another provider, set the variables `PING_AI_PROVIDER`,
 `PING_AI_BASE_URL`, `PING_AI_MODEL` and the secret `PING_AI_KEY` (see `ping/ai.py`).
 
 ## Another student setting it up
 
 One command, about 5 minutes, and you never open Supabase's SQL editor or login screens.
 
-Before you start (all free): your ERP login and its 3 security questions, a
+Before you start (all free, about 10 minutes): your ERP login and its 3 security questions, a
 Google app password for the mailbox the ERP sends OTPs to
 (`myaccount.google.com/apppasswords`, needs 2-step verification), a new
 Supabase project plus a personal access token (supabase.com > avatar >
@@ -348,12 +355,25 @@ Supabase's roles and rules), not yet against a brand-new real Supabase project.
 
 ## Demo data
 
-`load-sample` (Run workflow button, or `python -m ping.run --mode load-sample`)
-loads made-up companies, notices, shortlist results and a full feed into the
-database. Every demo row has `is_sample = true`; `remove-sample` deletes
-exactly those, and a real profile is never overwritten. The dashboard's demo
-mode doesn't need this: it reads `demo-data.json`, built by
-`python -m ping.sample dashboard/demo-data.json`.
+The demo is built from your real data by **Actions > Admin > build-demo**
+(`ping/demo_from_real.py`):
+
+- **Kept as they are:** company names, roles, pay, deadlines, notice wording,
+  and your applied / not-applied list (so applied, shortlisted, test room
+  still hold together).
+- **Replaced:** your roll number (`22XY10042`), name (`Demo Student`) and
+  CGPA (8.0); your CGPA is removed from every sentence.
+- **Removed:** every other student's name, roll number and phone number (in
+  notices, contact lines, lists of selected students and PDF rows), and
+  everything from your mailbox.
+- **Checked before anything is written:** the finished data is searched for
+  your real roll number, email and name, and for anything shaped like a roll
+  or phone number. If one is found, nothing is written.
+
+It is loaded into the database as demo rows (`is_sample = true`, only the
+reviewer login sees them; real runs never read them) and committed as
+`dashboard/demo-data.json` for the no-login demo. A fresh copy of the project
+that hasn't built one yet falls back to made-up sample data (`ping/sample.py`).
 
 ## Files
 
@@ -366,15 +386,19 @@ mode doesn't need this: it reads `demo-data.json`, built by
 | `ping/notices.py`, `ping/dates.py`, `ping/matching.py` | what a notice means, dates, which company |
 | `ping/pdfs.py` | is your roll number in the attachment |
 | `ping/eligibility.py`, `ping/items.py` | eligibility and the feed |
+| `ping/dedupe.py` | merging repeats, turning real changes into updates |
 | `ping/store.py`, `sql/schema.sql` | Supabase tables and database rules |
 | `ping/run.py` | one run, start to finish |
 | `ping/ai.py` | Gemini fallback for hard notices |
 | `ping/probe.py` | layout check of the "more details" popup |
-| `ping/sample.py` | demo data |
+| `ping/demo_from_real.py` | the anonymised demo built from your real data |
+| `ping/sample.py` | made-up sample data (fallback) |
+| `ping/admin.py`, `ping/supabase_admin.py` | Admin tasks: tables, reviewer login, demo, Gemini check |
 | `dashboard/` | the dashboard (`build.sh` builds it into `_site/`) |
 | `supabase/functions/` | Check now and Ask Ping server functions |
 | `setup/capture_erp.py` | one-time page capture used to build Ping |
 | `setup/new_student_setup.py` | setup for the next student |
-| `tests/` | offline tests, including a full run against a fake ERP |
+| `evals/` | real notices with expected answers, PDF layouts, `REPORT.md` |
+| `tests/` | offline tests, including a full run against a fake ERP and setup against a fake Supabase |
 
 Run the tests: `python -m pip install -r requirements-dev.txt && python -m pytest -q`.

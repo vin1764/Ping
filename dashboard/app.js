@@ -42,7 +42,8 @@
   const companyHref = (name) => `#co-${slug(name)}`;
   // company names for display only ("Auro Group(www.AuroIM.com)" -> "Auro Group"): dashboard/names.js
   const { cleanName, cleanRowText } = window.PingNames || { cleanName: (x) => String(x || ""), cleanRowText: (x) => String(x || "") };
-  const safeUrl = (u) => (/^(https?:|#|mailto:|\?)/i.test(String(u)) ? String(u) : "#");
+  // web links, in-page links, and this site's own pages (setup.html); never javascript: or data:
+  const safeUrl = (u) => (/^(https?:|#|mailto:|\?)/i.test(String(u)) || /^[a-z0-9-]+\.html$/i.test(String(u)) ? String(u) : "#");
   const mount = (...nodes) => { const app = $("#app"); app.replaceChildren(...nodes); };
   // every page but the chat: one centred column that scrolls (the chat scrolls its own thread)
   const mountPage = (...nodes) => { mount(h("div", { class: "page" }, ...nodes)); $("#app").scrollTop = 0; };
@@ -378,7 +379,9 @@
       if (error) { msg.textContent = error.message; return; }
       startReal(sb);
     } },
-      h("h1", {}, "Sign in to Ping"),
+      h("h1", {}, "Ping"),
+      h("p", { class: "promise" }, "Your ERP, filtered for you, every hour."),
+      h("p", { class: "who" }, "Sign in (the student this copy belongs to)"),
       h("label", {}, "Email", email),
       h("label", {}, "Password", pw),
       h("button", { class: "btn" }, "Sign in"),
@@ -393,7 +396,8 @@
         location.hash = "#chat";
         startReal(sb);
       } }, "View demo"),
-      h("p", { class: "muted small center" }, "No account needed: a sample student's placement season, read-only.")));
+      h("p", { class: "muted small center" }, "No account needed: a sample student's placement season, read-only."),
+      h("p", { class: "center", style: "margin:0" }, h("a", { class: "own", href: "setup.html", id: "setup-link" }, "Set up Ping for yourself \u2192"))));
   }
 
   // ------------------------------------------------------------ router

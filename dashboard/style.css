@@ -336,3 +336,38 @@ th { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .03em; c
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* setup.html (built from docs/SETUP.md): a plain scrolling document in the same look */
+body.doc { display: block; overflow: auto; height: auto; min-height: 100%; }
+.doc-page { max-width: 760px; line-height: 26px; }
+.doc-page h2 { margin-top: var(--s6); padding-top: var(--s2); border-top: 1px solid var(--line); }
+.doc-page ul, .doc-page ol { padding-left: 1.4em; }
+.doc-page li { margin: var(--s2) 0; }
+.doc-page li > p { margin: 0 0 var(--s2); }
+.doc-page code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; background: var(--thread);
+  padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.doc-page pre { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--s3); overflow-x: auto; }
+.doc-page pre code { background: none; padding: 0; overflow-wrap: normal; white-space: pre; }
+.doc-page .table-wrap { margin: var(--s3) 0; }
+.doc-page td, .doc-page th { min-width: 120px; }
+
+/* sign-in screen: name and promise, owner sign-in, the demo, then a quiet link to set up your own */
+.login .promise { margin: 0; color: var(--muted); font-size: var(--t-md); }
+.login h1 { margin: 0; }
+.login .who { margin: var(--s2) 0 0; font-size: var(--t-sm); color: var(--muted); }
+.login .own { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; color: var(--muted);
+  font-size: var(--t-sm); text-decoration: underline; text-underline-offset: 3px; }
+.login .own:hover { color: var(--accent); }
+.login p { margin: 0; }
+.login p:empty { display: none; }
+/* phones: each table row of setup.html as a small card, with the column name above each value */
+@media (max-width: 600px) {
+  .doc-page .table-wrap { border: 0; overflow: visible; }
+  .doc-page table, .doc-page tbody, .doc-page tr, .doc-page td { display: block; width: 100%; }
+  .doc-page thead { display: none; }
+  .doc-page tr { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--s2) var(--s3); margin-bottom: var(--s2); background: var(--surface); }
+  .doc-page td { border: 0; padding: 4px 0; min-width: 0; }
+  .doc-page td::before { content: attr(data-label); display: block; font-size: var(--t-xs); line-height: 16px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .doc-page code { overflow-wrap: break-word; }
+}

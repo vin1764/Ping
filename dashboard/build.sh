@@ -18,6 +18,7 @@ build = os.environ.get("GITHUB_SHA", "local")[:7]  # lets the deploy check that 
 open("_site/config.js", "w").write("window.PING_CONFIG = " + json.dumps(cfg) + ";\nwindow.PING_BUILD = "
                                    + json.dumps(build) + ";\n")
 PY
+python3 setup/build_setup_page.py _site/setup.html >/dev/null   # "Set up Ping for yourself", from docs/SETUP.md
 cp dashboard/PUBLIC_README.md _site/README.md   # the public repo's README
 touch _site/.nojekyll                             # serve the files as they are (no Jekyll on GitHub Pages)
 echo "built _site/ (real mode: $([ -n "${SUPABASE_URL:-}" ] && echo on || echo off))"

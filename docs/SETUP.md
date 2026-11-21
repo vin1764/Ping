@@ -1,53 +1,88 @@
-# Setting Ping up for yourself
+# Set up Ping for yourself
 
-Ping runs under **your own** accounts with **your own** passwords: your copy of the repo, your Supabase project,
-your Gemini key. Nobody else's data is involved, and nothing of yours sits on a shared server.
+Your own copy of Ping runs under your own accounts. This page is also published as `setup.html` next to the
+dashboard (built from this file at every deploy, so the two always say the same thing).
 
-## Prerequisites (all free)
+## What you get
 
-- your ERP login and its 3 security questions with answers
-- a Google app password for the mailbox the ERP sends your OTP to (myaccount.google.com/apppasswords; 2-step
-  verification must be on)
-- a Supabase project: its URL and a personal access token (supabase.com > avatar > Account > Access Tokens)
-- your own **private** copy of this repository on GitHub
-- optional: a Gemini API key (aistudio.google.com) for Ask Ping, "For you" marks and CV summaries
-- Python 3.11+ on your computer, for the one setup script
+- Every hour, Ping reads your placement ERP (companies, notices and the PDFs that name you) and posts only what's about you in one chat thread.
+- Deadlines come as one digest per closing time with a reminder before it, and lists that name you (shortlists, test rooms) come with your row.
+- Ask Ping in plain words: "what's due tonight?", "which CV for Groww?", "am I eligible for X?".
 
-## The one setup script
+## What it never does
 
-```
-python -m pip install --user -r requirements.txt
-python setup/new_student_setup.py
-```
+- It only reads. It never applies, never submits a form, never uploads a CV and never changes anything on the ERP.
+- Your passwords and keys stay in your own GitHub repository and your own Supabase project. There is nothing central: no shared server, no shared database, nobody else's copy.
 
-It asks for each secret once (hidden while you type), saves them in `.env` (git ignores it), creates all
-tables, rules and the private CV bucket in your Supabase project with an **empty profile**, creates your
-dashboard login, checks it, does one test login to the ERP, and puts the secrets into your GitHub repo (or
-prints exactly what to paste where). Running it again is safe.
+## What you need
 
-Tested: `tests/test_setup_fresh_project.py` runs the script against a local, empty Postgres with Supabase's
-roles and rules (the "local replica"), not against a new real Supabase project. It checks the tables, the
-login, the empty profile, that the first preferences can be saved, and that a demo session can't touch them.
+- A GitHub account.
+- A free Supabase project (supabase.com).
+- A free Gemini API key (aistudio.google.com). Optional, but Ask Ping and the "For you" marks need it.
+- Your ERP login: user id, password, the 3 security questions with their answers, and the mailbox the ERP sends your OTP to (with a Google app password for it).
+- Python 3.11 or newer on your computer, for the one setup script.
 
-## Your first chat message
+Everything above is on a free tier. Ping fits in it: about 20 short runs a day on GitHub Actions, a small database, and a few hundred Gemini calls a day. When Gemini's free quota runs out, Ping answers from your data without it.
 
-Open the dashboard link the script prints, sign in, and tell Ping what you're looking for:
+## Steps
 
-- "only show me <the kinds of roles you want>"
-- "also include <another kind>", "don't count <a kind> as relevant"
-- "remind me 3 hours before deadlines", "stop listing other roles separately"
-- "what are my preferences?", "reset my preferences"
+Source repo: SOURCE_REPO_URL
 
-Ping replies with one line saying exactly what it saved and marks every role "For you" or not. You can also
-upload up to 3 CVs on the Profile page (My CVs); Ping then says which CV to apply with for each role.
+1. **Copy the source repo** as a **private** repository under your account (GitHub > New repository > Import a repository), then clone it:
 
-## What to expect in the first hour
+   ```
+   git clone https://github.com/<you>/<your-copy>.git ping
+   cd ping
+   ```
 
-- The first run (start it with Menu > Check now, or wait for minute :41) reads the companies list and the last
-  14 days of notices: about 12 minutes. Later runs read only what's new: 1-3 minutes.
-- The chat fills with one "new roles listed" message for that run, any deadline digests for the next 24 hours,
-  and messages about lists that name you. Other students' details are never kept: from a PDF only your row and
-  the table heading are saved.
-- From then on, every hour from 06:11 to 01:11 IST. One reminder per deadline batch, N hours before (default 2).
-- If the ERP refuses your password or security answer, you get one email and the hourly runs pause until you
-  fix the secret and start a run yourself.
+2. **Create a Supabase project** (free plan). Note its URL (`https://<id>.supabase.co`) and create a personal access token: avatar > Account > Access Tokens.
+
+3. **Have your secrets ready.** The setup script asks for each one and stores it; only the last one you add by hand.
+
+   | name | what it is | where it goes |
+   |---|---|---|
+   | `ERP_USER_ID`, `ERP_PASSWORD` | your ERP login | GitHub repo secrets (the script) |
+   | `ERP_SECQ_1`, `ERP_SECQ_2`, `ERP_SECQ_3` | each security question and answer, as `question::answer` | GitHub repo secrets (the script) |
+   | `MAIL_ADDRESS`, `MAIL_APP_PASSWORD` | the OTP mailbox and its Google app password | GitHub repo secrets (the script) |
+   | `SUPABASE_URL`, `SUPABASE_ACCESS_TOKEN` | from step 2 | GitHub repo secrets (the script) |
+   | `SUPABASE_SERVICE_KEY`, `SUPABASE_PUBLISHABLE_KEY` | read from your project by the script | GitHub repo secrets (the script) |
+   | `GEMINI_API_KEY` | your Gemini key (optional) | GitHub repo secrets (the script), then Supabase function secrets (the deploy) |
+   | `PING_GITHUB_TOKEN` | a fine-grained token for your copy, Actions: read and write (optional: Check now and the hourly start) | GitHub repo secrets (the script), then Supabase function secrets (the deploy) |
+   | `DASHBOARD_DEPLOY_TOKEN` | a fine-grained token for a new, empty public repo `<you>/ping-dashboard`, Contents and Pages: read and write | add it yourself: your copy > Settings > Secrets and variables > Actions |
+
+4. **Run the setup script once.** It saves your answers in `.env` on your computer (git ignores it), creates the tables, rules and the private CV bucket in your Supabase project with an empty profile, creates your dashboard login, does one test login to the ERP and puts the secrets into your repo. Running it again is safe.
+
+   ```
+   python -m pip install --user -r requirements.txt
+   python setup/new_student_setup.py
+   ```
+
+5. **Turn on the schedule:** your copy > Actions > Admin > Run workflow > `schedule-setup`. Supabase then starts a check every hour, 06:11 to 01:11 IST; `schedule-status` shows the last starts.
+
+   ```
+   gh workflow run admin.yml -f task=schedule-setup
+   ```
+
+6. **Open your dashboard.** On `<you>/ping-dashboard` > Settings > Pages, choose Deploy from a branch, `main`, `/ (root)`, and leave Custom domain empty. Then Actions > Dashboard > Run workflow, and open `https://<you>.github.io/ping-dashboard/`.
+
+7. **Answer Ping's first questions in the chat:** your feed, degree and department, what you're looking for, a CV, how often to check, when to remind you. Every answer can be changed later by just telling Ping ("check every 30 minutes").
+
+8. **Done.** Ping runs your first check while you answer, then posts as things happen.
+
+## How long it takes
+
+About 30 minutes from start to dashboard, most of it creating accounts and tokens. The first check reads two weeks of notices and takes about 12 minutes, so your first messages land within the hour.
+
+## If something goes wrong
+
+- **The ERP shows a blank login page or won't accept Log In:** that's the ERP, not your setup. Ping tries again next hour and only writes to you after 3 failed runs in a row.
+- **GitHub's own scheduled runs never fire:** that's why the hourly start comes from Supabase (step 5). Run `schedule-setup` again and check `schedule-status`.
+- **The dashboard redirects to another address and sign-in fails:** the Custom domain box on `ping-dashboard` > Settings > Pages must be empty.
+
+## Privacy
+
+- Your feed, roles, notices, chat and preferences live in your own Supabase project, readable only with your login. From a PDF only your own row and the table heading are kept, never other students' rows.
+- Your CVs sit in a private storage bucket in that project; Ping keeps a short summary of each to suggest which one to apply with.
+- Your passwords and keys live only in your repo's secrets, your Supabase function secrets and the `.env` file on your computer.
+- Gemini sees only your own feed, roles and profile when you ask something, never a PDF.
+- The public `ping-dashboard` repo holds only the built page. Its demo is an anonymised snapshot: real companies, a made-up student, no other students and no mail.

@@ -20,18 +20,17 @@ const Rules = (globalThis as any).PingRules;
 // can call (Admin > gemini-check, 21 Nov 2026); gemini-2.0-flash, gemini-2.5-flash-lite and gemma-3-27b-it answered 404.
 const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash-lite",
                 "gemini-3.1-flash-lite", "gemma-4-31b-it"];
-const BUDGET_MS = 100_000;
-// Busy (429 / 503 / 5xx / timeout): the main model again after 1 s, 3 s and 6 s; then a lighter model once; then the
-// answer is built from the data by rules (never a "busy" error in the chat).
+// Latency cap for OPEN questions: the main model gets at most 10 s in all (one retry if it's busy), then the lighter
+// model once with at most 5 s, then the answer is built from the data by rules (never a "busy" error in the chat).
 const PRIMARY = MODELS[0];
 const LITE = Deno.env.get("PING_AI_LITE_MODEL") || "gemini-flash-lite-latest";
-const BACKOFF_MS = [1_000, 3_000, 6_000];
-const LITE_RESERVE_MS = 20_000;
+const PRIMARY_WINDOW_MS = 10_000;
+const RETRY_PAUSE_MS = 500;
+const LITE_MS = 5_000;
 const busy = (status: number) => status === 429 || status >= 500;
 
 const HISTORY_TURNS = 10;      // messages of the thread sent along (both sides)
 const HISTORY_CHARS = 8_000;   // about 2,000 tokens; the oldest messages go first
-const PER_MODEL_MS = 45_000;
 
 const FMT = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit",
   month: "short", hour: "2-digit", minute: "2-digit" });
@@ -489,19 +488,17 @@ Question: ${ask}`;
   const factsText = prompt.slice(prompt.indexOf("FACTS start here."), prompt.indexOf("FACTS end here."));
   const noAi = body?.no_ai === true;               // the evals test the rules path on its own
   if (!noAi) {
-    for (let i = 0; i <= BACKOFF_MS.length; i++) {
-      if (i) await new Promise((r) => setTimeout(r, BACKOFF_MS[i - 1]));
-      const left = BUDGET_MS - (Date.now() - t0) - LITE_RESERVE_MS;
-      if (left < 5_000) break;
-      const res = await call(PRIMARY, Math.min(PER_MODEL_MS, left));
+    const start = Date.now();
+    for (let i = 0; i < 2; i++) {                   // the main model: one try, one retry, 10 s in all
+      if (i) await new Promise((r) => setTimeout(r, RETRY_PAUSE_MS));
+      const left = PRIMARY_WINDOW_MS - (Date.now() - start);
+      if (left < 1_500) break;
+      const res = await call(PRIMARY, left);
       if (res.answer) return answered(res.answer, PRIMARY);
       if (!res.busy) break;                        // retired or refused: retrying won't help
     }
-    const left = BUDGET_MS - (Date.now() - t0);
-    if (left > 5_000) {
-      const res = await call(LITE, Math.min(PER_MODEL_MS, left));
-      if (res.answer) return answered(res.answer, LITE);
-    }
+    const res = await call(LITE, LITE_MS);        // the lighter model once, 5 s
+    if (res.answer) return answered(res.answer, LITE);
     console.error(JSON.stringify({ event: "no_answer", key: keyName, role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
   }
   function answered(answer: string, model: string) {

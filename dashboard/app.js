@@ -1108,6 +1108,12 @@
     appendToday(inner, textBubble("me", q, mine.created_at, true));
     const wait = appendToday(inner, h("div", { class: "msg ping typing enter", role: "status", "aria-label": "Ping is typing" },
       h("span", { class: "dot" }), h("span", { class: "dot" }), h("span", { class: "dot" })));
+    // a long answer never looks frozen: after 4 s the dots say so
+    const slow = setTimeout(() => {
+      if (!wait.isConnected) return;
+      wait.setAttribute("aria-label", "Ping is still thinking");
+      wait.append(h("span", { class: "thinking" }, "still thinking…"));
+    }, 4000);
     thread.scrollTop = thread.scrollHeight;
     // saved before asking: Ask Ping reads the thread (for follow-ups like "nothing else?") from the database
     await state.src.addChat(mine).catch(() => {});
@@ -1117,6 +1123,7 @@
     const typing = new Promise((r) => setTimeout(r, 600));
     try { answer = await state.src.ask(q); } catch (e) { answer = e.message; } finally { state.sending -= 1; }
     await typing;
+    clearTimeout(slow);
     const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };
     state.chat.push(reply);
     state.waiting = false;

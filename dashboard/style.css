@@ -562,3 +562,6 @@ body:has(form.login) main { background-color: var(--wall); background-image: var
   .top .sub { max-width: none; }
 }
 .today-row .t-names { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* the typing bubble after 4 s: "still thinking…" next to the dots */
+.msg.typing .thinking { margin-left: 6px; font-size: var(--t-sm); color: var(--muted); animation: rise .16s ease-out both; }

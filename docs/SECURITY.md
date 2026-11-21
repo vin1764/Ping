@@ -79,7 +79,7 @@ secrets above and for key-shaped text; it prints counts only.
 | what | limit |
 |---|---|
 | demo questions | 15 per session per hour, 100 per hour for all demo sessions (`demo_take_question()`); a preference change counts as one more |
-| Ask Ping | 100 s for the whole answer, 45 s per call; the main model again after 1 s, 3 s and 6 s when busy, then the lighter model once (20 s kept for it), then the rules answer (Supabase stops a function at 150 s); classification from the chat: 60 s |
+| Ask Ping | FACT questions (due, tests, CTC, eligibility, CV, lists...): rules only, no model call, under a second. OPEN questions: the main model 10 s in all with one retry when busy, then the lighter model once with 5 s, then the rules answer; the page's typing bubble says "still thinking…" after 4 s. Every number in a model reply must be in its FACTS or the rules answer replaces it; classification from the chat: 60 s |
 | hourly run, AI | notice reader: at most 20 calls and 300 s a run; classifier: 240 s a run; CV summary: 60 s per model |
 | models, in order | Ask Ping: gemini-flash-latest, then gemini-3.1-flash-lite (`PING_AI_LITE_MODEL`). Role marks and the hourly run: gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-31b-it |
 | CV upload | PDF only, 5 MB, 3 CVs |

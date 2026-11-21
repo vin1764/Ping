@@ -122,3 +122,45 @@ def test_wrong_access_token_stops_with_a_clear_message(project):
     out = setup({**env, "SUPABASE_ACCESS_TOKEN": "sbp_wrong"})
     assert out.returncode == 1
     assert "STOPPED" in out.stdout and "token" in out.stdout.lower()
+
+
+def test_reviewer_sees_only_the_anonymised_demo_and_cannot_change_it(project):
+    fake, env, _ = project
+    assert setup(env).returncode == 0
+    from fake_erp import FakeErp
+    import ping.erp as erp_mod
+    from ping import admin
+    from ping.config import IST, Secrets, SecurityAnswer
+    from ping.demo_from_real import build_from_store, load_to_db, verify
+    from ping.gate import Gate
+    from ping.run import Runner
+    from ping.store import SupabaseStore
+    erp_mod.MIN_OTP_TO_LOGIN = 0
+    store = SupabaseStore(fake.url, fs.SECRET)
+    erp = FakeErp(datetime(2026, 11, 21, 9, 0, tzinfo=IST))
+    secrets = Secrets("22XY10042", "pw", [SecurityAnswer("What is the name of your first pet?", "Bruno")],
+                      "student@example.com", "x", fake.url, fs.SECRET, {})
+    assert Runner(secrets, store, store_ok=True, gate=Gate(erp), mailbox=erp.mail,
+                  now=datetime(2026, 11, 21, 9, 0, tzinfo=IST), pause=0).run()["status"] == "ok"
+    real_items = len(store.select("items"))
+    # build the demo from the real rows, check it, load it as demo rows
+    data = build_from_store(store, "22AB99999", "student@example.com")
+    assert verify(data, "22AB99999", "student@example.com", None) == []
+    load_to_db(store, data)
+    # create the reviewer exactly like Actions > Admin > create-reviewer
+    os.environ.update({"REVIEWER_EMAIL": "reviewer@ping-demo.example", "REVIEWER_PASSWORD": "review-me-123",
+                       "SUPABASE_PUBLISHABLE_KEY": fs.PUBLISHABLE})
+    assert admin.create_reviewer(secrets) == 0
+    rev = sign_in(fake, "reviewer@ping-demo.example", "review-me-123").json()["access_token"]
+    me = sign_in(fake, "student@example.com", "correct horse battery").json()["access_token"]
+    see = lambda tok: requests.get(f"{fake.url}/rest/v1/items", params={"select": "id,is_sample"},
+                                   headers={"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {tok}"}).json()
+    assert see(rev) and all(i["is_sample"] for i in see(rev))
+    assert len(see(me)) == real_items and not any(i["is_sample"] for i in see(me))
+    hdr = {"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {rev}"}
+    assert requests.post(f"{fake.url}/rest/v1/chat_messages", headers=hdr, json=[{"role": "me", "text": "x"}]).status_code == 403
+    # a later Ping run never mixes the demo rows into the real feed
+    erp2 = FakeErp(datetime(2026, 11, 21, 10, 0, tzinfo=IST))
+    Runner(secrets, store, store_ok=True, gate=Gate(erp2), mailbox=erp2.mail,
+           now=datetime(2026, 11, 21, 10, 0, tzinfo=IST), pause=0).run()
+    assert not any(i["id"].startswith("sample:") and not i.get("is_sample") for i in store.select("items"))

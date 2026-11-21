@@ -41,7 +41,7 @@ Use [] when there is nothing. Do not invent dates."""
 
 
 MAX_CALLS = 20
-stats = {"calls": 0, "answers": 0, "errors": 0}
+stats = {"calls": 0, "answers": 0, "errors": 0, "last_error": None}
 
 
 def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> dict | None:
@@ -58,13 +58,17 @@ def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> 
             r = requests.post(cfg["base_url"].rstrip("/") + "/chat/completions", json=body, timeout=40,
                               headers={"Authorization": f"Bearer {cfg['key']}"})
             if r.status_code in (400, 404) and cfg.get("fallback_models"):
+                stats["last_error"] = f"{model}: HTTP {r.status_code} {r.text[:160]}"
                 continue  # model name retired: try the next one
+            if r.status_code >= 400:
+                stats["last_error"] = f"{model}: HTTP {r.status_code} {r.text[:160]}"
             r.raise_for_status()
             content = r.json()["choices"][0]["message"]["content"]
             m = re.search(r"\{.*\}", content, re.S)
             data = json.loads(m.group(0)) if m else None
             break
-        except Exception:
+        except Exception as e:
+            stats["last_error"] = stats["last_error"] or f"{model}: {type(e).__name__}: {str(e)[:160]}"
             data = None
             break
     if data is None:

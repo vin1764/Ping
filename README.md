@@ -80,8 +80,9 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
 
 ### Known ways it can break
 - The ERP changes a page. The run stops ("page changed") and emails you.
-- GitHub starts scheduled runs late (5-15 min, sometimes more) and now and
-  then skips one at busy times.
+- If Supabase's scheduler misses a slot, GitHub's backup schedule may start it
+  late (GitHub starts scheduled runs 5-15 min late, sometimes more, and skips
+  some at busy times).
 - Security questions: matching ignores capitals, spaces and punctuation and
   allows a one-or-two-letter typo, nothing more. If the ERP asks a question
   that matches none of your three, Ping stops and emails you the question.
@@ -98,15 +99,10 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
 
 ## What's left
 
-1. **Turn the hourly schedule on.** Actions > Ping > the "..." menu (top right)
-   > Disable workflow, then the same menu > Enable workflow. GitHub sometimes
-   doesn't register a schedule for a new repository or after edits to the
-   schedule; this re-registers it. (This branch is already the default branch,
-   which GitHub requires for schedules.)
-2. **Your profile:** department, degree, CGPA, backlogs (dashboard > Menu > Profile).
-3. **The deploy token** (`DASHBOARD_DEPLOY_TOKEN`, see [Live dashboard](#live-dashboard))
+1. **Your profile:** department, degree, CGPA, backlogs (dashboard > Menu > Profile).
+2. **The deploy token** (`DASHBOARD_DEPLOY_TOKEN`, see [Live dashboard](#live-dashboard))
    expires; renew it before then and save the new value under the same name.
-4. **OTP mail filter:** in your institute Gmail, From `erpkgp@adm.iitkgp.ac.in`,
+3. **OTP mail filter:** in your institute Gmail, From `erpkgp@adm.iitkgp.ac.in`,
    Subject `OTP` > Create filter > Skip the Inbox + Mark as read. Ping searches
    All Mail, so it still finds them.
 
@@ -119,11 +115,13 @@ Actions > **Admin** > Run workflow, pick a task:
 | `build-demo` | builds the anonymised demo from your real data, checks it for your roll number, email, name and any other roll or phone number (writes nothing if it finds one), loads it as the demo rows, reads them back and checks them again, commits `dashboard/demo-data.json` and starts the dashboard deploy |
 | `gemini-check` | one test call to Gemini, then retries the notices the rules couldn't read, printing every model's answer |
 | `functions-check` | the Ask Ping / Check now functions on Supabase: deployed version, which secrets they have (names only), every request and crash from the last 23 hours, and two test questions from a demo session |
-| `ask-ping-page` | opens the **live** dashboard in a real browser: checks the owner sign-in screen (without signing in), clicks View demo, confirms the demo session gets 0 real rows, types "slice ctc breakdown" and "what's due tomorrow" and prints the replies |
+| `ask-ping-page` | opens the **live** dashboard in a real browser: checks the owner sign-in screen (without signing in), clicks View demo, confirms the demo session gets 0 real rows, types "slice ctc breakdown" and "what's due tomorrow", then "any tests today?" followed by "anything else?" and "nothing else?" (follow-ups that need the conversation), and prints the replies |
 | `ask-ping-evals` | runs the Ask Ping evals from demo sessions and commits `evals/ask_ping/REPORT.md` |
 | `auth-config` | Supabase Auth for the live dashboard: Site URL and redirect list, anonymous sign-ins on |
-| `cleanup-demo` | deletes demo sessions older than 7 days and their chat (also runs daily) |
-| `rearm-schedule` | switches the Ping workflow off and on through the API so GitHub registers its schedule |
+| `cleanup-demo` | deletes demo sessions older than 7 days and their chat (also runs daily, from Supabase's scheduler) |
+| `schedule-setup` | sets up the hourly start in Supabase: a new shared secret for `kick-run` (function secret + database Vault), the two scheduled jobs from `sql/schedule.sql`, then a dry run of kick-run that starts nothing |
+| `schedule-status` | lists the scheduled jobs, their last 10 runs in Supabase, and the last Ping runs on GitHub with what started each |
+| `rearm-schedule` | switches the Ping workflow off and on through the API so GitHub re-registers its backup schedule |
 
 ---
 
@@ -148,8 +146,14 @@ Two repositories, so this one can stay private:
   build is ever public. GitHub Pages serves its `main` branch.
 - The push uses `DASHBOARD_DEPLOY_TOKEN` (this repo's Actions secret): a
   fine-grained token for ping-dashboard only, with Contents and Pages read/write.
-  Pages was switched on once by hand (Settings > Pages > main, / (root)), because
-  doing it through the API needs Administration: write on the token.
+  Pages is switched on once by hand (doing it through the API needs Administration:
+  write on the token): open **github.com/vin1764/ping-dashboard > Settings > Pages**;
+  under Build and deployment, Source: **Deploy from a branch**; Branch: **main**,
+  folder **/ (root)**; press **Save**. The deploy then waits until the new build
+  is live.
+- **The Custom domain box on that Pages screen must stay empty.** With a domain
+  there, github.io redirects to it and GitHub commits a CNAME file into the public
+  repo; the dashboard's sign-in redirects only allow the github.io address.
 - Supabase Auth's Site URL and redirect list point at the live URL (Admin >
   auth-config); localhost stays allowed for development.
 
@@ -159,7 +163,15 @@ Two repositories, so this one can stay private:
 
 GitHub Actions (free for private repos: 2,000 minutes/month) runs
 `python -m ping.run` every hour from 06:11 to 01:11 IST, 20 times a day (minute
-41 UTC, away from the top of the hour when GitHub is busiest). The first run
+41 UTC, away from the top of the hour when GitHub is busiest).
+
+**What starts it:** Supabase's own scheduler (pg_cron, in the database) calls the
+`kick-run` function at :41 UTC, 00:41-19:41, and kick-run presses Run workflow
+on the Ping workflow (with the same token as Check now). GitHub's own schedule
+(the `cron` line in `ping.yml`) stays as a backup. Both skip if a Ping run is
+already going or one started in the last 50 minutes, so a slot never runs twice.
+The daily demo cleanup runs on the same scheduler (21:23 UTC). Set up and checked
+with Admin > `schedule-setup` and `schedule-status`. The first run
 took 12 minutes; later runs only read what's new, so expect 1-3
 minutes, roughly 600-1,800 minutes a month.
 

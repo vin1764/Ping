@@ -17,8 +17,9 @@
   ask-ping-evals   run evals/ask_ping (questions against the deployed function from demo sessions) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
-  ask-ping-page    open the live dashboard in a real browser, click "View demo", type the two test
-                   questions into the chat and print the replies shown on screen
+  ask-ping-page    open the live dashboard in a real browser, click "View demo", type the test
+                   questions (two single ones, then "any tests today?" with two follow-ups) into the
+                   chat and print the replies shown on screen
 """
 
 from __future__ import annotations
@@ -234,7 +235,9 @@ def functions_check(secrets) -> int:
 def ask_ping_page(secrets) -> int:
     import subprocess
     return subprocess.run([sys.executable, str(ROOT / "setup" / "ask_ping_page_test.py"),
-                           "slice ctc breakdown", "what's due tomorrow"]).returncode
+                           "slice ctc breakdown", "what's due tomorrow",
+                           # follow-ups in the same demo session: the answers must use the conversation
+                           "any tests today?", "anything else?", "nothing else?"]).returncode
 
 
 def auth_config(secrets) -> int:

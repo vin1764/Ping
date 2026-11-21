@@ -74,11 +74,16 @@ export function glance(events: Ev[], roles: Role[], now: Date): string {
     return [...m.entries()].sort((a, b) => String(a[1][0].effective_deadline).localeCompare(String(b[1][0].effective_deadline)));
   };
   const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  // never a count without names: the companies follow, the first 5 then "+N more"
+  const named = (rs: Role[]) => {
+    const cos = [...new Set(rs.map((r) => r.company.replace(/\s*\((?:https?:\/\/|www\.)[^)]*\)/gi, "").trim()))].sort((a, b) => a.localeCompare(b));
+    return cos.length > 5 ? `${cos.slice(0, 5).join(", ")} +${cos.length - 5} more` : cos.join(", ");
+  };
   const count = (rs: Role[]) => {
     const no = rs.filter((r) => !r.applied).length;
     const mine = rs.filter((r) => r.for_you).length;
     return `${n(rs.length, "role", "roles")} at ${n(new Set(rs.map((r) => r.company)).size, "company", "companies")} (${no} not applied, ${rs.length - no} applied` +
-      `${rs.some((r) => r.for_you !== undefined) ? `; ${mine} for you` : ""})`;
+      `${rs.some((r) => r.for_you !== undefined) ? `; ${mine} for you` : ""}: ${named(rs)})`;
   };
   const todayRoles = open.filter((r) => DAY.format(new Date(r.effective_deadline!)) === today);
   lines.push(todayRoles.length

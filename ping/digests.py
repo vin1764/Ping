@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from typing import Callable
 from datetime import datetime, timedelta
 
 from .config import IST
@@ -104,6 +105,29 @@ def split_rows(members: list[dict], list_others: bool = True) -> list[dict]:
             groups.append({"head": f"{_plural(len(others), 'other role')} not shown (Profile: list other roles)",
                            "rows": []})
     return groups
+
+
+_URL_PAREN = re.compile(r"\s*\((?:[^()]*?(?:https?://|www\.|\.com\b|\.in\b|\.io\b|\.ai\b))[^()]*\)", re.I)
+_SUFFIX = re.compile(r"[\s,]+(?:private\s+limited|pvt\.?\s*ltd\.?|limited|ltd\.?|inc\.?|llp|corporation|corp\.?)\s*$", re.I)
+
+
+def _co_name(company: str) -> str:
+    """A company as it reads in a title: no bracketed website, no 'Private Limited'."""
+    s = _URL_PAREN.sub("", company or "")
+    for _ in range(2):
+        s = _SUFFIX.sub("", s)
+    return re.sub(r"\s{2,}", " ", s).strip() or (company or "").strip()
+
+
+def _named(title: Callable[[str], str], companies: list[str], limit: int = 160) -> str:
+    """Never a count without names: the title with its companies (the first 5, then '+N more'), shortened to fit."""
+    cos = sorted({_co_name(c) for c in companies if c}, key=str.lower)
+    for n in range(min(5, len(cos)), 0, -1):
+        names = ", ".join(cos[:n]) + (f" +{len(cos) - n} more" if len(cos) > n else "")
+        t = title(names)
+        if len(t) <= limit:
+            return t
+    return title(f"{len(cos)} companies")[:limit]
 
 
 def _for_you(members: list[dict]) -> str:
@@ -206,9 +230,9 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
             m = ms[0]
             title = f"New: {m['company']} {m['label']}. Apply by {fmt_when(m['due'], seen)}."
         else:
-            title = f"{_plural(len(ms), 'new role')} listed at {_plural(len(companies), 'company', 'companies')}"
             soonest = ms[0]["due"]
-            title += f"; the first closes {fmt_when(soonest, seen)}."
+            title = _named(lambda names: f"{_plural(len(ms), 'new role')} listed at {_plural(len(companies), 'company', 'companies')} "
+                                         f"({names}); the first closes {fmt_when(soonest, seen)}.", [m["company"] for m in ms])
         note = _unverified_line(ms)
         emit({"id": lid, "level": "show", "category": "listing", "company": ms[0]["company"] if len(companies) == 1 else None,
               "role_ids": [m["id"] for m in ms], "notice_id": None, "due_at": None, "event_at": None, "pdf_status": None,
@@ -257,9 +281,9 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 m = ms[0]
                 title = f"{m['company']} {m['label']} closes {when(due, sent)}. You haven't applied."
             else:
-                title = (f"{_plural(len(ms), 'application')} close {when(due, sent)} — you've applied to "
-                         f"{applied if applied else 'none'}{' of them' if applied and applied < len(ms) else ''}"
-                         f"{_for_you(pending)}")
+                title = _named(lambda names: f"{_plural(len(ms), 'application')} ({names}) close {when(due, sent)} — you've applied to "
+                               f"{applied if applied else 'none'}{' of them' if applied and applied < len(ms) else ''}"
+                               f"{_for_you(pending)}", [m["company"] for m in ms])
             det = {"kind": "application", "batch": bk, "role": "digest", "members": ids,
                    "list": split_rows(pending, list_others) + ([{"head": f"Applied ({applied})", "collapsed": True,
                            "rows": [role_row({**m, "note": "", "tag": "done"}) for m in ms if m.get("applied")]}]
@@ -299,8 +323,8 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
         if previous.get(rid):
             emit(dict(previous[rid]))
         elif pending and due - timedelta(hours=reminder_h) <= now < due and sent < due - timedelta(hours=reminder_h):
-            title = (f"Reminder: {_plural(len(pending), 'application')} you haven't applied to "
-                     f"close{'s' if len(pending) == 1 else ''} {when(due, now)}{_for_you(pending)}")
+            title = _named(lambda names: f"Reminder: {_plural(len(pending), 'application')} you haven't applied to ({names}) "
+                           f"close{'s' if len(pending) == 1 else ''} {when(due, now)}{_for_you(pending)}", [m["company"] for m in pending])
             emit({"id": rid, "level": "show", "category": "digest", "company": None,
                   "role_ids": [m["id"] for m in pending], "notice_id": None, "due_at": due.isoformat(),
                   "event_at": None, "pdf_status": None, "needs_review": False, "title": title[:160],
@@ -335,7 +359,7 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 continue
             at = _dt(its[0].get("due_at") if kind == "form" else its[0].get("event_at"))
             rows = [{"text": it["title"], "note": "", "tag": "role", "id": it["id"]} for it in its]
-            title = f"{len(its)} {label[1]} {when(at, now)}"
+            title = _named(lambda names: f"{len(its)} {label[1]} {when(at, now)}: {names}", [it.get("company") or "" for it in its])
             level = "always" if any(it["level"] == "always" for it in its) else "show"
             for it in its:
                 hide(it, f"in the {kind} digest")
@@ -356,7 +380,8 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 if previous.get(rid):
                     emit(dict(previous[rid]))
                 elif pending and at - timedelta(hours=reminder_h) <= now < at and sent < at - timedelta(hours=reminder_h):
-                    emit({**made[did], "id": rid, "title": f"Reminder: {_plural(len(pending), 'form')} due {when(at, now)}",
+                    emit({**made[did], "id": rid, "title": _named(lambda names: f"Reminder: {_plural(len(pending), 'form')} due {when(at, now)}: {names}",
+                                                                  [p.get("company") or "" for p in pending]),
                           "first_seen": now.isoformat(),
                           "details": {**made[did]["details"], "role": "reminder",
                                       "list": [{"head": "", "rows": [r for r in rows if r["id"] in {p['id'] for p in pending}]}]}})
@@ -385,7 +410,8 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
         emit({"id": cid, "level": level,
               "category": "collapse", "company": None, "role_ids": sorted({r for it in its for r in it.get("role_ids") or []}),
               "notice_id": None, "due_at": due.isoformat(), "event_at": None, "pdf_status": None, "needs_review": False,
-              "title": (f"{len(its)} deadlines{' for roles you applied to' if mine else ''} moved to {fmt_when(due, posted)}"),
+              "title": _named(lambda names: f"{len(its)} deadlines{' for roles you applied to' if mine else ''} moved to "
+                                            f"{fmt_when(due, posted)}: {names}", [it.get("company") or "" for it in its]),
               "first_seen": posted.isoformat(), "sort_at": due.isoformat(),
               "details": {"kind": "deadline", "role": "collapse", "members": sorted(it["id"] for it in its),
                           "notice_time": posted.isoformat(), "list": [{"head": "", "rows": rows}],
@@ -457,11 +483,12 @@ def _known_members(previous: dict[str, dict], kind: str) -> dict[str, set[str]]:
 def _update_item(uid, old_key, bk, due, ms, moved, now, list_others, sources, members=None) -> dict:
     old_at = datetime.strptime(old_key, "%Y%m%dT%H%M").replace(tzinfo=IST) if old_key else None
     if old_key:
-        title = (f"Update: {_plural(len(ms), 'application')} that closed {fmt_when(old_at, now)} now "
-                 f"close{'s' if len(ms) == 1 else ''} {when(due, now)}")
+        title = _named(lambda names: f"Update: {_plural(len(ms), 'application')} ({names}) that closed {fmt_when(old_at, now)} now "
+                       f"close{'s' if len(ms) == 1 else ''} {when(due, now)}", [m["company"] for m in ms])
     else:
         mv = [m for m in ms if m["id"] in moved]
-        title = f"Update: {_plural(len(ms), 'more application')} now close{'s' if len(ms) == 1 else ''} {when(due, now)}"
+        title = _named(lambda names: f"Update: {_plural(len(ms), 'more application')} ({names}) now close{'s' if len(ms) == 1 else ''} "
+                                     f"{when(due, now)}", [m["company"] for m in ms])
         if mv:
             title += f" ({len(mv)} moved from an earlier deadline)"
     return {"id": uid, "level": "show", "category": "digest", "company": None, "role_ids": [m["id"] for m in ms],

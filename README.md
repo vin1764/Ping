@@ -337,8 +337,13 @@ text and your targets, never your name, roll number, CGPA or mail.
   "which room for the Eternal test", "slice ctc breakdown". Gemini answers on
   the server (the key is a Supabase function secret and never reaches the
   browser), from your feed, your roles and, for companies you name, the pay and
-  bond details from the ERP's "more details". If Gemini is slow or busy, simple
-  rules answer instead and the reply says so. Supabase stops a function after
+  bond details from the ERP's "more details". If Gemini is busy, Ask Ping retries
+  (after 1 s, 3 s and 6 s), then tries a lighter model once, then answers from the
+  data by rules and says so: a company in the question gets an answer about that
+  company only (open deadlines, latest notice, your status), even misspelled or
+  abbreviated ("msft"); a company Ping has no data on is said plainly; only a
+  message it can't read at all gets "I couldn't tell what you meant" and what's due
+  soon (`supabase/functions/_shared/answer_rules.js`, also used by the page offline). Supabase stops a function after
   150 s; Ask Ping gives Gemini at most 100 s (45 s per model).
 - The thread is saved (the `chat_messages` table), so you see the whole
   history when you come back. New messages since your last visit get an

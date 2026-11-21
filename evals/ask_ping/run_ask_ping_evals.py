@@ -119,14 +119,14 @@ class DemoSessions:
         return f"removed this run's demo question counts (HTTP {r.status_code}, {len(self.ids)} sessions)"
 
 
-def ask(url: str, key: str, token: str, question: str, as_of: str) -> tuple[int, str, str, float]:
+def ask(url: str, key: str, token: str, question: str, as_of: str, no_ai: bool = False) -> tuple[int, str, str, float]:
     """(HTTP status, answer or error, model, seconds). One retry if Gemini is busy or the call fails."""
     for attempt in (1, 2):
         t = time.monotonic()
         try:
             r = requests.post(f"{url}/functions/v1/ask-ping", timeout=170,
                               headers={"apikey": key, "Authorization": f"Bearer {token}"},
-                              json={"question": question, "as_of": as_of})
+                              json={"question": question, "as_of": as_of, **({"no_ai": True} if no_ai else {})})
             body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
             secs = time.monotonic() - t
             if r.status_code == 200:
@@ -153,11 +153,15 @@ def main() -> int:
     if not demo_ok:
         print("WARNING: dashboard/demo-data.json changed since the expected answers were written; "
               "rebuilding the demo can change the right answers")
+    # --only F1,F2 or --only F (an id prefix): run just those cases and no conversations
+    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
+    cases = [c for c in spec["cases"] if not only or any(c["id"] == o or c["id"].startswith(o) for o in only)]
     sessions = DemoSessions(url, key)
     results = []
-    for c in spec["cases"]:
+    for c in cases:
+        # "no_ai": the function answers by rules only (as when Gemini is busy), to test that path on its own
         status, answer, model, secs = ask(url, key, sessions.next_token(), c["question"],
-                                          c.get("as_of") or spec["snapshot_as_of"])
+                                          c.get("as_of") or spec["snapshot_as_of"], c.get("no_ai", False))
         failed = score(answer, c["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
         results.append({**c, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
                         "failed": failed})
@@ -165,7 +169,7 @@ def main() -> int:
               + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
 
     convs = []
-    for conv in spec.get("conversations", []):
+    for conv in ([] if only else spec.get("conversations", [])):
         token = sessions.fresh()
         turns = []
         for t in conv["turns"]:
@@ -180,6 +184,11 @@ def main() -> int:
                   f"{t['question']}" + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
         convs.append({"id": conv["id"], "why": conv["why"], "turns": turns, "passed": all(not t["failed"] for t in turns)})
     print(sessions.forget_counts())
+    if only:   # a partial run: print it, keep the full report and results as they are
+        for r in results:
+            print(f"\n{r['id']} {r['question']}  [{r['model']}]  {'PASS' if not r['failed'] else 'FAIL: ' + '; '.join(r['failed'])}\n{r['answer']}")
+        print(f"\n{sum(not r['failed'] for r in results)} of {len(results)} passed")
+        return 0 if all(not r["failed"] for r in results) else 1
     report = write_report(spec, results, demo_ok, convs)
     (HERE / "results.json").write_text(json.dumps({"single_turn": results, "conversations": convs}, indent=1,
                                                   ensure_ascii=False) + "\n", encoding="utf-8")

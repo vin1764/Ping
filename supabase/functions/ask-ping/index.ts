@@ -9,6 +9,9 @@ import { caller, cors, json } from "../_shared/owner.ts";
 import { asksToAct, glance, roleLists, stripRefusal, todayNote, wantsLists } from "./wording.ts";
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
+// answers from the data without the AI (shared with the dashboard, which loads the same file)
+import "../_shared/answer_rules.js";
+const Rules = (globalThis as any).PingRules;
 
 // Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
 // free tier is sometimes overloaded (503) or slow, so try a few names in turn.
@@ -17,6 +20,13 @@ import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash-lite",
                 "gemini-3.1-flash-lite", "gemma-4-31b-it"];
 const BUDGET_MS = 100_000;
+// Busy (429 / 503 / 5xx / timeout): the main model again after 1 s, 3 s and 6 s; then a lighter model once; then the
+// answer is built from the data by rules (never a "busy" error in the chat).
+const PRIMARY = MODELS[0];
+const LITE = Deno.env.get("PING_AI_LITE_MODEL") || "gemini-flash-lite-latest";
+const BACKOFF_MS = [1_000, 3_000, 6_000];
+const LITE_RESERVE_MS = 20_000;
+const busy = (status: number) => status === 429 || status >= 500;
 const HISTORY_TURNS = 10;      // messages of the thread sent along (both sides)
 const HISTORY_CHARS = 8_000;   // about 2,000 tokens; the oldest messages go first
 const PER_MODEL_MS = 45_000;
@@ -307,7 +317,8 @@ Time: times today carry a note in the data, "(earlier today, already over)" or "
 "was at 15:00 today, so it's over" or "at 20:00 today (in 1h 25m)". Never say "is today at 15:00" once it's past. For "anything else?"-type follow-ups answer with the count: "No, that was the only
 test today" or "Two more: ...", then add one line with the most urgent other thing from "Today and this week"
 below, with its count and time: "No other tests. 48 applications close at 20:00 today (in 1h 25m), 39 of them not
-applied." "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
+applied: Ather Energy, Auro Group, Axis Bank, BlackBuck, Diageo +15 more." Never give a count without the names that
+"Today and this week" lists after it (the first 5, then "+N more"). "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
 Lists of roles: "Role lists by closing time" below is ready-made. When an answer lists roles that close at one of
 those times, copy that time's whole block exactly: its heading (the deadline is said once, there), "For you" with
@@ -359,40 +370,82 @@ ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s
 
 Question: ${ask}`;
 
+  const done = (answer: string, model: string, extra: Record<string, unknown> = {}) =>
+    json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, ...extra, ...(saved ? { prefs, prefs_changed: true } : {}) });
   const tried: string[] = [];
-  let last = 0;
-  for (const model of MODELS) {
-    const left = BUDGET_MS - (Date.now() - t0);
-    if (left < 5_000) break;
+  // one call: the answer, or why there is none ("busy" may be retried)
+  const call = async (model: string, limit: number): Promise<{ answer?: string; busy: boolean }> => {
     const t = Date.now();
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST",
-        signal: AbortSignal.timeout(Math.min(PER_MODEL_MS, left)),
+        signal: AbortSignal.timeout(limit),
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         // room for "thinking" models: their reasoning counts against the output limit
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }],
                                generationConfig: { temperature: 0.2, maxOutputTokens: 4096 } }),
       });
-      last = r.status;
       tried.push(`${model}:${r.status}:${Date.now() - t}ms`);
       if (!r.ok) {
         console.error(JSON.stringify({ event: "gemini_error", model, status: r.status, body: (await r.text()).slice(0, 300) }));
-        continue; // retired, busy or refused: try the next model
+        return { busy: busy(r.status) };
       }
       const out = await r.json();
       const raw = out?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("").trim() || "";
       const answer = act ? raw : stripRefusal(raw);
-      if (!answer) { tried.push(`${model}:empty(${out?.candidates?.[0]?.finishReason})`); continue; }
-      console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, act,
-        refusal_removed: answer !== raw, items: items.data?.length ?? 0,
-        roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0, prompt_chars: prompt.length, ms: Date.now() - t0 }));
-      return json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, ...(saved ? { prefs, prefs_changed: true } : {}) });
+      if (!answer) { tried.push(`${model}:empty(${out?.candidates?.[0]?.finishReason})`); return { busy: false }; }
+      return { answer, busy: false };
     } catch (e) {
       tried.push(`${model}:${(e as Error).name}:${Date.now() - t}ms`);
+      return { busy: true };                       // a timeout or a dropped connection: worth another try
     }
+  };
+  const noAi = body?.no_ai === true;               // the evals test the rules path on its own
+  if (!noAi) {
+    for (let i = 0; i <= BACKOFF_MS.length; i++) {
+      if (i) await new Promise((r) => setTimeout(r, BACKOFF_MS[i - 1]));
+      const left = BUDGET_MS - (Date.now() - t0) - LITE_RESERVE_MS;
+      if (left < 5_000) break;
+      const res = await call(PRIMARY, Math.min(PER_MODEL_MS, left));
+      if (res.answer) return answered(res.answer, PRIMARY);
+      if (!res.busy) break;                        // retired or refused: retrying won't help
+    }
+    const left = BUDGET_MS - (Date.now() - t0);
+    if (left > 5_000) {
+      const res = await call(LITE, Math.min(PER_MODEL_MS, left));
+      if (res.answer) return answered(res.answer, LITE);
+    }
+    console.error(JSON.stringify({ event: "no_answer", role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
   }
-  console.error(JSON.stringify({ event: "no_answer", role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
-  return json({ error: last === 503 || last === 429 ? "Gemini is busy right now, try again in a minute"
-    : `no answer from Gemini (${tried.join(", ")})` }, 502);
+  function answered(answer: string, model: string) {
+    console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, act,
+      items: items.data?.length ?? 0, roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0,
+      prompt_chars: prompt.length, ms: Date.now() - t0 }));
+    return done(answer, model);
+  }
+
+  // No AI answer: the rules answer the question asked (a company: only that company; no company: what was asked
+  // about; nothing understood: says so, then what's due soon). Same code as the dashboard's offline answers.
+  const [allItems, allNotices, lastRun] = await Promise.all([
+    sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids," +
+      "hidden_because:details->>hidden_because,subject:details->>subject").eq("dismissed", false)
+      .order("first_seen", { ascending: false }).limit(1000),
+    sb.from("notices").select("company,subject,notice_time").order("notice_time", { ascending: false }).limit(1000),
+    sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1),
+  ]);
+  for (const [name, r] of [["items(rules)", allItems], ["notices(rules)", allNotices], ["runs", lastRun]] as const) {
+    if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
+  }
+  const run: any = lastRun.data?.[0];
+  const ruled = Rules.answer(ask, {
+    now: asOf,
+    lastChecked: run?.finished_at || run?.started_at || null,
+    roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline, cv: rmarks.get(r.id)?.relevant ? rmarks.get(r.id)?.best_cv : null })),
+    items: allItems.data || [],
+    notices: allNotices.data || [],
+  });
+  console.log(JSON.stringify({ event: "answered", role, model: "rules", kind: ruled.kind, companies: ruled.companies.length,
+    no_ai: noAi, tried, ms: Date.now() - t0 }));
+  return done(ruled.text + (noAi ? "" : "\n\n(Gemini was busy, so I answered straight from the ERP data.)"), "rules",
+              { fallback: true, kind: ruled.kind });
 });

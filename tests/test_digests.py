@@ -53,7 +53,7 @@ def test_same_deadline_becomes_one_digest():
     digests = [v for v in visible(items).values() if v["category"] == "digest"]
     assert len(digests) == 1, [d["title"] for d in digests]
     d = digests[0]
-    assert d["title"].startswith("3 applications close tomorrow, Sat 21 Nov 20:00 — you've applied to 1 of them")
+    assert d["title"].startswith("3 applications (Alpha, Beta, Gamma) close tomorrow, Sat 21 Nov 20:00 — you've applied to 1 of them")
     rows = [r["text"] for g in d["details"]["list"] for r in g["rows"]]
     assert rows == ["Alpha — Role 1", "Beta — Role 2", "Gamma — Role 3"]
     # this check is 4 hours late for it (the batch came within 24 hours at Fri 20:00): the digest is dated then
@@ -76,7 +76,7 @@ def test_digest_once_reminder_once_nothing_else():
     assert DUE - timedelta(hours=24) <= messages[0][0] < DUE - timedelta(hours=23)
     assert DUE - timedelta(hours=2) <= messages[1][0] < DUE - timedelta(hours=1)
     rem = final["digest:application:20261121T2000:reminder"]
-    assert rem["title"] == "Reminder: 2 applications you haven't applied to close tonight, Sat 21 Nov 20:00"
+    assert rem["title"] == "Reminder: 2 applications you haven't applied to (Alpha, Beta) close tonight, Sat 21 Nov 20:00"
     # after the deadline both stay in the history, marked as past
     assert final["digest:application:20261121T2000"]["details"]["hidden_because"] == "deadline gone"
 
@@ -91,7 +91,7 @@ def test_reminder_lists_only_unapplied_and_follows_the_profile_setting():
     assert len(when) == 1 and DUE - timedelta(hours=5) <= when[0] < DUE - timedelta(hours=4)
     rem = final["digest:application:20261121T2000:reminder"]
     assert [r["text"] for g in rem["details"]["list"] for r in g["rows"]] == ["Alpha — Role 1"]
-    assert rem["title"].startswith("Reminder: 1 application you haven't applied to closes tonight")
+    assert rem["title"].startswith("Reminder: 1 application you haven't applied to (Alpha) closes tonight")
 
 
 def test_no_reminder_when_everything_is_applied():
@@ -115,11 +115,11 @@ def test_batch_change_is_one_update_not_a_new_digest():
     # Beta's move: one "update" for the old batch, no full digest for the new one
     moved = [i for i in flat if ":moved:" in i]
     assert len(moved) == 1
-    assert final[moved[0]]["title"].startswith("Update: 1 application that closed Sat 21 Nov 20:00 now closes Mon 23 Nov 20:00")
+    assert final[moved[0]]["title"].startswith("Update: 1 application (Beta) that closed Sat 21 Nov 20:00 now closes Mon 23 Nov 20:00")
     assert final["digest:application:20261123T2000"]["level"] == "hidden"
     # Gamma joining Alpha's batch: one update, sent once
     upd = [i for i in flat if ":upd:" in i]
-    assert len(upd) == 1 and final[upd[0]]["title"].startswith("Update: 1 more application now closes")
+    assert len(upd) == 1 and final[upd[0]]["title"].startswith("Update: 1 more application (")
     # and nothing more after that
     _, sent3 = hourly(roles, DUE - timedelta(hours=14), DUE - timedelta(hours=12), previous=final)
     assert not any(ids for _, ids in sent3)
@@ -133,7 +133,7 @@ def test_new_roles_of_one_run_are_one_message():
     msgs = visible(items)
     assert list(msgs) == ["listing:20261119T2000"]
     m = msgs["listing:20261119T2000"]
-    assert m["title"] == "3 new roles listed at 2 companies; the first closes Sat 21 Nov 20:00."
+    assert m["title"] == "3 new roles listed at 2 companies (Alpha, Beta); the first closes Sat 21 Nov 20:00."
     assert [g["head"] for g in m["details"]["list"]] == ["Close Sat 21 Nov 20:00", "Close Sun 22 Nov 20:00"]
     # when the batch then comes within 24 hours, its digest says it once more; listed in the same run -> no digest
     roles2 = [role(4, "Epsilon", seen=DUE - timedelta(hours=10)), role(5, "Zeta", seen=DUE - timedelta(hours=10))]

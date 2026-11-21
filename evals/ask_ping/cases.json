@@ -643,6 +643,121 @@
     ]
    },
    "why": "Groww Associate Product Manager: the demo student's Product CV (made-up CVs in evals/relevance/personas.json)"
+  },
+  {
+   "id": "F1",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "yms financial deadline",
+   "checks": {
+    "must_contain": [
+     "YMS Financial",
+     "Quant Researcher",
+     "20:00",
+     "open deadline"
+    ],
+    "must_not_contain": [
+     "BlackBuck",
+     "Ather",
+     "Auro",
+     "Microsoft",
+     "I couldn't tell what you meant"
+    ]
+   },
+   "why": "(a) a company with an open deadline: roles: YMS Financial Private Limited, Quant Researcher, closes Sat 21 Nov 20:00, not applied. The answer is about YMS only."
+  },
+  {
+   "id": "F2",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "microsoft cv submission deadline",
+   "checks": {
+    "must_contain": [
+     "No open deadline for Microsoft",
+     "last checked",
+     "PPO"
+    ],
+    "must_not_contain": [
+     "Ather",
+     "Auro",
+     "BlackBuck",
+     "Due in",
+     "I couldn't tell what you meant"
+    ]
+   },
+   "why": "(b) a company with no open deadline: Microsoft's CV submission closed Sun 8 Nov 16:00; its last notice is 'PPO' (Wed 11 Nov). The reported bug: this used to get a generic 'due in the next 3 days' list."
+  },
+  {
+   "id": "F3",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "google cv deadline",
+   "checks": {
+    "must_contain": [
+     "I don't have Google",
+     "last checked"
+    ],
+    "must_not_contain": [
+     "Ather",
+     "Microsoft",
+     "BlackBuck",
+     "Due in",
+     "I couldn't tell what you meant"
+    ]
+   },
+   "why": "(c) a company not in the data: no Google role and no Google notice."
+  },
+  {
+   "id": "F4",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "blakbuck deadline",
+   "checks": {
+    "must_contain": [
+     "BlackBuck",
+     "Associate Manager",
+     "20:00"
+    ],
+    "must_not_contain": [
+     "BlackRock",
+     "Ather",
+     "Auro",
+     "Microsoft",
+     "I couldn't tell what you meant"
+    ]
+   },
+   "why": "(d) a misspelled company: 'blakbuck' is BlackBuck (Associate Manager BlackBuck Leadership Program, closes Sat 21 Nov 20:00), not BlackRock."
+  },
+  {
+   "id": "F5",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "msft cv submission deadline",
+   "checks": {
+    "must_contain": [
+     "No open deadline for Microsoft"
+    ],
+    "must_not_contain": [
+     "Ather",
+     "Auro",
+     "I couldn't tell what you meant"
+    ]
+   },
+   "why": "an alias: msft is Microsoft."
+  },
+  {
+   "id": "F6",
+   "category": "rules fallback (AI off)",
+   "no_ai": true,
+   "question": "hmm",
+   "checks": {
+    "must_contain": [
+     "I couldn't tell what you meant",
+     "what's due soon",
+     "Ather Energy"
+    ]
+   },
+   "why": "neither a company nor an intent: says so, then what's due soon, every line with its company's name."
   }
  ],
  "check_changes": [

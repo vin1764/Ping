@@ -38,7 +38,7 @@ Deno.test("today and this week, counted", () => {
      { company: "Next Week", applied: false, effective_deadline: "2026-11-23T14:30:00Z" }], now);
   eq(g.split("\n"), [
     "Tests and events today (1): Groww test (Associate Product Manager) at 15:00 (earlier today, already over)",
-    "Application deadlines still open today: 2 roles at 2 companies (1 not applied, 1 applied) close at 20:00 (later today, in 1h 25m)",
-    "Application deadlines from now to the end of this week (Sunday; today counts as this week): Sat 21 Nov 20:00: 2 roles at 2 companies (1 not applied, 1 applied); Sun 22 Nov 20:00: 1 role at 1 company (1 not applied, 0 applied)",
+    "Application deadlines still open today: 2 roles at 2 companies (1 not applied, 1 applied: ESRI, SLB) close at 20:00 (later today, in 1h 25m)",
+    "Application deadlines from now to the end of this week (Sunday; today counts as this week): Sat 21 Nov 20:00: 2 roles at 2 companies (1 not applied, 1 applied: ESRI, SLB); Sun 22 Nov 20:00: 1 role at 1 company (1 not applied, 0 applied: Pine Labs)",
   ]);
 });

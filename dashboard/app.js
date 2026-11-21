@@ -204,10 +204,10 @@
         return out.answer;
       }
       catch (e) {
-        if (e.status === 429) return `${e.message}\n\nMeanwhile, with simple rules: ${answerLocally(q, state.data)}`;
+        if (e.status === 429) return `${e.message}\n\nMeanwhile, from the ERP data: ${answerLocally(q, state.data)}`;
         const why = e.status === 404 || /fetch/i.test(e.message) ? "the ask-ping server function isn't deployed or reachable"
           : e.status === 403 ? "your login isn't on the allowed list" : e.message;
-        return answerLocally(q, state.data) + `\n\n(AI not reachable: ${why}. Answered with simple rules.)`;
+        return answerLocally(q, state.data) + `\n\n(AI not reachable: ${why}. Answered straight from the ERP data.)`;
       }
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
@@ -1299,76 +1299,24 @@
   }
 
   // ------------------------------------------------------------ answers without AI
-  // Used in demo mode and whenever the AI helper isn't reachable.
+  // Used in the offline ?demo=1 copy and whenever the ask-ping function can't be reached. The same rules the
+  // function uses when Gemini is busy (supabase/functions/_shared/answer_rules.js, loaded as window.PingRules):
+  // a company in the question gets an answer about that company only; otherwise what was asked about.
   function answerLocally(question, data) {
-    const q = question.toLowerCase();
-    const now = nowDate();
-    const live = data.items.filter((i) => i.level !== "hidden" && !i.dismissed);
-    const companies = [...new Set(data.roles.map((r) => r.company))];
-    const words = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2);
-    const STOP = new Set(["private", "limited", "india", "pvt", "ltd", "inc", "the", "and", "group", "company", "services", "technologies"]);
-    const mentioned = companies.filter((c) => words(c).some((w) => !STOP.has(w) && new RegExp(`\\b${w}\\b`).test(q)));
-    const rolesOf = (c) => data.roles.filter((r) => r.company === c);
-
-    if (mentioned.length && /appl/.test(q)) {
-      return mentioned.map((c) => {
-        const yes = rolesOf(c).filter((r) => r.applied);
-        return yes.length ? `Yes, you applied to ${c}: ${yes.map((r) => r.designation).join(", ")}.`
-          : `No, you haven't applied to ${c}. Roles: ${rolesOf(c).map((r) => `${r.designation} (closes ${when(deadlineOf(r))})`).join(", ")}.`;
-      }).join("\n");
-    }
-    if (mentioned.length && /ctc|pay|salary|package|stipend|lpa|money/.test(q)) {
-      return mentioned.map((c) => rolesOf(c).map((r) => `${c} ${r.designation}: CTC ${money(r.ctc, r.currency)}`).join("\n")).join("\n");
-    }
-    if (mentioned.length && /eligib/.test(q)) {
-      return mentioned.map((c) => rolesOf(c).map((r) =>
-        `${c} ${r.designation}: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "not sure"}` +
-        ` (${[...(r.eligibility?.reasons || []), ...(r.eligibility?.flags || [])].join("; ")})`).join("\n")).join("\n");
-    }
-    if (mentioned.length && /room|venue|where|slot/.test(q)) {
-      return mentioned.map((c) => {
-        const hits = data.items.filter((i) => i.company === c && ["shortlist", "test", "result"].includes(i.category));
-        const mine = hits.find((i) => i.pdf_status === "yes" || i.details?.pdf?.status === "yes");
-        if (mine) {
-          const p = mine.details?.pdf || {};
-          const row = p.my_row && p.header ? p.header.map((x, i) => `${x}: ${p.my_row[i] ?? ""}`).join(" · ") : "";
-          return `${mine.title}${row ? `\nYour row: ${row}` : ""}`;
-        }
-        if (hits.some((i) => i.pdf_status === "no")) return `You're not on the ${c} list, so there's no room for you.`;
-        return `I haven't seen a room list for ${c} yet.`;
-      }).join("\n");
-    }
-    let from = null, to = null, label = "";
-    const offset = now - new Date(now.toLocaleString("en-US", { timeZone: TZ }));
-    const istMidnight = (d) => { const x = new Date(d.toLocaleString("en-US", { timeZone: TZ })); x.setHours(0, 0, 0, 0); return new Date(x.getTime() + offset); };
-    if (/tomorrow/.test(q)) { from = new Date(istMidnight(now).getTime() + 86400000); to = new Date(from.getTime() + 86400000); label = "tomorrow"; }
-    else if (/today|tonight/.test(q)) { from = now; to = new Date(istMidnight(now).getTime() + 86400000); label = "today"; }
-    else if (/week|7 days/.test(q)) { from = now; to = new Date(now.getTime() + 7 * 86400000); label = "in the next 7 days"; }
-    else if (/due|deadline|next|upcoming|soon/.test(q)) { from = now; to = new Date(now.getTime() + 3 * 86400000); label = "in the next 3 days"; }
-    if (from) {
-      const hits = live.filter((i) => { const d = dt(i.due_at || i.event_at); return d && d >= from && d < to; })
-                       .sort((a, b) => dt(a.due_at || a.event_at) - dt(b.due_at || b.event_at));
-      return hits.length ? `Due or happening ${label}:\n` + hits.map((i) => `• ${i.title}`).join("\n") : `Nothing due or scheduled ${label}.`;
-    }
-    if (/room|venue|where/.test(q)) {
-      const hits = live.filter((i) => ["shortlist", "test", "result"].includes(i.category));
-      if (!hits.length) return "No current tests for you.";
-      return hits.map((i) => {
-        const room = i.details?.pdf?.details?.room;
-        const where = room ? `room ${room}` : i.pdf_status === "no" ? "you're not on its list"
-          : "no room list yet (I'll post when it's out)";
-        return `• ${i.title.replace(/\.$/, "")}: ${where}.`;
-      }).join("\n");
-    }
-    if (/shortlist|test/.test(q)) {
-      const hits = live.filter((i) => ["shortlist", "test", "result"].includes(i.category));
-      return hits.length ? hits.map((i) => `• ${i.title}`).join("\n") : "No current shortlists or tests for you.";
-    }
-    if (mentioned.length) return mentioned.map((c) => live.filter((i) => i.company === c).map((i) => `• ${i.title}`).join("\n")
-      || `Nothing current about ${c}.`).join("\n");
-    const top = live.filter((i) => i.level === "always").slice(0, 3);
-    return "I can answer things like “what's due tomorrow?”, “did I apply to X?”, “which room for the X test?”, " +
-      "“what's the CTC at X?”." + (top.length ? "\n\nMost important right now:\n" + top.map((i) => `• ${i.title}`).join("\n") : "");
+    const R = window.PingRules;
+    if (!R) return "I can't answer that right now. Try again in a minute.";
+    const run = (data.runs || [])[0] || {};
+    return R.answer(question, {
+      now: nowDate(),
+      lastChecked: run.finished_at || run.started_at || data.generated_at || null,
+      roles: (data.roles || []).map((r) => {
+        const m = state.marks?.size ? state.marks.get(r.id) : r.relevance;
+        return { ...r, deadline: r.effective_deadline || r.apply_end, cv: m?.relevant ? m.best_cv : null };
+      }),
+      items: (data.items || []).filter((i) => !i.dismissed)
+        .map((i) => ({ ...i, hidden_because: i.details?.hidden_because, subject: i.details?.subject })),
+      notices: data.notices || [],
+    }).text;
   }
 
   boot().catch((e) => mountPage(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, e.message))));

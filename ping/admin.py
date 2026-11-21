@@ -5,6 +5,8 @@
   build-demo       build the anonymised demo from your real data, check it, save it for the static demo
                    (dashboard/demo-data.json) and load it as the rows the reviewer login sees
   gemini-check     call Gemini once and show exactly what comes back, plus retry the notices the rules missed
+  functions-check  the Ask Ping / Check now functions on Supabase: deployed versions, which secrets they have
+                   (names only), their logs from the last 24 hours, and two test questions as the reviewer
 """
 
 from __future__ import annotations
@@ -137,11 +139,101 @@ def gemini_check(secrets) -> int:
     return 0 if res is not None or not missed else 1
 
 
+API = "https://api.supabase.com"
+
+
+def _logs(ref: str, token: str, sql: str, hours: int = 24) -> list:
+    from datetime import timedelta, timezone
+    end = datetime.now(timezone.utc)
+    r = requests.get(f"{API}/v1/projects/{ref}/analytics/endpoints/logs.all", timeout=60,
+                     headers={"Authorization": f"Bearer {token}"},
+                     params={"sql": sql, "iso_timestamp_start": (end - timedelta(hours=hours)).isoformat(),
+                             "iso_timestamp_end": end.isoformat()})
+    if r.status_code >= 400:
+        say(f"  (logs query failed: HTTP {r.status_code} {r.text[:300]})")
+        return []
+    body = r.json()
+    if body.get("error"):
+        say(f"  (logs query error: {str(body['error'])[:300]})")
+    return body.get("result") or []
+
+
+def ask_as_reviewer(url: str, question: str) -> tuple[int, float, str]:
+    """Ask Ping exactly like the dashboard does: signed-in token + publishable key, POST {question}."""
+    publishable = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+    r = requests.post(f"{url.rstrip('/')}/auth/v1/token", params={"grant_type": "password"}, timeout=30,
+                      headers={"apikey": publishable},
+                      json={"email": os.environ.get("REVIEWER_EMAIL", ""), "password": os.environ.get("REVIEWER_PASSWORD", "")})
+    if r.status_code != 200:
+        return r.status_code, 0.0, f"reviewer sign-in failed: {r.text[:200]}"
+    tok = r.json()["access_token"]
+    t = time.monotonic()
+    a = requests.post(f"{url.rstrip('/')}/functions/v1/ask-ping", timeout=180, json={"question": question},
+                      headers={"apikey": publishable, "Authorization": f"Bearer {tok}"})
+    return a.status_code, time.monotonic() - t, a.text[:1500]
+
+
+def functions_check(secrets) -> int:
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    if not token:
+        say("SUPABASE_ACCESS_TOKEN is not set in the repo secrets")
+        return 2
+    ref = sa.project_ref(secrets.supabase_url)
+    hdr = {"Authorization": f"Bearer {token}"}
+    fns = requests.get(f"{API}/v1/projects/{ref}/functions", headers=hdr, timeout=30).json()
+    ids = {}
+    say("deployed functions:")
+    for f in fns if isinstance(fns, list) else []:
+        ids[f.get("id")] = f.get("slug")
+        say(f"  {f.get('slug')}: status {f.get('status')}, version {f.get('version')}, "
+            f"updated {datetime.fromtimestamp((f.get('updated_at') or 0) / 1000, IST):%d %b %H:%M IST}, "
+            f"verify_jwt {f.get('verify_jwt')}")
+    names = sorted(x.get("name", "") for x in requests.get(f"{API}/v1/projects/{ref}/secrets", headers=hdr,
+                                                            timeout=30).json())
+    say(f"secrets the functions can read on Supabase (names only): {', '.join(names)}")
+    say(f"  GEMINI_API_KEY on the Supabase side: {'yes' if 'GEMINI_API_KEY' in names else 'NO'}")
+    ask_id = next((i for i, slug in ids.items() if slug == "ask-ping"), None)
+
+    say("\nask-ping requests, last 24 h (newest first):")
+    rows = _logs(ref, token, f"""
+        select timestamp, response.status_code as status, request.method as method, m.execution_time_ms as ms,
+               m.version as version
+        from function_edge_logs
+        cross join unnest(metadata) as m
+        cross join unnest(m.response) as response
+        cross join unnest(m.request) as request
+        where m.function_id = '{ask_id}'
+        order by timestamp desc
+        limit 40""")
+    for x in rows:
+        ts = datetime.fromtimestamp(int(x["timestamp"]) / 1e6, IST)
+        say(f"  {ts:%d %b %H:%M:%S} {x.get('method')} -> HTTP {x.get('status')} in {x.get('ms')} ms (v{x.get('version')})")
+    say("\nask-ping messages (errors, crashes, shutdown reasons), last 24 h:")
+    rows = _logs(ref, token, f"""
+        select timestamp, event_message, m.level as level, m.event_type as event_type
+        from function_logs
+        cross join unnest(metadata) as m
+        where m.function_id = '{ask_id}'
+        order by timestamp desc
+        limit 60""")
+    for x in rows:
+        ts = datetime.fromtimestamp(int(x["timestamp"]) / 1e6, IST)
+        msg = " ".join(str(x.get("event_message") or "").split())[:400]
+        say(f"  {ts:%d %b %H:%M:%S} [{x.get('level')}/{x.get('event_type')}] {msg}")
+
+    if os.environ.get("REVIEWER_PASSWORD") and os.environ.get("SUPABASE_PUBLISHABLE_KEY"):
+        say("\ntest questions, asked as the reviewer login (demo data, same function):")
+        for q in ("slice ctc breakdown", "what's due tomorrow"):
+            code, secs, body = ask_as_reviewer(secrets.supabase_url, q)
+            say(f"  Q: {q}\n  -> HTTP {code} in {secs:.1f}s: {body}")
+    return 0
+
+
 def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
-             "gemini-check": gemini_check}
+             "gemini-check": gemini_check, "functions-check": functions_check}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

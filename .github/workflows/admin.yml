@@ -7,12 +7,12 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, create-reviewer, build-demo, gemini-check]
+        options: [apply-sql, create-reviewer, build-demo, gemini-check, functions-check]
       reviewer_email:
         description: "create-reviewer: the reviewer's sign-in email"
         default: "reviewer@ping-demo.example"
       reviewer_password:
-        description: "create-reviewer: the reviewer's password (8+ characters)"
+        description: "create-reviewer / functions-check: the reviewer's password"
         default: ""
 
 permissions:

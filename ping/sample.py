@@ -157,9 +157,23 @@ def build(now: datetime | None = None) -> dict:
                  "name": c["name"], "phone": c["phone"], "is_sample": True}
                 for n in notice_rows for c in n["analysis"]["contacts"]]
     items = build_items(roles, notice_rows, checks, PROFILE, now, emails)
+    starts = {r["id"]: r["apply_start"] for r in roles}
     for it in items:
         it["id"] = it["id"] if it["id"].startswith(("sample", "role:sample", "notice:sample")) else f"sample:{it['id']}"
         it["is_sample"] = True
+        # when Ping would have posted it: the notice time, the role's opening, or 24h before a deadline
+        if it["category"] == "reminder" and it.get("due_at"):
+            it["first_seen"] = (datetime.fromisoformat(it["due_at"]) - timedelta(hours=24)).isoformat()
+        elif it.get("details", {}).get("notice_time"):
+            it["first_seen"] = it["details"]["notice_time"]
+        elif it.get("role_ids") and it["role_ids"][0] in starts:
+            it["first_seen"] = starts[it["role_ids"][0]]
+        elif it.get("details", {}).get("received_at"):
+            it["first_seen"] = it["details"]["received_at"]
+        else:
+            it["first_seen"] = (now - timedelta(hours=1)).isoformat()
+        if datetime.fromisoformat(it["first_seen"]) > now:
+            it["first_seen"] = (now - timedelta(minutes=5)).isoformat()
     dls = effective_deadlines(roles, notice_rows, index)
     for r in roles:
         e = evaluate(r, PROFILE)

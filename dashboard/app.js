@@ -1,11 +1,16 @@
 /* Ping dashboard. Plain JavaScript, no build step.
  *
+ * Home screen is a chat with Ping: every "for you" item is a message from
+ * Ping, your questions and Ping's answers sit in the same thread, and unread
+ * messages are marked. Behind the Menu: all updates (with the three level
+ * filters), company pages, profile, Check now.
+ *
  * Two modes:
  *  - real: log in with Supabase; data is read straight from your own Supabase
  *    project with the publishable key, and Row Level Security only lets your
- *    login see it. "Check now" and "Ask Ping" go to two small server functions
+ *    login see it. "Check now" and AI answers go to two small server functions
  *    that hold the GitHub token and the Gemini key, so neither is ever in here.
- *  - demo: made-up data from demo-data.json, no login, nothing leaves the page.
+ *  - demo: data from demo-data.json, no login; the thread is kept in this browser.
  */
 (() => {
   "use strict";
@@ -13,6 +18,7 @@
   const TZ = "Asia/Kolkata";
   const $ = (s) => document.querySelector(s);
   const LEVELS = { always: "Always show", show: "Apply by", hidden: "Hidden" };
+  const PAST = /deadline gone|already happened|older than 3 days|replaced by the 24h reminder/;
 
   // ------------------------------------------------------------ tiny DOM helper (no innerHTML: notice text is untrusted)
   function h(tag, attrs, ...kids) {
@@ -32,21 +38,32 @@
   }
   const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const companyHref = (name) => `#co-${slug(name)}`;
-  const safeUrl = (u) => (/^(https?:|#|mailto:)/i.test(String(u)) ? String(u) : "#");
-  const mount = (...nodes) => { const app = $("#app"); app.replaceChildren(...nodes); window.scrollTo(0, 0); };
+  const safeUrl = (u) => (/^(https?:|#|mailto:|\?)/i.test(String(u)) ? String(u) : "#");
+  const mount = (...nodes) => { const app = $("#app"); app.replaceChildren(...nodes); };
+  const store = {  // per-browser conveniences only; every read/write may fail (private windows)
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
+  };
 
   // ------------------------------------------------------------ dates (always IST)
   const dt = (v) => (v ? new Date(v) : null);
+  const istDay = (d) => d.toLocaleDateString("en-CA", { timeZone: TZ });
   function when(v) {
     const d = dt(v);
     if (!d || isNaN(d)) return "";
-    const now = new Date();
-    const days = (d - now) / 86400000;
+    const days = (d - new Date()) / 86400000;
     const time = d.toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
     const wd = d.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "short" });
     if (days >= 0 && days < 6) return `${wd} ${time}`;
-    const date = d.toLocaleDateString("en-GB", { timeZone: TZ, day: "2-digit", month: "short" });
-    return `${wd} ${date} ${time}`;
+    return `${wd} ${d.toLocaleDateString("en-GB", { timeZone: TZ, day: "2-digit", month: "short" })} ${time}`;
+  }
+  const clock = (v) => dt(v).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  function dayLabel(v) {
+    const d = dt(v), today = istDay(new Date()), yest = istDay(new Date(Date.now() - 86400000));
+    const k = istDay(d);
+    if (k === today) return "Today";
+    if (k === yest) return "Yesterday";
+    return d.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", year: "numeric" });
   }
   const money = (n, cur) => (n == null ? "—" : `${Number(n).toLocaleString("en-IN")} ${cur || ""}`.trim());
 
@@ -65,11 +82,15 @@
       if (it) { it.level = "hidden"; it.title = fix.ignore ? "Marked not relevant." : `Noted: it's about ${fix.company}.`; }
     }
     async checkNow() { return "Demo mode: this would start a real run on GitHub. Nothing was started."; }
-    async ask(q) { return answerLocally(q, this.d) + "\n\n(Demo mode answers with simple rules, not AI.)"; }
+    async ask(q) { return answerLocally(q, this.d); }
+    async chat() { return store.get("ping-demo-chat", []); }
+    async addChat(m) { store.set("ping-demo-chat", [...store.get("ping-demo-chat", []), m].slice(-500)); }
+    async readAt() { return store.get("ping-demo-read", null); }
+    async setReadAt(t) { store.set("ping-demo-read", t); }
   }
 
   class SupabaseSource {
-    constructor(sb) { this.sb = sb; this.kind = "real"; }
+    constructor(sb) { this.sb = sb; this.kind = "real"; this.chatOk = true; }
     async q(table, fn) {
       let query = this.sb.from(table).select("*");
       if (fn) query = fn(query);
@@ -79,7 +100,7 @@
     }
     async load() {
       const [items, roles, profile, runs] = await Promise.all([
-        this.q("items", (q) => q.order("first_seen", { ascending: false }).limit(2000)),
+        this.q("items", (q) => q.order("first_seen", { ascending: true }).limit(3000)),
         this.q("roles", (q) => q.limit(2000)),
         this.q("profile"),
         this.q("runs", (q) => q.order("started_at", { ascending: false }).limit(1)),
@@ -107,8 +128,7 @@
       const { data: { session } } = await this.sb.auth.getSession();
       const r = await fetch(`${CFG.supabaseUrl}/functions/v1/${name}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey,
-                   Authorization: `Bearer ${session?.access_token}` },
+        headers: { "Content-Type": "application/json", apikey: CFG.supabaseKey, Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(body || {}),
       });
       const out = await r.json().catch(() => ({}));
@@ -117,19 +137,35 @@
     }
     async checkNow() {
       await this.fn("check-now");
-      return "Started a run. New results show up here in about 2 minutes (reload the page).";
+      return "Started a run. New messages arrive in about 2 minutes (reload to see them).";
     }
     async ask(q) {
       try { return (await this.fn("ask-ping", { question: q })).answer; }
-      catch (e) {
-        return answerLocally(q, state.data) +
-          `\n\n(The AI helper isn't reachable: ${e.message}. This answer used simple rules.)`;
+      catch (e) { return answerLocally(q, state.data) + `\n\n(AI helper not reachable: ${e.message}. Answered with simple rules.)`; }
+    }
+    // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
+    async chat() {
+      const { data, error } = await this.sb.from("chat_messages").select("role,text,created_at").order("created_at").limit(1000);
+      if (error) { this.chatOk = false; return store.get("ping-chat", []); }
+      return data;
+    }
+    async addChat(m) {
+      if (this.chatOk) {
+        const { error } = await this.sb.from("chat_messages").insert({ role: m.role, text: m.text, created_at: m.created_at });
+        if (!error) return;
+        this.chatOk = false;
       }
+      store.set("ping-chat", [...store.get("ping-chat", []), m].slice(-500));
+    }
+    async readAt() { return state.data.profile?.chat_read_at || store.get("ping-read", null); }
+    async setReadAt(t) {
+      store.set("ping-read", t);
+      await this.sb.from("profile").update({ chat_read_at: t }).eq("id", 1);
     }
   }
 
   // ------------------------------------------------------------ state + boot
-  const state = { src: null, data: null, filter: "visible", companyQuery: "" };
+  const state = { src: null, data: null, filter: "visible", companyQuery: "", chat: [], open: new Set() };
 
   async function boot() {
     const params = new URLSearchParams(location.search);
@@ -144,13 +180,15 @@
 
   async function startDemo(noBackend) {
     const r = await fetch("demo-data.json", { cache: "no-store" });
-    const data = await r.json();
-    state.src = new DemoSource(data);
-    $("#mode-badge").textContent = "Demo: made-up data";
+    state.src = new DemoSource(await r.json());
+    $("#mode-badge").textContent = "Demo";
+    $("#mode-badge").title = "Demo data, no login";
     $("#mode-badge").hidden = false;
     if (!noBackend) {
-      const exit = h("button", { class: "btn ghost", onclick: () => { location.href = location.pathname; } }, "Exit demo");
-      $("#sign-out").replaceWith(exit);
+      const out = $("#sign-out");
+      out.textContent = "Exit demo";
+      out.hidden = false;
+      out.onclick = () => { location.href = location.pathname; };
     }
     await afterStart();
   }
@@ -174,40 +212,46 @@
   }
 
   async function afterStart() {
-    try { state.data = await state.src.load(); }
-    catch (e) { mount(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
-    $("#nav").hidden = false;
-    $("#ask").hidden = false;
-    const btn = $("#check-now");
-    btn.hidden = false;
-    btn.onclick = async () => {
-      btn.disabled = true;
-      try { status(await state.src.checkNow()); }
-      catch (e) { status(e.status === 404 ? "The check-now function isn't deployed yet (see README)." : `Couldn't start a run: ${e.message}`); }
-      finally { setTimeout(() => { btn.disabled = false; }, 15000); }
-    };
+    try {
+      state.data = await state.src.load();
+      state.chat = await state.src.chat();
+      state.readAt = await state.src.readAt();
+    } catch (e) { mount(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
+    setupMenu();
     showLastRun();
     window.addEventListener("hashchange", route);
     route();
   }
 
+  function setupMenu() {
+    const btn = $("#menu-btn"), menu = $("#menu");
+    btn.hidden = false;
+    const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+    btn.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); };
+    document.addEventListener("click", (e) => { if (!menu.contains(e.target)) close(); });
+    menu.addEventListener("click", (e) => { if (e.target.closest("a")) close(); });
+    const check = $("#check-now");
+    check.onclick = async () => {
+      close();
+      check.disabled = true;
+      try { status(await state.src.checkNow()); }
+      catch (e) { status(e.status === 404 ? "Check now isn't set up yet (see README)." : `Couldn't start a run: ${e.message}`); }
+      finally { setTimeout(() => { check.disabled = false; }, 15000); }
+    };
+  }
+
   function showLastRun() {
     const run = (state.data.runs || [])[0];
     if (!run) return;
-    const bad = run.status !== "ok";
-    status(`Last run ${when(run.finished_at)}: ${run.status}` + (bad && run.problems?.length ? ` (${run.problems[0]})` : ""), !bad);
+    $("#subtitle").textContent = `last checked ${when(run.finished_at)}${run.status === "ok" ? "" : " (problem)"}`;
+    if (run.status !== "ok") status(`Last run: ${run.status}${run.problems?.length ? ` (${run.problems[0]})` : ""}`);
   }
 
-  function status(text, quiet) {
-    const el = $("#status");
-    el.textContent = text;
-    el.hidden = false;
-    if (quiet) el.style.opacity = ".8";
-  }
+  function status(text) { const el = $("#status"); el.textContent = text; el.hidden = !text; }
 
   function showLogin(sb) {
-    const email = h("input", { type: "email", required: true, autocomplete: "username", placeholder: "you@kgpian.iitkgp.ac.in" });
-    const pw = h("input", { type: "password", required: true, autocomplete: "current-password", placeholder: "Password" });
+    const email = h("input", { type: "email", required: true, autocomplete: "username", placeholder: "you@example.com", id: "login-email" });
+    const pw = h("input", { type: "password", required: true, autocomplete: "current-password", placeholder: "Password", id: "login-pw" });
     const msg = h("p", { class: "muted small" });
     mount(h("form", { class: "login card", onsubmit: async (e) => {
       e.preventDefault();
@@ -222,30 +266,153 @@
       h("button", { class: "btn" }, "Sign in"),
       msg,
       h("p", { class: "or" }, "or"),
-      h("a", { class: "btn ghost center", href: "?demo=1" }, "Try the demo (made-up data, no login)")));
+      h("a", { class: "btn ghost center", href: "?demo=1" }, "Try the demo (no login)")));
   }
 
   // ------------------------------------------------------------ router
-  // Plain "#name" links only (they also work where the page is embedded): #feed, #companies, #profile, #co-<company>
+  // Plain "#name" links: #chat (home), #feed, #companies, #profile, #co-<company>
   function route() {
-    const hash = location.hash.slice(1) || "feed";
+    const hash = location.hash.slice(1) || "chat";
     const page = hash.startsWith("co-") ? "companies" : hash;
-    document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("on", a.dataset.route === page));
+    document.body.classList.toggle("chat-on", page === "chat");
+    document.querySelectorAll("#menu a").forEach((a) => a.classList.toggle("on", a.dataset.route === page));
     if (hash.startsWith("co-")) {
       const name = [...byCompany().keys()].find((c) => slug(c) === hash.slice(3));
       return viewCompany(name || "");
     }
+    if (hash === "feed") return viewFeed();
     if (hash === "companies") return viewCompanies();
     if (hash === "profile") return viewProfile();
-    return viewFeed();
+    return viewChat();
   }
 
-  // ------------------------------------------------------------ feed
-  function itemDue(it) { return it.due_at || it.event_at; }
-  function sortNewest(a, b) {
-    const ka = a.first_seen || a.sort_at || "", kb = b.first_seen || b.sort_at || "";
-    return kb.localeCompare(ka) || String(b.sort_at || "").localeCompare(String(a.sort_at || ""));
+  // ------------------------------------------------------------ chat (home)
+  const itemTime = (it) => it.first_seen || it.details?.notice_time || it.sort_at;
+  const isPast = (it) => it.level === "hidden" && PAST.test(it.details?.hidden_because || "");
+  const inChat = (it) => !it.dismissed && (it.level !== "hidden" || isPast(it));
+
+  function threadEntries() {
+    const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
+    const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text }));
+    return [...items, ...talk].filter((e) => e.at).sort((a, b) =>
+      dt(a.at) - dt(b.at) || (a.kind === "item" && b.kind === "item" ? String(a.it.sort_at || "").localeCompare(String(b.it.sort_at || "")) : 0));
   }
+
+  function viewChat() {
+    const entries = threadEntries();
+    const readAt = state.readAt ? dt(state.readAt) : null;
+    const unread = entries.filter((e) => e.kind === "item" && (!readAt || dt(e.at) > readAt));
+    const inner = h("div", { class: "thread-inner" });
+    let lastDay = null, divider = null;
+    if (!entries.length) inner.append(h("div", { class: "day" }, "No messages yet. Ping posts here when something is about you."));
+    for (const e of entries) {
+      const day = dayLabel(e.at);
+      if (day !== lastDay) { inner.append(h("div", { class: "day" }, day)); lastDay = day; }
+      if (!divider && unread.length && e === unread[0]) {
+        divider = h("div", { class: "unread", id: "unread" }, `${unread.length} unread message${unread.length > 1 ? "s" : ""}`);
+        inner.append(divider);
+      }
+      inner.append(e.kind === "item" ? itemBubble(e.it, e.at) : textBubble(e.kind, e.text, e.at));
+    }
+    const thread = h("div", { class: "thread", id: "thread" }, inner);
+    const input = h("input", { id: "ask-input", autocomplete: "off", maxlength: "300", enterkeyhint: "send",
+      placeholder: "Ask Ping: what's due tomorrow?", "aria-label": "Message Ping" });
+    const form = h("form", { onsubmit: (ev) => { ev.preventDefault(); send(input, inner, thread); } }, input, h("button", { class: "btn" }, "Send"));
+    mount(thread, h("div", { class: "composer" }, form));
+    // open at the first unread message, otherwise at the bottom (the latest thing that happened)
+    requestAnimationFrame(() => {
+      if (divider) divider.scrollIntoView({ block: "start" });
+      else thread.scrollTop = thread.scrollHeight;
+    });
+    const latest = entries.length ? entries[entries.length - 1].at : null;
+    if (latest && (!readAt || dt(latest) > readAt)) {
+      state.readAt = new Date(Math.max(dt(latest), Date.now())).toISOString();
+      state.src.setReadAt(state.readAt).catch(() => {});
+    }
+  }
+
+  function textBubble(role, text, at) {
+    return h("div", { class: `msg ${role === "me" ? "me" : "ping"}` }, h("span", { class: "text" }, text),
+      h("span", { class: "time" }, clock(at)));
+  }
+
+  function itemBubble(it, at) {
+    const cls = it.needs_review ? "review" : it.level;
+    const past = isPast(it);
+    const why = it.details?.hidden_because || "";
+    const pastLabel = /reminder/.test(why) ? "Replaced by reminder" : /deadline/.test(why) ? "Deadline passed" : "Over";
+    const kicker = past ? pastLabel : it.needs_review ? "Question" : LEVELS[it.level];
+    const open = state.open.has(it.id);
+    const bubble = h("div", { class: `msg ping item ${cls}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
+      tabindex: "0", "aria-expanded": String(open) },
+      h("div", { class: `kicker ${past ? "hidden" : cls}` }, kicker),
+      h("span", { class: "text" }, it.title),
+      h("span", { class: "time" }, clock(at)));
+    const toggle = (ev) => {
+      if (ev.target.closest("a, button, .more")) return;
+      state.open.has(it.id) ? state.open.delete(it.id) : state.open.add(it.id);
+      bubble.replaceWith(itemBubble(it, at));
+    };
+    bubble.addEventListener("click", toggle);
+    bubble.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(ev); } });
+    if (open) bubble.append(itemDetails(it));
+    return bubble;
+  }
+
+  function itemDetails(it) {
+    const d = it.details || {};
+    const due = it.due_at || it.event_at;
+    const lines = [];
+    if (due) lines.push(h("div", {}, h("strong", {}, it.due_at ? "Due: " : "When: "), when(due)));
+    if (it.company) lines.push(h("div", {}, h("strong", {}, "Company: "), h("a", { href: companyHref(it.company) }, it.company)));
+    if (d.venue) lines.push(h("div", {}, h("strong", {}, "Venue: "), d.venue));
+    if (d.pdf?.status === "yes" && d.pdf.my_row) lines.push(h("div", {}, h("strong", {}, "Your row: "),
+      (d.pdf.header ? d.pdf.header.map((x, i) => `${x}: ${d.pdf.my_row[i] ?? ""}`) : d.pdf.my_row).join(" · ")));
+    if ((d.reasons || []).length) lines.push(h("div", {}, h("strong", {}, "Eligibility: "), [...d.reasons, ...(d.flags || [])].join("; ")));
+    if (d.deadline_source && d.deadline_source !== "companies list") lines.push(h("div", { class: "muted" }, `Deadline from ${d.deadline_source}`));
+    if ((d.contacts || []).length) lines.push(h("div", {}, h("strong", {}, "Contacts: "), d.contacts.map((c) => `${c.name} ${c.phone}`).join(", ")));
+    if (d.hidden_because) lines.push(h("div", { class: "muted" }, `Not shown any more: ${d.hidden_because}`));
+    const links = [
+      it.notice_id ? h("button", { type: "button", onclick: () => openNotice(it.notice_id) }, "Open notice") : null,
+      it.notice_id && it.pdf_status ? pdfLink(it) : null,
+      ...(d.todo?.link ? [h("a", { href: d.todo.link, target: "_blank", rel: "noopener" }, "Open form")] : []),
+      ...mailLinks(it).map((u, k) => h("a", { href: u, target: "_blank", rel: "noopener" }, k ? "Link 2" : "Link from your mail")),
+      !isPast(it) ? h("button", { type: "button", onclick: () => toggleDone(it) }, it.done ? "Undo done" : "Mark done") : null,
+    ];
+    const more = h("div", { class: "more" }, lines, h("div", { class: "links" }, links));
+    if (it.needs_review && it.level !== "hidden") {
+      more.append(h("div", { class: "links" }, "It's about:",
+        (d.candidates || []).map((c) => h("button", { type: "button", onclick: () => fix(it, { company: c }) }, c)),
+        h("button", { type: "button", onclick: () => fix(it, { ignore: true }) }, "none of these")));
+    }
+    return more;
+  }
+
+  async function send(input, inner, thread) {
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = "";
+    const mine = { role: "me", text: q, created_at: new Date().toISOString() };
+    state.chat.push(mine);
+    inner.append(textBubble("me", q, mine.created_at));
+    const wait = h("div", { class: "msg ping typing" }, "Ping is typing…");
+    inner.append(wait);
+    thread.scrollTop = thread.scrollHeight;
+    state.src.addChat(mine).catch(() => {});
+    let answer;
+    try { answer = await state.src.ask(q); } catch (e) { answer = e.message; }
+    const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };
+    state.chat.push(reply);
+    wait.replaceWith(textBubble("ping", reply.text, reply.created_at));
+    thread.scrollTop = thread.scrollHeight;
+    state.src.addChat(reply).catch(() => {});
+    state.readAt = reply.created_at;
+    state.src.setReadAt(state.readAt).catch(() => {});
+  }
+
+  // ------------------------------------------------------------ all updates (list with the three level filters)
+  const itemDue = (it) => it.due_at || it.event_at;
+  function sortNewest(a, b) { return String(itemTime(b) || "").localeCompare(String(itemTime(a) || "")); }
 
   function viewFeed() {
     const items = state.data.items.filter((i) => !i.dismissed);
@@ -253,17 +420,15 @@
     items.forEach((i) => { counts[i.level] = (counts[i.level] || 0) + 1; });
     const filters = [["visible", "For you", counts.always + counts.show], ["always", LEVELS.always, counts.always],
                      ["show", LEVELS.show, counts.show], ["hidden", LEVELS.hidden, counts.hidden]];
-    const shown = items.filter((i) => state.filter === "visible" ? i.level !== "hidden" : i.level === state.filter)
-                       .sort(sortNewest);
+    const shown = items.filter((i) => state.filter === "visible" ? i.level !== "hidden" : i.level === state.filter).sort(sortNewest);
     mount(
-      h("h1", {}, "For you"),
+      h("h1", {}, "All updates"),
       h("p", { class: "muted small" }, "Newest first. “Always show” is anything about a role you applied to; " +
         "“Apply by” is open roles you're eligible for; “Hidden” is kept but not yours (or past)."),
       h("div", { class: "filters" }, filters.map(([key, label, n]) =>
         h("button", { class: "chip" + (state.filter === key ? " on" : ""), onclick: () => { state.filter = key; viewFeed(); } },
           label, h("span", { class: "n" }, n)))),
-      shown.length ? h("div", { class: "list" }, shown.map(itemCard))
-                   : h("p", { class: "muted" }, "Nothing here right now."));
+      shown.length ? h("div", { class: "list" }, shown.map(itemCard)) : h("p", { class: "muted" }, "Nothing here right now."));
   }
 
   function itemCard(it) {
@@ -274,18 +439,16 @@
       h("span", { class: `tag ${cls}` }, it.needs_review ? "Question" : LEVELS[it.level]),
       due ? h("span", { class: "due" + (soon ? " soon" : "") }, (it.due_at ? "Due " : "On ") + when(due)) : null,
       it.company ? h("a", { href: companyHref(it.company) }, it.company) : null,
-      it.notice_id ? h("button", { onclick: () => openNotice(it.notice_id, it) }, "Open notice") : null,
+      it.notice_id ? h("button", { onclick: () => openNotice(it.notice_id) }, "Open notice") : null,
       it.notice_id && it.pdf_status ? pdfLink(it) : null,
       ...mailLinks(it).map((u, k) => h("a", { href: u, target: "_blank", rel: "noopener" }, k ? "Link 2" : "Link from your mail")),
       ...(it.details?.todo?.link ? [h("a", { href: it.details.todo.link, target: "_blank", rel: "noopener" }, "Open form")] : []),
       it.level !== "hidden" ? h("button", { onclick: () => toggleDone(it) }, it.done ? "Undo done" : "Done") : null,
     ];
-    const card = h("div", { class: `item ${cls}${it.done ? " done" : ""}` }, h("div", { class: "title" }, it.title),
-      h("div", { class: "meta" }, meta));
+    const card = h("div", { class: `item ${cls}${it.done ? " done" : ""}` }, h("div", { class: "title" }, it.title), h("div", { class: "meta" }, meta));
     if (it.needs_review && it.level !== "hidden") {
-      const cands = it.details?.candidates || [];
       card.append(h("div", { class: "meta" }, "It's about:",
-        cands.map((c) => h("button", { onclick: () => fix(it, { company: c }) }, c)),
+        (it.details?.candidates || []).map((c) => h("button", { onclick: () => fix(it, { company: c }) }, c)),
         h("button", { onclick: () => fix(it, { ignore: true }) }, "none of these / not relevant")));
     }
     return card;
@@ -298,7 +461,7 @@
   }
 
   function pdfLink(it) {
-    const year = it.details?.notice_year || (state.noticeYears || {})[it.notice_id];
+    const year = it.details?.notice_year;
     const href = year ? `https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=${encodeURIComponent(year)}&id=${it.notice_id}`
                       : "https://erp.iitkgp.ac.in/";
     return h("a", { href, target: "_blank", rel: "noopener", title: "Opens on the ERP; you need to be logged in to the ERP in this browser" },
@@ -312,16 +475,15 @@
   }
 
   async function fix(it, f) {
-    const key = it.details?.notice_key;
     try {
-      await state.src.correct(key, f);
+      await state.src.correct(it.details?.notice_key, f);
       status(state.src.kind === "demo" ? "Saved (demo only)." : "Saved. The next run will use your answer.");
-      if (state.src.kind !== "demo") { it.level = "hidden"; }
+      if (state.src.kind !== "demo") it.level = "hidden";
     } catch (e) { status(e.message); }
     route();
   }
 
-  async function openNotice(noticeId, it) {
+  async function openNotice(noticeId) {
     const body = $("#modal-body");
     body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
     $("#modal").showModal();
@@ -329,7 +491,6 @@
     try { res = await state.src.notice(noticeId); } catch (e) { body.replaceChildren(h("p", {}, e.message)); return; }
     const n = res.notice;
     if (!n) { body.replaceChildren(h("p", {}, "This notice isn't stored.")); return; }
-    (state.noticeYears ||= {})[noticeId] = n.year;
     const c = res.check;
     const a = n.analysis || {};
     body.replaceChildren(
@@ -363,23 +524,19 @@
 
   function viewCompanies() {
     const map = byCompany();
-    const input = h("input", { class: "search", placeholder: "Search companies", value: state.companyQuery,
+    const input = h("input", { class: "search", id: "company-search", placeholder: "Search companies", value: state.companyQuery,
       oninput: (e) => { state.companyQuery = e.target.value; draw(); } });
     const grid = h("div", { class: "grid" });
     function draw() {
       const q = state.companyQuery.toLowerCase();
       const now = new Date();
-      grid.replaceChildren(...[...map.entries()]
-        .filter(([c]) => c.toLowerCase().includes(q))
-        .sort(([a], [b]) => a.localeCompare(b))
+      grid.replaceChildren(...[...map.entries()].filter(([c]) => c.toLowerCase().includes(q)).sort(([a], [b]) => a.localeCompare(b))
         .map(([c, roles]) => {
           const applied = roles.filter((r) => r.applied).length;
           const open = roles.filter((r) => !r.applied && dt(deadlineOf(r)) > now && r.eligible !== false);
-          return h("a", { class: "card company-link", href: companyHref(c) },
-            h("strong", {}, c),
+          return h("a", { class: "card company-link", href: companyHref(c) }, h("strong", {}, c),
             h("div", { class: "small muted" }, `${roles.length} role${roles.length > 1 ? "s" : ""}`,
-              applied ? ` · applied to ${applied}` : "",
-              open.length ? ` · ${open.length} open for you` : ""));
+              applied ? ` · applied to ${applied}` : "", open.length ? ` · ${open.length} open for you` : ""));
         }));
     }
     draw();
@@ -420,9 +577,8 @@
     const p = state.data.profile || {};
     const depts = new Set(), degrees = new Set();
     state.data.roles.forEach((r) => (r.allowed || []).forEach((a) => { depts.add(a.department); degrees.add(a.degree); }));
-    const companies = [...byCompany().keys()].sort();
     const field = (name, label, value, attrs = {}, hint) => h("label", {}, label, hint ? h("span", { class: "hint" }, hint) : null,
-      h("input", { name, value: value ?? "", ...attrs }));
+      h("input", { name, id: `pf-${name}`, value: value ?? "", ...attrs }));
     const cv = p.cv_names || [];
     const lists = (v) => (v || []).join("\n");
     const form = h("form", { class: "profile card", onsubmit: save },
@@ -434,18 +590,17 @@
         field("degree", "Degree", p.degree, { list: "dl-degrees" })),
       h("div", { class: "row2" },
         field("cgpa", "CGPA", p.cgpa, { type: "number", step: "0.01", min: "0", max: "10" }),
-        h("label", { class: "check" }, h("input", { type: "checkbox", name: "active_backlogs", checked: !!p.active_backlogs }), "I have active backlogs")),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "active_backlogs", id: "pf-backlogs", checked: !!p.active_backlogs }), "I have active backlogs")),
       h("div", { class: "row3" }, [0, 1, 2].map((i) => field(`cv${i}`, `CV ${i + 1} name`, cv[i]))),
       h("div", { class: "row2" },
         h("label", {}, "Interested companies", h("span", { class: "hint" }, "One per line"),
-          h("textarea", { name: "interested_companies", rows: 5 }, lists(p.interested_companies))),
+          h("textarea", { name: "interested_companies", id: "pf-interested", rows: 5 }, lists(p.interested_companies))),
         h("label", {}, "Not interested", h("span", { class: "hint" }, "One per line. Their roles are hidden."),
-          h("textarea", { name: "not_interested_companies", rows: 5 }, lists(p.not_interested_companies)))),
+          h("textarea", { name: "not_interested_companies", id: "pf-not-interested", rows: 5 }, lists(p.not_interested_companies)))),
       h("div", {}, h("button", { class: "btn" }, "Save profile"),
-        h("span", { class: "muted small", id: "saved" }, "  Changes apply on the next run (or press Check now).")),
+        h("span", { class: "muted small", id: "saved" }, "  Changes apply on the next run (or Menu > Check now).")),
       h("datalist", { id: "dl-depts" }, [...depts].sort().map((d) => h("option", { value: d }))),
-      h("datalist", { id: "dl-degrees" }, [...degrees].sort().map((d) => h("option", { value: d }))),
-      h("datalist", { id: "dl-companies" }, companies.map((c) => h("option", { value: c }))));
+      h("datalist", { id: "dl-degrees" }, [...degrees].sort().map((d) => h("option", { value: d }))));
 
     async function save(e) {
       e.preventDefault();
@@ -469,67 +624,57 @@
       "Used to decide what you're eligible for. Whether you applied comes from the ERP's companies list, not from here."), form);
   }
 
-  // ------------------------------------------------------------ ask Ping
-  function setupAsk() {
-    const toggle = $("#ask-toggle"), panel = $("#ask-panel"), log = $("#ask-log");
-    toggle.onclick = () => {
-      panel.hidden = !panel.hidden;
-      toggle.setAttribute("aria-expanded", String(!panel.hidden));
-      if (!panel.hidden) $("#ask-input").focus();
-      if (!log.childElementCount) log.append(h("div", { class: "msg bot" }, "Ask me things like “what's due tomorrow?” or “did I apply to Accenture?”"));
-    };
-    $("#ask-form").onsubmit = async (e) => {
-      e.preventDefault();
-      const input = $("#ask-input");
-      const q = input.value.trim();
-      if (!q) return;
-      input.value = "";
-      log.append(h("div", { class: "msg me" }, q));
-      const wait = h("div", { class: "msg bot muted" }, "…");
-      log.append(wait);
-      log.scrollTop = log.scrollHeight;
-      try { wait.textContent = await state.src.ask(q); } catch (err) { wait.textContent = err.message; }
-      wait.classList.remove("muted");
-      log.scrollTop = log.scrollHeight;
-    };
-  }
-
-  // Simple rule-based answers: used in demo mode and when the AI helper is unreachable.
+  // ------------------------------------------------------------ answers without AI
+  // Used in demo mode and whenever the AI helper isn't reachable.
   function answerLocally(question, data) {
     const q = question.toLowerCase();
     const now = new Date();
     const live = data.items.filter((i) => i.level !== "hidden" && !i.dismissed);
     const companies = [...new Set(data.roles.map((r) => r.company))];
     const words = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 2);
-    const STOP = new Set(["private", "limited", "india", "pvt", "ltd", "inc", "the", "and", "group", "company"]);
+    const STOP = new Set(["private", "limited", "india", "pvt", "ltd", "inc", "the", "and", "group", "company", "services", "technologies"]);
     const mentioned = companies.filter((c) => words(c).some((w) => !STOP.has(w) && new RegExp(`\\b${w}\\b`).test(q)));
+    const rolesOf = (c) => data.roles.filter((r) => r.company === c);
 
     if (mentioned.length && /appl/.test(q)) {
       return mentioned.map((c) => {
-        const roles = data.roles.filter((r) => r.company === c);
-        const yes = roles.filter((r) => r.applied);
+        const yes = rolesOf(c).filter((r) => r.applied);
         return yes.length ? `Yes, you applied to ${c}: ${yes.map((r) => r.designation).join(", ")}.`
-          : `No, you haven't applied to ${c}. Roles: ${roles.map((r) => `${r.designation} (closes ${when(deadlineOf(r))})`).join(", ")}.`;
+          : `No, you haven't applied to ${c}. Roles: ${rolesOf(c).map((r) => `${r.designation} (closes ${when(deadlineOf(r))})`).join(", ")}.`;
       }).join("\n");
     }
+    if (mentioned.length && /ctc|pay|salary|package|stipend|lpa|money/.test(q)) {
+      return mentioned.map((c) => rolesOf(c).map((r) => `${c} ${r.designation}: CTC ${money(r.ctc, r.currency)}`).join("\n")).join("\n");
+    }
     if (mentioned.length && /eligib/.test(q)) {
-      return mentioned.map((c) => data.roles.filter((r) => r.company === c).map((r) =>
+      return mentioned.map((c) => rolesOf(c).map((r) =>
         `${c} ${r.designation}: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "not sure"}` +
         ` (${[...(r.eligibility?.reasons || []), ...(r.eligibility?.flags || [])].join("; ")})`).join("\n")).join("\n");
     }
+    if (mentioned.length && /room|venue|where|slot/.test(q)) {
+      return mentioned.map((c) => {
+        const hits = data.items.filter((i) => i.company === c && ["shortlist", "test", "result"].includes(i.category));
+        const mine = hits.find((i) => i.pdf_status === "yes" || i.details?.pdf?.status === "yes");
+        if (mine) {
+          const p = mine.details?.pdf || {};
+          const row = p.my_row && p.header ? p.header.map((x, i) => `${x}: ${p.my_row[i] ?? ""}`).join(" · ") : "";
+          return `${mine.title}${row ? `\nYour row: ${row}` : ""}`;
+        }
+        if (hits.some((i) => i.pdf_status === "no")) return `You're not on the ${c} list, so there's no room for you.`;
+        return `I haven't seen a room list for ${c} yet.`;
+      }).join("\n");
+    }
     let from = null, to = null, label = "";
-    const startOfDay = (d) => { const x = new Date(d.toLocaleString("en-US", { timeZone: TZ })); x.setHours(0, 0, 0, 0); return x; };
     const offset = now - new Date(now.toLocaleString("en-US", { timeZone: TZ }));
-    const ist = (d) => new Date(d.getTime() + offset);
-    if (/tomorrow/.test(q)) { from = ist(new Date(startOfDay(now).getTime() + 86400000)); to = new Date(from.getTime() + 86400000); label = "tomorrow"; }
-    else if (/today|tonight/.test(q)) { from = now; to = ist(new Date(startOfDay(now).getTime() + 86400000)); label = "today"; }
+    const istMidnight = (d) => { const x = new Date(d.toLocaleString("en-US", { timeZone: TZ })); x.setHours(0, 0, 0, 0); return new Date(x.getTime() + offset); };
+    if (/tomorrow/.test(q)) { from = new Date(istMidnight(now).getTime() + 86400000); to = new Date(from.getTime() + 86400000); label = "tomorrow"; }
+    else if (/today|tonight/.test(q)) { from = now; to = new Date(istMidnight(now).getTime() + 86400000); label = "today"; }
     else if (/week|7 days/.test(q)) { from = now; to = new Date(now.getTime() + 7 * 86400000); label = "in the next 7 days"; }
     else if (/due|deadline|next|upcoming|soon/.test(q)) { from = now; to = new Date(now.getTime() + 3 * 86400000); label = "in the next 3 days"; }
     if (from) {
       const hits = live.filter((i) => { const d = dt(i.due_at || i.event_at); return d && d >= from && d < to; })
                        .sort((a, b) => dt(a.due_at || a.event_at) - dt(b.due_at || b.event_at));
-      return hits.length ? `Due or happening ${label}:\n` + hits.map((i) => `• ${i.title}`).join("\n")
-                         : `Nothing due or scheduled ${label}.`;
+      return hits.length ? `Due or happening ${label}:\n` + hits.map((i) => `• ${i.title}`).join("\n") : `Nothing due or scheduled ${label}.`;
     }
     if (/shortlist|test|room/.test(q)) {
       const hits = live.filter((i) => ["shortlist", "test", "result"].includes(i.category));
@@ -538,10 +683,9 @@
     if (mentioned.length) return mentioned.map((c) => live.filter((i) => i.company === c).map((i) => `• ${i.title}`).join("\n")
       || `Nothing current about ${c}.`).join("\n");
     const top = live.filter((i) => i.level === "always").slice(0, 3);
-    return "I can answer things like “what's due tomorrow?”, “did I apply to X?”, “am I eligible for X?”." +
-      (top.length ? "\n\nMost important right now:\n" + top.map((i) => `• ${i.title}`).join("\n") : "");
+    return "I can answer things like “what's due tomorrow?”, “did I apply to X?”, “which room for the X test?”, " +
+      "“what's the CTC at X?”." + (top.length ? "\n\nMost important right now:\n" + top.map((i) => `• ${i.title}`).join("\n") : "");
   }
 
-  setupAsk();
   boot().catch((e) => mount(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, e.message))));
 })();

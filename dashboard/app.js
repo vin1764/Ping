@@ -473,7 +473,8 @@
     const wait = h("div", { class: "msg ping typing" }, "Ping is typing…");
     inner.append(wait);
     thread.scrollTop = thread.scrollHeight;
-    state.src.addChat(mine).catch(() => {});
+    // saved before asking: Ask Ping reads the thread (for follow-ups like "nothing else?") from the database
+    await state.src.addChat(mine).catch(() => {});
     let answer;
     try { answer = await state.src.ask(q); } catch (e) { answer = e.message; }
     const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };

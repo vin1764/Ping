@@ -11,6 +11,8 @@ import { caller, cors, json } from "../_shared/owner.ts";
 // free tier is sometimes overloaded (503) or slow, so try a few names in turn.
 const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash"];
 const BUDGET_MS = 100_000;
+const HISTORY_TURNS = 10;      // messages of the thread sent along (both sides)
+const HISTORY_CHARS = 8_000;   // about 2,000 tokens; the oldest messages go first
 const PER_MODEL_MS = 45_000;
 
 const FMT = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit",
@@ -85,6 +87,25 @@ Deno.serve(async (req) => {
     }
   }
 
+  // The thread so far, from the database (never from the page): this login's last messages, oldest first.
+  // The owner reads its own thread; a demo session only its own messages (database rules). The page saves the
+  // new question before asking, so it's dropped here if it's the newest message.
+  const thread = await sb.from("chat_messages").select("role,text,created_at")
+    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2);
+  if (thread.error) console.error(JSON.stringify({ event: "read_failed", table: "chat_messages", error: thread.error.message }));
+  const earlier = (thread.data || []).slice();
+  if (earlier[0]?.role === "me" && earlier[0].text.trim() === question.trim()) earlier.shift();
+  const history = earlier.slice(0, HISTORY_TURNS).reverse();
+  let historyChars = 0;
+  const kept: { role: string; text: string }[] = [];
+  for (const m of history.slice().reverse()) {          // newest first, so the oldest are dropped
+    const text = m.text.length > 1200 ? m.text.slice(0, 1200) + "…" : m.text;
+    if (historyChars + text.length > HISTORY_CHARS) break;
+    historyChars += text.length;
+    kept.unshift({ role: m.role, text });
+  }
+  const lastQuestion = [...kept].reverse().find((m) => m.role === "me")?.text || "";
+
   const [items, roles, profile] = await Promise.all([
     sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
@@ -94,7 +115,10 @@ Deno.serve(async (req) => {
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
-  const names = mentioned(question, [...new Set((roles.data || []).map((r) => r.company as string))]).slice(0, 6);
+  const companies = [...new Set((roles.data || []).map((r) => r.company as string))];
+  // a follow-up that names no company ("same for analyst role?") is about the previous question's companies
+  let names = mentioned(question, companies).slice(0, 6);
+  if (!names.length && lastQuestion) names = mentioned(lastQuestion, companies).slice(0, 6);
   const since = new Date(asOf.getTime() - 21 * 86_400_000).toISOString();
   const [detail, lists, notices] = await Promise.all([
     names.length
@@ -147,8 +171,8 @@ Deno.serve(async (req) => {
 Be short and concrete: dates in IST, times as HH:MM in 24-hour form (e.g. 20:00), money in rupees as written
 (e.g. 22,00,000 or 22 LPA). For pay questions, list every component the data gives (fixed / take-home, bonuses,
 ESOPs, bond) per role. When a deadline or test is before Now, say it has already passed.
-If the answer isn't in the data, say so in one sentence and mention what the data does show. Never guess
-locations, scores, contacts or phone numbers.
+If what was asked about isn't in the data at all (a company, field or record Ping doesn't have), say so in one
+sentence and mention what the data does show. Never guess locations, scores, contacts or phone numbers.
 Ping is read-only: it can never apply, withdraw, accept or decline offers, fill or submit forms, upload or change a CV,
 or change anything on the ERP or anywhere else. If asked to do any of that, start with "Ping is read-only, so I can't"
 followed by what was asked, then add anything useful from the data (deadline, form link).
@@ -166,6 +190,9 @@ ${detailLines.length ? `\nDetails for the companies in the question (from the ER
 Your results on shortlists and test room lists in the last 21 days, newest first:
 ${listLines.join("\n") || "(none)"}
 ${noticeLines.length ? `\nLatest notices for the companies in the question, newest first:\n${noticeLines.join("\n")}\n` : ""}
+Conversation so far, oldest first:
+${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
+
 Question: ${question}`;
 
   const tried: string[] = [];
@@ -192,7 +219,7 @@ Question: ${question}`;
       const out = await r.json();
       const answer = out?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("").trim() || "";
       if (!answer) { tried.push(`${model}:empty(${out?.candidates?.[0]?.finishReason})`); continue; }
-      console.log(JSON.stringify({ event: "answered", role, model, tried, items: items.data?.length ?? 0,
+      console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, items: items.data?.length ?? 0,
         roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0, prompt_chars: prompt.length, ms: Date.now() - t0 }));
       return json({ answer, model });
     } catch (e) {

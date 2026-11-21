@@ -293,8 +293,8 @@ those times, copy that time's block exactly: its heading (the deadline is said o
 "✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each. Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
-Roles marked eligible: no are never listed. If eligibility is "unknown", add one line "Eligibility not verified for
-<n> of these". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
+Roles marked eligible: no are never listed. If eligibility is "unknown" because the Profile has no department or
+degree, say once "Add your department and degree on the Profile page to check eligibility". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
 due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't
 re-judge roles yourself. If no targets are set, list roles normally and mention once that the Profile page's
 "What I'm looking for" box makes Ping split them.

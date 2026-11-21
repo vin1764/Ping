@@ -139,3 +139,18 @@ def test_new_roles_of_one_run_are_one_message():
     roles2 = [role(4, "Epsilon", seen=DUE - timedelta(hours=10)), role(5, "Zeta", seen=DUE - timedelta(hours=10))]
     items2 = run(roles2, DUE - timedelta(hours=10) + timedelta(minutes=5))
     assert [k for k in visible(items2)] == ["listing:20261121T1000"]
+
+
+def test_eligibility_note_counts_only_roles_without_criteria():
+    roles = [role(1, "Alpha"), role(2, "Beta"), role(3, "Gamma")]
+    roles[2].pop("allowed")                                   # the ERP hasn't given Gamma's criteria yet
+    roles[2]["details_fetched"] = False
+    for r in roles[:2]:
+        r["details_fetched"] = True
+    items = run(roles, DUE - timedelta(hours=20))
+    d = [v for v in visible(items).values() if v["category"] == "digest"][0]
+    assert d["details"]["note"] == "Eligibility not verified for Gamma Role 3 (the ERP gives no criteria yet)."
+    # a profile without department/degree: one line, no count
+    items2 = run(roles[:2], DUE - timedelta(hours=20), profile={"department": None, "degree": None})
+    d2 = [v for v in visible(items2).values() if v["category"] == "digest"][0]
+    assert d2["details"]["note"] == "Add your degree and department on the Profile page to check eligibility."

@@ -320,6 +320,7 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
         dl = deadlines[r["id"]]
         members[r["id"]] = {"id": r["id"], "company": r["company"], "label": r["designation"], "due": _dt(dl["at"]),
                             "source": dl["source"], "applied": bool(r.get("applied")), "eligible": e["eligible"],
+                            "flags": e["flags"],
                             "first_seen": r.get("first_seen")}
         members[r["id"]]["tag"], members[r["id"]]["note"] = tag(r, targets)
     items = digests.build(items, members, previous or {}, profile, now)

@@ -109,14 +109,23 @@ def _for_you(members: list[dict]) -> str:
     return f" — {sum(m.get('tag') == 'for_you' for m in members)} for you"
 
 
+ERP_MISSING = ("role details not read yet",)     # the ERP hasn't given this role's criteria (yet)
+
+
 def _unverified_line(members: list[dict]) -> str:
-    unk = [m for m in members if m.get("eligible") is None]
-    if not unk:
-        return ""
-    if len(unk) <= 3:
-        return "Eligibility not verified for " + ", ".join(f"{m['company']} {m['label']}" for m in unk) + \
-               " (the ERP data or your Profile is incomplete)."
-    return f"Eligibility not verified for {len(unk)} of these (the ERP data or your Profile is incomplete)."
+    """CG cut-off and departments are checked wherever the ERP gives them and the profile has them. The note counts
+    only roles whose criteria the ERP doesn't give; a gap in your own profile is one line, not a count."""
+    unk = [m for m in members if any(f in ERP_MISSING for f in m.get("flags") or [])]
+    out = []
+    if len(unk) == 1:
+        out.append(f"Eligibility not verified for {unk[0]['company']} {unk[0]['label']} (the ERP gives no criteria yet).")
+    elif unk:
+        out.append(f"Eligibility not verified for {len(unk)} of these (the ERP gives no criteria yet).")
+    gaps = {f for m in members for f in m.get("flags") or [] if f.endswith("in Profile")}
+    if gaps:
+        what = " and ".join(sorted({"your CGPA" if "CGPA" in f else "your degree and department" for f in gaps}))
+        out.append(f"Add {what} on the Profile page to check eligibility.")
+    return " ".join(out)
 
 
 def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[str, dict], profile: dict,

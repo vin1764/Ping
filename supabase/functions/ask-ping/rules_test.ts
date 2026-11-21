@@ -11,3 +11,8 @@ Deno.test("rules answers load in Deno and answer about the company asked", () =>
   if (!a.text.startsWith("No open deadline for Microsoft in the ERP data (last checked Sat 21 Nov 17:11).")) throw new Error(a.text);
   if (!a.text.includes('Last Microsoft notice: "PPO", Wed 11 Nov 17:59.')) throw new Error(a.text);
 });
+
+Deno.test("day labels read the same in Deno as in the browser (no comma)", () => {
+  const a = Rules.answer("what's due tomorrow", { now: "2026-11-21T17:30:00+05:30", lastChecked: null, roles: [], items: [], notices: [] });
+  if (!a.text.startsWith("Nothing due tomorrow (Sun 22 Nov)")) throw new Error(a.text);
+});

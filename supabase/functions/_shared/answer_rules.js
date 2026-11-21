@@ -24,6 +24,7 @@
   const DAYNAME = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" });
   const when = (iso) => FMT.format(new Date(iso)).replace(/,/g, "");
   const dayKey = (d) => DAYKEY.format(new Date(d));
+  const dayName = (d) => DAYNAME.format(new Date(d)).replace(/,/g, "");   // Deno writes "Sun, 22 Nov", Node "Sun 22 Nov"
 
   // ---------------------------------------------------------------- names
   const URLISH = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|in|io|ai|co|org|net|tech|app|dev)\b/i;
@@ -160,8 +161,8 @@
   function timeRange(question, now) {
     const q = norm(question);
     const start = new Date(`${dayKey(now)}T00:00:00+05:30`).getTime();
-    if (/\btomorrow\b/.test(q)) return { from: start + 86400000, to: start + 2 * 86400000, label: `tomorrow (${DAYNAME.format(new Date(start + 86400000))})` };
-    if (/\b(today|tonight)\b/.test(q)) return { from: now.getTime(), dayStart: start, to: start + 86400000, label: `today (${DAYNAME.format(now)})` };
+    if (/\btomorrow\b/.test(q)) return { from: start + 86400000, to: start + 2 * 86400000, label: `tomorrow (${dayName(start + 86400000)})` };
+    if (/\b(today|tonight)\b/.test(q)) return { from: now.getTime(), dayStart: start, to: start + 86400000, label: `today (${dayName(now)})` };
     if (/\bnext week\b/.test(q)) return { from: start + 7 * 86400000 - ((new Date(start).getUTCDay() + 6) % 7) * 0, to: start + 14 * 86400000, label: "in the next two weeks" };
     if (/\b(this week|week)\b/.test(q)) return { from: now.getTime(), to: now.getTime() + 7 * 86400000, label: "in the next 7 days" };
     return null;

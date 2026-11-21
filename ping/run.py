@@ -561,7 +561,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--memory", help="use a local JSON file instead of Supabase (testing)")
     args = ap.parse_args(argv)
     load_dotenv()
-    trigger = os.environ.get("GITHUB_EVENT_NAME", "manual")
+    # 'schedule' for the hourly run (GitHub's cron, or Supabase's kick-run which passes source=schedule)
+    trigger = os.environ.get("PING_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME", "manual")
 
     if args.mode in ("load-sample", "remove-sample"):
         from . import sample

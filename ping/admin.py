@@ -10,7 +10,10 @@
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
   cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
-                   (also runs daily from the Ping workflow)
+                   (also runs daily inside Supabase, see schedule-setup)
+  schedule-setup   schedule the hourly Ping run and the daily demo cleanup inside Supabase (pg_cron + the kick-run
+                   function), with a new shared secret; then a dry-run call to prove it's wired up
+  schedule-status  the Supabase jobs, their last runs and calls, and the latest Ping runs on GitHub
   ask-ping-evals   run evals/ask_ping (questions against the deployed function from demo sessions) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
@@ -299,6 +302,67 @@ def cleanup_demo(secrets) -> int:
     return 0
 
 
+def _function_url(secrets, name: str) -> str:
+    return f"{secrets.supabase_url.rstrip('/')}/functions/v1/{name}"
+
+
+def schedule_setup(secrets) -> int:
+    import secrets as pysecrets
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    if not token:
+        say("SUPABASE_ACCESS_TOKEN is not set in the repo secrets")
+        return 2
+    ref = sa.project_ref(secrets.supabase_url)
+    shared = pysecrets.token_urlsafe(32)
+    r = requests.post(f"{API}/v1/projects/{ref}/secrets", timeout=30, json=[{"name": "PING_CRON_SECRET", "value": shared}],
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    say(f"kick-run's shared secret set as a function secret: HTTP {r.status_code}")
+    if r.status_code >= 300:
+        return 1
+    lit = shared.replace("'", "''")
+    sa.run_sql(secrets.supabase_url, token, f"""
+        do $$ begin
+          if exists (select 1 from vault.secrets where name = 'ping_cron_secret') then
+            perform vault.update_secret((select id from vault.secrets where name = 'ping_cron_secret'), '{lit}');
+          else
+            perform vault.create_secret('{lit}', 'ping_cron_secret', 'shared secret for the kick-run function');
+          end if;
+        end $$;""")
+    say("the same secret stored in the database's Vault as ping_cron_secret")
+    sql = (ROOT / "sql" / "schedule.sql").read_text(encoding="utf-8").replace("{{FUNCTION_URL}}", _function_url(secrets, "kick-run"))
+    sa.run_sql(secrets.supabase_url, token, sql)
+    jobs = sa.run_sql(secrets.supabase_url, token, "select jobname, schedule, active from cron.job order by jobname")
+    for j in jobs:
+        say(f"  job {j['jobname']}: '{j['schedule']}' (UTC), active {j['active']}")
+    time.sleep(5)  # a new function secret takes a moment to reach the function
+    for attempt in range(6):
+        c = requests.post(_function_url(secrets, "kick-run"), json={"task": "check"}, timeout=60,
+                          headers={"x-ping-cron": shared, "Content-Type": "application/json"})
+        if c.status_code == 200:
+            break
+        time.sleep(10)
+    say(f"dry run of kick-run (doesn't start anything): HTTP {c.status_code} {c.text[:300]}")
+    return 0 if c.status_code == 200 and len(jobs) >= 2 else 1
+
+
+def schedule_status(secrets) -> int:
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    q = lambda sql: sa.run_sql(secrets.supabase_url, token, sql)  # noqa: E731
+    for j in q("select jobid, jobname, schedule, active from cron.job order by jobname"):
+        say(f"job {j['jobname']}: '{j['schedule']}' UTC, active {j['active']}")
+        for d in q(f"select status, start_time, return_message from cron.job_run_details where jobid = {int(j['jobid'])} "
+                   "order by start_time desc limit 3"):
+            say(f"   ran {d['start_time']}: {d['status']} {str(d['return_message'])[:80]}")
+    for h in q("select created, status_code, left(content::text, 160) as body from net._http_response order by created desc limit 4"):
+        say(f"call to kick-run {h['created']}: HTTP {h['status_code']} {h['body']}")
+    gh = os.environ.get("GITHUB_TOKEN", "")
+    r = requests.get(f"https://api.github.com/repos/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/workflows/ping.yml/runs",
+                     params={"per_page": 5}, headers={"Authorization": f"Bearer {gh}"}, timeout=30)
+    for run in r.json().get("workflow_runs", []) if r.ok else []:
+        say(f"Ping run {run['id']}: {run['event']}, started {run['run_started_at']}, {run['status']} {run.get('conclusion') or ''}")
+    return 0
+
+
 def ask_ping_evals(secrets) -> int:
     import subprocess
     return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "run_ask_ping_evals.py")]).returncode
@@ -346,7 +410,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

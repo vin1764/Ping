@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.ask-ping]
 verify_jwt = false
+
+[functions.kick-run]
+verify_jwt = false

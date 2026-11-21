@@ -88,10 +88,13 @@
     async setReadAt(t) { store.set("ping-demo-read", t); }
   }
 
-  const READ_ONLY = "Reviewer login is read-only: changes aren't saved.";
+  const READ_ONLY = "The demo is read-only: changes aren't saved.";
+  const DEMO_CHIP = "Demo \u2014 sample data, read-only";
+  // One class for both logins: the owner (real rows) and a one-click demo session (an anonymous sign-in that the
+  // database only lets read the anonymised demo rows and its own chat).
   class SupabaseSource {
-    constructor(sb, reviewer = false) {
-      this.sb = sb; this.kind = reviewer ? "reviewer" : "real"; this.reviewer = reviewer; this.chatOk = !reviewer;
+    constructor(sb, demo = false) {
+      this.sb = sb; this.kind = demo ? "demo" : "real"; this.demo = demo; this.chatOk = true;
     }
     async q(table, fn) {
       let query = this.sb.from(table).select("*");
@@ -107,7 +110,9 @@
         this.q("profile"),
         this.q("runs", (q) => q.order("started_at", { ascending: false }).limit(1)),
       ]);
-      return { items, roles, profile: profile[0] || {}, runs };
+      // the demo is a snapshot: its profile row carries the time it was taken
+      return { items, roles, profile: profile[0] || {}, runs,
+               generated_at: this.demo ? profile[0]?.updated_at : undefined };
     }
     async notice(noticeId) {
       const [n] = await this.q("notices", (q) => q.eq("notice_id", noticeId).limit(1));
@@ -115,18 +120,18 @@
       return { notice: n, check: checks[0] };
     }
     async saveProfile(p) {
-      if (this.reviewer) throw new Error(READ_ONLY);
+      if (this.demo) throw new Error(READ_ONLY);
       const { error } = await this.sb.from("profile").update({ ...p, updated_at: new Date().toISOString() })
         .eq("id", state.data.profile?.id ?? 1);
       if (error) throw new Error(error.message);
     }
     async markItem(id, patch) {
-      if (this.reviewer) throw new Error(READ_ONLY);
+      if (this.demo) throw new Error(READ_ONLY);
       const { error } = await this.sb.from("items").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
     }
     async correct(noticeKey, fix) {
-      if (this.reviewer) throw new Error(READ_ONLY);
+      if (this.demo) throw new Error(READ_ONLY);
       const { error } = await this.sb.from("corrections").upsert({ notice_id: noticeKey, ...fix });
       if (error) throw new Error(error.message);
     }
@@ -142,15 +147,16 @@
       return out;
     }
     async checkNow() {
-      if (this.reviewer) return "Reviewers can't start runs: Ping only logs in to the ERP for its owner.";
+      if (this.demo) return "The demo can't start a check: Ping only logs in to the ERP for its owner.";
       await this.fn("check-now");
       return "Started a run. New messages arrive in about 2 minutes (reload to see them).";
     }
     async ask(q) {
-      // the reviewer sees a snapshot: "tomorrow" is the day after it, as everywhere else on the page
-      const asOf = this.reviewer && state.asOf ? new Date(state.asOf).toISOString() : undefined;
+      // the demo is a snapshot: "tomorrow" is the day after it, as everywhere else on the page
+      const asOf = this.demo && state.asOf ? new Date(state.asOf).toISOString() : undefined;
       try { return (await this.fn("ask-ping", { question: q, as_of: asOf })).answer; }
       catch (e) {
+        if (e.status === 429) return `${e.message}\n\nMeanwhile, with simple rules: ${answerLocally(q, state.data)}`;
         const why = e.status === 404 || /fetch/i.test(e.message) ? "the ask-ping server function isn't deployed or reachable"
           : e.status === 403 ? "your login isn't on the allowed list" : e.message;
         return answerLocally(q, state.data) + `\n\n(AI not reachable: ${why}. Answered with simple rules.)`;
@@ -158,32 +164,31 @@
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
     async chat() {
-      if (this.reviewer) return store.get("ping-reviewer-chat", []);
       const { data, error } = await this.sb.from("chat_messages").select("role,text,created_at").order("created_at").limit(1000);
       if (error) { this.chatOk = false; return store.get("ping-chat", []); }
       return data;
     }
     async addChat(m) {
-      if (this.reviewer) { store.set("ping-reviewer-chat", [...store.get("ping-reviewer-chat", []), m].slice(-500)); return; }
       if (this.chatOk) {
-        const { error } = await this.sb.from("chat_messages").insert({ role: m.role, text: m.text, created_at: m.created_at });
+        // a demo session's messages are demo rows: only that session can read them back
+        const row = { role: m.role, text: m.text, created_at: m.created_at, ...(this.demo ? { is_sample: true } : {}) };
+        const { error } = await this.sb.from("chat_messages").insert(row);
         if (!error) return;
         this.chatOk = false;
       }
       store.set("ping-chat", [...store.get("ping-chat", []), m].slice(-500));
     }
-    async readAt() { return (!this.reviewer && state.data.profile?.chat_read_at) || store.get(this.reviewer ? "ping-reviewer-read" : "ping-read", null); }
+    async readAt() { return (!this.demo && state.data.profile?.chat_read_at) || store.get(this.demo ? "ping-demo-session-read" : "ping-read", null); }
     async setReadAt(t) {
-      store.set(this.reviewer ? "ping-reviewer-read" : "ping-read", t);
-      if (this.reviewer) return;
+      store.set(this.demo ? "ping-demo-session-read" : "ping-read", t);
+      if (this.demo) return;
       await this.sb.from("profile").update({ chat_read_at: t }).eq("id", 1);
     }
   }
 
   // ------------------------------------------------------------ state + boot
   const state = { src: null, data: null, filter: "visible", companyQuery: "", chat: [], open: new Set(), asOf: null };
-  // The demo and the reviewer login show a snapshot: "now" is when it was taken, so its deadlines don't all
-  // read "passed" a week later.
+  // The demo shows a snapshot: "now" is when it was taken, so its deadlines don't all read "passed" a week later.
   const nowDate = () => new Date(state.asOf || Date.now());
 
   async function boot() {
@@ -200,8 +205,8 @@
   async function startDemo(noBackend) {
     const r = await fetch("demo-data.json", { cache: "no-store" });
     state.src = new DemoSource(await r.json());
-    $("#mode-badge").textContent = "Demo";
-    $("#mode-badge").title = "Demo data, no login";
+    $("#mode-badge").textContent = DEMO_CHIP;
+    $("#mode-badge").title = "Anonymised snapshot of a real run, no login";
     $("#mode-badge").hidden = false;
     if (!noBackend) {
       const out = $("#sign-out");
@@ -214,12 +219,12 @@
 
   async function startReal(sb) {
     const { data: ok, error } = await sb.rpc("is_ping_owner");
-    let reviewer = false;
+    let demo = false;
     if (!error && !ok) {
-      const r = await sb.rpc("is_ping_reviewer");
-      reviewer = !r.error && r.data === true;
+      const r = await sb.rpc("is_ping_demo");
+      demo = !r.error && r.data === true;
     }
-    if (error || (!ok && !reviewer)) {
+    if (error || (!ok && !demo)) {
       mount(h("div", { class: "login card" },
         h("h1", {}, "Not allowed"),
         h("p", {}, "This login isn't on Ping's list of allowed users. Ping adds the MAIL_ADDRESS from your " +
@@ -228,11 +233,12 @@
         h("button", { class: "btn", onclick: async () => { await sb.auth.signOut(); location.reload(); } }, "Sign out")));
       return;
     }
-    state.src = new SupabaseSource(sb, reviewer);
-    if (reviewer) {
-      $("#mode-badge").textContent = "Reviewer";
-      $("#mode-badge").title = "Anonymised demo data, read-only";
+    state.src = new SupabaseSource(sb, demo);
+    if (demo) {
+      $("#mode-badge").textContent = DEMO_CHIP;
+      $("#mode-badge").title = "Anonymised snapshot of a real run: real companies, a made-up student";
       $("#mode-badge").hidden = false;
+      $("#sign-out").textContent = "Exit demo";
     }
     const out = $("#sign-out");
     out.hidden = false;
@@ -300,7 +306,16 @@
       h("button", { class: "btn" }, "Sign in"),
       msg,
       h("p", { class: "or" }, "or"),
-      h("a", { class: "btn ghost center", href: "?demo=1" }, "Try the demo (no login)")));
+      h("button", { type: "button", class: "btn demo", id: "view-demo", onclick: async (e) => {
+        e.target.disabled = true;
+        msg.textContent = "Opening the demo\u2026";
+        const { error } = await sb.auth.signInAnonymously();
+        if (error) { msg.textContent = `The demo couldn't start: ${error.message}`; e.target.disabled = false; return; }
+        msg.textContent = "";
+        location.hash = "#chat";
+        startReal(sb);
+      } }, "View demo"),
+      h("p", { class: "muted small center" }, "No account needed: a sample student's placement season, read-only.")));
   }
 
   // ------------------------------------------------------------ router

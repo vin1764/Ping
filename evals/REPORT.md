@@ -1,17 +1,82 @@
 # Ping evals
 
-Three eval suites, each repeatable, each with expected answers written by reading the data (never by running
+Three eval suites and one audit, each repeatable, each with expected answers written by reading the data (never by running
 the model being tested).
 
 | suite | what it measures | current score | report | re-run |
 |---|---|---|---|---|
 | **Parser evals** | How Ping reads the ERP's notices and PDFs with rules: company, kind of notice, deadline, test time, venue, form link, "are you in this PDF", your room. 31 development + 15 held-out real CDC notices (other students' details removed) and 7 PDF/Excel layouts seen in the real run. | **Held-out: 56 of 58 checks (97%)**, the fair number. Development: 143 of 143 (100%), optimistic because Ping was fixed using these. | [PARSER_REPORT.md](PARSER_REPORT.md) | `python evals/run_evals.py` |
 | **Ask Ping evals** | The chat's answers from the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data, the demo persona's targets and made-up CVs), with the snapshot time fixed: company facts, deadlines, notices and tests, refusing to invent things, refusing actions only when asked to act, times today, role lists in one format, the CV to apply with, and typos / two questions in one. 42 single questions and 21 conversations: 13 follow-up conversations ("nothing else?", "and slice?", "ok") and 8 preference-by-chat conversations (set, append, exclude, reminder hours, list others, reset, show, and a question that must NOT change anything). Deterministic checks. | **Single questions: 37 of 42 (88%). Conversations: 21 of 21 (39 of 39 turns).** Before conversation memory: 34 of 36 single, 4 of 9 conversations. | [ask_ping/REPORT.md](ask_ping/REPORT.md) | Actions > Admin > `ask-ping-evals` |
+| **Attachment audit** | The notice-attachment reader end to end on made-up files in messy real layouts (`tests/test_attachments.py`, fixtures in `tests/attachment_fixtures.py`): file types, your roll in every form and inside longer strings, a different longer roll that is not you, names exact and with a typo, your own row on merged cells / two students per line / a table broken across pages / section rows, a file listing several companies, 600 rows, a scanned list read with OCR, and what the feed says. | **31 of 31 tests pass** (10 of the first 27 failed before the fixes of 22 Nov). 600-row PDF read in about 1 s; a scanned page with OCR in about 2 s. | [below](#attachments-audit-22-nov) | `python -m pytest tests/test_attachments.py` |
 | **Role relevance evals** | Whether "For you" (and the CV to apply with) follows the student's stated targets: two made-up personas with opposite targets (`relevance/personas.json`), 201 + 48 demo roles labelled for each persona's text, each persona's roles marked in one classifier call. | **demo persona: precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76). core-software persona: precision 100% (28 of 28), recall 100% (28 of 28).** | [relevance/REPORT.md](relevance/REPORT.md) | Actions > Admin > `relevance-evals` |
 
 Also in this folder: `real_run.json` (numbers from the real runs: login time, notices, PDFs, merged repeats),
 `notices.json` and `companies.json` (the parser eval inputs), `ask_ping/cases.json` (the Ask Ping questions,
 checks and where each expected answer comes from).
+
+## Attachments audit (22 Nov)
+
+How a notice's attachment (shortlist, room list, schedule) is read for you: `ping/pdfs.py` reads it, keeps only your
+row and the table heading, and `ping/items.py` turns the result into the feed message. All cases use made-up files
+(no real student); real layouts are also in the parser evals above (7 of 7, unchanged after the fixes).
+
+### 1. File types
+
+| type | handled? | what the student sees |
+|---|---|---|
+| PDF with text (tables or plain lines) | yes (pdfplumber) | "You're on the X list ... room NR 422" / "X list is out. You're not on it." |
+| Scanned PDF (images only) | yes: OCR with Tesseract, installed on the GitHub runner the first time a scanned file appears (~30 s); tested here: 1 page in ~2 s, roll and room found | the same messages; if OCR can't run: as for unreadable files below |
+| Excel (.xlsx) | yes (openpyxl) | the same messages |
+| CSV, Word (.docx), an image file (PNG/JPEG), a web page (e.g. a Google Drive link page), anything else | not read: status "unknown" with the reason (e.g. "not a PDF or Excel file (text/csv)") in the run's problems | "X list is out but the file couldn't be read. Check it yourself." with the ERP link to the file (marked "unread"); Ask Ping is told "list not readable" |
+| Google Drive / form links inside a notice's text | not followed (they need your own Google login, and Ping only reads the ERP) | the link is shown on the message ("Open form", "Link from your mail") |
+
+None of the 64 attachments in the real run of 21 Nov was CSV, Word, an image or scanned: 64 of 64 were read.
+
+### 2. Matching
+
+| case | test | result |
+|---|---|---|
+| roll as `22XY10042`, `22xy10042`, `22 XY10042`, `22-XY-10042`, `22XY 10042`, `22xy-10042` (profile roll in any case) | `test_roll_in_every_form_the_lists_use` | yes, with the right room. **Fixed:** forms with dashes weren't found |
+| roll inside a longer string: `22XY10042@kgpian.iitkgp.ac.in`, `22XY10042_DemoStudent`, `(22XY10042)`, `Roll:22XY10042` | `test_roll_inside_a_longer_string_still_counts` | yes |
+| a different, longer roll: `22XY100425`, `122XY10042`, and a neighbouring roll `22XY10043` | `test_a_different_longer_or_neighbouring_roll_is_not_you` | no. **Fixed:** the first two used to count as you (a substring match) |
+| names only: `Demo Student`, `DEMO STUDENT`, `Student Demo`, `Demo K. Student` | `test_name_only_list_exact` | yes, matched by name, right room |
+| names only with one typo: `Demo Studnet` | `test_name_only_list_one_letter_typo` | yes, reported as "name (close spelling)". **Added:** one typo per name part of 5+ letters; shorter parts must be exact |
+| names only, not you: `Demo Studentson`, `Dema Stuart` | `test_name_only_list_without_you` | no |
+| earlier tests: standard roster, not on it, name fallback, Excel, unreadable files, a saved two-column row re-read | `tests/test_rules.py` | pass |
+
+### 3. Your own row, on messy tables
+
+| layout | test | result |
+|---|---|---|
+| two students per line (`Roll / Room / / Roll / Room`) | `test_two_students_per_line_takes_your_pair` | your pair's room (NR 422), not the left student's |
+| room in a merged cell spanning 6 rows | `test_merged_room_cell_belongs_to_every_row_it_spans` | the merged room. **Fixed:** your row had no room. Only cells the PDF really merged are filled; an empty cell stays empty |
+| a table broken across pages, header only on page 1, you on page 3 | `test_page_break_without_a_repeated_header` | the page-1 header, your room and reporting time. **Fixed:** another student's row was used as the "header" and saved |
+| section rows inside the table ("Slot 2: 2:00 PM - 3:00 PM") | `test_section_rows_inside_the_table_are_slots_not_headers` | your slot from the section row, the real header kept. **Fixed:** the section row was taken for the header |
+| only your row and the heading are kept | `test_only_your_row_and_the_heading_are_kept` | no other roll number in what's kept. **Fixed** with the page-break case above |
+| a first row of column titles without the usual words ("PA / SDE-1 / MLE") | parser evals | still read as the header (the role you're listed under) |
+
+### 4. Negatives and size
+
+| case | test | result |
+|---|---|---|
+| a day's schedule listing you under Beta Bank, not Alpha Analytics | `test_listed_for_another_company_on_the_same_day`, `test_feed_says_on_it_only_for_the_company_whose_section_lists_you` | Beta Bank: "You're on the Beta Bank ... room NR 422"; Alpha: "You're not on it (the file lists you under Beta Bank Limited)". **Fixed:** both said "you're on it", Alpha with Beta's room |
+| that section kept through saving and the hourly re-read | `test_the_section_survives_saving_and_the_hourly_re_read` | kept (inside the stored details) |
+| 600 rows over 15 pages, you near the end | `test_five_hundred_rows_in_seconds` | found, right room, about 1 s |
+| a scanned list (no text layer) | `test_scanned_pdf_is_read_with_ocr` | found with OCR, room NR 422; a scanned list without you: "no" (skipped where Tesseract isn't installed) |
+
+Not changed, worth knowing: the test time in a message comes from the notice's text; when a day's schedule file gives
+a different time in your section, that time is shown next to it ("Test Sat 21 Nov 10:00, 2:00 PM") rather than
+replacing it.
+
+### 5. What the student sees (generated by the real code, made-up file)
+
+| state | feed message | what Ask Ping's model is given | Ask Ping without the model (rules) |
+|---|---|---|---|
+| on the list, with a room | You're on the Alpha Analytics Private Limited test room list (Data Analyst). Test Sat 21 Nov 14:00, reporting 01:30 PM, room NR 422. | the message + `[you ARE on this list] [your row in the PDF: S.No: 12, Roll No: 22XY10042, Name: DEMO STUDENT, Room: NR 422, Reporting Time: 01:30 PM]` | the message, then the last Alpha notice and "You applied to: Data Analyst." |
+| on the list, no room in the file | You're on the Alpha Analytics Private Limited test room list (Data Analyst). Test Sat 21 Nov 14:00. | the message + `[you ARE on this list] [your row in the PDF: S.No: 8, Roll No: 22XY10042, Name: DEMO STUDENT]` | the same pattern |
+| not on the list | Alpha Analytics Private Limited test room list is out (Data Analyst). You're not on it. (Kept in the feed because you applied; hidden otherwise.) | the message + `[you are NOT on this list]` | the same pattern |
+
+**Fixed (wording):** a "Reporting Time" column is now shown as "reporting 01:30 PM"; it read like a second test time.
 
 ## Ask Ping: what changed between the two runs
 

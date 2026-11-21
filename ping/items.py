@@ -162,6 +162,9 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             ndetails["pdf"] = {k: check.get(k) for k in ("status", "matched_by", "details", "error", "header", "my_row")}
 
         produced = False
+        # several companies in one notice (a day's test schedule): the file says "you're on it" only for the company
+        # whose section you're listed under, and its room / time belong to that company only
+        under = listed_under(check, [t.get("company") or t.get("name") or "" for t in targets]) if len(targets) > 1 else None
         for ti, t in enumerate(targets):
             picked, why = roles_for_target(t, index, kind, text) if t.get("company") else ([], "not in your companies list")
             applied = [r for r in picked if r.get("applied")]
@@ -170,12 +173,15 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             label = _roles_label(applied or picked) or ", ".join(t.get("profiles") or [])
             label_s = f" ({label})" if label else ""
             event_at = t.get("start") or when_event
-            pdf_yes = pdf_status == "yes"
+            t_status = pdf_status
+            if under is not None and ti not in under:
+                t_status = "no"
+            pdf_yes = t_status == "yes"
             about_me = pdf_yes or a.get("mentions_me")
             mail_links = _mail_links(emails, company, n.get("notice_time")) if a.get("email_hint") else []
             det = {**ndetails, "role_match": why, "mail_links": mail_links, "applied": bool(applied),
                    "profiles": [p for p in (t.get("profiles") or []) if p.strip().lower() != "all"]}
-            base = {**nbase, "company": company, "role_ids": [r["id"] for r in (applied or picked)],
+            base = {**nbase, "pdf_status": t_status, "company": company, "role_ids": [r["id"] for r in (applied or picked)],
                     "event_at": event_at, "due_at": None, "details": det}
             nid = f"notice:{n['id']}:{ti}"
 
@@ -199,14 +205,18 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             if kind_for_target in LIST_KINDS:
                 what = {"shortlist": "shortlist", "result": "result", "test_rooms": "test room list",
                         "test": "test"}[kind]
-                room = _room(check)
+                room = _room(check) if pdf_yes else ""
                 ev = f" {fmt_when(_dt(event_at), now)}" if event_at else ""
                 venue = f", {a['venue']}" if a.get("venue") else ""
                 mail = " Link in your mail." if mail_links else (" Check your mail for the link." if a.get("email_hint") else "")
                 if pdf_yes:
                     title = f"You're on the {company} {what}{label_s}.{' Test' + ev if ev else ''}{venue}{room}.{mail}"
-                elif pdf_status == "no":
-                    title = f"{company} {what} is out{label_s}. You're not on it."
+                elif t_status == "no":
+                    elsewhere = ""
+                    if under is not None:
+                        others_ = [targets[i].get("company") or targets[i].get("name") for i in sorted(under)]
+                        elsewhere = f" (the file lists you under {', '.join(o for o in others_ if o)})"
+                    title = f"{company} {what} is out{label_s}. You're not on it{elsewhere}."
                     if not applied:
                         level = "hidden"
                 elif pdf_status == "unknown":
@@ -353,6 +363,28 @@ def _expire(it: dict, now: datetime) -> None:
         it["details"] = {**it.get("details", {}), "hidden_because": why}
 
 
+_SECTION_SKIP = {"private", "pvt", "limited", "ltd", "india", "the", "and", "company", "technologies", "services",
+                 "solutions", "group", "corporation", "corp", "inc", "llp", "test", "written", "online", "room", "slot"}
+
+
+def _key_word(name: str) -> str:
+    """The word that tells a company apart: 'Beta Bank Limited' -> 'beta'."""
+    words = [w for w in re.findall(r"[a-z0-9]+", (name or "").lower()) if w not in _SECTION_SKIP and len(w) >= 3]
+    return words[0] if words else ""
+
+
+def listed_under(check: dict | None, names: list[str]) -> set[int] | None:
+    """A file listing several companies' tests: which of the notice's companies the section you're listed under
+    names ("Beta Bank - Written Test, 2:00 PM, Room NR 422"). None when it names none of them (then the file
+    counts for all of them, as before)."""
+    section = (check or {}).get("section") or ((check or {}).get("details") or {}).get("section") or ""
+    if not section or (check or {}).get("status") != "yes":
+        return None
+    words = set(re.findall(r"[a-z0-9]+", section.lower()))
+    hit = {i for i, n in enumerate(names) if _key_word(n) and _key_word(n) in words}
+    return hit or None
+
+
 def _room(check: dict | None) -> str:
     if not check or check.get("status") != "yes":
         return ""
@@ -361,7 +393,8 @@ def _room(check: dict | None) -> str:
     if d.get("slot") or d.get("slot_from_heading"):
         bits.append(str(d.get("slot") or d.get("slot_from_heading")))
     if d.get("time") or d.get("time_from_heading"):
-        bits.append(str(d.get("time") or d.get("time_from_heading")))
+        t = str(d.get("time") or d.get("time_from_heading"))
+        bits.append(f"reporting {t}" if d.get("time") and d.get("time_is") == "reporting" else t)
     if d.get("room") or d.get("room_or_venue_from_heading"):
         bits.append(f"room {d.get('room') or d.get('room_or_venue_from_heading')}")
     return (", " + ", ".join(bits)) if bits else ""

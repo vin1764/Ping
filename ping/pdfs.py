@@ -30,15 +30,44 @@ def _norm_cell(c) -> str:
     return re.sub(r"\s+", " ", str(c or "")).strip()
 
 
+def roll_pattern(roll: str) -> re.Pattern:
+    """Your roll number as lists write it: any case, with spaces, dashes, dots or a line break inside
+    ("22XY10042", "22xy10042", "22 XY 10042", "22-XY-10042"), and inside a longer string ("22XY10042@kgpian...",
+    "22XY10042_Name"), but never as part of a longer roll ("22XY100425", "122XY10042")."""
+    body = r"[\s\-./]?".join(re.escape(c) for c in roll)
+    return re.compile(rf"(?<![A-Za-z0-9]){body}(?![A-Za-z0-9])", re.I)
+
+
 def _row_has(row: list[str], roll: str) -> bool:
-    return any(re.search(rf"\b{re.escape(roll)}\b", c, re.I) for c in row) or \
-        roll.lower() in "".join(row).replace(" ", "").lower()
+    pat = roll_pattern(roll)
+    return any(pat.search(c) for c in row) or bool(pat.search(" ".join(row)))
 
 
-def _row_has_name(row: list[str], name: str) -> bool:
+def _close(a: str, b: str) -> bool:
+    """One typo (a letter wrong, missing, extra or two swapped) in a name part of 5+ letters."""
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 5 or abs(len(a) - len(b)) > 1:
+        return False
+    d = [[i + j if not i * j else 0 for j in range(len(b) + 1)] for i in range(len(a) + 1)]
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] != b[j - 1]))
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    return d[-1][-1] <= 1
+
+
+def _row_has_name(row: list[str], name: str, fuzzy: bool = False) -> bool:
+    """Every part of your profile name is a word in the row (any order, any case). fuzzy: one typo allowed per
+    part of 5+ letters; shorter parts must be exact."""
     parts = [p for p in re.split(r"\s+", name.lower()) if len(p) > 1]
-    joined = " ".join(row).lower()
-    return bool(parts) and all(re.search(rf"\b{re.escape(p)}\b", joined) for p in parts)
+    words = re.findall(r"[a-z]+", " ".join(row).lower())
+    if not parts:
+        return False
+    if not fuzzy:
+        return all(p in words for p in parts)
+    return all(any(_close(p, w) for w in words) for p in parts)
 
 
 ROOM_TOKEN = re.compile(r"\b(?:NC|NR|LH|CR|V|S|F|G)\s?-?\d{1,4}[A-Z]?\b")
@@ -49,7 +78,8 @@ def _details_from(header: list[str], row: list[str], needle: str = "") -> dict:
     students side by side ("Roll No | Room No | | Roll No | Room No"), so take the columns nearest to
     your cell, to the right first, never just the first Room column."""
     out = {}
-    mine = next((i for i, c in enumerate(row) if needle and needle.lower() in str(c).replace(" ", "").lower()), None)
+    pat = roll_pattern(needle) if needle else None
+    mine = next((i for i, c in enumerate(row) if pat and pat.search(str(c))), None)
     order = list(range(len(row)))
     if mine is not None:
         order = sorted(order, key=lambda j: (j < mine, abs(j - mine)))
@@ -69,10 +99,12 @@ def _details_from(header: list[str], row: list[str], needle: str = "") -> dict:
             out["date"] = v
         elif TIME_HDR.search(h) and "time" not in out:
             out["time"] = v
+            if re.search(r"report", h, re.I):
+                out["time_is"] = "reporting"     # "Reporting Time": when to be there, not when the test starts
     if "room" not in out:
         rest = " ".join(str(c) for k, c in enumerate(row) if k != mine or len(row) == 1)
         if needle:
-            rest = re.sub(re.escape(needle), " ", rest, flags=re.I)
+            rest = roll_pattern(needle).sub(" ", rest)
         m = ROOM_TOKEN.search(rest)
         if m:
             out["room"] = m.group(0)
@@ -95,7 +127,7 @@ def _context_details(context: str) -> dict:
 
 def _looks_like_header(row: list[str]) -> bool:
     filled = [c for c in row if c]
-    if not filled:
+    if len(filled) < 2:          # one cell across the table is a section ("Slot 2: 2:00 PM"), not the header
         return False
     alpha = sum(1 for c in filled if re.search(r"[A-Za-z]", c) and not ROLL_LIKE.search(c))
     return alpha == len(filled) and any(re.search(r"roll|name|s\.?\s*no|sl|room|venue|slot|dept|time", c, re.I)
@@ -111,10 +143,13 @@ def _read_pdf(data: bytes) -> dict:
         for p in pdf.pages:
             text = p.extract_text() or ""
             try:
-                tables = [[[_norm_cell(c) for c in row] for row in t] for t in p.extract_tables()]
+                raw = p.extract_tables()
             except Exception:
-                tables = []
-            pages.append({"text": text, "tables": tables, "images": len(p.images)})
+                raw = []
+            tables = [[[_norm_cell(c) for c in row] for row in t] for t in raw]
+            # None = a cell covered by a merged cell above it (pdfplumber); "" = a cell that is really empty
+            merged = [[[c is None for c in row] for row in t] for t in raw]
+            pages.append({"text": text, "tables": tables, "merged": merged, "images": len(p.images)})
     return {"format": "pdf", "pages": pages}
 
 
@@ -179,7 +214,7 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
     fmt = sniff(data, content_type)
     result = {"status": "unknown", "matched_by": None, "format": fmt, "pages": 0, "text_chars": 0,
               "scanned": False, "ocr": False, "roll_like_count": 0, "header": None, "my_row": None,
-              "context": None, "details": {}, "error": None}
+              "context": None, "section": None, "details": {}, "error": None}
     try:
         if fmt == "pdf":
             doc = _read_pdf(data)
@@ -218,13 +253,15 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
 
     result["roll_like_count"] = len(set(ROLL_LIKE.findall(all_text.upper())))
 
-    found = _find_in_tables(pages, roll, by="roll")
-    if not found and roll and re.search(rf"\b{re.escape(roll)}\b", all_text, re.I):
-        found = _find_in_text(pages, roll, by="roll")
-    if not found and roll and roll.lower() in re.sub(r"\s+", "", all_text).lower():
-        found = {"matched_by": "roll", "header": None, "my_row": None, "context": "roll number found (split across lines)"}
+    found = _find_in_tables(pages, roll, by="roll") if roll else None
+    if not found and roll and roll_pattern(roll).search(all_text):
+        found = _find_in_text(pages, roll, by="roll") or \
+            {"matched_by": "roll", "header": None, "my_row": None, "context": "roll number found (split across lines)"}
     if not found and name:
         found = _find_in_tables(pages, name, by="name") or _find_in_text(pages, name, by="name")
+    if not found and name:
+        # one typo per name part (5+ letters): "Studnet" for "Student"; said so in the result
+        found = _find_in_tables(pages, name, by="name", fuzzy=True) or _find_in_text(pages, name, by="name", fuzzy=True)
 
     if found:
         result.update({k: v for k, v in found.items() if k != "details"})
@@ -235,53 +272,114 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
             det.update(_details_from(found.get("header") or [], found["my_row"], needle))
         if found.get("context"):
             det.update({k: v for k, v in _context_details(found["context"]).items() if k not in det})
+        if "room" not in det and "room_or_venue_from_heading" not in det and found.get("section"):
+            m = ROOM_TOKEN.search(found["section"])          # "Beta Bank - Written Test, 2:00 PM, Room NR 422"
+            if m:
+                det["room_or_venue_from_heading"] = m.group(0)
+        if found.get("section"):
+            det["section"] = found["section"][:160]   # stored inside details (pdf_checks.details): the run re-reads it
         result["details"] = det
     else:
         result["status"] = "no"
     return result
 
 
-def _find_in_tables(pages, needle: str, by: str) -> dict | None:
+def _is_section(row: list[str]) -> bool:
+    """A row with one text across the table ("Slot 2: 2:00 PM - 3:00 PM"): a section of the list, not a student."""
+    filled = [c for c in row if c]
+    return bool(filled) and len(set(filled)) == 1 and not ROLL_LIKE.search(filled[0].upper()) and len(filled[0]) < 160
+
+
+def _matcher(needle: str, by: str, fuzzy: bool):
+    if by == "roll":
+        pat = roll_pattern(needle)
+        return lambda cells: any(pat.search(c) for c in cells) or bool(pat.search(" ".join(cells)))
+    return lambda cells: _row_has_name(cells, needle, fuzzy)
+
+
+def _found(by: str, fuzzy: bool) -> str:
+    return "name (close spelling)" if by == "name" and fuzzy else by
+
+
+def _find_in_tables(pages, needle: str, by: str, fuzzy: bool = False) -> dict | None:
+    hit = _matcher(needle, by, fuzzy)
+    header = None            # carried over: a table that breaks across pages keeps the header of its first page
     for p in pages:
-        for t in p["tables"]:
-            header = None
-            for row in t:
-                if _looks_like_header(row):
-                    header = row
+        for ti, t in enumerate(p["tables"]):
+            if header is not None and t and len(t[0]) != len(header):
+                header = None    # a different table
+            merged = (p.get("merged") or [])[ti] if ti < len(p.get("merged") or []) else None
+            section = None
+            for k, row in enumerate(t):
+                if _looks_like_header(row) or (k == 0 and header is None and _column_titles(t)):
+                    header, section = row, None
                     continue
-                hit = _row_has(row, needle) if by == "roll" else _row_has_name(row, needle)
-                if hit:
-                    ctx = _heading_above(p["text"], row)
-                    return {"matched_by": by, "header": header or (t[0] if t and t[0] is not row else None),
-                            "my_row": row, "context": ctx}
+                if _is_section(row):
+                    section = next(c for c in row if c)
+                    continue
+                if hit(row):
+                    mine = _fill_merged(t, merged, k, header)
+                    key = lambda line: hit([line])  # noqa: E731
+                    above = _headings_above(p["text"], key)
+                    ctx = ([section] if section else []) + above
+                    return {"matched_by": _found(by, fuzzy), "header": header, "my_row": mine,
+                            "context": "\n".join(ctx)[:400] or None, "section": section or (above[0] if above else None)}
     return None
 
 
-def _find_in_text(pages, needle: str, by: str) -> dict | None:
+def _column_titles(t: list[list[str]]) -> bool:
+    """A first row of titles without the usual words ("PA | SDE-1 | MLE": one column per role): no roll number
+    in it, and roll numbers in the rows below. Never a row that could be a student."""
+    first = t[0] if t else []
+    return (len([c for c in first if c]) >= 2 and not any(ROLL_LIKE.search(c.upper()) for c in first)
+            and any(ROLL_LIKE.search(" ".join(r).upper()) for r in t[1:]))
+
+
+def _fill_merged(t: list[list[str]], merged, k: int, header) -> list[str]:
+    """Your row, with a room / slot / time that the PDF shows once for several rows (a merged cell) filled in
+    from the row that carries it. Only cells the PDF really merged; a cell that is just empty stays empty."""
+    row = list(t[k])
+    if not header or not merged or k >= len(merged):
+        return row
+    for j, v in enumerate(row):
+        if v or j >= len(header) or j >= len(merged[k]) or not merged[k][j]:
+            continue
+        if not (ROOM_HDR.search(header[j]) or SLOT_HDR.search(header[j]) or TIME_HDR.search(header[j]) or DATE_HDR.search(header[j])):
+            continue
+        for up in range(k - 1, -1, -1):
+            if _looks_like_header(t[up]) or _is_section(t[up]):
+                break
+            if j < len(t[up]) and t[up][j] and not (j < len(merged[up]) and merged[up][j]):
+                row[j] = t[up][j]
+                break
+    return row
+
+
+def _find_in_text(pages, needle: str, by: str, fuzzy: bool = False) -> dict | None:
+    hit = _matcher(needle, by, fuzzy)
     for p in pages:
         lines = p["text"].splitlines()
         for i, line in enumerate(lines):
-            hit = re.search(rf"\b{re.escape(needle)}\b", line, re.I) if by == "roll" else _row_has_name([line], needle)
-            if hit:
+            if hit([line]):
                 header = None
                 for back in range(i - 1, -1, -1):
-                    if re.search(r"roll|name", lines[back], re.I):
+                    if re.search(r"roll|name", lines[back], re.I) and not ROLL_LIKE.search(lines[back].upper()):
                         header = [lines[back].strip()]
                         break
-                ctx = "\n".join(l for l in lines[max(0, i - 40):i] if _is_heading(l))
-                return {"matched_by": by, "header": header, "my_row": [line.strip()], "context": ctx[-400:] or None}
+                above = [l.strip() for l in reversed(lines[max(0, i - 60):i]) if _is_heading(l)][:4]
+                return {"matched_by": _found(by, fuzzy), "header": header, "my_row": [line.strip()],
+                        "context": "\n".join(above)[:400] or None, "section": above[0] if above else None}
     return None
 
 
-def _heading_above(page_text: str, row: list[str]) -> str | None:
-    """Text lines above your row that are not other students' rows (slot / room headings)."""
+def _headings_above(page_text: str, is_mine) -> list[str]:
+    """Heading lines above your row on the page (slot, room, test, company), nearest first; never a line that
+    could be another student's entry."""
     lines = page_text.splitlines()
-    key = next((c for c in row if c), "")
     for i, line in enumerate(lines):
-        if key and key in line:
-            above = [l for l in lines[max(0, i - 40):i] if _is_heading(l)]
-            return "\n".join(above[-4:])[-400:] or None
-    return None
+        if is_mine(line):
+            return [l.strip() for l in reversed(lines[max(0, i - 60):i]) if _is_heading(l)][:4]
+    return []
 
 
 HEADING_WORDS = re.compile(r"slot|room|venue|batch|session|time|date|test|shortlist|round|panel|lab|hall|"
@@ -305,5 +403,7 @@ def refresh_details(check: dict, roll: str) -> dict:
         det.update(_details_from(check.get("header") or [], check["my_row"], needle))
     if check.get("context"):
         det.update({k: v for k, v in _context_details(check["context"]).items() if k not in det})
+    if (check.get("details") or {}).get("section"):
+        det["section"] = check["details"]["section"]      # which section of the file lists you: kept as read
     check["details"] = det
     return check

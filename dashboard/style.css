@@ -413,3 +413,5 @@ body { grid-template-columns: minmax(0, 1fr); }
 /* the name gives way first; the demo chip and Check now keep their words */
 .top .brand { flex: 1 1 0; }
 .top .badge, .check-top { flex: none; }
+/* live updates keep your place themselves (app.js keepPlace); the browser's own anchoring would move it twice */
+.thread { overflow-anchor: none; }

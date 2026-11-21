@@ -287,7 +287,8 @@
     state.exit = { label: demo ? "Exit demo" : "Sign out", run: async () => { await sb.auth.signOut(); location.reload(); } };
     await afterStart();
     // split the lists by the current marks once they arrive, but never while a question is waiting for its answer
-    loadMarks().then(() => { if (state.marks?.size && (location.hash || "#chat") === "#chat" && !state.sending && !state.onb) route(); });
+    // drawn in place (live), never a full redraw: that would move the chat under someone reading it
+    loadMarks().then(() => { if (state.marks?.size && !state.sending) applyLive(); });
   }
 
   async function afterStart() {
@@ -326,6 +327,7 @@
       .subscribe((st) => {
         const was = live.ok;
         live.ok = st === "SUBSCRIBED";
+        document.body.dataset.live = live.ok ? "on" : "off";      // the live page test waits for this
         if (live.ok && !was) sync();                             // (re)connected: catch up on anything missed
         schedulePoll();
       });
@@ -807,13 +809,13 @@
       if (live.newCount && live.firstNew?.isConnected) {
         jump.textContent = `↓ ${live.newCount} new`; jump.className = "pill-btn"; jump.hidden = false;
         const first = live.firstNew;
-        jump.onclick = () => first.scrollIntoView({ block: "start", behavior: motion() });
+        jump.onclick = () => jumpTo(thread, first);
       } else if (divider && divider.getBoundingClientRect().top > tr.bottom - 8) {
         jump.textContent = `${unread.length} new ↓`; jump.className = "pill-btn"; jump.hidden = false;
-        jump.onclick = () => divider.scrollIntoView({ block: "start", behavior: motion() });
+        jump.onclick = () => jumpTo(thread, divider);
       } else if (fromBottom > thread.clientHeight) {
         jump.textContent = "Latest ↓"; jump.className = "pill-btn ghost"; jump.hidden = false;
-        jump.onclick = () => thread.scrollTo({ top: thread.scrollHeight, behavior: motion() });
+        jump.onclick = () => jumpTo(thread, null);
       } else jump.hidden = true;
     };
     thread.addEventListener("scroll", syncJump, { passive: true });
@@ -834,6 +836,12 @@
     navUnread(0);
   }
   const motion = () => (window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+  // to a message (or the bottom): smooth for a short way, at once for a long one (a long smooth scroll is slow)
+  function jumpTo(thread, el) {
+    const top = el ? thread.scrollTop + el.getBoundingClientRect().top - thread.getBoundingClientRect().top - 8 : thread.scrollHeight;
+    const far = Math.abs(top - thread.scrollTop) > 3 * thread.clientHeight;
+    thread.scrollTo({ top, behavior: far ? "auto" : motion() });
+  }
   function navUnread(n) { const d = $("#nav-unread"); if (!d) return; d.textContent = n > 99 ? "99+" : String(n); d.hidden = !n;
     d.parentElement.setAttribute("aria-label", n ? `Chat, ${n} new` : "Chat"); }
 
@@ -845,7 +853,8 @@
   // every bubble has a key (what it is) and a signature (what it shows), so live updates add what's new and
   // redraw only what changed, in place
   const msgKey = (role, at) => `msg:${role === "me" ? "me" : "ping"}:${Date.parse(at)}`;
-  const itemSig = (it) => [retitle(it), it.level, it.done ? 1 : 0, it.details?.hidden_because || "", (it.details?.list || []).length].join("|");
+  const itemSig = (it) => [retitle(it), it.level, it.done ? 1 : 0, it.details?.hidden_because || "", (it.details?.list || []).length,
+                            (it.details?.list || []).length ? state.marksVersion || 0 : 0].join("|");
   const runSig = (r) => [r.stage, r.status, r.new_items, r.note, r.finished_at].join("|");
   function entryKey(e) { return e.kind === "item" ? `item:${e.it.id}` : e.kind === "run" ? `run:${e.run.id}` : msgKey(e.kind, e.at); }
   function entrySig(e) { return e.kind === "item" ? itemSig(e.it) : e.kind === "run" ? runSig(e.run) : "1"; }
@@ -1074,6 +1083,7 @@
     try {
       const { prefs, marks } = await state.src.marks();
       state.marks = marks;
+      state.marksVersion = (state.marksVersion || 0) + 1;     // the lists split differently: redraw them in place
       state.prefs = prefs;
       Object.assign(state.data.profile, { targets: prefs.targets, reminder_hours: prefs.reminder_hours,
                                           list_other_roles: prefs.list_other_roles });

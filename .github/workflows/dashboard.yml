@@ -85,10 +85,14 @@ jobs:
           REF: ${{ github.event.repository.default_branch }}
         run: |
           PROJECT=$(echo "$SUPABASE_URL" | sed -E 's#https://([^.]+)\..*#\1#')
-          supabase functions deploy check-now ask-ping --project-ref "$PROJECT" --no-verify-jwt
+          # --yes: the CLI asks "are you sure?" and GitHub can't answer, so nothing was deployed without it
+          supabase functions deploy check-now ask-ping --project-ref "$PROJECT" --no-verify-jwt --yes
           ARGS=("PING_GITHUB_REPO=$REPO" "PING_GITHUB_REF=$REF")
           [ -n "$GEMINI_API_KEY" ] && ARGS+=("GEMINI_API_KEY=$GEMINI_API_KEY")
           [ -n "$PING_GITHUB_TOKEN" ] && ARGS+=("PING_GITHUB_TOKEN=$PING_GITHUB_TOKEN")
           [ -n "$PUBLISHABLE" ] && ARGS+=("PING_PUBLISHABLE_KEY=$PUBLISHABLE")
-          supabase secrets set --project-ref "$PROJECT" "${ARGS[@]}" > /dev/null
-          echo "Functions deployed."
+          supabase secrets set --project-ref "$PROJECT" --yes "${ARGS[@]}" > /dev/null
+          # prove it: the function must answer (403 "not allowed" without a login is the right answer)
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$SUPABASE_URL/functions/v1/ask-ping")
+          echo "ask-ping answers HTTP $code (403 = deployed and checking logins)"
+          [ "$code" = "403" ] || { echo "::error::ask-ping isn't answering as expected"; exit 1; }

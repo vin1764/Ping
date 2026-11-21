@@ -21,13 +21,21 @@ Deno.serve(async (req) => {
   if (!question || String(question).length > 500) return json({ error: "ask a question (max 500 characters)" }, 400);
 
   const [items, roles, profile] = await Promise.all([
-    sb.from("items").select("level,category,title,company,due_at,event_at,first_seen")
+    sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
     sb.from("roles").select("company,designation,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff").limit(400),
     sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies").limit(1),
   ]);
+  // Your own row from each list PDF (room, slot, time...). Never anyone else's.
+  const myRow = (d: any) => {
+    const p = d?.pdf;
+    if (!p || p.status !== "yes" || !p.my_row) return "";
+    const pairs = p.header ? p.header.map((h: string, k: number) => `${h || "?"}: ${p.my_row[k] ?? ""}`) : p.my_row;
+    return ` [your row in the PDF: ${pairs.join(", ")}]`;
+  };
   const feed = (items.data || []).map((i) =>
-    `- [${i.level}] ${i.title}${i.due_at ? ` (due ${ist(i.due_at)})` : ""}${i.event_at ? ` (at ${ist(i.event_at)})` : ""}`);
+    `- [${i.level}] ${i.title}${i.due_at ? ` (due ${ist(i.due_at)})` : ""}${i.event_at ? ` (at ${ist(i.event_at)})` : ""}` +
+    `${i.details?.venue ? ` (venue ${i.details.venue})` : ""}${myRow(i.details)}`);
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
     ` | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"} | CTC ${r.ctc ?? "?"} ${r.currency ?? ""}`);

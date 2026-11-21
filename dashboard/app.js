@@ -141,7 +141,11 @@
     }
     async ask(q) {
       try { return (await this.fn("ask-ping", { question: q })).answer; }
-      catch (e) { return answerLocally(q, state.data) + `\n\n(AI helper not reachable: ${e.message}. Answered with simple rules.)`; }
+      catch (e) {
+        const why = e.status === 404 || /fetch/i.test(e.message) ? "the ask-ping server function isn't deployed or reachable"
+          : e.status === 403 ? "your login isn't on the allowed list" : e.message;
+        return answerLocally(q, state.data) + `\n\n(AI not reachable: ${why}. Answered with simple rules.)`;
+      }
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
     async chat() {

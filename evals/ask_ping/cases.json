@@ -1,0 +1,535 @@
+{
+ "about": "Ask Ping evals: questions against the anonymised demo data (what the reviewer login sees), each with deterministic checks. Expected values were written by reading dashboard/demo-data.json, not by running the model.",
+ "snapshot_as_of": "2026-11-21T17:32:18+05:30",
+ "demo_data_sha256": "56d6cf92fcb0937e0514a0bf8c1a2b61647fbd32fafbdc4208e5bc9b3847a24b",
+ "check_rules": {
+  "must_contain": "every entry must appear in the answer (case-insensitive); an entry 'a|b|c' passes if any alternative appears",
+  "must_not_contain": "no entry may appear (case-insensitive)",
+  "numbers_present": "each number must appear in the answer, written any common way: 2800000, 28,00,000, 2,800,000, 28 L, 28 LPA, 28 lakh, 0.28 Cr (amounts within 0.5%); small numbers exactly (6.0 = 6)",
+  "max_words": "the answer has at most this many words"
+ },
+ "cases": [
+  {
+   "id": "C1",
+   "category": "company facts",
+   "question": "slice ctc breakdown",
+   "checks": {
+    "must_contain": [
+     "esop",
+     "retention",
+     "associate product manager",
+     "analyst"
+    ],
+    "numbers_present": [
+     "2800000",
+     "2500000",
+     "2200000"
+    ]
+   },
+   "why": "roles: slice APM CTC 28,00,000 (22L fixed + 2L retention + 4L ESOPs); Analyst 25,00,000 (19L + 2L RB + 4L ESOPs)"
+  },
+  {
+   "id": "C2",
+   "category": "company facts",
+   "question": "am I eligible for Harness",
+   "checks": {
+    "must_contain": [
+     "7.5"
+    ],
+    "must_not_contain": [
+     "you are not eligible",
+     "you're not eligible"
+    ]
+   },
+   "why": "Harness Software Engineer I: CGPA cut-off 7.5; demo profile CGPA 8.0; department unknown so eligibility can't be confirmed, but the CG cut-off is met"
+  },
+  {
+   "id": "C3",
+   "category": "company facts",
+   "question": "what is the CG cut-off for Axis Bank",
+   "checks": {
+    "numbers_present": [
+     "6.0"
+    ],
+    "max_words": 80
+   },
+   "why": "Axis Bank BIU: cgpa_cutoff 6.0"
+  },
+  {
+   "id": "C4",
+   "category": "company facts",
+   "question": "which departments can apply for Axis Bank",
+   "checks": {
+    "must_contain": [
+     "computer science",
+     "electrical",
+     "mechanical",
+     "mining",
+     "ocean"
+    ]
+   },
+   "why": "Axis Bank BIU allowed departments (13): aerospace, agricultural & food, bioscience, chemical, civil, CSE, electrical, E&ECE, industrial & systems, mechanical, metallurgical, mining, ocean engg"
+  },
+  {
+   "id": "C5",
+   "category": "company facts",
+   "question": "what roles does Waterfly Technologies have",
+   "checks": {
+    "must_contain": [
+     "graduate engineer 1",
+     "graduate engineer 2",
+     "growth",
+     "consultant 1",
+     "consultant 2"
+    ]
+   },
+   "why": "Waterfly: Graduate Engineer 1, Graduate Engineer 2, Growth and Strategist, Managment Consultant 2, Management Consultant 1"
+  },
+  {
+   "id": "C6",
+   "category": "company facts",
+   "question": "Diageo joining bonus",
+   "checks": {
+    "numbers_present": [
+     "500000"
+    ],
+    "max_words": 80
+   },
+   "why": "Diageo GBS Management Trainee: Joining Bonus 500000 (CTC 3200000 includes 5L joining bonus)"
+  },
+  {
+   "id": "C7",
+   "category": "company facts",
+   "question": "does Harness have a bond",
+   "checks": {
+    "must_contain": [
+     "no bond|bonds: no|bond: no|doesn't have a bond|does not have a bond|no service bond|without a bond|has no bond|no, harness|no. harness|harness does not|harness doesn't|bond amount: 0|bond amount of 0"
+    ],
+    "max_words": 60
+   },
+   "why": "Harness: Bonds No, Bond Amount 0"
+  },
+  {
+   "id": "C8",
+   "category": "company facts",
+   "question": "Harness take home salary",
+   "checks": {
+    "numbers_present": [
+     "2700000"
+    ],
+    "max_words": 80
+   },
+   "why": "Harness: Fixed Take Home Salary (per Annum) 2700000"
+  },
+  {
+   "id": "D1",
+   "category": "deadlines",
+   "question": "what's due tomorrow",
+   "checks": {
+    "must_contain": [
+     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+    ],
+    "max_words": 60
+   },
+   "why": "nothing in the feed or roles falls on Sun 22 Nov"
+  },
+  {
+   "id": "D2",
+   "category": "deadlines",
+   "question": "anything due today",
+   "checks": {
+    "must_contain": [
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m",
+     "aiprise",
+     "waterfly",
+     "auro"
+    ]
+   },
+   "why": "today Sat 21 Nov: 41 reminders/deadlines all at 20:00 (AiPrise, Ather, Auro Group, Waterfly, Searce, ...)"
+  },
+  {
+   "id": "D3",
+   "category": "deadlines",
+   "question": "what closes this week",
+   "checks": {
+    "must_contain": [
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m",
+     "21|today"
+    ]
+   },
+   "why": "all 48 open role deadlines after the snapshot are Sat 21 Nov 20:00"
+  },
+  {
+   "id": "D4",
+   "category": "deadlines",
+   "question": "when does the Ather Energy application close",
+   "checks": {
+    "must_contain": [
+     "21|today",
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m"
+    ],
+    "max_words": 80
+   },
+   "why": "Ather Energy roles: effective deadline Sat 21 Nov 20:00"
+  },
+  {
+   "id": "D5",
+   "category": "deadlines",
+   "question": "when does Diageo close",
+   "checks": {
+    "must_contain": [
+     "21|today",
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m"
+    ],
+    "max_words": 80
+   },
+   "why": "Diageo GBS Management Trainee: deadline Sat 21 Nov 20:00 (applied)"
+  },
+  {
+   "id": "D6",
+   "category": "deadlines",
+   "question": "is the ESRI deadline today?",
+   "checks": {
+    "must_contain": [
+     "yes|today",
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m"
+    ],
+    "max_words": 60
+   },
+   "why": "ESRI Data Scientist I: Sat 21 Nov 20:00"
+  },
+  {
+   "id": "D7",
+   "category": "deadlines",
+   "question": "what's the deadline for Harness",
+   "checks": {
+    "must_contain": [
+     "14 oct|oct 14|14th oct|october 14|14 october|14-oct",
+     "passed|closed|over|already|ended|expired"
+    ]
+   },
+   "why": "Harness Software Engineer I: Wed 14 Oct 12:00, long past"
+  },
+  {
+   "id": "D8",
+   "category": "deadlines",
+   "question": "what's due on 25 November",
+   "checks": {
+    "must_contain": [
+     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+    ],
+    "max_words": 60
+   },
+   "why": "nothing falls on 25 Nov"
+  },
+  {
+   "id": "N1",
+   "category": "notices",
+   "question": "am I shortlisted anywhere",
+   "checks": {
+    "must_contain": [
+     "eternal"
+    ],
+    "must_not_contain": [
+     "shortlisted for pine labs",
+     "on the pine labs shortlist",
+     "you're on the goldman",
+     "shortlisted for goldman"
+    ]
+   },
+   "why": "latest list results: on the Eternal shortlist/test room list (Thu 19 Nov); not on Pine Labs (20 Nov), Goldman Sachs, Microsoft"
+  },
+  {
+   "id": "N2",
+   "category": "notices",
+   "question": "when is the Eternal test and where",
+   "checks": {
+    "must_contain": [
+     "19:15|7:15",
+     "nalanda",
+     "nr 121"
+    ]
+   },
+   "why": "Eternal test Thu 19 Nov 19:15, Nalanda Classroom Complex, your room NR 121"
+  },
+  {
+   "id": "N3",
+   "category": "notices",
+   "question": "which room was I in for the IQVIA test",
+   "checks": {
+    "must_contain": [
+     "nr 122"
+    ],
+    "max_words": 60
+   },
+   "why": "IQVIA test Tue 10 Nov 20:00, room NR 122"
+  },
+  {
+   "id": "N4",
+   "category": "notices",
+   "question": "latest notice for Groww",
+   "checks": {
+    "must_contain": [
+     "form",
+     "20"
+    ]
+   },
+   "why": "Groww, 20 Nov 00:36, 'Additional requirement': fill the Additional Details Form by 20 Nov 2026, 2:00 PM"
+  },
+  {
+   "id": "N5",
+   "category": "notices",
+   "question": "am I on the Pine Labs list",
+   "checks": {
+    "must_contain": [
+     "not on|no,|aren't on|are not on|weren't on|were not on|not shortlisted|not in|not listed|no. you"
+    ],
+    "max_words": 60
+   },
+   "why": "Pine Labs shortlist (20 Nov) and test room list (9 Nov): not on either"
+  },
+  {
+   "id": "N6",
+   "category": "notices",
+   "question": "when is the Groww test",
+   "checks": {
+    "must_contain": [
+     "15:00|3 pm|3:00 pm|3pm|3.00 pm",
+     "21|today"
+    ],
+    "max_words": 60
+   },
+   "why": "Groww test (Associate Product Manager) Sat 21 Nov 15:00"
+  },
+  {
+   "id": "X1",
+   "category": "negative",
+   "question": "what's the CTC at Google",
+   "checks": {
+    "must_contain": [
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    ],
+    "must_not_contain": [
+     "lpa",
+     "lakh",
+     "₹"
+    ],
+    "max_words": 70
+   },
+   "why": "Google is not in the companies list"
+  },
+  {
+   "id": "X2",
+   "category": "negative",
+   "question": "what's due on 30 November",
+   "checks": {
+    "must_contain": [
+     "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+    ],
+    "max_words": 60
+   },
+   "why": "nothing falls on 30 Nov"
+  },
+  {
+   "id": "X3",
+   "category": "negative",
+   "question": "where is the Diageo job located",
+   "checks": {
+    "must_contain": [
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    ],
+    "must_not_contain": [
+     "bangalore",
+     "bengaluru",
+     "mumbai",
+     "gurgaon",
+     "gurugram",
+     "hyderabad",
+     "delhi",
+     "pune",
+     "chennai",
+     "noida",
+     "kolkata"
+    ],
+    "max_words": 70
+   },
+   "why": "the data has no location for Diageo (no location field at all)"
+  },
+  {
+   "id": "X4",
+   "category": "negative",
+   "question": "what was my score in the Eternal test",
+   "checks": {
+    "must_contain": [
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    ],
+    "must_not_contain": [
+     "/100",
+     "out of",
+     "% "
+    ],
+    "max_words": 70
+   },
+   "why": "scores are not in the data"
+  },
+  {
+   "id": "X5",
+   "category": "negative",
+   "question": "what's the CTC at Netflix",
+   "checks": {
+    "must_contain": [
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    ],
+    "must_not_contain": [
+     "lpa",
+     "lakh",
+     "₹"
+    ],
+    "max_words": 70
+   },
+   "why": "Netflix is not in the companies list"
+  },
+  {
+   "id": "X6",
+   "category": "negative",
+   "question": "who is the CDC contact for Groww and their phone number",
+   "checks": {
+    "must_contain": [
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    ],
+    "must_not_contain": [
+     "+91",
+     "phone number is",
+     "call them on",
+     "reach them at"
+    ],
+    "max_words": 70
+   },
+   "why": "contacts were removed from the demo; there is no phone number to give"
+  },
+  {
+   "id": "R1",
+   "category": "read-only",
+   "question": "apply to Waterfly Graduate Engineer 1 for me",
+   "checks": {
+    "must_contain": [
+     "read-only|read only"
+    ],
+    "must_not_contain": [
+     "i have applied",
+     "i've applied",
+     "applied for you",
+     "application submitted"
+    ],
+    "max_words": 80
+   },
+   "why": "Ping never applies"
+  },
+  {
+   "id": "R2",
+   "category": "read-only",
+   "question": "withdraw my application to Diageo",
+   "checks": {
+    "must_contain": [
+     "read-only|read only"
+    ],
+    "must_not_contain": [
+     "has been withdrawn",
+     "i withdrew",
+     "i've withdrawn",
+     "i have withdrawn"
+    ],
+    "max_words": 80
+   },
+   "why": "Ping never withdraws"
+  },
+  {
+   "id": "R3",
+   "category": "read-only",
+   "question": "change my CV on the ERP to the Data CV",
+   "checks": {
+    "must_contain": [
+     "read-only|read only"
+    ],
+    "must_not_contain": [
+     "i've changed",
+     "i have changed",
+     "updated your cv",
+     "changed your cv"
+    ],
+    "max_words": 80
+   },
+   "why": "Ping never uploads or changes anything on the ERP"
+  },
+  {
+   "id": "R4",
+   "category": "read-only",
+   "question": "fill the Groww additional details form for me",
+   "checks": {
+    "must_contain": [
+     "read-only|read only"
+    ],
+    "must_not_contain": [
+     "i've filled",
+     "i have filled",
+     "form submitted",
+     "submitted the form"
+    ],
+    "max_words": 80
+   },
+   "why": "Ping never submits forms"
+  },
+  {
+   "id": "B1",
+   "category": "robustness",
+   "question": "waterfly ctc",
+   "checks": {
+    "numbers_present": [
+     "3500000",
+     "2000000",
+     "1000000"
+    ]
+   },
+   "why": "Waterfly: Graduate Engineer 1 / Management Consultant 1 35L, Graduate Engineer 2 / Managment Consultant 2 20L, Growth and Strategist 10L"
+  },
+  {
+   "id": "B2",
+   "category": "robustness",
+   "question": "eternl ctc brekdown",
+   "checks": {
+    "numbers_present": [
+     "5900000",
+     "4700000"
+    ]
+   },
+   "why": "Eternal (typo): SDE I / ML Scientist 59L, Product Analyst 47L; ETERNAL Assistant Program Manager 17L"
+  },
+  {
+   "id": "B3",
+   "category": "robustness",
+   "question": "what's slice's CTC and when does ESRI close?",
+   "checks": {
+    "numbers_present": [
+     "2800000",
+     "2500000"
+    ],
+    "must_contain": [
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m"
+    ]
+   },
+   "why": "two questions: slice 28L / 25L; ESRI Sat 21 Nov 20:00"
+  },
+  {
+   "id": "B4",
+   "category": "robustness",
+   "question": "did i apply to diageo?? and whats the bond",
+   "checks": {
+    "must_contain": [
+     "yes|you have applied|you've applied|you applied|applied: yes",
+     "no bond|bonds: no|bond: no|doesn't have a bond|does not have a bond|has no bond|no service bond|without a bond|bond amount: 0|bond amount 0|no bond"
+    ]
+   },
+   "why": "Diageo: applied yes; Bonds No"
+  }
+ ]
+}

@@ -7,6 +7,7 @@
   gemini-check     call Gemini once and show exactly what comes back, plus retry the notices the rules missed
   functions-check  the Ask Ping / Check now functions on Supabase: deployed versions, which secrets they have
                    (names only), their logs from the last 24 hours, and two test questions as the reviewer
+  ask-ping-evals   run evals/ask_ping (36 questions against the deployed function as the reviewer) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
   ask-ping-page    open the dashboard page in a real browser, sign in as the reviewer, type the two test
@@ -269,6 +270,11 @@ def ask_ping_page(secrets) -> int:
                            "slice ctc breakdown", "what's due tomorrow"]).returncode
 
 
+def ask_ping_evals(secrets) -> int:
+    import subprocess
+    return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "run_ask_ping_evals.py")]).returncode
+
+
 def rearm_schedule(secrets) -> int:
     """GitHub registers a workflow's cron when it sees the file on the default branch. ping.yml has been there
     since the repo was created and never fired, so the registration was lost; disable + enable re-registers it."""
@@ -311,7 +317,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

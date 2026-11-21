@@ -7,12 +7,12 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, create-reviewer, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule]
+        options: [apply-sql, create-reviewer, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals]
       reviewer_email:
         description: "create-reviewer: the reviewer's sign-in email"
         default: "reviewer@ping-demo.example"
       reviewer_password:
-        description: "create-reviewer / functions-check: the reviewer's password"
+        description: "create-reviewer / functions-check / ask-ping-evals: the reviewer's password"
         default: ""
 
 permissions:
@@ -26,7 +26,7 @@ concurrency:
 jobs:
   admin:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -67,3 +67,12 @@ jobs:
           git diff --cached --quiet && { echo "demo data unchanged"; exit 0; }
           git commit -q -m "Demo data: anonymised snapshot of the real run"
           git push
+      - name: Save the Ask Ping eval report
+        if: inputs.task == 'ask-ping-evals'
+        run: |
+          git config user.name "ping-admin"
+          git config user.email "ping-admin@users.noreply.github.com"
+          git add evals/ask_ping/REPORT.md evals/ask_ping/results.json
+          git diff --cached --quiet && { echo "report unchanged"; exit 0; }
+          git commit -q -m "Ask Ping evals: report from the latest run"
+          git pull -q --rebase && git push

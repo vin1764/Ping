@@ -30,8 +30,16 @@ TIMEOUT = 20
 USABLE = 200            # characters: below this a JD isn't something you can summarise
 
 
+# Windows-1252 punctuation that arrives as C1 control characters (a bullet as \x95, quotes as \x93/\x94, ...)
+C1 = {"\x95": "•", "\x96": "–", "\x97": "—", "\x91": "'", "\x92": "'", "\x93": '"', "\x94": '"', "\x85": "…"}
+
+
+def fix_c1(text: str) -> str:
+    return re.sub(r"[\x80-\x9f]", lambda m: C1.get(m.group(0), ""), text or "")
+
+
 def clean(text: str) -> str:
-    text = re.sub(r"[ \t\r\f\v]+", " ", text or "")
+    text = re.sub(r"[ \t\r\f\v]+", " ", fix_c1(text))
     text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
     return text.strip()
 
@@ -323,7 +331,7 @@ SUBHEAD_RE = re.compile(r"^\s*(\d+[.)]|[ivx]+[.)])\s+[^.]{2,60}$")      # "1. Pr
 
 def _parts(text: str) -> list[tuple[str, str]]:
     """[(section, line)] with section in do / must / location / eligibility / other / intro."""
-    raw = re.sub(r"\r", "", text or "")
+    raw = re.sub(r"\r", "", fix_c1(text))
     raw = re.sub(r"[ \t\u00a0\u2007\u2009\u202f]{2,}", "\n", raw)   # items separated by runs of spaces
     raw = re.sub(r"\s*(?:[•·▪●◦]|â€¢|Â·|\uf0b7|\uf0a7|\x95|¢)\s*", "\n", raw)   # bullets (also mis-decoded ones)
     out, cur = [], "intro"
@@ -369,11 +377,18 @@ WORK = re.compile(r"(?i)\b(you will|you'll|you would|responsible for|work(?:ing)
 
 
 def _short(x: str, n: int = 12) -> str:
+    """At most n words; a long item is cut at its last natural break (comma, semicolon, "and") inside the limit."""
     w = x.split()
-    return " ".join(w[:n]) + ("…" if len(w) > n else "")
+    if len(w) <= n:
+        return x
+    head = " ".join(w[:n])
+    cut = max(head.rfind(","), head.rfind(";"), head.rfind(" and "), head.rfind(" with "))
+    if cut > 0 and len(head[:cut].split()) >= 3:
+        return head[:cut].rstrip(" ,;")
+    return head + "…"
 
 
-RULES_VERSION = 2      # bump when rules_summary changes: stored rules summaries are redone (no model call)
+RULES_VERSION = 3      # bump when rules_summary changes: stored rules summaries are redone (no model call)
 
 
 def rules_summary(text: str, designation: str = "") -> dict:

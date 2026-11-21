@@ -1345,7 +1345,8 @@
 
   // the JD: Ping's short summary of it (roles.jd_summary), the full text behind "Full JD", and where it came from
   function jdSection(r, kv, sec) {
-    const s = r.jd_summary, text = r.jd_text || r.job_description || "";
+    const C1 = { "\x95": "•", "\x96": "–", "\x97": "—", "\x91": "'", "\x92": "'", "\x93": '"', "\x94": '"', "\x85": "…" };
+    const s = r.jd_summary, text = (r.jd_text || r.job_description || "").replace(/[\x80-\x9f]/g, (c) => C1[c] || "");
     const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     const linkShut = r.jd_source === "link-unreadable" || (r.jd_source === "detail" && r.jd_url);
     const from = { attachment: "the JD file on the ERP", link: "the JD link", detail: "the ERP's role details", inline: "the ERP's job description" }[r.jd_source];
@@ -1356,7 +1357,8 @@
     if (r.jd_source === "link-unreadable") {
       body.push(h("p", { style: "margin:0" }, "The JD is a link Ping can't open (private or gone). "), srcLink);
     } else if (s) {
-      body.push(h("p", { style: "margin:0", class: "jd-role" }, one(s.role_team) || r.designation));
+      const team = one(s.role_team);
+      if (team && team.toLowerCase() !== String(r.designation || "").toLowerCase()) body.push(h("p", { style: "margin:0", class: "jd-role" }, team));
       if ((s.do || []).length) body.push(h("ul", { class: "jd-list" }, s.do.map((x) => h("li", {}, x))));
       body.push(kv([["Must-have", (s.must_have || []).join("; ")], ["Location", one(s.location)],
                     ["Eligibility", one(s.eligibility) || (r.cgpa_cutoff ? `CG cut-off ${r.cgpa_cutoff} (ERP)` : "")],

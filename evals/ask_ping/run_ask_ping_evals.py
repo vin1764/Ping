@@ -31,6 +31,10 @@ import requests
 
 HERE = Path(__file__).resolve().parent
 EVAL_HEADERS: dict = {}
+MAIN_MODEL = "gemini-flash-latest"       # ask-ping's main model (supabase/functions/ask-ping/index.ts, MODELS[0])
+# --pace N: seconds between questions (default 6, about 10 a minute: under the free tier's per-minute limit, so
+# answers come from the main model rather than the retries, the lighter model or the rules)
+PACE = float(sys.argv[sys.argv.index("--pace") + 1]) if "--pace" in sys.argv else 6.0
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -122,6 +126,8 @@ class DemoSessions:
 
 def ask(url: str, key: str, token: str, question: str, as_of: str, no_ai: bool = False) -> tuple[int, str, str, float]:
     """(HTTP status, answer or error, model, seconds). One retry if Gemini is busy or the call fails."""
+    if PACE and not no_ai:
+        time.sleep(PACE)
     for attempt in (1, 2):
         t = time.monotonic()
         try:
@@ -210,6 +216,17 @@ def post_chat(url: str, key: str, token: str, role: str, text: str) -> None:
         print(f"  (couldn't save the {role} message to the thread: HTTP {r.status_code} {r.text[:120]})")
 
 
+def _main_only(results: list[dict], convs: list[dict] | None) -> str:
+    """The score of the answers the main model gave (not the retries' lighter model or the rules answer)."""
+    main = [r for r in results if r["model"] == MAIN_MODEL]
+    turns = [t for c in (convs or []) for t in c["turns"] if t["model"] == MAIN_MODEL]
+    pct = lambda a, b: f"{100 * a / b:.0f}%" if b else "n/a"  # noqa: E731
+    p, pt = sum(not r["failed"] for r in main), sum(not t["failed"] for t in turns)
+    return (f"- **Main model only ({MAIN_MODEL}): {p} of {len(main)} single questions passed ({pct(p, len(main))}); "
+            f"{pt} of {len(turns)} conversation turns ({pct(pt, len(turns))}).** The other answers came from the lighter "
+            "model or the rules answer (marked in the table below).")
+
+
 def write_report(spec: dict, results: list[dict], demo_ok: bool, convs: list[dict] | None = None) -> Path:
     by_cat = defaultdict(list)
     for r in results:
@@ -231,6 +248,7 @@ def write_report(spec: dict, results: list[dict], demo_ok: bool, convs: list[dic
          f"{sum(not t['failed'] for c in convs for t in c['turns'])} of {sum(len(c['turns']) for c in convs)} turns passed.**"
          if convs else "- Conversations: none in this run."),
         f"- Models that answered: " + ", ".join(f"{m} ({n})" for m, n in sorted(models.items(), key=lambda x: -x[1])),
+        _main_only(results, convs),
         (f"- Latency: median {lat[len(lat) // 2]:.1f} s, slowest {lat[-1]:.1f} s" if lat else "- Latency: no answers"),
         "- Checks are deterministic (no model grades another model): required words or phrases, forbidden ones, "
         "numbers in any common format (28,00,000 = 28 L = 28 LPA), and a word limit.",

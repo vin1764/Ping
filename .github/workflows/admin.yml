@@ -7,13 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, create-reviewer, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo]
-      reviewer_email:
-        description: "create-reviewer: the reviewer's sign-in email"
-        default: "reviewer@ping-demo.example"
-      reviewer_password:
-        description: "create-reviewer / functions-check / ask-ping-evals: the reviewer's password"
-        default: ""
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -33,12 +27,6 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Hide the typed password from the logs
-        # GitHub prints a step's environment before the step runs, so mask it in an earlier step,
-        # reading it from the event file (never echoed)
-        run: |
-          pw=$(jq -r '.inputs.reviewer_password // ""' "$GITHUB_EVENT_PATH")
-          [ -n "$pw" ] && echo "::add-mask::$pw" || true
       - run: pip install -q -r requirements.txt
       - name: Install a browser (ask-ping-page only)
         if: inputs.task == 'ask-ping-page'
@@ -46,8 +34,6 @@ jobs:
       - name: Run ${{ inputs.task }}
         env:
           TASK: ${{ inputs.task }}
-          REVIEWER_EMAIL: ${{ inputs.reviewer_email }}
-          REVIEWER_PASSWORD: ${{ inputs.reviewer_password }}
           ERP_USER_ID: ${{ secrets.ERP_USER_ID }}
           MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

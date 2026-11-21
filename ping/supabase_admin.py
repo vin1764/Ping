@@ -114,3 +114,15 @@ def sign_in_check(url: str, publishable: str, email: str, password: str) -> None
         raise SetupError(f"signed in, but the database doesn't let this login see Ping's data ({owner.text[:200]})")
     items = requests.get(f"{base}/rest/v1/items", headers=hdrs, params={"select": "id", "limit": "1"}, timeout=30)
     _check(items, "reading the feed as the dashboard login")
+
+
+def demo_session(url: str, publishable: str) -> tuple[dict, str]:
+    """A one-click demo session, exactly like the dashboard's "View demo" (supabase.auth.signInAnonymously()):
+    returns the request headers for it and its user id. Fails if anonymous sign-ins are off."""
+    r = requests.post(url.rstrip("/") + "/auth/v1/signup", headers={"apikey": publishable}, json={}, timeout=30)
+    if r.status_code != 200:
+        raise SetupError(f"the demo couldn't start (anonymous sign-in): HTTP {r.status_code} {r.text[:200]}")
+    body = r.json()
+    token = body.get("access_token") or (body.get("session") or {}).get("access_token")
+    uid = (body.get("user") or {}).get("id", "")
+    return {"apikey": publishable, "Authorization": f"Bearer {token}", "Content-Type": "application/json"}, uid

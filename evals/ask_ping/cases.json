@@ -1,5 +1,5 @@
 {
- "about": "Ask Ping evals: questions against the anonymised demo data (what the reviewer login sees), each with deterministic checks. Expected values were written by reading dashboard/demo-data.json, not by running the model.",
+ "about": "Ask Ping evals: questions against the anonymised demo data (what the one-click demo shows), each with deterministic checks. Expected values were written by reading dashboard/demo-data.json, not by running the model.",
  "snapshot_as_of": "2026-11-21T17:32:18+05:30",
  "demo_data_sha256": "2d75c6c11017228331bf38b273c69307f9e38f15b358f98af3c75c745742fe05",
  "check_rules": {

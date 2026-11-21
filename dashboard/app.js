@@ -369,7 +369,7 @@
     const unread = entries.filter((e) => (e.kind === "item" || e.kind === "ping") && (!readAt || dt(e.at) > readAt));
     const inner = h("div", { class: "thread-inner" });
     let lastDay = null, divider = null;
-    const snapshot = state.asOf && h("div", { class: "day snapshot" }, `${state.src.kind === "demo" ? "Demo" : "Reviewer view"}: ` +
+    const snapshot = state.asOf && h("div", { class: "day snapshot" }, "Demo: " +
       `an anonymised snapshot of a real run, shown as it was on ${when(state.asOf)}. Fake roll number, name and CGPA; ` +
       "other students and all mail removed.");
     if (!entries.length) inner.append(h("div", { class: "day" }, "No messages yet. Ping posts here when something is about you."));

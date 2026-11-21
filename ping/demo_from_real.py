@@ -282,6 +282,7 @@ def build_from_store(store, real_roll: str, mail: str) -> dict:
             "emails": [], "contacts": [], "runs": run}
     data = Scrubber(real_roll, real_name, mail).walk(data)
     data["generated_at"] = datetime.now(IST).isoformat()
+    data["profile"]["updated_at"] = data["generated_at"]  # a demo session reads the snapshot time from here
     data["about"] = ("Anonymised snapshot of a real Ping run: real companies, roles, pay, deadlines and notice "
                      "wording; fake roll number, name and CGPA; other students' details and all mail removed.")
     return data
@@ -335,7 +336,7 @@ def final_check(data) -> list[str]:
 
 
 def load_to_db(store, data: dict) -> dict:
-    """Replace the demo rows the reviewer login sees (is_sample = true). Real rows are never touched."""
+    """Replace the demo rows a one-click demo session sees (is_sample = true). Real rows are never touched."""
     counts = {}
     for table in ("items", "pdf_checks", "notices", "roles", "runs", "contacts", "emails"):
         store.delete(table, {"is_sample": "is.true"})

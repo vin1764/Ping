@@ -12,17 +12,20 @@ chat, like WhatsApp:
 
 It **only reads**. It cannot apply, submit, upload or accept anything (see [Safety](#safety)).
 
-**Demo, no login:** https://claude.ai/artifact/TWGCZxEawg7zZrrjSDnur7 (the owner
-shares it from its Share menu). It is an anonymised snapshot of a real run on
+**Live dashboard:** https://vin1764.github.io/ping-dashboard/ (sign in as the
+owner, or press **View demo**: no account needed). How it gets there: see
+[Live dashboard](#live-dashboard).
+
+**One-click demo:** the **View demo** button on the sign-in screen opens an
+anonymous, read-only session on the live dashboard. It is an anonymised snapshot of a real run on
 21 Nov 2026: real companies, roles, pay, deadlines and notice wording; fake roll
 number, name and CGPA; every other student's name, roll number and phone number
 and everything from the mailbox removed. It shows the feed as it was at that
-moment, so it doesn't go stale.
-
-**Reviewer login:** `reviewer@ping-demo.example` (password shared separately).
-It signs in to the real dashboard but the database only lets it see the
-anonymised demo rows, and it can't change anything. It needs the dashboard to
-be hosted (see [What's left](#whats-left)).
+moment, so it doesn't go stale. The database only lets a demo session read the
+demo rows and its own chat; it can't change anything. Ask Ping answers it too,
+up to 15 questions per visitor per hour and 100 per hour for all visitors
+together. A static copy with no login is also at
+https://claude.ai/artifact/TWGCZxEawg7zZrrjSDnur7 (the owner shares it from its Share menu).
 
 Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md), the index of both suites in plain words:
 parser evals (`python evals/run_evals.py`) and Ask Ping evals (Actions > Admin > `ask-ping-evals`).
@@ -53,8 +56,9 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
 - "More details" popup (CGPA cut-off, backlog rule, written test) for all 201 roles.
 - Ask Ping and Check now functions deployed and answering (Ask Ping falls back
   to simple rules when Gemini is busy).
-- The reviewer login, checked on the real project: it sees 440 demo items and
-  0 real ones; an attempt to edit the demo profile changed nothing.
+- The one-click demo's database rules, tested on a local copy of Supabase (real
+  Postgres, Supabase's roles): a demo session reads only demo rows, writes only its
+  own chat, sees no other session's chat, and is limited to 15 questions an hour.
 - Chat tables applied to the real project from GitHub (Actions > Admin > apply-sql).
 
 ### Not working or not verified yet
@@ -71,8 +75,6 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
   instead of guessing. Deliberately not tuned to the held-out set.
 - **Eligibility** says "not sure" for most roles until your profile has your
   department and degree (the Profile page).
-- **The dashboard isn't hosted yet**, so real data and the reviewer login
-  can't be opened in a browser (the demo can).
 - **One-command setup** was tested against an empty Supabase-like database
   (real Postgres with Supabase's rules), not yet a brand-new real project.
 
@@ -102,12 +104,8 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
    schedule; this re-registers it. (This branch is already the default branch,
    which GitHub requires for schedules.)
 2. **Your profile:** department, degree, CGPA, backlogs (dashboard > Menu > Profile).
-3. **Host the dashboard** so real data and the reviewer login work in a
-   browser: Settings > Pages > Source: **GitHub Actions** (private repos need
-   GitHub Pro, free with the GitHub Student Developer Pack), then Actions >
-   Dashboard > Run workflow. Or any free static host (Cloudflare Pages,
-   Netlify): build command `bash dashboard/build.sh`, output folder `_site`,
-   variables `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
+3. **The deploy token** (`DASHBOARD_DEPLOY_TOKEN`, see [Live dashboard](#live-dashboard))
+   expires; renew it before then and save the new value under the same name.
 4. **OTP mail filter:** in your institute Gmail, From `erpkgp@adm.iitkgp.ac.in`,
    Subject `OTP` > Create filter > Skip the Inbox + Mark as read. Ping searches
    All Mail, so it still finds them.
@@ -118,11 +116,42 @@ Actions > **Admin** > Run workflow, pick a task:
 | task | what it does |
 |---|---|
 | `apply-sql` | creates or updates all tables and rules from `sql/schema.sql`, then checks them |
-| `create-reviewer` | creates (or resets) the read-only demo login with the email and password you type, then signs in as it to prove it sees only demo rows and can't change them |
-| `build-demo` | builds the anonymised demo from your real data, checks it for your roll number, email, name and any other roll or phone number (writes nothing if it finds one), loads it for the reviewer and commits `dashboard/demo-data.json` |
+| `build-demo` | builds the anonymised demo from your real data, checks it for your roll number, email, name and any other roll or phone number (writes nothing if it finds one), loads it as the demo rows, reads them back and checks them again, commits `dashboard/demo-data.json` and starts the dashboard deploy |
 | `gemini-check` | one test call to Gemini, then retries the notices the rules couldn't read, printing every model's answer |
-| `functions-check` | the Ask Ping / Check now functions on Supabase: deployed version, which secrets they have (names only), every request and crash from the last 23 hours, and two test questions as the reviewer |
-| `ask-ping-page` | opens the dashboard in a real browser, signs in as the reviewer, types "slice ctc breakdown" and "what's due tomorrow" into the chat and prints the replies |
+| `functions-check` | the Ask Ping / Check now functions on Supabase: deployed version, which secrets they have (names only), every request and crash from the last 23 hours, and two test questions from a demo session |
+| `ask-ping-page` | opens the **live** dashboard in a real browser: checks the owner sign-in screen (without signing in), clicks View demo, confirms the demo session gets 0 real rows, types "slice ctc breakdown" and "what's due tomorrow" and prints the replies |
+| `ask-ping-evals` | runs the Ask Ping evals from demo sessions and commits `evals/ask_ping/REPORT.md` |
+| `auth-config` | Supabase Auth for the live dashboard: Site URL and redirect list, anonymous sign-ins on |
+| `cleanup-demo` | deletes demo sessions older than 7 days and their chat (also runs daily) |
+| `rearm-schedule` | switches the Ping workflow off and on through the API so GitHub registers its schedule |
+
+---
+
+## Live dashboard
+
+**https://vin1764.github.io/ping-dashboard/**
+
+Two repositories, so this one can stay private:
+
+- **This repo (private)** has the code, the settings and the history. On every
+  push that touches the dashboard (and after Admin > build-demo), Actions >
+  Dashboard builds the static site and runs a guard over the built files
+  (`setup/check_public_build.py`): it stops the deploy if they contain a Supabase
+  secret or service key, a Google key, "+91", any 10-digit number outside the
+  made-up 90000 range, your roll number or email, a banned word, or any file other
+  than the seven expected.
+- **[vin1764/ping-dashboard](https://github.com/vin1764/ping-dashboard) (public)**
+  holds **only the built files**: `index.html`, `app.js`, `style.css`, `config.js`
+  (the Supabase URL and publishable key, which are public by design),
+  `demo-data.json` (anonymised), `.nojekyll` and a short README. Each deploy
+  force-pushes one commit ("build <sha> from private repo"), so only the current
+  build is ever public. GitHub Pages serves its `main` branch.
+- The push uses `DASHBOARD_DEPLOY_TOKEN` (this repo's Actions secret): a
+  fine-grained token for ping-dashboard only, with Contents and Pages read/write.
+  Pages was switched on once by hand (Settings > Pages > main, / (root)), because
+  doing it through the API needs Administration: write on the token.
+- Supabase Auth's Site URL and redirect list point at the live URL (Admin >
+  auth-config); localhost stays allowed for development.
 
 ---
 
@@ -224,14 +253,16 @@ summary reports its own counts.
   Things that are over stay in the history, greyed ("Deadline passed", "Over").
 - **Menu:** All updates (with the three level filters), Companies (a page per
   company: roles, applied, deadline, pay, eligibility), Profile, Check now.
-- **Demo mode** (`?demo=1`): the anonymised snapshot, no login; the thread is
-  kept in that browser. The demo and the reviewer login show the snapshot as it
-  was when it was taken (a note at the top of the unread messages says so).
+- **View demo** (sign-in screen): a one-click anonymous session on the anonymised
+  snapshot, with a "Demo - sample data, read-only" chip; its chat is kept for that
+  session. `?demo=1` opens the same snapshot from a file, without the database. Both
+  show the snapshot as it was when it was taken (a note above the unread messages says so).
 
 Real data needs a login. The page reads your Supabase directly with the
 publishable key (that key is meant to be public), and database rules only let
-emails in the `allowed_users` table see your data; emails in `reviewer_users`
-see only the demo rows (`is_sample = true`) and can't change anything. Check now and the AI answers
+emails in the `allowed_users` table see your data; a one-click demo session
+(anonymous sign-in) sees only the demo rows (`is_sample = true`) and its own chat, and
+can't change anything (`sql/demo.sql`). Check now and the AI answers
 run as two small Supabase functions (`supabase/functions/`) that hold the
 GitHub token and the Gemini key, and check that the caller is you.
 
@@ -387,8 +418,8 @@ The demo is built from your real data by **Actions > Admin > build-demo**
   your real roll number, email and name, and for anything shaped like a roll
   or phone number. If one is found, nothing is written.
 
-It is loaded into the database as demo rows (`is_sample = true`, only the
-reviewer login sees them; real runs never read them) and committed as
+It is loaded into the database as demo rows (`is_sample = true`, only demo
+sessions see them; real runs never read them) and committed as
 `dashboard/demo-data.json` for the no-login demo. A fresh copy of the project
 that hasn't built one yet falls back to made-up sample data (`ping/sample.py`).
 
@@ -410,7 +441,7 @@ that hasn't built one yet falls back to made-up sample data (`ping/sample.py`).
 | `ping/probe.py` | layout check of the "more details" popup |
 | `ping/demo_from_real.py` | the anonymised demo built from your real data |
 | `ping/sample.py` | made-up sample data (fallback) |
-| `ping/admin.py`, `ping/supabase_admin.py` | Admin tasks: tables, reviewer login, demo, Gemini check |
+| `ping/admin.py`, `ping/supabase_admin.py` | Admin tasks: tables, Auth settings, demo, evals, checks |
 | `dashboard/` | the dashboard (`build.sh` builds it into `_site/`) |
 | `supabase/functions/` | Check now and Ask Ping server functions |
 | `setup/capture_erp.py` | one-time page capture used to build Ping |

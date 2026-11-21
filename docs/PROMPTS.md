@@ -37,8 +37,8 @@ Use [] when there is nothing. Do not invent dates.
 ## 2. Ask Ping (the chat on the dashboard)
 
 - **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini key is a Supabase function secret and never reaches the browser
-- **When:** Every question typed in the dashboard chat by a signed-in owner or reviewer. If it fails, the page answers with simple rules instead and says so.
-- **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the reviewer's anonymised demo). See the template for each part.
+- **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If it fails, the page answers with simple rules instead and says so. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
+- **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part.
 - **Expected output:** Plain text, shown as Ping's chat reply. No JSON.
 - **Models, in fallback order:** `PING_AI_MODEL` → `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-2.0-flash`
 - endpoint: Gemini `generateContent` (`GEMINI_API_KEY`); `PING_AI_MODEL` replaces the first model

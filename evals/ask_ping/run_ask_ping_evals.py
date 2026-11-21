@@ -1,12 +1,15 @@
-"""Ask Ping evals: ask the deployed ask-ping function every question in cases.json, exactly as the dashboard
-does (signed in as the reviewer login, which sees the anonymised demo), with the snapshot time fixed so
-"today" and "tomorrow" never move. Score the deterministic checks and write REPORT.md.
+"""Ask Ping evals: ask the deployed ask-ping function every question in cases.json, exactly as the dashboard's
+one-click demo does (an anonymous "View demo" session, which sees only the anonymised demo), with the snapshot
+time fixed so "today" and "tomorrow" never move. Score the deterministic checks and write REPORT.md.
 
 Run it:
-  - on GitHub: Actions > Admin > ask-ping-evals (type the reviewer password), or
-  - locally:   SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... REVIEWER_EMAIL=... REVIEWER_PASSWORD=... \
-               python evals/ask_ping/run_ask_ping_evals.py
+  - on GitHub: Actions > Admin > ask-ping-evals, or
+  - locally:   SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... python evals/ask_ping/run_ask_ping_evals.py
                (a .env file with those names works too)
+
+A demo session may ask 15 questions an hour, so the runner opens a new session every 14 questions. With
+SUPABASE_SERVICE_KEY set (as in Admin), it removes its own question counts afterwards, so an eval run doesn't
+use up the hour's demo allowance for visitors.
 
 Checks never call a model: must_contain / must_not_contain (case-insensitive; 'a|b' = either),
 numbers_present (2800000 = 28,00,000 = 28 L = 28 LPA ...), max_words.
@@ -81,11 +84,32 @@ def score(answer: str, checks: dict) -> list[str]:
     return failed
 
 
-def sign_in(url: str, key: str, email: str, password: str) -> str:
-    r = requests.post(f"{url}/auth/v1/token", params={"grant_type": "password"}, headers={"apikey": key},
-                      json={"email": email, "password": password}, timeout=30)
-    r.raise_for_status()
-    return r.json()["access_token"]
+class DemoSessions:
+    """One-click demo sessions, a fresh one before the per-session limit (15 an hour) is reached."""
+    PER_SESSION = 14
+
+    def __init__(self, url: str, key: str):
+        from ping.supabase_admin import demo_session
+        self.url, self.key, self._new, self.ids, self.used = url, key, demo_session, [], self.PER_SESSION
+        self.token = ""
+
+    def next_token(self) -> str:
+        if self.used >= self.PER_SESSION:
+            hdr, uid = self._new(self.url, self.key)
+            self.token, self.used = hdr["Authorization"].removeprefix("Bearer "), 0
+            self.ids.append(uid)
+        self.used += 1
+        return self.token
+
+    def forget_counts(self) -> str:
+        """Remove this run's rows from the demo question counter (needs the service key)."""
+        secret = os.environ.get("SUPABASE_SERVICE_KEY", "")
+        if not secret or not self.ids:
+            return "question counts kept (no SUPABASE_SERVICE_KEY here)"
+        r = requests.delete(f"{self.url}/rest/v1/demo_questions", timeout=30,
+                            headers={"apikey": secret, "Authorization": f"Bearer {secret}"},
+                            params={"session_id": f"in.({','.join(self.ids)})"})
+        return f"removed this run's demo question counts (HTTP {r.status_code}, {len(self.ids)} sessions)"
 
 
 def ask(url: str, key: str, token: str, question: str, as_of: str) -> tuple[int, str, str, float]:
@@ -113,10 +137,8 @@ def main() -> int:
     load_dotenv()
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
-    email = os.environ.get("REVIEWER_EMAIL", "reviewer@ping-demo.example")
-    password = os.environ.get("REVIEWER_PASSWORD", "")
-    if not (url and key and password):
-        print("needs SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and REVIEWER_PASSWORD (and REVIEWER_EMAIL)")
+    if not (url and key):
+        print("needs SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY")
         return 2
     spec = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
     demo = (ROOT / "dashboard" / "demo-data.json").read_bytes()
@@ -124,16 +146,17 @@ def main() -> int:
     if not demo_ok:
         print("WARNING: dashboard/demo-data.json changed since the expected answers were written; "
               "rebuilding the demo can change the right answers")
-    token = sign_in(url, key, email, password)
+    sessions = DemoSessions(url, key)
     results = []
     for c in spec["cases"]:
-        status, answer, model, secs = ask(url, key, token, c["question"], spec["snapshot_as_of"])
+        status, answer, model, secs = ask(url, key, sessions.next_token(), c["question"], spec["snapshot_as_of"])
         failed = score(answer, c["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
         results.append({**c, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
                         "failed": failed})
         print(f"{c['id']:3} {'PASS' if not failed else 'FAIL'} {secs:5.1f}s {model:26} {c['question']}"
               + ("" if not failed else f"  -> {'; '.join(failed)}"), flush=True)
     (HERE / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(sessions.forget_counts())
     report = write_report(spec, results, demo_ok)
     passed = sum(1 for r in results if not r["failed"])
     print(f"\n{passed} of {len(results)} cases passed. Wrote {report.relative_to(ROOT)}")
@@ -153,7 +176,7 @@ def write_report(spec: dict, results: list[dict], demo_ok: bool) -> Path:
     lines = [
         "# Ask Ping evals", "",
         f"_Run on {datetime.now().astimezone().strftime('%d %b %Y, %H:%M %Z')} against the deployed `ask-ping` function, "
-        f"signed in as the reviewer login (anonymised demo data), snapshot time fixed at {spec['snapshot_as_of']}. "
+        f"from one-click demo sessions (anonymised demo data), snapshot time fixed at {spec['snapshot_as_of']}. "
         "Re-run with Actions > Admin > ask-ping-evals, or `python evals/ask_ping/run_ask_ping_evals.py`._", "",
         "## In short", "",
         f"- **{passed} of {len(results)} questions passed all their checks ({pct([not r['failed'] for r in results])}).**",

@@ -1,21 +1,20 @@
 """One-off maintenance tasks, run on GitHub (Actions > Admin) where the secrets live.
 
   apply-sql        create/update all tables, permissions and rules (sql/schema.sql) with the access token
-  create-reviewer  create the read-only reviewer login (demo data only) and prove what it can see
   build-demo       build the anonymised demo from your real data, check it, save it for the static demo
-                   (dashboard/demo-data.json) and load it as the rows the reviewer login sees
+                   (dashboard/demo-data.json) and load it as the rows a demo session sees
   gemini-check     call Gemini once and show exactly what comes back, plus retry the notices the rules missed
   functions-check  the Ask Ping / Check now functions on Supabase: deployed versions, which secrets they have
-                   (names only), their logs from the last 24 hours, and two test questions as the reviewer
+                   (names only), their logs from the last 24 hours, and two test questions from a demo session
   auth-config      Supabase Auth settings for the live dashboard: Site URL and redirect allow-list point at
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
   cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
                    (also runs daily from the Ping workflow)
-  ask-ping-evals   run evals/ask_ping (36 questions against the deployed function as the reviewer) and save the report
+  ask-ping-evals   run evals/ask_ping (questions against the deployed function from demo sessions) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
-  ask-ping-page    open the dashboard page in a real browser, sign in as the reviewer, type the two test
+  ask-ping-page    open the live dashboard in a real browser, click "View demo", type the two test
                    questions into the chat and print the replies shown on screen
 """
 
@@ -69,43 +68,6 @@ def apply_sql(secrets) -> int:
     return 0
 
 
-def create_reviewer(secrets) -> int:
-    email = os.environ.get("REVIEWER_EMAIL", "").strip().lower()
-    password = os.environ.get("REVIEWER_PASSWORD", "")
-    publishable = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
-    if not email or len(password) < 8 or not publishable:
-        say("need REVIEWER_EMAIL, REVIEWER_PASSWORD (8+ characters) and SUPABASE_PUBLISHABLE_KEY")
-        return 2
-    if email == secrets.mail_address.strip().lower():
-        say("the reviewer email must not be your own")
-        return 2
-    url, secret = secrets.supabase_url, secrets.supabase_key
-    how = sa.ensure_dashboard_user(url, secret, email, password)
-    store = SupabaseStore(url, secret)
-    store.upsert("reviewer_users", [{"email": email}], key="email")
-    store.delete("allowed_users", {"email": f"eq.{email}"})
-    say(f"reviewer login {email}: {how}, confirmed, on the reviewer list (not the owner list)")
-    r = requests.post(f"{url}/auth/v1/token", params={"grant_type": "password"}, timeout=30,
-                      headers={"apikey": publishable}, json={"email": email, "password": password})
-    r.raise_for_status()
-    hdr = {"apikey": publishable, "Authorization": f"Bearer {r.json()['access_token']}"}
-    owner = requests.post(f"{url}/rest/v1/rpc/is_ping_owner", headers=hdr, json={}, timeout=30).json()
-    rev = requests.post(f"{url}/rest/v1/rpc/is_ping_reviewer", headers=hdr, json={}, timeout=30).json()
-    items = requests.get(f"{url}/rest/v1/items", headers=hdr, params={"select": "id,is_sample"}, timeout=30).json()
-    real_seen = [i for i in items if not i.get("is_sample")] if isinstance(items, list) else ["error"]
-    profile = requests.get(f"{url}/rest/v1/profile", headers=hdr, params={"select": "id"}, timeout=30).json()
-    write = requests.patch(f"{url}/rest/v1/profile", headers=hdr, params={"id": "eq.2"}, json={"cgpa": 1}, timeout=30)
-    chk = requests.get(f"{url}/rest/v1/profile", params={"select": "cgpa", "id": "eq.2"},
-                       headers={"apikey": secret}, timeout=30).json()
-    say(f"  signed in as the reviewer: owner={owner}, reviewer={rev}")
-    say(f"  rows it can see: {len(items) if isinstance(items, list) else items} items, "
-        f"{len(real_seen)} of them real (must be 0); profile rows {[p.get('id') for p in profile] if isinstance(profile, list) else profile}")
-    say(f"  tried to change the demo profile: HTTP {write.status_code}; stored CGPA afterwards: {chk}")
-    ok = owner is False and rev is True and not real_seen and not (chk and chk[0].get("cgpa") == 1)
-    say("reviewer login: OK, read-only and demo-only" if ok else "reviewer login: PROBLEM (see above)")
-    return 0 if ok else 1
-
-
 def build_demo(secrets) -> int:
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     data = build_from_store(store, secrets.erp_user_id, secrets.mail_address)
@@ -123,11 +85,11 @@ def build_demo(secrets) -> int:
     say(f"demo built from the real data: {counts}; {visible} items shown in the chat")
     say(f"anonymising check: passed (no real roll, email or name; no other rolls, phones, ten-digit numbers, "
         f"'+91', meeting links or real names from the denylist). Wrote {out.name}, {out.stat().st_size // 1024} KB")
-    # read back exactly what the reviewer login now sees and check it again
+    # read back exactly what a demo session now sees and check it again
     live = {t: store.select(t, {"is_sample": "is.true"}) for t in
             ("profile", "roles", "notices", "pdf_checks", "items", "runs", "contacts", "emails")}
     left = final_check(live)
-    say(f"reviewer's database rows read back ({', '.join(f'{t} {len(r)}' for t, r in live.items())}): "
+    say(f"demo rows in the database, read back ({', '.join(f'{t} {len(r)}' for t, r in live.items())}): "
         + ("clean" if not left else "NOT CLEAN: " + "; ".join(left)))
     file_left = final_check(out.read_text(encoding="utf-8"))
     say(f"{out.name} as written: " + ("clean" if not file_left else "NOT CLEAN: " + "; ".join(file_left)))
@@ -210,20 +172,15 @@ def _source_logs(ref: str, token: str, source: str, function_id, fields: str, li
     return []
 
 
-def ask_as_reviewer(url: str, question: str) -> tuple[int, float, str]:
-    """Ask Ping exactly like the dashboard does: signed-in token + publishable key, POST {question}."""
-    publishable = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
-    r = requests.post(f"{url.rstrip('/')}/auth/v1/token", params={"grant_type": "password"}, timeout=30,
-                      headers={"apikey": publishable},
-                      json={"email": os.environ.get("REVIEWER_EMAIL", ""), "password": os.environ.get("REVIEWER_PASSWORD", "")})
-    if r.status_code != 200:
-        return r.status_code, 0.0, f"reviewer sign-in failed: {r.text[:200]}"
-    tok = r.json()["access_token"]
-    t = time.monotonic()
-    a = requests.post(f"{url.rstrip('/')}/functions/v1/ask-ping", timeout=180, json={"question": question},
-                      headers={"apikey": publishable, "Authorization": f"Bearer {tok}"})
-    return a.status_code, time.monotonic() - t, a.text[:1500]
-
+def ask_as_demo(url: str, questions: list[str]) -> list[tuple[str, int, float, str]]:
+    """Ask Ping exactly like the dashboard's demo does: a one-click (anonymous) session, POST {question}."""
+    hdr, _ = sa.demo_session(url, os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""))
+    out = []
+    for q in questions:
+        t = time.monotonic()
+        a = requests.post(f"{url.rstrip('/')}/functions/v1/ask-ping", timeout=180, json={"question": q}, headers=hdr)
+        out.append((q, a.status_code, time.monotonic() - t, a.text[:1500]))
+    return out
 
 def functions_check(secrets) -> int:
     token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
@@ -261,11 +218,13 @@ def functions_check(secrets) -> int:
         msg = " ".join(str(x.get("event_message") or "").split())[:400]
         say(f"  {_when(x.get('timestamp'))} [{x.get('level') or x.get('severity')}/{x.get('event_type')}] {msg}")
 
-    if os.environ.get("REVIEWER_PASSWORD") and os.environ.get("SUPABASE_PUBLISHABLE_KEY"):
-        say("\ntest questions, asked as the reviewer login (demo data, same function):")
-        for q in ("slice ctc breakdown", "what's due tomorrow"):
-            code, secs, body = ask_as_reviewer(secrets.supabase_url, q)
-            say(f"  Q: {q}\n  -> HTTP {code} in {secs:.1f}s: {body}")
+    if os.environ.get("SUPABASE_PUBLISHABLE_KEY"):
+        say("\ntest questions from a one-click demo session (demo data, same function):")
+        try:
+            for q, code, secs, body in ask_as_demo(secrets.supabase_url, ["slice ctc breakdown", "what's due tomorrow"]):
+                say(f"  Q: {q}\n  -> HTTP {code} in {secs:.1f}s: {body}")
+        except sa.SetupError as e:
+            say(f"  {e}")
     return 0
 
 
@@ -377,7 +336,7 @@ def rearm_schedule(secrets) -> int:
 def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
-    tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
+    tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

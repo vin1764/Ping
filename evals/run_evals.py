@@ -4,7 +4,7 @@ Ping evals: does Ping read real placement notices and PDFs the way a careful per
 
     python evals/run_evals.py
 
-Prints the results and writes evals/PARSER_REPORT.md (plain English, for reviewers; evals/REPORT.md is the index).
+Prints the results and writes evals/PARSER_REPORT.md (plain English; evals/REPORT.md is the index).
 
 What is tested
   - 31 real CDC notices from 7-21 Nov 2026 (other students' details removed). For each, a person's

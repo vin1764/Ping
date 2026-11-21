@@ -62,7 +62,8 @@ def _failure_note(status: str) -> str:
 
 
 JD_FETCH_PER_RUN = 40        # ERP files and public links read per run for job descriptions
-JD_SUMMARIES_PER_RUN = 40    # JD summaries made per run (Gemini; open roles first)
+JD_SUMMARIES_PER_RUN = 40     # new JDs summarised by Gemini per run (the rest by rules, upgraded later)
+JD_AI_UPGRADES_PER_RUN = 20   # rules summaries redone by Gemini per run, open roles first
 
 
 UNREACHABLE_MSG = "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly."
@@ -353,18 +354,25 @@ class Runner:
             elif old.get("model") == "rules":
                 retry.append((r, text, key))        # made by rules while Gemini was busy: Gemini gets another go
         # open roles first: those are the ones you might apply to
-        todo.sort(key=lambda x: str(x[0].get("effective_deadline") or x[0].get("apply_end") or ""), reverse=True)
+        order = lambda x: str(x[0].get("effective_deadline") or x[0].get("apply_end") or "")  # noqa: E731
+        todo.sort(key=order, reverse=True)
+        retry.sort(key=order, reverse=True)
         ups, made = [], Counter()
-        for i, (r, text, key) in enumerate(todo[:JD_SUMMARIES_PER_RUN]):
-            s = summarise(text, self.secrets.ai) if made["ai_failed"] < 3 else None
+        # every JD gets a summary this run: Gemini for the first ones, the JD's own labelled parts for the rest
+        # (Gemini gets those on later runs, below)
+        for i, (r, text, key) in enumerate(todo):
+            s = None
+            if i < JD_SUMMARIES_PER_RUN and made["ai_failed"] < 3:
+                s = summarise(text, self.secrets.ai)
+                if s is None:
+                    made["ai_failed"] += 1
             if s is None:
-                made["ai_failed"] += 1
                 s = rules_summary(text, r.get("designation") or "")
             s["key"] = key
-            made[s.get("model") == "rules" and "rules" or "ai"] += 1
+            made["rules" if s.get("model") == "rules" else "ai"] += 1
             ups.append({"id": r["id"], "jd_summary": s})
             r["jd_summary"] = s
-        for r, text, key in retry[:max(0, JD_SUMMARIES_PER_RUN - len(ups))]:
+        for r, text, key in retry[:max(0, JD_AI_UPGRADES_PER_RUN - made["ai"])]:
             if made["ai_failed"] >= 3:
                 break
             s = summarise(text, self.secrets.ai)
@@ -372,7 +380,7 @@ class Runner:
                 made["ai_failed"] += 1
                 continue                              # the rules summary stays
             s["key"] = key
-            made["ai_retried"] += 1
+            made["ai_upgraded"] += 1
             ups.append({"id": r["id"], "jd_summary": s})
             r["jd_summary"] = s
         if ups:

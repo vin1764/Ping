@@ -48,7 +48,8 @@ def links_in(text: str) -> list[str]:
 
 def jd_key(role: dict) -> str:
     """Changes when the role's own JD information changes (then the JD is fetched again)."""
-    raw = "|".join(str(role.get(k) or "") for k in ("job_description", "has_company_doc", "has_form_doc", "apply_end"))
+    # "v2": a change in how JDs are found (a link kept next to the details) looks every role up once more
+    raw = "v2|" + "|".join(str(role.get(k) or "") for k in ("job_description", "has_company_doc", "has_form_doc", "apply_end"))
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
@@ -218,7 +219,10 @@ def resolve(role: dict, get_file, get_link=None) -> dict:
             return {"jd_text": text[:20000], "jd_source": "attachment", "jd_url": erp_file_url(role, "COM")}
     both = clean(("" if not inline or _placeholder(inline) else inline) + ("\n\n" + detail if detail else ""))
     if usable(both):
-        return {"jd_text": both[:20000], "jd_source": "detail", "jd_url": None}
+        out = {"jd_text": both[:20000], "jd_source": "detail", "jd_url": None}
+        if unreadable:      # the fuller JD is behind a link Ping couldn't open: keep the link with the details
+            out.update(jd_url=unreadable["jd_url"], jd_note="the JD link couldn't be opened (" + (unreadable.get("jd_note") or "private") + ")")
+        return out
     if unreadable:
         return unreadable
     note = "; ".join(tried) or (inline[:80] if inline else "no JD on the ERP")
@@ -287,6 +291,11 @@ def summarise(text: str, cfg: dict, timeout: int = 45) -> dict | None:
                 out = {k: data.get(k) for k in SUMMARY_KEYS}
                 for k in ("do", "must_have", "unusual"):
                     out[k] = [str(x).strip() for x in (out[k] or []) if str(x).strip()][: {"do": 3, "must_have": 5, "unusual": 3}[k]]
+                for k in ("role_team", "location", "eligibility"):
+                    v = out[k]
+                    if isinstance(v, list):
+                        v = "; ".join(str(x) for x in v if str(x).strip())
+                    out[k] = str(v).strip() if v and str(v).strip().lower() not in ("null", "none", "n/a", "-") else None
                 out["model"] = model
                 return out
         except Exception:
@@ -294,33 +303,88 @@ def summarise(text: str, cfg: dict, timeout: int = 45) -> dict | None:
     return None
 
 
-SECTION = re.compile(r"^\s*(?:key\s+)?(responsibilit\w*|role|what you('ll| will) do|job description|requirements?|"
-                     r"qualifications?|skills?(?: required)?|must[- ]haves?|required skill set|location|eligibility)\s*[:\-]?\s*$", re.I)
+# labels a JD uses for its parts, at the start of a line or inside one ("Required Skill Set: ... Skills: ...")
+LABELS = {
+    "do": r"(?:key\s+)?responsibilit(?:y|ies)|roles? and responsibilities|what you(?:'ll| will) do|your role|role|"
+          r"day to day",
+    "about": r"about the (?:role|team|job|position)|the role|job description|overview",
+    "must": r"required skill set|skills?(?: required)?|must[- ]haves?|requirements?|(?:preferred |desired )?qualifications?|"
+            r"what we(?:'re| are) looking for|who you are|technical skills|eligibility criteria|you should have|"
+            r"what you(?:'ll)? need(?: to bring)?(?: to the \W?\w+\W?)?",
+    "location": r"(?:job |work )?locations?|based in|place of posting",
+    "eligibility": r"eligibility|eligible (?:branches|degrees)|cgpa(?: cut-?off)?|min(?:imum)? cgpa|batch",
+    "other": r"additional information|about (?:us|the company)|perks|benefits|compensation|ctc|stipend|"
+             r"department|experience|employment type|target institutes|selection process|notes?|important|disclaimer",
+}
+LABEL_RE = re.compile(r"(?i)(?:^|(?<=[\s.;]))(" + "|".join(f"(?P<{k}>{v})" for k, v in LABELS.items()) + r")\s*:\s*")
+HEADING_RE = re.compile(r"(?i)^\s*(" + "|".join(LABELS.values()) + r")\s*:?\s*$")
+SUBHEAD_RE = re.compile(r"^\s*(\d+[.)]|[ivx]+[.)])\s+[^.]{2,60}$")      # "1. Product Strategy & Roadmap"
+
+
+def _parts(text: str) -> list[tuple[str, str]]:
+    """[(section, line)] with section in do / must / location / eligibility / other / intro."""
+    raw = re.sub(r"\r", "", text or "")
+    raw = re.sub(r"[ \t\u00a0\u2007\u2009\u202f]{2,}", "\n", raw)   # items separated by runs of spaces
+    raw = re.sub(r"\s*(?:[•·▪●◦]|â€¢|Â·|\uf0b7|\uf0a7|\x95|¢)\s*", "\n", raw)   # bullets (also mis-decoded ones)
+    out, cur = [], "intro"
+    for line in raw.splitlines():
+        line = line.strip(" -*\t")
+        if not line:
+            continue
+        h = HEADING_RE.match(line)
+        if h:
+            cur = next(k for k in LABELS if re.fullmatch(LABELS[k], h.group(1).strip(), re.I))
+            continue
+        # labels inside the line split it into pieces, each with its own section
+        pos, pieces = 0, []
+        for m in LABEL_RE.finditer(line):
+            if m.start() > pos:
+                pieces.append((cur, line[pos:m.start()]))
+            cur = next(k for k in LABELS if m.group(k))
+            pos = m.end()
+        pieces.append((cur, line[pos:]))
+        for sec, piece in pieces:
+            piece = piece.strip(" .;:-")
+            if piece and not SUBHEAD_RE.match(piece):
+                out.append((sec, piece))
+    return out
+
+
+def _items(lines: list[str], commas: bool = True, min_words: int = 2) -> list[str]:
+    """One item per duty or skill: a long comma list becomes its items, sentences become items."""
+    out, split_commas = [], commas
+    for l in lines:
+        for sent in re.split(r"(?<=[a-z0-9)])\.\s+(?=[A-Z])", l):
+            commas = [c.strip() for c in re.split(r",(?![^()]*\))", sent) if c.strip()]
+            if split_commas and len(commas) >= 3 and all(len(c.split()) <= 12 for c in commas[:-1]) and len(commas[-1].split()) <= 24:
+                out += [re.sub(r"^(and|or)\s+", "", c, flags=re.I) for c in commas]
+            else:
+                out.append(sent.strip())
+    out = [re.sub(r"^[^\w(“\"']+", "", i).strip(" .;") for i in out]
+    return [x[0].upper() + x[1:] for x in out if x and len(x.split()) >= min_words]
+
+
+WORK = re.compile(r"(?i)\b(you will|you'll|you would|responsible for|work(?:ing)? (?:on|with|closely)|build|develop|design|"
+                  r"analy[sz]e|own|drive|manage|deliver|support|lead)\b")
+
+
+def _short(x: str, n: int = 12) -> str:
+    w = x.split()
+    return " ".join(w[:n]) + ("…" if len(w) > n else "")
 
 
 def rules_summary(text: str, designation: str = "") -> dict:
-    """Without a model: the same fields, taken from labelled sections and lines (never written fresh)."""
-    lines = [l.strip(" •·-*\t") for l in clean(text).splitlines() if l.strip(" •·-*\t")]
-    sections, cur = {}, "intro"
-    for l in lines:
-        m = SECTION.match(l)
-        if m:
-            cur = m.group(1).lower()
-            continue
-        sections.setdefault(cur, []).append(l)
-    def pick(*names):
-        for n in names:
-            for k, v in sections.items():
-                if k.startswith(n):
-                    return v
-        return []
-    do = pick("responsib", "what you", "role", "job description") or [s for s in sections.get("intro", []) if len(s.split()) > 4]
-    must = pick("must", "required skill", "skill", "requirement", "qualification")
-    loc = re.search(r"\blocation\s*[:\-]\s*([^\n.;]{2,60})", text, re.I)
-    elig = re.search(r"\b(eligib\w*|cgpa|cg)\s*[:\-]?\s*([^\n]{2,80})", text, re.I)
-    unusual = [l for l in lines if re.search(r"\bbond\b|\bshift|rotation|relocat|travel|service agreement|night", l, re.I)]
-    short = lambda xs, n: [" ".join(x.split()[:14]) for x in xs[:n]]  # noqa: E731
-    return {"role_team": designation or None, "do": short(do, 3), "must_have": short(must, 5),
-            "location": loc.group(1).strip() if loc else None,
-            "eligibility": " ".join(elig.group(0).split()[:14]) if elig else None,
-            "unusual": short(unusual, 3), "model": "rules"}
+    """Without a model: the same fields, taken from the JD's own labelled parts (never written fresh)."""
+    parts = _parts(text)
+    by = lambda sec: [l for s, l in parts if s == sec]  # noqa: E731
+    intro = _items([l for l in by("intro") + by("about") if len(l.split()) > 3])
+    # with no responsibilities section: the sentences about the work, not the company's introduction
+    do = _items(by("do")) or [x for x in intro if WORK.search(x)] or intro
+    must = _items(by("must"), commas=len(by("must")) == 1, min_words=1)   # bullets are items already; one run-on line is split
+    loc = next((l for l in by("location") if len(l) <= 80), None)
+    elig = next((l for l in by("eligibility") if len(l) <= 120), None)
+    unusual = [l for _, l in parts if re.search(r"\bbond\b|\bshifts?\b|rotation|relocat|travel|service agreement|"
+                                                 r"night|contract of", l, re.I)]
+    return {"role_team": designation or None, "do": [_short(x) for x in do[:3]], "must_have": [_short(x) for x in must[:5]],
+            "location": _short(loc, 10) if loc else None, "eligibility": _short(elig, 16) if elig else None,
+            "unusual": [_short(x) for x in unusual[:3]], "model": "rules"}

@@ -126,4 +126,12 @@ test("JD questions: the stored summary (≤120 words), a link that can't be open
     "Searce (Associate Data Engineer): The JD is a link I can't open: https://docs.google.com/document/d/14dVgbE3ZQouUB93/edit");
   assert.match(R.answer("what do they want for cars24", d).text, /^Cars24 \(Data Science\): no JD on the ERP/);
   assert.match(R.answer("summarise google's jd", d).text, /^I don't have Google/);
+  // the JD came from the ERP's details, the fuller JD is a private link; a model that sent [] for "no location"
+  const d2 = { ...data, roles: [{ id: "j4", company: "Searce Inc.", designation: "Associate Data Engineer", jd_source: "detail",
+    jd_url: "https://docs.google.com/document/d/x/edit", jd_text: "Role: Build data pipelines ...",
+    jd_summary: { role_team: "Data Engineer", do: ["Build data pipelines"], must_have: ["Python", "SQL"], location: [], eligibility: [] } }] };
+  const t = R.answer("what's the JD for searce", d2).text;
+  assert.match(t, /^Searce \(Associate Data Engineer\): Data Engineer\nWhat you'd do:\n- Build data pipelines\nMust-have: Python; SQL\n/);
+  assert.doesNotMatch(t, /Location|Eligibility/);
+  assert.match(t, /\(From the ERP's role details\.\)\nThe full JD is a link I can't open: https:\/\/docs\.google\.com\/document\/d\/x\/edit$/);
 });

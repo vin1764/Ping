@@ -1346,18 +1346,20 @@
   // the JD: Ping's short summary of it (roles.jd_summary), the full text behind "Full JD", and where it came from
   function jdSection(r, kv, sec) {
     const s = r.jd_summary, text = r.jd_text || r.job_description || "";
+    const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
+    const linkShut = r.jd_source === "link-unreadable" || (r.jd_source === "detail" && r.jd_url);
     const from = { attachment: "the JD file on the ERP", link: "the JD link", detail: "the ERP's role details", inline: "the ERP's job description" }[r.jd_source];
     const srcLink = r.jd_url ? h("a", { href: r.jd_url, target: "_blank", rel: "noopener",
       title: r.jd_source === "attachment" ? "Opens on the ERP; you need to be logged in to the ERP in this browser" : null },
-      r.jd_source === "attachment" ? "Open the JD file on the ERP" : "Open the JD link") : null;
+      r.jd_source === "attachment" ? "Open the JD file on the ERP" : linkShut ? "The full JD link (Ping couldn't open it)" : "Open the JD link") : null;
     const body = [];
     if (r.jd_source === "link-unreadable") {
       body.push(h("p", { style: "margin:0" }, "The JD is a link Ping can't open (private or gone). "), srcLink);
     } else if (s) {
-      body.push(h("p", { style: "margin:0", class: "jd-role" }, s.role_team || r.designation));
+      body.push(h("p", { style: "margin:0", class: "jd-role" }, one(s.role_team) || r.designation));
       if ((s.do || []).length) body.push(h("ul", { class: "jd-list" }, s.do.map((x) => h("li", {}, x))));
-      body.push(kv([["Must-have", (s.must_have || []).join("; ")], ["Location", s.location || ""],
-                    ["Eligibility", s.eligibility || (r.cgpa_cutoff ? `CG cut-off ${r.cgpa_cutoff} (ERP)` : "")],
+      body.push(kv([["Must-have", (s.must_have || []).join("; ")], ["Location", one(s.location)],
+                    ["Eligibility", one(s.eligibility) || (r.cgpa_cutoff ? `CG cut-off ${r.cgpa_cutoff} (ERP)` : "")],
                     ["Unusual", (s.unusual || []).join("; ")]]));
     } else if (!text.trim() || r.jd_source === "none") {
       body.push(h("p", { class: "muted small", style: "margin:0" }, `No JD on the ERP${r.jd_note ? ` (${r.jd_note})` : ""}.`));

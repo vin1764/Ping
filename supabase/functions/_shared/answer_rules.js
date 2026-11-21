@@ -249,15 +249,18 @@
     const who = `${name} (${role.designation})`;
     if (role.jd_source === "link-unreadable" && role.jd_url) return `${who}: The JD is a link I can't open: ${role.jd_url}`;
     const s = role.jd_summary;
+    // a link Ping couldn't open, next to the JD it did find (the ERP's details)
+    const linkNote = role.jd_url && role.jd_source === "detail" ? `\nThe full JD is a link I can't open: ${role.jd_url}` : "";
+    const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     if (!s) {
-      if (role.jd_text) return `${who}: ${String(role.jd_text).split(/\s+/).slice(0, 90).join(" ")}…`;
+      if (role.jd_text) return `${who}: ${String(role.jd_text).split(/\s+/).slice(0, 90).join(" ")}…` + linkNote;
       return `${who}: no JD on the ERP${role.jd_note ? ` (${String(role.jd_note).slice(0, 80)})` : ""}.`;
     }
-    const lines = [`${who}: ${s.role_team || role.designation}`];
+    const lines = [`${who}: ${one(s.role_team) || role.designation}`];
     if ((s.do || []).length) lines.push("What you'd do:", ...s.do.slice(0, 3).map((x) => `- ${x}`));
     if ((s.must_have || []).length) lines.push(`Must-have: ${s.must_have.slice(0, 5).join("; ")}`);
-    if (s.location) lines.push(`Location: ${s.location}`);
-    const elig = s.eligibility || (role.cgpa_cutoff ? `CG cut-off ${role.cgpa_cutoff} (ERP)` : "");
+    if (one(s.location)) lines.push(`Location: ${one(s.location)}`);
+    const elig = one(s.eligibility) || (role.cgpa_cutoff ? `CG cut-off ${role.cgpa_cutoff} (ERP)` : "");
     if (elig) lines.push(`Eligibility: ${elig}`);
     const odd = [...(s.unusual || [])];
     if (role.bond && !odd.some((x) => /bond|service/i.test(x)) && !/^no$/i.test(String(role.bond).trim())) odd.push(`bond: ${role.bond} (ERP)`);
@@ -270,7 +273,7 @@
     }
     const src = role.jd_source === "attachment" ? "the JD file on the ERP" : role.jd_source === "link" ? "the JD link"
       : role.jd_source === "detail" ? "the ERP's role details" : "the ERP's job description";
-    return out.join("\n") + `\n(From ${src}.)`;
+    return out.join("\n") + `\n(From ${src}.)` + linkNote;
   }
 
   function jdForCompany(ent, question, data) {

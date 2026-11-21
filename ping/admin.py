@@ -322,7 +322,9 @@ def ask_ping_page(secrets) -> int:
     return subprocess.run([sys.executable, str(ROOT / "setup" / "ask_ping_page_test.py"),
                            "slice ctc breakdown", "what's due tomorrow",
                            # follow-ups in the same demo session: the answers must use the conversation
-                           "any tests today?", "anything else?", "nothing else?"]).returncode
+                           "any tests today?", "anything else?", "nothing else?",
+                           # the demo profile says what it's looking for: the answer splits For you / Others
+                           "what's due tonight that's relevant to me"]).returncode
 
 
 def auth_config(secrets) -> int:

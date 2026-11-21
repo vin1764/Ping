@@ -69,6 +69,12 @@ def test_one_command_setup_on_an_empty_project(project):
     assert oct(envfile.stat().st_mode)[-3:] == "600"
     assert 'MAIL_APP_PASSWORD="abcdefghijklmnop"' in envfile.read_text()
 
+    # a brand-new student starts with an EMPTY profile: nothing about anyone is pre-filled
+    from ping.store import SupabaseStore as _S
+    prof = _S(fake.url, fs.SECRET).select("profile")
+    assert [r["id"] for r in prof] == [1]
+    assert all(prof[0].get(k) in (None, [], "") for k in ("roll", "name", "department", "degree", "cgpa", "targets", "cvs"))
+
     # Ping can now save a whole run with the secret key ...
     from fake_erp import FakeErp
     import ping.erp as erp_mod
@@ -97,6 +103,11 @@ def test_one_command_setup_on_an_empty_project(project):
     # it may edit the profile and write to the chat ...
     ok = requests.patch(f"{fake.url}/rest/v1/profile", headers=user, params={"id": "eq.1"}, json={"cgpa": 8.4})
     assert ok.status_code == 204, ok.text
+    # ... including what a first chat message saves ("only show me ...", "remind me 3 hours before")
+    prefs = {"targets": "roles a new student describes", "reminder_hours": 3, "list_other_roles": False}
+    ok = requests.patch(f"{fake.url}/rest/v1/profile", headers=user, params={"id": "eq.1"}, json=prefs)
+    assert ok.status_code == 204, ok.text
+    assert {k: store.select("profile", {"id": "eq.1"})[0][k] for k in prefs} == prefs
     chat = requests.post(f"{fake.url}/rest/v1/chat_messages", headers=user, json=[{"role": "me", "text": "hi"}])
     assert chat.status_code == 201, chat.text
     # ... but not change what Ping found, and someone without a login sees nothing
@@ -183,6 +194,19 @@ def test_demo_session_reads_only_demo_rows_and_writes_only_its_own_chat(project)
     other, other_uid = _anonymous(fake)
     assert chat(demo, {"role": "me", "text": "x", "is_sample": True, "owner_id": other_uid}) == 403  # not someone else's
     assert [m["text"] for m in get(demo, "chat_messages").json()] == ["slice ctc?"]
+
+    # preferences: a demo session keeps its own (session_prefs), never the owner's profile, never another session's
+    owner_targets = store.select("profile", {"id": "eq.1"})[0].get("targets")
+    pref = lambda h, row: requests.post(f"{fake.url}/rest/v1/session_prefs", headers=h, json=[row]).status_code
+    assert pref(demo, {"owner_id": demo_uid, "targets": "only analyst roles"}) == 201
+    assert pref(demo, {"owner_id": other_uid, "targets": "x"}) == 403
+    requests.patch(f"{fake.url}/rest/v1/profile", headers=demo, params={"id": "eq.1"}, json={"targets": "hijack"})
+    assert store.select("profile", {"id": "eq.1"})[0].get("targets") == owner_targets
+    assert [r["targets"] for r in get(demo, "session_prefs").json()] == ["only analyst roles"]
+    assert get(other, "session_prefs").json() == []
+    # the "For you" cache is server-only
+    r = get(demo, "role_marks")
+    assert r.status_code == 403 or r.json() == []
     assert get(other, "chat_messages").json() == []                                # sessions don't see each other
     me = sign_in(fake, "student@example.com", "correct horse battery").json()["access_token"]
     owner = {"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {me}"}

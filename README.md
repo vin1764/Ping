@@ -47,6 +47,41 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
    The Profile page shows the same fields (plus CGPA, department and degree for eligibility).
 4. **Done.** The first hourly run reads the last 14 days of notices; after that, only what's new.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  cron["Supabase pg_cron<br/>:41 every hour, 06:11-01:11 IST"] -->|kick-run function| gha
+  ghcron["GitHub cron (backup,<br/>skips if a run started &lt;50 min ago)"] --> gha
+  check["Dashboard: Check now"] -->|check-now function| gha
+  gha["GitHub Actions: Ping run<br/>python -m ping.run"] -->|GET pages and PDFs only,<br/>through the read-only gate| erp["IIT KGP ERP"]
+  gha -->|read-only IMAP: OTP + placement mail| mail["Institute mailbox"]
+  gha -->|notice fallback, 'For you' marks,<br/>CV summaries| gemini["Gemini (free tier)"]
+  gha -->|service key| db[("Supabase Postgres<br/>roles, notices, pdf_checks, items,<br/>profile, chat, role_marks ...")]
+  db --- storage[("Storage: cvs bucket<br/>owner only")]
+  storage -->|new CVs, server-side| gha
+  pages["GitHub Pages: ping-dashboard<br/>(built files only)"] -->|owner login or<br/>View demo (anonymous)| db
+  pages -->|Ask Ping| askfn["ask-ping function"]
+  askfn -->|the caller's own rows (RLS)| db
+  askfn --> gemini
+```
+
+**The hourly cycle.** pg_cron calls `kick-run`, which starts the Ping workflow (GitHub's own schedule is a backup;
+both skip if a run is going or started in the last 50 minutes). The run logs in (OTP from the mailbox), reads
+the companies list, new notices and their PDFs (keeping only your row), checks the mailbox, logs out, then
+rebuilds the feed: rules first, Gemini only where the rules can't read a notice, "For you" marks from one
+cached classifier call, deadline digests and reminders. Everything is saved to Supabase; the dashboard reads it
+with your login.
+
+**When it fails.** ERP down or flaky: retried hourly; after 3 failed runs in a row one email and one chat
+message, then "back online" when it works. Credentials refused: one email and chat message at once and the
+schedule pauses until you start a run yourself. See [When Ping needs you](#when-ping-needs-you).
+
+**The demo path.** "View demo" signs in anonymously; database rules give that session only the anonymised demo
+rows (a made-up student over a real snapshot), its own chat, its own preferences and a rate limit (15
+questions an hour). It can't start a run, read real rows, or reach the CV bucket. See
+[docs/SECURITY.md](docs/SECURITY.md).
+
 ## Status (honest)
 
 ### Today's numbers (real runs, 21 Nov 2026)

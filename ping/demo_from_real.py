@@ -108,6 +108,9 @@ def _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll):
     from .notices import analyze
     now = datetime.now(IST)
     profile = {"roll": real_roll, "notice_types": ["PLACEMENT"], **{k: v for k, v in real_profile.items() if v is not None}}
+    from .pdfs import refresh_details
+    for c in checks:
+        refresh_details(c, real_roll)
     index = CompanyIndex(roles)
     for n in notices:
         if (n.get("analysis") or {}).get("method") != "ai" and (n.get("text") or n.get("preview")):

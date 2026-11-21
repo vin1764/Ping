@@ -27,7 +27,7 @@ from .mailbox import Mailbox
 from .matching import CompanyIndex, tokens
 from .notices import analyze, roles_for_target
 from .parsers import parse_companies, parse_more_details, parse_notice_page, parse_notices, parse_role_popup
-from .pdfs import check_attachment
+from .pdfs import check_attachment, refresh_details
 from .store import MemoryStore, SupabaseStore
 
 PROFILE_DEFAULTS = {"roll": None, "name": None, "department": None, "degree": None, "cgpa": None,
@@ -385,7 +385,19 @@ class Runner:
             if n["analysis"].get("method") != "ai" and (n.get("text") or n.get("preview")):
                 n["analysis"] = analyze(n, n.get("text") or n.get("preview"), index, profile["roll"],
                                         profile.get("name") or "")
-        checks = {c["notice_id"]: c for c in self.store.select("pdf_checks", REAL)}
+        checks = {}
+        fixed = []
+        for c in self.store.select("pdf_checks", REAL):
+            before = c.get("details")
+            checks[c["notice_id"]] = refresh_details(c, profile["roll"])
+            if c.get("details") != before:
+                fixed.append({"notice_id": c["notice_id"], "details": c["details"]})
+        if fixed:
+            try:
+                self.store.upsert("pdf_checks", fixed, key="notice_id")
+            except Exception as e:
+                self.problems.append(f"saving re-read PDF details failed: {e}")
+        self.counts["pdf_details_reread"] = len(fixed)
         emails = self.store.select("emails", REAL)
         corrections = {c["notice_id"]: c for c in self.store.select("corrections")} if self.store_ok else {}
         dstats: dict = {}

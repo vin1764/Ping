@@ -60,7 +60,7 @@ def test_relative_word_next_to_real_date_is_not_double_counted():
 
 
 def test_fmt_when():
-    assert fmt_when(datetime(2026, 11, 22, 16, 0, tzinfo=IST), REF) == "Sun 16:00"
+    assert fmt_when(datetime(2026, 11, 22, 16, 0, tzinfo=IST), REF) == "Sun 22 Nov 16:00"
     assert fmt_when(datetime(2026, 12, 5, 9, 30, tzinfo=IST), REF) == "Sat 05 Dec 09:30"
 
 
@@ -212,3 +212,14 @@ def test_exact_company_name_wins_before_loose_matching():
     assert idx.match("ACCENTURE INDIA PRIVATE LIMITED").company == "Accenture India Private Limited"
     assert idx.match("NAVI").company == "Navi Limited"          # shortened name: loose match
     assert idx.match("Accenture").company is None                # really ambiguous: ask, don't guess
+
+
+def test_saved_room_from_an_older_reading_is_corrected():
+    """Real case: a room list with two students per line. An older reading took the left student's room;
+    every run now re-reads the saved row (yours + heading only) with today's rules."""
+    from ping.pdfs import refresh_details
+    saved = {"status": "yes", "matched_by": "roll", "header": ["Roll No", "Room No", "", "Roll No", "Room No"],
+             "my_row": ["21AB10001", "NR 324", "", "22XY10042", "NR 422"], "context": "Roll No Room No",
+             "details": {"room": "NR 324", "room_or_venue_from_heading": "Roll No Room No"}}
+    assert refresh_details(saved, "22xy10042")["details"] == {"room": "NR 422"}
+    assert refresh_details({"status": "no", "details": {}}, "22XY10042") == {"status": "no", "details": {}}

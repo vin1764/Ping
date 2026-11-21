@@ -292,3 +292,18 @@ def _is_heading(line: str) -> bool:
     """Only keep lines that look like headings, never lines that could be another student's entry."""
     line = line.strip()
     return bool(line) and not ROLL_LIKE.search(line.upper()) and bool(HEADING_WORDS.search(line)) and len(line) < 160
+
+
+def refresh_details(check: dict, roll: str) -> dict:
+    """Re-read room/slot/time from a saved check (your row + heading only) with today's rules, so a fix
+    to the reading (e.g. which of two side-by-side room columns is yours) also corrects older files."""
+    if not check or check.get("status") != "yes" or not (check.get("my_row") or check.get("context")):
+        return check
+    det = {}
+    if check.get("my_row"):
+        needle = (roll or "").strip().upper() if check.get("matched_by") == "roll" else ""
+        det.update(_details_from(check.get("header") or [], check["my_row"], needle))
+    if check.get("context"):
+        det.update({k: v for k, v in _context_details(check["context"]).items() if k not in det})
+    check["details"] = det
+    return check

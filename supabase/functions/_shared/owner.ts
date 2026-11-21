@@ -26,9 +26,14 @@ export async function ownerClient(req: Request) {
 }
 
 export async function ownerOrReviewerClient(req: Request) {
+  return (await caller(req))?.sb ?? null;
+}
+
+// Who is calling: the owner (real rows) or the reviewer (anonymised demo rows), or nobody.
+export async function caller(req: Request) {
   const sb = client(req);
   const owner = await sb.rpc("is_ping_owner");
-  if (!owner.error && owner.data === true) return sb;
+  if (!owner.error && owner.data === true) return { sb, role: "owner" as const };
   const reviewer = await sb.rpc("is_ping_reviewer");
-  return !reviewer.error && reviewer.data === true ? sb : null;
+  return !reviewer.error && reviewer.data === true ? { sb, role: "reviewer" as const } : null;
 }

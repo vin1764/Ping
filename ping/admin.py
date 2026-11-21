@@ -144,13 +144,17 @@ def gemini_check(secrets) -> int:
 API = "https://api.supabase.com"
 
 
-def _logs(ref: str, token: str, sql: str, hours: int = 24) -> list:
+def _z(t) -> str:
+    return t.strftime("%Y-%m-%dT%H:%M:%S.000Z")  # the logs API accepts only this shape
+
+
+def _logs(ref: str, token: str, sql: str, hours: int = 23) -> list:
     from datetime import timedelta, timezone
     end = datetime.now(timezone.utc)
     r = requests.get(f"{API}/v1/projects/{ref}/analytics/endpoints/logs", timeout=60,
                      headers={"Authorization": f"Bearer {token}"},
-                     params={"sql": sql, "iso_timestamp_start": (end - timedelta(hours=hours)).isoformat(),
-                             "iso_timestamp_end": end.isoformat()})
+                     params={"sql": sql, "iso_timestamp_start": _z(end - timedelta(hours=hours)),
+                             "iso_timestamp_end": _z(end)})
     if r.status_code >= 400:
         say(f"  (logs query failed: HTTP {r.status_code} {r.text[:300]})")
         return []

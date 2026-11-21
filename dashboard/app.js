@@ -147,7 +147,9 @@
       return "Started a run. New messages arrive in about 2 minutes (reload to see them).";
     }
     async ask(q) {
-      try { return (await this.fn("ask-ping", { question: q })).answer; }
+      // the reviewer sees a snapshot: "tomorrow" is the day after it, as everywhere else on the page
+      const asOf = this.reviewer && state.asOf ? new Date(state.asOf).toISOString() : undefined;
+      try { return (await this.fn("ask-ping", { question: q, as_of: asOf })).answer; }
       catch (e) {
         const why = e.status === 404 || /fetch/i.test(e.message) ? "the ask-ping server function isn't deployed or reachable"
           : e.status === 403 ? "your login isn't on the allowed list" : e.message;

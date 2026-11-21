@@ -17,6 +17,9 @@ if [ -s dashboard/demo-data.json ]; then cp dashboard/demo-data.json _site/; els
 python3 - <<'PY'
 import json, os
 cfg = {"supabaseUrl": os.environ.get("SUPABASE_URL", ""), "supabaseKey": os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")}
+# push notifications: the VAPID public key (Actions > Admin > push-setup writes it; public by design)
+if os.path.exists("dashboard/push-public-key.txt"):
+    cfg["pushKey"] = open("dashboard/push-public-key.txt").read().strip()
 build = os.environ.get("GITHUB_SHA", "local")[:7]  # lets the deploy check that the live site is this build
 open("_site/config.js", "w").write("window.PING_CONFIG = " + json.dumps(cfg) + ";\nwindow.PING_BUILD = "
                                    + json.dumps(build) + ";\n")

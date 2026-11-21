@@ -61,6 +61,9 @@ def _failure_note(status: str) -> str:
     return f"The check stopped before the end ({why}). I'll try again at the next hourly check."
 
 
+# the dashboard, for links in emails (the public Pages site of this repo's owner)
+DASHBOARD_URL = os.environ.get("PING_DASHBOARD_URL") or \
+    f"https://{(os.environ.get('GITHUB_REPOSITORY') or 'owner/x').split('/')[0].lower()}.github.io/ping-dashboard/"
 JD_FETCH_PER_RUN = 40        # ERP files and public links read per run for job descriptions
 JD_SUMMARIES_PER_RUN = 40     # new JDs summarised by Gemini per run (the rest by rules, upgraded later)
 JD_AI_UPGRADES_PER_RUN = 20   # rules summaries redone by Gemini per run, open roles first
@@ -275,9 +278,42 @@ class Runner:
                     self.store.upsert("runs", [record])
                 except Exception:
                     log(f"could not save the run record: {e}")
+        if status == "ok":
+            self._notify(profile, items)
         self._alerts(status)
         self._print_summary(record)
         return record
+
+    def _notify(self, profile: dict, items: list[dict]) -> None:
+        """Push (docs/PUSH.md): at most one notification for this run's most urgent new for-you message, test-day
+        reminders queued for pg_cron, and the optional for-you email. Never fails the run."""
+        from . import push
+        if not self.store_ok:
+            return
+        new = getattr(self, "new_messages", [])
+        try:
+            rows = push.reminders(items, profile, self.now)
+            if rows:
+                sent = {r["id"] for r in self.store.select("push_queue", {"kind": "eq.reminder", "sent_at": "not.is.null"})}
+                rows = [r for r in rows if r["id"] not in sent]
+                if rows:
+                    self.store.upsert("push_queue", rows)
+            self.counts["push_reminders_queued"] = len(rows)
+        except Exception as e:                        # e.g. before Admin > apply-sql made push_queue
+            self.problems.append(f"queueing test reminders failed: {type(e).__name__}")
+        chosen = push.pick(new, self.now)
+        if chosen and self.secrets.supabase_url and self.secrets.supabase_key:
+            try:
+                res = push.send(self.secrets.supabase_url, self.secrets.supabase_key, push.payload(*chosen, self.now))
+                self.counts["push"] = {k: res[k] for k in ("status", "sent", "devices", "ok", "why", "error") if k in res}
+            except Exception as e:
+                self.counts["push"] = {"error": type(e).__name__}
+            log(f"push: {self.counts['push']}")
+        if chosen and profile.get("email_digests"):
+            text = push.email_text(new, self.now, DASHBOARD_URL)
+            if text:
+                ok = notify.send_self(self.secrets.mail_address, self.secrets.mail_app_password, *text)
+                self.counts["email_digest"] = bool(ok)
 
     # --------------------------------------------------------------- details
     def _role_details(self, r: dict) -> dict:
@@ -571,8 +607,9 @@ class Runner:
         self.counts["dedupe"]["deadline_moves_between_runs"] = len(moved)
         self.counts["dedupe_examples"] = dstats.get("examples", [])[:5]
         # what the chat shows that it didn't show before (role cards and reminders live inside the digests)
-        self.new_in_chat = sum(1 for it in items if it["id"] not in previous and it.get("level") != "hidden"
-                               and it.get("category") not in ("apply", "reminder") and not it.get("dismissed"))
+        self.new_messages = [it for it in items if it["id"] not in previous and it.get("level") != "hidden"
+                             and it.get("category") not in ("apply", "reminder") and not it.get("dismissed")]
+        self.new_in_chat = len(self.new_messages)
         self.counts["new_in_chat"] = self.new_in_chat
         stamp = datetime.now(timezone.utc).isoformat()
         # role eligibility + effective deadline, for the dashboard

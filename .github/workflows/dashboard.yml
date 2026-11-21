@@ -115,7 +115,7 @@ jobs:
         run: |
           PROJECT=$(echo "$SUPABASE_URL" | sed -E 's#https://([^.]+)\..*#\1#')
           # --yes: the CLI asks "are you sure?" and GitHub can't answer, so nothing was deployed without it
-          supabase functions deploy check-now ask-ping kick-run --project-ref "$PROJECT" --no-verify-jwt --yes
+          supabase functions deploy check-now ask-ping kick-run send-push --project-ref "$PROJECT" --no-verify-jwt --yes
           ARGS=("PING_GITHUB_REPO=$REPO" "PING_GITHUB_REF=$REF")
           [ -n "$GEMINI_API_KEY" ] && ARGS+=("GEMINI_API_KEY=$GEMINI_API_KEY")
           # evals and Admin checks: their own key (ask-ping uses it only for requests that prove they hold it)

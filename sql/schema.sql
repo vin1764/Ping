@@ -437,3 +437,44 @@ alter table roles add column if not exists jd_url text;           -- the file on
 alter table roles add column if not exists jd_note text;          -- why there's none (e.g. "link: HTTP 401", "only by email")
 alter table roles add column if not exists jd_key text;           -- the role's JD inputs: fetched again only when they change
 alter table roles add column if not exists jd_summary jsonb;      -- {role_team, do[], must_have[], location, eligibility, unusual[], key}
+
+-- ---------------------------------------------------------------- push notifications (docs/PUSH.md)
+-- One row per device that said yes. Only the owner may add, see or remove them (a demo session can't subscribe);
+-- the send-push function reads them with the service key. No key material that could send pushes is here: the
+-- VAPID private key is a Supabase function secret.
+create table if not exists push_subscriptions (
+  endpoint text primary key,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  created_at timestamptz default now(),
+  last_ok_at timestamptz,
+  failures int default 0
+);
+alter table push_subscriptions enable row level security;
+drop policy if exists owner_push on push_subscriptions;
+create policy owner_push on push_subscriptions for all to authenticated using (is_ping_owner()) with check (is_ping_owner());
+revoke all on push_subscriptions from anon;
+grant select, insert, update, delete on push_subscriptions to authenticated;
+
+-- What was sent and what's waiting: one row per message pushed by a run ('run:<item id>', so never twice) and per
+-- test-day reminder ('reminder:<item id>', sent by pg_cron through send-push at send_at). Server only: no policies.
+create table if not exists push_queue (
+  id text primary key,
+  kind text not null,
+  title text not null,
+  body text,
+  url text,
+  tag text,
+  event_at timestamptz,
+  send_at timestamptz not null,
+  sent_at timestamptz,
+  result text,
+  created_at timestamptz default now()
+);
+alter table push_queue enable row level security;
+revoke all on push_queue from anon, authenticated;
+create index if not exists push_queue_due on push_queue (send_at) where sent_at is null;
+
+-- also email the for-you messages (off by default; the 3-failed-runs alert is mailed either way)
+alter table profile add column if not exists email_digests boolean default false;

@@ -957,7 +957,7 @@
       else thread.scrollTop = thread.scrollHeight;
       syncJump();
     });
-    offerInstall(inner);
+    if (!offerInstall(inner)) offerPush(inner);
     const latest = entries.length ? entries[entries.length - 1].at : null;
     if (latest && (!readAt || dt(latest) > readAt)) {
       state.readAt = new Date(Math.max(dt(latest), Date.now())).toISOString();
@@ -971,7 +971,7 @@
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   function offerInstall(inner) {
     if (standalone() || state.offline || Number(store.get("ping-visits", 0)) < 2 || store.get("ping-install", "") ||
-        inner.querySelector(".install") || !(state.installEvent || isIOS())) return;
+        inner.querySelector(".install") || !(state.installEvent || isIOS())) return false;
     const close = (how) => { store.set("ping-install", how); bubble.remove(); };
     const at = new Date().toISOString();
     const bubble = h("div", { class: "msg ping sys install enter", role: "group", "aria-label": "Install Ping" },
@@ -989,7 +989,88 @@
         h("button", { type: "button", class: "chip", onclick: () => close("dismissed") }, "Not now")),
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
     appendToday(inner, bubble);
+    return true;
   }
+
+  // ------------------------------------------------------------ push notifications (docs/PUSH.md): the owner's own
+  // devices only (a demo session can't subscribe; the database refuses it). On iPhone/iPad only once installed.
+  const urlB64 = (b) => Uint8Array.from(atob((b + "=".repeat((4 - b.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+  const pushSupported = () => !!(CFG.pushKey && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+  const pushPossible = () => state.src?.kind === "real" && !state.offline && pushSupported() && (!isIOS() || standalone());
+  async function pushSubscription() {
+    try { return await (await navigator.serviceWorker.ready).pushManager.getSubscription(); } catch { return null; }
+  }
+  async function enablePush() {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return { ok: false, why: perm === "denied" ? "blocked" : "not now" };
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) ||
+      await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(CFG.pushKey) });
+    const j = sub.toJSON();
+    const { error } = await state.src.sb.from("push_subscriptions").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh,
+      auth: j.keys.auth, user_agent: navigator.userAgent.slice(0, 200) });
+    if (error) { await sub.unsubscribe().catch(() => {}); return { ok: false, why: error.message }; }
+    return { ok: true };
+  }
+  async function disablePush() {
+    const sub = await pushSubscription();
+    if (sub) { await state.src.sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe().catch(() => {}); }
+  }
+  const quietText = () => { const p = state.data.profile || {}; return `${p.check_to || "01:00"}–${p.check_from || "06:00"}`; };
+  // "Want me to notify you when something's for you?" once per device, never in the same visit as the install offer
+  async function offerPush(inner) {
+    if (!pushPossible() || Notification.permission !== "default" || store.get("ping-push-ask", "") || inner.querySelector(".push-ask")) return;
+    if (await pushSubscription()) return;
+    const at = new Date().toISOString();
+    const text = h("span", { class: "text" }, `Want me to notify you when something's for you? At most one notification per check, never in your quiet hours (${quietText()}).`);
+    const chips = h("div", { class: "chips wrap" },
+      h("button", { type: "button", class: "chip primary", onclick: async () => {
+        store.set("ping-push-ask", "yes");
+        chips.replaceChildren();
+        const r = await enablePush().catch((e) => ({ ok: false, why: e.message }));
+        text.textContent = r.ok ? "Done: this phone gets a notification when something's for you. Profile > Notifications to send a test or turn it off."
+          : r.why === "blocked" ? "Your browser blocked notifications for Ping. You can allow them in its site settings, then turn them on in Profile."
+          : `Notifications didn't turn on (${r.why}). You can try again in Profile > Notifications.`;
+      } }, "Yes"),
+      h("button", { type: "button", class: "chip", onclick: () => { store.set("ping-push-ask", "not now"); bubble.remove(); } }, "Not now"));
+    const bubble = h("div", { class: "msg ping sys push-ask enter", role: "group", "aria-label": "Notifications" },
+      h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping")), text, chips,
+      h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
+    appendToday(inner, bubble);
+  }
+  // Profile > Notifications: this device on or off, a test, and the optional email
+  function pushCard(demo) {
+    const p = state.data.profile || {};
+    const line = h("p", { class: "summary" }, "…");
+    const actions = h("div", { class: "actions" });
+    const draw = async () => {
+      if (demo) { line.textContent = "Notifications go to the owner's own phone: the demo can't turn them on."; return; }
+      if (!pushSupported()) { line.textContent = CFG.pushKey ? "This browser can't receive notifications." : "Notifications aren't set up for this copy of Ping yet (Actions > Admin > push-setup)."; return; }
+      if (isIOS() && !standalone()) { line.textContent = "On iPhone and iPad, add Ping to your Home Screen first (Share → Add to Home Screen), then open it from there."; return; }
+      const sub = await pushSubscription();
+      const perm = Notification.permission;
+      line.textContent = sub ? `On for this device. At most one per check, plus test-day reminders; quiet ${quietText()}.`
+        : perm === "denied" ? "Blocked for Ping in this browser's site settings." : "Off for this device.";
+      actions.replaceChildren(
+        sub ? h("button", { type: "button", class: "btn ghost", onclick: async () => { await disablePush(); draw(); } }, "Turn off")
+            : perm !== "denied" ? h("button", { type: "button", class: "btn", onclick: async () => { await enablePush().catch(() => {}); draw(); } }, "Turn on") : null,
+        sub ? h("button", { type: "button", class: "btn ghost", onclick: async (ev) => {
+          ev.target.disabled = true;
+          const r = await state.src.fn("send-push", { mode: "test" }).catch((e) => ({ error: e.message }));
+          line.textContent = r?.error ? `The test didn't go out: ${r.error}` : `Test sent to ${r.ok} of ${r.devices} device${r.devices === 1 ? "" : "s"}.`;
+          ev.target.disabled = false;
+        } }, "Send a test") : null);
+    };
+    draw();
+    const mail = h("input", { type: "checkbox", id: "pf-email-digests", checked: !!p.email_digests, disabled: demo, onchange: async (ev) => {
+      try { await state.src.saveProfile({ email_digests: ev.target.checked }); state.data.profile.email_digests = ev.target.checked; }
+      catch (e) { ev.target.checked = !ev.target.checked; line.textContent = `Couldn't save: ${e.message}`; }
+    } });
+    return h("section", { class: "card pcard", id: "pc-push", "aria-labelledby": "pc-push-h" },
+      h("div", { class: "pcard-head" }, h("h2", { id: "pc-push-h" }, "Notifications")), line, actions,
+      h("label", { class: "check" }, mail, "Also email me what's for you (off by default; the alert after 3 failed checks is emailed either way)"));
+  }
+
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     state.installEvent = e;
@@ -1788,7 +1869,7 @@
 
     mountPage(h("h1", {}, "Profile"), h("p", { class: "lede" },
       "Whether you applied comes from the ERP's companies list, not from here. Ping only reads the ERP."),
-      h("div", { class: "pcards" }, about, looking, cvs, sched, account));
+      h("div", { class: "pcards" }, about, looking, cvs, sched, pushCard(demo), account));
     updateCheckButtons();
   }
 

@@ -19,6 +19,12 @@
                    field) and now (inline, JD file, public link, details), by source; the roles that had none; JPMC
   demo-jd          copy the JD fields (text, source, link, summary) of your real roles onto the demo's roles,
                    scrubbed and checked like the rest of the demo; saves dashboard/demo-data.json and loads it
+  push-setup       push notifications: a VAPID key pair made here, the private key straight into the Supabase function
+                   secrets (never printed, never in git), the public key into dashboard/push-public-key.txt (committed,
+                   public by design); does nothing if push is already set up (push-rotate makes a new pair and clears
+                   the subscriptions, which the old key no longer reaches)
+  push-check       push end to end without a phone: the send-push function's public key, a test subscription's
+                   encrypted request decrypted here, quiet hours, and the row rules (a demo session can't subscribe)
   demo-clock       set the demo's "now" (the demo profile's updated_at) to the snapshot time in
                    dashboard/demo-data.json, without rebuilding the demo
   cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
@@ -266,6 +272,141 @@ def demo_jd(secrets) -> int:
     left = final_check(live)
     say("demo rows read back: " + ("clean" if not left else "NOT CLEAN: " + "; ".join(left)))
     return 0 if not left else 1
+
+
+PUSH_KEY_FILE = ROOT / "dashboard" / "push-public-key.txt"
+
+
+def _secret_names(secrets, token: str) -> set:
+    ref = sa.project_ref(secrets.supabase_url)
+    r = requests.get(f"{API}/v1/projects/{ref}/secrets", timeout=30, headers={"Authorization": f"Bearer {token}"})
+    return {x.get("name") for x in (r.json() if r.ok else [])}
+
+
+def push_setup(secrets, rotate: bool = False) -> int:
+    from .push import vapid_keys
+    from .run import DASHBOARD_URL
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    if not token:
+        say("SUPABASE_ACCESS_TOKEN is not set in the repo secrets")
+        return 1
+    have = _secret_names(secrets, token)
+    if not rotate and "VAPID_PRIVATE_KEY" in have and PUSH_KEY_FILE.exists():
+        say(f"push is already set up (public key {PUSH_KEY_FILE.read_text().strip()[:12]}...); run push-rotate for a new pair")
+        return 0
+    pub, priv = vapid_keys()
+    ref = sa.project_ref(secrets.supabase_url)
+    r = requests.post(f"{API}/v1/projects/{ref}/secrets", timeout=30, headers={"Authorization": f"Bearer {token}"},
+                      json=[{"name": "VAPID_PUBLIC_KEY", "value": pub}, {"name": "VAPID_PRIVATE_KEY", "value": priv},
+                            {"name": "VAPID_SUBJECT", "value": DASHBOARD_URL}])
+    say(f"VAPID keys set as Supabase function secrets (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT): HTTP {r.status_code}")
+    if r.status_code >= 300:
+        return 1
+    PUSH_KEY_FILE.write_text(pub + "\n", encoding="utf-8")
+    say(f"public key written to dashboard/{PUSH_KEY_FILE.name} ({pub[:12]}...); the dashboard deploy puts it in config.js")
+    if rotate:
+        store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+        store.delete("push_subscriptions", {"endpoint": "not.is.null"})
+        say("old subscriptions removed: each device turns notifications on again (Profile > Notifications)")
+    return 0
+
+
+def _b64u(s: str) -> bytes:
+    import base64
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def decrypt_push(body: bytes, ua_private, auth_secret: bytes) -> bytes:
+    """Decrypt a Web Push message body (RFC 8291, aes128gcm), as a browser does with its subscription keys."""
+    import hashlib
+    import hmac
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    salt, rs, idlen = body[:16], int.from_bytes(body[16:20], "big"), body[20]
+    as_public = body[21:21 + idlen]
+    cipher = body[21 + idlen:]
+    assert len(cipher) <= rs, "one record"
+    ext = lambda key, data: hmac.new(key, data, hashlib.sha256).digest()  # noqa: E731
+    expand = lambda prk, info, n: hmac.new(prk, info + b"\x01", hashlib.sha256).digest()[:n]  # noqa: E731
+    secret = ua_private.exchange(ec.ECDH(), ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), as_public))
+    ua_public = ua_private.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    ikm = expand(ext(auth_secret, secret), b"WebPush: info\x00" + ua_public + as_public, 32)
+    prk = ext(salt, ikm)
+    plain = AESGCM(expand(prk, b"Content-Encoding: aes128gcm\x00", 16)).decrypt(expand(prk, b"Content-Encoding: nonce\x00", 12), cipher, None)
+    return plain[:plain.rindex(b"\x02")]          # the padding delimiter of the last record
+
+
+def push_check(secrets) -> int:
+    """Push end to end, without a phone (docs/PUSH.md): the function's key, a real encrypted request for a test
+    subscription decrypted here, the VAPID token, and the row rules."""
+    import json as _json
+    import os as _os
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+    from .supabase_admin import demo_session
+    ok_all = True
+    def check(ok, what):
+        nonlocal ok_all
+        ok_all &= bool(ok)
+        say(f"{'ok  ' if ok else 'FAIL'} {what}")
+    url = _function_url(secrets, "send-push")
+    g = requests.get(url, timeout=30, headers={"apikey": secrets.supabase_key})
+    pub = (g.json() if g.ok else {}).get("publicKey") or ""
+    file_pub = PUSH_KEY_FILE.read_text().strip() if PUSH_KEY_FILE.exists() else ""
+    check(pub and pub == file_pub, f"send-push serves the public key that config.js carries ({pub[:12]}...)")
+    # a subscription as a browser makes one: its own P-256 key and a 16-byte auth secret
+    ua = ec.generate_private_key(ec.SECP256R1())
+    auth = _os.urandom(16)
+    b64u = lambda b: __import__("base64").urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
+    p256dh = ua.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    sub = {"endpoint": "https://fcm.googleapis.com/fcm/send/ping-push-check", "keys": {"p256dh": b64u(p256dh), "auth": b64u(auth)}}
+    payload = {"title": "Test · today 15:00", "body": "Groww test at 15:00 · room 304 (in 2 h)", "url": "./#m-t1", "tag": "t1"}
+    r = requests.post(url, timeout=30, json={"mode": "dry", "subscription": sub, "payload": payload},
+                      headers={"Authorization": f"Bearer {secrets.supabase_key}", "apikey": secrets.supabase_key})
+    check(r.status_code == 200, f"the function encrypts a notification for a subscription (HTTP {r.status_code})")
+    if r.status_code == 200:
+        d = r.json()
+        h = {k.lower(): v for k, v in d["headers"].items()}
+        check(h.get("content-encoding") == "aes128gcm" and int(h.get("ttl", 0)) > 0, f"headers: {sorted(h)}")
+        plain = decrypt_push(__import__("base64").b64decode(d["body"]), ua, auth)
+        check(_json.loads(plain) == payload, f"decrypted with the subscription's own keys: {plain.decode()[:90]}")
+        # the VAPID token: signed by the private key whose public half is in config.js, for this push service
+        m = __import__("re").match(r"vapid t=([^,]+), k=(.+)", h.get("authorization", ""))
+        check(bool(m) and m.group(2) == pub, "Authorization: vapid t=<JWT>, k=<the public key>")
+        if m:
+            head, body, sig = m.group(1).split(".")
+            claims = _json.loads(_b64u(body))
+            key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), _b64u(pub))
+            raw = _b64u(sig)
+            try:
+                key.verify(encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")),
+                           f"{head}.{body}".encode(), ec.ECDSA(hashes.SHA256()))
+                sig_ok = True
+            except InvalidSignature:
+                sig_ok = False
+            check(sig_ok and claims.get("aud") == "https://fcm.googleapis.com" and claims.get("exp", 0) > time.time() and
+                  str(claims.get("sub", "")).startswith(("https://", "mailto:")),
+                  f"VAPID JWT signature valid; aud {claims.get('aud')}, sub {claims.get('sub')}, expires in "
+                  f"{(claims.get('exp', 0) - time.time()) / 3600:.1f} h")
+    # the row rules: the service writes and reads a subscription back; a demo session can neither add nor see one
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    row = {"endpoint": sub["endpoint"], "p256dh": sub["keys"]["p256dh"], "auth": sub["keys"]["auth"], "user_agent": "push-check"}
+    store.upsert("push_subscriptions", [row], key="endpoint")
+    back = store.select("push_subscriptions", {"endpoint": f"eq.{sub['endpoint']}"})
+    check(len(back) == 1 and back[0]["p256dh"] == row["p256dh"], "a subscription round-trips through push_subscriptions")
+    hdr, _uid = demo_session(secrets.supabase_url, os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""))
+    base = {**hdr, "apikey": os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""), "Content-Type": "application/json"}
+    ins = requests.post(f"{secrets.supabase_url}/rest/v1/push_subscriptions", timeout=30, headers=base,
+                        json={**row, "endpoint": row["endpoint"] + "-demo"})
+    see = requests.get(f"{secrets.supabase_url}/rest/v1/push_subscriptions?select=endpoint", timeout=30, headers=base)
+    check(ins.status_code >= 400 and see.ok and see.json() == [],
+          f"a demo session can't subscribe (HTTP {ins.status_code}) and sees no subscriptions ({len(see.json()) if see.ok else '?'} rows)")
+    store.delete("push_subscriptions", {"endpoint": f"eq.{sub['endpoint']}"})
+    say("" if ok_all else "some checks failed")
+    return 0 if ok_all else 1
 
 
 def gemini_check(secrets) -> int:
@@ -562,7 +703,8 @@ def schedule_setup(secrets) -> int:
           end if;
         end $$;""")
     say("the same secret stored in the database's Vault as ping_cron_secret")
-    sql = (ROOT / "sql" / "schedule.sql").read_text(encoding="utf-8").replace("{{FUNCTION_URL}}", _function_url(secrets, "kick-run"))
+    sql = (ROOT / "sql" / "schedule.sql").read_text(encoding="utf-8").replace("{{FUNCTION_URL}}", _function_url(secrets, "kick-run")) \
+        .replace("{{PUSH_URL}}", _function_url(secrets, "send-push"))
     sa.run_sql(secrets.supabase_url, token, sql)
     jobs = sa.run_sql(secrets.supabase_url, token, "select jobname, schedule, active from cron.job order by jobname")
     for j in jobs:
@@ -575,7 +717,7 @@ def schedule_setup(secrets) -> int:
             break
         time.sleep(10)
     say(f"dry run of kick-run (doesn't start anything): HTTP {c.status_code} {c.text[:300]}")
-    return 0 if c.status_code == 200 and len(jobs) >= 2 else 1
+    return 0 if c.status_code == 200 and len(jobs) >= 3 else 1
 
 
 def schedule_status(secrets) -> int:
@@ -689,7 +831,8 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

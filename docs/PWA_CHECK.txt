@@ -1,0 +1,19 @@
+ok   manifest linked: https://vin1764.github.io/ping-dashboard/manifest.webmanifest
+ok   name "Ping: placement updates", short_name "Ping", display standalone, theme #0e6b5c
+ok   scope /ping-dashboard/, start_url /ping-dashboard/?source=app#chat
+ok   icon icons/icon-192.png 192x192 (any): HTTP 200, 192x192 image/png
+ok   icon icons/icon-512.png 512x512 (any): HTTP 200, 512x512 image/png
+ok   icon icons/maskable-512.png 512x512 (maskable): HTTP 200, 512x512 image/png
+ok   192, 512 and a maskable icon
+ok   iOS: apple-touch-icon and theme-color
+ok   service worker activated, scope https://vin1764.github.io/ping-dashboard/
+ok   the page is served by the service worker after a reload
+ok   offline: the app opens with its thread (115 messages)
+note real subscription here: not possible headless (AbortError: Registration failed - permission denied)
+ok   config.js carries the VAPID public key
+ok   service worker registration 0 for https://vin1764.github.io/ping-dashboard/
+ok   the push is shown as a notification: "Test · today 15:00" / "Groww test at 15:00 · room 304 (in 2 h)" -> ./#m-sample%3Anotice%3A2026-2027%3A1793%3A0
+ok   the link opens the thread at that message (item:sample:notice:2026-2027:1793:0)
+ok   no page errors
+
+0 problem(s)

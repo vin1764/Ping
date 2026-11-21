@@ -86,7 +86,9 @@ const pngSize = (buf) => [buf.readUInt32BE(16), buf.readUInt32BE(20)];
   check(shown.length === 1 && shown[0].title === payload.title && shown[0].body === payload.body && shown[0].url === payload.url,
         `the push is shown as a notification: "${shown[0]?.title}" / "${shown[0]?.body}" -> ${shown[0]?.url}`);
   // the tap: the worker focuses this window and sends it there; the same link, opened, lands on that message
-  await p.goto(new URL(payload.url, BASE).href); await p.waitForSelector("#ask-input"); await p.waitForTimeout(800);
+  // (the owner is signed in when they tap; here the demo stands in, so the link keeps ?demo=1)
+  const link = new URL(payload.url, BASE); link.search = "?demo=1";
+  await p.goto(link.href); await p.waitForSelector("#ask-input"); await p.waitForTimeout(800);
   const hl = await p.evaluate(() => document.querySelector(".msg.hl")?.dataset.key || null);
   check(hl === `item:${items[0]}`, `the link opens the thread at that message (${hl})`);
   check(!errs.length, `no page errors${errs.length ? `: ${errs.slice(0, 2).join("; ")}` : ""}`);

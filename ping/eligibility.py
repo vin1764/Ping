@@ -49,7 +49,7 @@ def evaluate(role: dict, profile: dict) -> dict:
     if cut:
         if cg is None:
             verdict = None
-            flags.append("CGPA not set in your profile")
+            flags.append("add your CGPA in Profile")
         elif float(cg) + 1e-9 < float(cut):
             return {"eligible": False, "reasons": [f"CGPA cut-off {cut} is above your {cg}"], "flags": []}
         else:
@@ -65,7 +65,7 @@ def evaluate(role: dict, profile: dict) -> dict:
         dept, deg = _norm_dept(profile.get("department", "")), _norm_degree(profile.get("degree", ""))
         if not dept or not deg:
             verdict = None if verdict else verdict
-            flags.append("degree/department not set in your profile")
+            flags.append("add your degree and department in Profile")
         else:
             ok = any((_norm_dept(a["department"]) == dept or (dept and dept in _norm_dept(a["department"] + a["programme"])))
                      and (_norm_degree(a["degree"]) == deg or deg in _norm_degree(a["degree"]))

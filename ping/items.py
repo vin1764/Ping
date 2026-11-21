@@ -246,7 +246,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                     continue  # the role item already says "apply by", with this notice's deadline if later
                 due = todo.get("due")
                 if todo["action"] == "fill_form":
-                    title = f"{company}{label_s}: fill the form by {fmt_when(_dt(due), now)}."
+                    title = (f"{company}{label_s}: fill the form by {fmt_when(_dt(due), now)}." if due
+                             else f"{company}{label_s}: fill the form (no deadline given, see the notice).")
                     if not applied and not open_roles:
                         lvl = "hidden"
                     else:
@@ -255,7 +256,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                     title = f"{company} offered you a PPO. Accept by {fmt_when(_dt(due), now)}."
                     lvl = "always"
                 else:
-                    title = f"{company}{label_s}: submit by {fmt_when(_dt(due), now)}."
+                    title = (f"{company}{label_s}: submit by {fmt_when(_dt(due), now)}." if due
+                             else f"{company}{label_s}: submit (no deadline given, see the notice).")
                     lvl = "always" if (applied or about_me) else "hidden"
                 if due and _dt(due) <= now and lvl != "always":
                     lvl = "hidden"
@@ -271,8 +273,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             items.append({**nbase, "id": f"notice:{n['id']}:unsure{ui}", "level": "show" if relevant else "hidden",
                           "category": "review", "company": None, "role_ids": [], "due_at": None, "event_at": None,
                           "needs_review": True,
-                          "title": clip(f"Couldn't match this {n.get('subject', '').lower()} notice "
-                                        f"(\"{u['name']}\"). Is it about {' or '.join(cands)}?"),
+                          "title": clip(f"A {n.get('subject', '').lower()} notice says \"{u['name']}\". "
+                                        f"Which company is that: {' or '.join(cands)}? Tap to choose."),
                           "details": {**ndetails, "candidates": cands, "name_in_notice": u["name"]},
                           "sort_at": n.get("notice_time")})
             produced = True

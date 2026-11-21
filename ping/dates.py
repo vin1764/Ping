@@ -170,11 +170,9 @@ def first_deadline(text: str, ref: datetime) -> Moment | None:
 
 
 def fmt_when(at: datetime | None, now: datetime) -> str:
-    """'Fri 16:00' within the next 6 days, else 'Sat 21 Nov 16:00'."""
+    """'Sat 21 Nov 16:00'. Always with the date: a chat message is read days later, when 'Sat' is ambiguous."""
     if at is None:
         return "no date given"
     at = at.astimezone(IST)
     hm = at.strftime("%H:%M")
-    if now <= at < now + timedelta(days=6):
-        return f"{at.strftime('%a')} {hm}"
     return f"{at.strftime('%a %d %b')} {hm}"

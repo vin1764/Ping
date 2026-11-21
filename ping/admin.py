@@ -7,6 +7,8 @@
   gemini-check     call Gemini once and show exactly what comes back, plus retry the notices the rules missed
   functions-check  the Ask Ping / Check now functions on Supabase: deployed versions, which secrets they have
                    (names only), their logs from the last 24 hours, and two test questions as the reviewer
+  auth-urls        point Supabase Auth's Site URL and redirect allow-list at the live dashboard
+                   (https://<owner>.github.io/ping-dashboard/), keeping localhost entries for development
   ask-ping-evals   run evals/ask_ping (36 questions against the deployed function as the reviewer) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
@@ -270,6 +272,36 @@ def ask_ping_page(secrets) -> int:
                            "slice ctc breakdown", "what's due tomorrow"]).returncode
 
 
+def auth_urls(secrets) -> int:
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "")
+    if not token or not owner:
+        say("needs SUPABASE_ACCESS_TOKEN and GITHUB_REPOSITORY_OWNER (run it on GitHub: Actions > Admin)")
+        return 2
+    live = f"https://{owner.lower()}.github.io/ping-dashboard/"
+    url = f"{API}/v1/projects/{sa.project_ref(secrets.supabase_url)}/config/auth"
+    hdr = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    cur = requests.get(url, headers=hdr, timeout=30)
+    if cur.status_code >= 300:
+        say(f"reading the Auth settings failed: HTTP {cur.status_code} {cur.text[:200]}")
+        return 1
+    cur = cur.json()
+    before_site, before_list = cur.get("site_url") or "", [u for u in (cur.get("uri_allow_list") or "").split(",") if u]
+    keep = list(before_list)  # nothing already there is removed
+    if not any("localhost" in u or "127.0.0.1" in u for u in keep):
+        keep += ["http://localhost:8000/**", "http://127.0.0.1:8000/**"]  # python -m http.server, for development
+    wanted = [live, live + "**"] + keep
+    new_list = list(dict.fromkeys(wanted))
+    say(f"before: site_url = {before_site or '(empty)'}; redirect allow-list = {before_list or '(empty)'}")
+    r = requests.patch(url, headers=hdr, timeout=30, json={"site_url": live, "uri_allow_list": ",".join(new_list)})
+    if r.status_code >= 300:
+        say(f"updating the Auth settings failed: HTTP {r.status_code} {r.text[:200]}")
+        return 1
+    after = requests.get(url, headers=hdr, timeout=30).json()
+    say(f"after:  site_url = {after.get('site_url')}; redirect allow-list = {(after.get('uri_allow_list') or '').split(',')}")
+    return 0 if after.get("site_url") == live else 1
+
+
 def ask_ping_evals(secrets) -> int:
     import subprocess
     return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "run_ask_ping_evals.py")]).returncode
@@ -317,7 +349,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-urls": auth_urls}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

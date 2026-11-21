@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, create-reviewer, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals]
+        options: [apply-sql, create-reviewer, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-urls]
       reviewer_email:
         description: "create-reviewer: the reviewer's sign-in email"
         default: "reviewer@ping-demo.example"

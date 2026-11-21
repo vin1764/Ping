@@ -2,60 +2,86 @@ name: Dashboard
 
 on:
   push:
-    paths: ["dashboard/**", "supabase/**", "ping/sample.py", "ping/items.py", ".github/workflows/dashboard.yml"]
+    paths: ["dashboard/**", "supabase/**", "ping/sample.py", "ping/items.py", "setup/check_public_build.py",
+            ".github/workflows/dashboard.yml"]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: read   # this repo is only read; the public repo is written with DASHBOARD_DEPLOY_TOKEN
 
 concurrency:
   group: dashboard
   cancel-in-progress: true
 
 jobs:
-  site:
+  deploy-pages:
+    # Builds the static dashboard and pushes ONLY the built files to the public repo <owner>/ping-dashboard,
+    # which GitHub Pages serves at https://<owner>.github.io/ping-dashboard/. This repo stays private.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    timeout-minutes: 15
+    env:
+      PUBLIC_REPO: ${{ github.repository_owner }}/ping-dashboard
+      PAGES_URL: https://${{ github.repository_owner }}.github.io/ping-dashboard/
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
-      - name: Is GitHub Pages switched on?
-        id: pages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/pages")
-          if [ "$code" = "200" ]; then echo "on=true" >> "$GITHUB_OUTPUT"; else
-            echo "on=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::GitHub Pages is off for this repo (HTTP $code). Turn it on in Settings > Pages > Source: GitHub Actions (private repos need GitHub Pro or the Student Pack), or host _site elsewhere. Skipping the deploy."
-          fi
       - name: Build the site
-        if: steps.pages.outputs.on == 'true'
         env:
           # The publishable key is meant to be public; Row Level Security protects the data.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: bash dashboard/build.sh
-      - if: steps.pages.outputs.on == 'true'
-        uses: actions/configure-pages@v5
-      - if: steps.pages.outputs.on == 'true'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - if: steps.pages.outputs.on == 'true'
-        id: deploy
-        uses: actions/deploy-pages@v4
+      - name: "Guard: nothing private in the built files"
+        env:
+          ERP_USER_ID: ${{ secrets.ERP_USER_ID }}
+          MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
+        run: python setup/check_public_build.py _site
+      - name: Push the built files to the public repo
+        env:
+          TOKEN: ${{ secrets.DASHBOARD_DEPLOY_TOKEN }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::DASHBOARD_DEPLOY_TOKEN is not set (see README: Live dashboard)"; exit 1; }
+          cd _site
+          git init -q -b main
+          git config user.name "ping-deploy"
+          git config user.email "ping-deploy@users.noreply.github.com"
+          git add -A
+          git commit -q -m "build ${GITHUB_SHA::7} from private repo"
+          # every deploy replaces the whole public history: only the current build is ever public
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${PUBLIC_REPO}.git" main
+          echo "pushed build ${GITHUB_SHA::7} to ${PUBLIC_REPO}"
+      - name: Switch on GitHub Pages (main, root) and wait until this build is live
+        env:
+          TOKEN: ${{ secrets.DASHBOARD_DEPLOY_TOKEN }}
+        run: |
+          api="https://api.github.com/repos/${PUBLIC_REPO}/pages"
+          h=(-H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          code=$(curl -s -o pages.json -w "%{http_code}" "${h[@]}" "$api")
+          if [ "$code" = "404" ]; then
+            code=$(curl -s -o out.json -w "%{http_code}" -X POST "${h[@]}" "$api" -d '{"source":{"branch":"main","path":"/"}}')
+            echo "Pages switched on: HTTP $code"; [ "$code" = "201" ] || { cat out.json; exit 1; }
+          else
+            code=$(curl -s -o out.json -w "%{http_code}" -X PUT "${h[@]}" "$api" -d '{"source":{"branch":"main","path":"/"}}')
+            echo "Pages source set to main /: HTTP $code"; [ "$code" = "204" ] || { cat out.json; exit 1; }
+          fi
+          short=${GITHUB_SHA::7}
+          for i in $(seq 1 40); do
+            sleep 15
+            if curl -s "${PAGES_URL}config.js?nocache=$RANDOM" | grep -q "PING_BUILD = \"$short\""; then
+              echo "live: ${PAGES_URL} serves build $short"
+              for f in index.html app.js style.css demo-data.json; do
+                echo "  $f: HTTP $(curl -s -o /dev/null -w '%{http_code}' "${PAGES_URL}$f")"
+              done
+              exit 0
+            fi
+            echo "waiting for Pages ($((i*15))s)"
+          done
+          echo "::error::Pages did not serve build $short within 10 minutes"; exit 1
 
-  functions:
+  deploy-functions:
     # Needs a Supabase access token (Supabase > Account > Access Tokens) saved as the
     # repo secret SUPABASE_ACCESS_TOKEN. Skipped until it exists.
     runs-on: ubuntu-latest

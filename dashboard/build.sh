@@ -14,6 +14,10 @@ if [ -s dashboard/demo-data.json ]; then cp dashboard/demo-data.json _site/; els
 python3 - <<'PY'
 import json, os
 cfg = {"supabaseUrl": os.environ.get("SUPABASE_URL", ""), "supabaseKey": os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")}
-open("_site/config.js", "w").write("window.PING_CONFIG = " + json.dumps(cfg) + ";\n")
+build = os.environ.get("GITHUB_SHA", "local")[:7]  # lets the deploy check that the live site is this build
+open("_site/config.js", "w").write("window.PING_CONFIG = " + json.dumps(cfg) + ";\nwindow.PING_BUILD = "
+                                   + json.dumps(build) + ";\n")
 PY
+cp dashboard/PUBLIC_README.md _site/README.md   # the public repo's README
+touch _site/.nojekyll                             # serve the files as they are (no Jekyll on GitHub Pages)
 echo "built _site/ (real mode: $([ -n "${SUPABASE_URL:-}" ] && echo on || echo off))"

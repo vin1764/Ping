@@ -7,7 +7,7 @@ Run it:
   - locally:   SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... python evals/ask_ping/run_ask_ping_evals.py
                (a .env file with those names works too)
 
-A demo session may ask 15 questions an hour, so the runner opens a new session every 14 questions. With
+A demo session may ask 15 questions an hour, so the runner opens a new session every 7 questions (a retry counts too). With
 SUPABASE_SERVICE_KEY set (as in Admin), it removes its own question counts afterwards, so an eval run doesn't
 use up the hour's demo allowance for visitors.
 
@@ -86,7 +86,7 @@ def score(answer: str, checks: dict) -> list[str]:
 
 class DemoSessions:
     """One-click demo sessions, a fresh one before the per-session limit (15 an hour) is reached."""
-    PER_SESSION = 14
+    PER_SESSION = 7   # each question may be sent twice (one retry), and both count towards the 15
 
     def __init__(self, url: str, key: str):
         from ping.supabase_admin import demo_session

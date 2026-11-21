@@ -39,3 +39,54 @@ export function todayNote(iso: string | null | undefined, now: Date): string {
   const h = Math.floor(mins / 60), m = mins % 60;
   return ` (later today, in ${h ? `${h}h ` : ""}${m}m)`;
 }
+
+// 3. "Today and this week" in numbers, counted here: the evals saw the model miss the Groww test that was earlier
+// today, call deadlines tonight "not this week", and answer "anything else?" without the 48 roles closing at 20:00.
+const HM = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+const WD = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });
+const ISO_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", weekday: "short" });
+
+type Ev = { title: string; at: string | null | undefined };
+type Role = { company: string; applied: boolean | null; effective_deadline: string | null | undefined };
+
+function endOfWeek(now: Date): number {
+  // Sunday 23:59:59 IST of the week (Mon-Sun) that holds `now`
+  const wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(ISO_DAY.format(now).split(",")[0].trim());
+  const ymd = DAY.format(now);
+  const midnight = new Date(`${ymd}T00:00:00+05:30`).getTime();
+  return midnight + (7 - Math.max(wd, 0)) * 86_400_000 - 1000;
+}
+
+export function glance(events: Ev[], roles: Role[], now: Date): string {
+  const today = DAY.format(now);
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  const evToday = events.filter((e) => e.at && DAY.format(new Date(e.at)) === today)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)))
+    .filter((e) => !seen.has(e.title) && seen.add(e.title));
+  lines.push(evToday.length
+    ? `Tests and events today (${evToday.length}): ` + evToday.map((e) => `${e.title} at ${HM.format(new Date(e.at!))}${todayNote(e.at, now)}`).join("; ")
+    : "Tests and events today: none");
+  const open = roles.filter((r) => r.effective_deadline && new Date(r.effective_deadline) > now);
+  const group = (rs: Role[], key: (r: Role) => string) => {
+    const m = new Map<string, Role[]>();
+    for (const r of rs) m.set(key(r), [...(m.get(key(r)) || []), r]);
+    return [...m.entries()].sort((a, b) => String(a[1][0].effective_deadline).localeCompare(String(b[1][0].effective_deadline)));
+  };
+  const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  const count = (rs: Role[]) => {
+    const no = rs.filter((r) => !r.applied).length;
+    return `${n(rs.length, "role", "roles")} at ${n(new Set(rs.map((r) => r.company)).size, "company", "companies")} (${no} not applied, ${rs.length - no} applied)`;
+  };
+  const todayRoles = open.filter((r) => DAY.format(new Date(r.effective_deadline!)) === today);
+  lines.push(todayRoles.length
+    ? "Application deadlines still open today: " + group(todayRoles, (r) => HM.format(new Date(r.effective_deadline!)))
+        .map(([hm, rs]) => `${count(rs)} close at ${hm}${todayNote(rs[0].effective_deadline, now)}`).join("; ")
+    : "Application deadlines still open today: none");
+  const week = open.filter((r) => new Date(r.effective_deadline!).getTime() <= endOfWeek(now));
+  lines.push(`Application deadlines from now to the end of this week (Sunday; today counts as this week): ` + (week.length
+    ? group(week, (r) => DAY.format(new Date(r.effective_deadline!)))
+        .map(([, rs]) => `${WD.format(new Date(rs[0].effective_deadline!))}: ${count(rs)}`).join("; ")
+    : "none"));
+  return lines.join("\n");
+}

@@ -1,4 +1,4 @@
-import { asksToAct, stripRefusal, todayNote } from "./wording.ts";
+import { asksToAct, glance, stripRefusal, todayNote } from "./wording.ts";
 const eq = (a: unknown, b: unknown) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} != ${JSON.stringify(b)}`); };
 
 Deno.test("only requests to act get the refusal", () => {
@@ -23,4 +23,22 @@ Deno.test("times today say over or how long to go", () => {
   eq(todayNote("2026-11-21T09:30:00Z", now), " (earlier today, already over)");   // 15:00 IST
   eq(todayNote("2026-11-21T14:30:00Z", now), " (later today, in 1h 25m)");        // 20:00 IST
   eq(todayNote("2026-11-22T04:30:00Z", now), "");                                 // tomorrow
+});
+
+Deno.test("today and this week, counted", () => {
+  const now = new Date("2026-11-21T13:05:00Z"); // Sat 18:35 IST
+  const g = glance(
+    [{ title: "Groww test (Associate Product Manager)", at: "2026-11-21T15:00:00+05:30" },
+     { title: "Groww test (Associate Product Manager)", at: "2026-11-21T15:00:00+05:30" },
+     { title: "Pine Labs test", at: "2026-11-23T10:00:00+05:30" }],
+    [{ company: "ESRI", applied: false, effective_deadline: "2026-11-21T14:30:00Z" },
+     { company: "SLB", applied: true, effective_deadline: "2026-11-21T14:30:00Z" },
+     { company: "ICICI", applied: false, effective_deadline: "2026-11-21T10:30:00Z" },
+     { company: "Pine Labs", applied: false, effective_deadline: "2026-11-22T14:30:00Z" },
+     { company: "Next Week", applied: false, effective_deadline: "2026-11-23T14:30:00Z" }], now);
+  eq(g.split("\n"), [
+    "Tests and events today (1): Groww test (Associate Product Manager) at 15:00 (earlier today, already over)",
+    "Application deadlines still open today: 2 roles at 2 companies (1 not applied, 1 applied) close at 20:00 (later today, in 1h 25m)",
+    "Application deadlines from now to the end of this week (Sunday; today counts as this week): Sat 21 Nov: 2 roles at 2 companies (1 not applied, 1 applied); Sun 22 Nov: 1 role at 1 company (1 not applied, 0 applied)",
+  ]);
 });

@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo, demo-clock, schedule-setup, schedule-status]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -45,7 +45,7 @@ jobs:
         run: |
           python -m ping.admin "$TASK"
       - name: Save the demo data
-        if: inputs.task == 'build-demo'
+        if: inputs.task == 'build-demo' || inputs.task == 'demo-refeed'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -53,7 +53,7 @@ jobs:
           git config user.email "ping-admin@users.noreply.github.com"
           git add dashboard/demo-data.json
           git diff --cached --quiet && { echo "demo data unchanged"; exit 0; }
-          git commit -q -m "Demo data: anonymised snapshot of the real run"
+          git commit -q -m "Demo data: ${{ inputs.task == 'demo-refeed' && 'feed rebuilt (digests, For you) from the same snapshot' || 'anonymised snapshot of the real run' }}"
           git pull -q --rebase && git push
           # a push made with this workflow's token doesn't start other workflows; ask for the dashboard deploy
           gh workflow run dashboard.yml --ref "$GITHUB_REF_NAME" && echo "dashboard deploy started"

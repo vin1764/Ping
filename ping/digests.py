@@ -40,7 +40,7 @@ def _dt(v) -> datetime | None:
 
 
 def _key(at: datetime) -> str:
-    return at.astimezone(IST).strftime("%Y%m%d%H%M")
+    return at.astimezone(IST).strftime("%Y%m%dT%H%M")   # no 10-digit runs (the demo privacy check)
 
 
 def when(at: datetime, now: datetime) -> str:
@@ -102,6 +102,13 @@ def split_rows(members: list[dict], list_others: bool = True) -> list[dict]:
     return groups
 
 
+def _for_you(members: list[dict]) -> str:
+    """' — 8 for you' when the roles are marked (Profile: What I'm looking for), else nothing."""
+    if not any(m.get("tag") in ("for_you", "other") for m in members):
+        return ""
+    return f" — {sum(m.get('tag') == 'for_you' for m in members)} for you"
+
+
 def _unverified_line(members: list[dict]) -> str:
     unk = [m for m in members if m.get("eligible") is None]
     if not unk:
@@ -152,7 +159,7 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
         # only roles that were open and unapplied when Ping first saw them are news
         if due is None or due <= seen or m.get("applied") or seen < now - timedelta(days=3):
             continue
-        runs.setdefault(seen.astimezone(IST).strftime("%Y%m%d%H%M"), []).append({**m, "seen": seen})
+        runs.setdefault(seen.astimezone(IST).strftime("%Y%m%dT%H%M"), []).append({**m, "seen": seen})
     listed_in: dict[str, str] = {}       # role id -> listing message id
     listing_at: dict[str, datetime] = {}
     for rk, ms in sorted(runs.items()):
@@ -224,7 +231,8 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 title = f"{m['company']} {m['label']} closes {when(due, sent)}. You haven't applied."
             else:
                 title = (f"{_plural(len(ms), 'application')} close {when(due, sent)} — you've applied to "
-                         f"{applied if applied else 'none'}{' of them' if applied and applied < len(ms) else ''}")
+                         f"{applied if applied else 'none'}{' of them' if applied and applied < len(ms) else ''}"
+                         f"{_for_you(pending)}")
             det = {"kind": "application", "batch": bk, "role": "digest", "members": ids,
                    "list": split_rows(pending, list_others) + ([{"head": f"Applied ({applied})", "collapsed": True,
                            "rows": [role_row({**m, "note": "", "tag": "done"}) for m in ms if m.get("applied")]}]
@@ -265,7 +273,7 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
             emit(dict(previous[rid]))
         elif pending and due - timedelta(hours=reminder_h) <= now < due and sent < due - timedelta(hours=reminder_h):
             title = (f"Reminder: {_plural(len(pending), 'application')} you haven't applied to "
-                     f"close{'s' if len(pending) == 1 else ''} {when(due, now)}")
+                     f"close{'s' if len(pending) == 1 else ''} {when(due, now)}{_for_you(pending)}")
             emit({"id": rid, "level": "show", "category": "digest", "company": None,
                   "role_ids": [m["id"] for m in pending], "notice_id": None, "due_at": due.isoformat(),
                   "event_at": None, "pdf_status": None, "needs_review": False, "title": title[:160],
@@ -300,12 +308,12 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 continue
             at = _dt(its[0].get("due_at") if kind == "form" else its[0].get("event_at"))
             rows = [{"text": it["title"], "note": "", "tag": "role", "id": it["id"]} for it in its]
-            title = f"{_plural(len(its), label[0])} {label[1].split(' ', 1)[1] if ' ' in label[1] else ''} {when(at, now)}"
             title = f"{len(its)} {label[1]} {when(at, now)}"
+            level = "always" if any(it["level"] == "always" for it in its) else "show"
             for it in its:
                 hide(it, f"in the {kind} digest")
             ids = sorted(it["id"] for it in its)
-            emit({"id": did, "level": max((it["level"] for it in its), key=lambda l: ("show", "always").index(l)),
+            emit({"id": did, "level": level,
                   "category": "digest", "company": None, "role_ids": [], "notice_id": None,
                   "due_at": at.isoformat() if kind == "form" else None,
                   "event_at": at.isoformat() if kind == "test" else None, "pdf_status": None, "needs_review": False,
@@ -326,6 +334,36 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                           "details": {**made[did]["details"], "role": "reminder",
                                       "list": [{"head": "", "rows": [r for r in rows if r["id"] in {p['id'] for p in pending}]}]}})
 
+    # ------------------------------------------------------------------ one notice extends several deadlines
+    ext: dict[str, list[dict]] = {}
+    for it in out:
+        if it["category"] != "deadline" or it["level"] == "hidden" or not it.get("due_at"):
+            continue
+        posted = _dt((it.get("details") or {}).get("notice_time")) or _dt((previous.get(it["id"]) or {}).get("first_seen")) or now
+        ext.setdefault(f"{_key(_dt(it['due_at']))}:{posted.astimezone(IST).strftime('%Y%m%dT%H')}", []).append(it)
+    for k, its in ext.items():
+        cid = f"collapse:deadline:{k}"
+        if len(its) < 2 and not previous.get(cid):
+            continue
+        due = _dt(its[0]["due_at"])
+        posted = min(_dt((it.get("details") or {}).get("notice_time")) or now for it in its)
+        mine = all((it.get("details") or {}).get("applied") or "you've applied" in it["title"] or it["level"] == "always"
+                   for it in its)
+        level = "always" if any(it["level"] == "always" for it in its) else "show"
+        seen = min((_dt((previous.get(it["id"]) or {}).get("first_seen")) or now for it in its))
+        for it in its:
+            hide(it, "in the deadline extensions message")
+        rows = [{"text": it["title"].replace(" (you've applied).", "").replace("Update - ", ""), "note": "",
+                 "tag": "role", "id": it["id"]} for it in sorted(its, key=lambda x: x.get("company") or "")]
+        emit({"id": cid, "level": level,
+              "category": "collapse", "company": None, "role_ids": sorted({r for it in its for r in it.get("role_ids") or []}),
+              "notice_id": None, "due_at": due.isoformat(), "event_at": None, "pdf_status": None, "needs_review": False,
+              "title": (f"{len(its)} deadlines{' for roles you applied to' if mine else ''} moved to {fmt_when(due, posted)}"),
+              "first_seen": posted.isoformat(), "sort_at": due.isoformat(),
+              "details": {"kind": "deadline", "role": "collapse", "members": sorted(it["id"] for it in its),
+                          "notice_time": posted.isoformat(), "list": [{"head": "", "rows": rows}],
+                          "source": _source(seen, [f"notice {it['notice_id']}" for it in its if it.get("notice_id")])}})
+
     # ------------------------------------------------------------------ several lists out in the same run
     for cat, (one, many) in COLLAPSIBLE.items():
         arrived: dict[str, list[dict]] = {}
@@ -336,16 +374,17 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
             posted = _dt((it.get("details") or {}).get("notice_time"))
             if posted and posted < seen - timedelta(hours=3):
                 continue   # a backlog read on a first run keeps its own place in the history
-            arrived.setdefault(seen.astimezone(IST).strftime("%Y%m%d%H%M"), []).append(it)
+            arrived.setdefault(seen.astimezone(IST).strftime("%Y%m%dT%H%M"), []).append(it)
         for rk, its in arrived.items():
             cid = f"collapse:{cat}:{rk}"
             if len(its) < 2 and not previous.get(cid):
                 continue
             its.sort(key=lambda it: (it.get("pdf_status") != "yes", it.get("company") or ""))
+            level = "always" if any(it["level"] == "always" for it in its) else "show"
             for it in its:
                 hide(it, f"in the {many} message")
             seen = _dt((previous.get(its[0]["id"]) or {}).get("first_seen")) or now
-            emit({"id": cid, "level": "always" if any(it["level"] == "always" for it in its) else "show",
+            emit({"id": cid, "level": level,
                   "category": "collapse", "company": None, "role_ids": [], "notice_id": None, "due_at": None,
                   "event_at": None, "pdf_status": None, "needs_review": False,
                   "title": f"{len(its)} {many}: " + "; ".join(it.get("company") or "?" for it in its)[:120],
@@ -381,7 +420,7 @@ def _known_members(previous: dict[str, dict], kind: str) -> dict[str, set[str]]:
 
 
 def _update_item(uid, old_key, bk, due, ms, moved, now, list_others, sources, members=None) -> dict:
-    old_at = datetime.strptime(old_key, "%Y%m%d%H%M").replace(tzinfo=IST) if old_key else None
+    old_at = datetime.strptime(old_key, "%Y%m%dT%H%M").replace(tzinfo=IST) if old_key else None
     if old_key:
         title = (f"Update: {_plural(len(ms), 'application')} that closed {fmt_when(old_at, now)} now "
                  f"close{'s' if len(ms) == 1 else ''} {when(due, now)}")

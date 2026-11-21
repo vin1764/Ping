@@ -9,6 +9,8 @@
   auth-config      Supabase Auth settings for the live dashboard: Site URL and redirect allow-list point at
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
+  demo-refeed      rebuild the demo's feed with the current code (digests, "For you"), from the same snapshot:
+                   example targets on the demo profile, Gemini marks the demo roles, loads and commits it
   demo-clock       set the demo's "now" (the demo profile's updated_at) to the snapshot time in
                    dashboard/demo-data.json, without rebuilding the demo
   cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
@@ -100,6 +102,74 @@ def build_demo(secrets) -> int:
     file_left = final_check(out.read_text(encoding="utf-8"))
     say(f"{out.name} as written: " + ("clean" if not file_left else "NOT CLEAN: " + "; ".join(file_left)))
     return 0 if not left and not file_left else 1
+
+
+DEMO_TARGETS = "product, consulting, business/data analyst and finance roles; not core software engineering"
+
+
+def demo_refeed(secrets) -> int:
+    """The demo as the feed now shows it, from the same anonymised snapshot (companies, roles, pay, deadlines and
+    notices unchanged): the demo profile gets example targets, Gemini marks each demo role 'For you' or not (only
+    the roles' own text is sent), and the feed is rebuilt with digests at the snapshot time."""
+    from .eligibility import evaluate
+    from .items import build_items
+    from . import relevance
+    from .demo_from_real import final_check, load_to_db
+    out = ROOT / "dashboard" / "demo-data.json"
+    data = json.loads(out.read_text(encoding="utf-8"))
+    now = datetime.fromisoformat(data["generated_at"])
+    profile = {**data["profile"], "targets": DEMO_TARGETS, "list_other_roles": True, "reminder_hours": 2,
+               "updated_at": data["generated_at"]}
+    roles = data["roles"]
+    open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False]
+    for attempt in range(3):            # the free tier allows a few calls a minute; whatever is left goes next round
+        todo = [r for r in open_ if relevance.needs(r, DEMO_TARGETS)]
+        if not todo:
+            break
+        found = relevance.classify(todo, DEMO_TARGETS, secrets.ai)
+        for r in roles:
+            if r["id"] in found:
+                r["relevance"] = found[r["id"]]
+        say(f"round {attempt + 1}: classified {len(found)} of {len(todo)} roles "
+            f"({sum(v['relevant'] for v in found.values())} for you); last error: {relevance.stats['last_error']}")
+        if len(found) < len(todo):
+            time.sleep(30)
+    left = [r for r in open_ if relevance.needs(r, DEMO_TARGETS)]
+    if left:
+        say(f"{len(left)} roles still unclassified; not written (run demo-refeed again)")
+        return 1
+    # demo ids carry "sample:" (the anonymised copy keeps them apart from your real rows)
+    plain = lambda i: str(i).replace("sample:", "")
+    old = {plain(i["id"]): i for i in data["items"]}
+    checks = {c["notice_id"]: c for c in data["pdf_checks"]}
+    notices = [n for n in data["notices"] if n.get("analysis")]
+    # twice: the second time with the snapshot's own items as "the last run", so every message keeps the time
+    # Ping first saw it (a backlog read on the first run stays in its place instead of collapsing)
+    first = build_items(roles, notices, checks, profile, now, [], {}, previous={})
+    seen = {it["id"]: {"first_seen": old[plain(it["id"])]["first_seen"]} for it in first
+            if plain(it["id"]) in old and old[plain(it["id"])].get("first_seen")}
+    items = build_items(roles, notices, checks, profile, now, [], {}, previous=seen)
+    for it in items:
+        it["first_seen"] = (old.get(plain(it["id"])) or {}).get("first_seen") or it.get("first_seen") or now.isoformat()
+        it["id"] = "sample:" + plain(it["id"])
+        it.update({"is_sample": True, "dismissed": False, "done": False})
+    data["profile"], data["items"] = profile, items
+    problems = final_check(data)
+    if problems:
+        say("NOT written, the check found: " + "; ".join(problems))
+        return 1
+    out.write_text(json.dumps(data, default=str, ensure_ascii=False), encoding="utf-8")
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    counts = load_to_db(store, data)
+    marked = [r for r in roles if (r.get("relevance") or {}).get("relevant") is not None]
+    say(f"demo feed rebuilt at {now:%d %b %H:%M} IST: {len(items)} items; roles marked {len(marked)} "
+        f"({sum(r['relevance']['relevant'] for r in marked)} for you, "
+        f"{sum(bool(r['relevance'].get('jd_missing')) for r in marked)} with no JD); loaded {counts}")
+    live = {t: store.select(t, {"is_sample": "is.true"}) for t in
+            ("profile", "roles", "notices", "pdf_checks", "items", "runs", "contacts", "emails")}
+    left_db = final_check(live)
+    say("demo rows read back: " + ("clean" if not left_db else "NOT CLEAN: " + "; ".join(left_db)))
+    return 0 if not left_db else 1
 
 
 def gemini_check(secrets) -> int:
@@ -448,7 +518,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

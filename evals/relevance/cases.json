@@ -1,0 +1,1818 @@
+{
+ "about": "Role relevance evals: is each demo role 'For you' for these targets? Labels proposed by Claude from each role's title and job description; the owner corrects them once (labels_confirmed) before anything is scored. Scored on precision and recall of 'For you'.",
+ "targets": "product, consulting, business/data analyst and finance roles; not core software engineering",
+ "labels_confirmed": false,
+ "label_changes": [],
+ "demo_data_sha256": "2d75c6c11017228331bf38b273c69307f9e38f15b358f98af3c75c745742fe05",
+ "cases": [
+  {
+   "role_id": "sample:2026-2027:171:3",
+   "company": "Accenture India Private Limited",
+   "designation": "Elite Technology Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:302:1",
+   "company": "Accenture Japan",
+   "designation": "Digital Consultant",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "technology consulting for clients",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:114:4",
+   "company": "Accenture Solutions Private Limited",
+   "designation": "I&E- AI and Data PG FTE",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "AI and data engineering; JD only in an email",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:513:1",
+   "company": "Accordion India",
+   "designation": "AI_ML Engineer 2",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:513:2",
+   "company": "Accordion India",
+   "designation": "Data & AI Analyst 2",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "business research and data analysis",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:513:3",
+   "company": "Accordion India",
+   "designation": "Data & AI Engineer 2",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:421:1",
+   "company": "AiPrise",
+   "designation": "Software Engineer I",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:421:4",
+   "company": "AiPrise",
+   "designation": "Software Engineer I, Full Stack (Frontend Focused)",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "frontend software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:421:2",
+   "company": "AiPrise",
+   "designation": "Software Engineer II",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:421:3",
+   "company": "AiPrise",
+   "designation": "Software Engineer II, Full Stack (Frontend Focused)",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "frontend software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:340:1",
+   "company": "AIRAMATRIX PRIVATE LIMITED",
+   "designation": "Trainee Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI / image-processing engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:226:8",
+   "company": "Airbus India Private Limited",
+   "designation": "Associate Engineer - Advanced Engineering & System Studies_PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core aerospace engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:226:10",
+   "company": "Airbus India Private Limited",
+   "designation": "Associate Engineer - Cabin_PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core aerospace engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:226:12",
+   "company": "Airbus India Private Limited",
+   "designation": "Associate Engineer - Flight Physics_PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core aerospace engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:226:16",
+   "company": "Airbus India Private Limited",
+   "designation": "Associate Engineer - Industrialisation_PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "manufacturing engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:226:2",
+   "company": "Airbus India Private Limited",
+   "designation": "Associate Engineer - Propulsion System Engineer_PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core propulsion engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:226:14",
+   "company": "Airbus India Private Limited",
+   "designation": "Associate Engineer Industrialisation_Robotics and Data Analytics_PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "industrial robotics and data engineering",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:446:1",
+   "company": "Allegro Capital Advisors",
+   "designation": "Investment Banking Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "investment banking analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:417:1",
+   "company": "Amazon",
+   "designation": "Software Development Engineer I",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:28:4",
+   "company": "American Express",
+   "designation": "Management Trainee - Data Science & Analytics",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "data science and analytics trainee",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:433:1",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "AI/ML Engineer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:433:3",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "Backend Engineer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "backend engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:433:5",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "Customer Data Analytics & Engagement Specialist (CleverTap)",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "customer data analytics",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:433:4",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "Data Scientist / ML Engineer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "data science / ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:433:7",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "PRODUCT MANAGER",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:433:2",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "Quantitative Research / Algorithmic Trading",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "quant research and trading",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:433:6",
+   "company": "Arihant Capital Markets Limited",
+   "designation": "Trading & WealthTech",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "trading and wealth-tech (finance)",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:360:11",
+   "company": "Astera Labs",
+   "designation": "Software Quality Assurance (SQA) Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software QA engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:334:2",
+   "company": "Ather Energy",
+   "designation": "Chief Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:334:6",
+   "company": "Ather Energy",
+   "designation": "Data Office",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:334:1",
+   "company": "Ather Energy",
+   "designation": "Hardware Pack Engineering",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "mechanical design",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:334:3",
+   "company": "Ather Energy",
+   "designation": "Product Ownership",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product ownership track",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:334:7",
+   "company": "Ather Energy",
+   "designation": "System Intelligence",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "engineering; no JD",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:358:11",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "AI/ML Software Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:358:3",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "Back End Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "backend engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:358:5",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "Data Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "data analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:358:4",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "Frontend Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "frontend engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:358:6",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "Full Stack Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "full stack engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:358:1",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "Product Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:358:2",
+   "company": "Auro Group(www.AuroIM.com)",
+   "designation": "Sales & Business Development",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "sales and business development",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:239:1",
+   "company": "Auronova Consulting",
+   "designation": "Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "risk management consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:161:2",
+   "company": "Avathon",
+   "designation": "Associate Software Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:323:2",
+   "company": "Axis Bank",
+   "designation": "BIU (Business Intelligence Unit)",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "business intelligence and analytics",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:527:2",
+   "company": "AXON DEVELOPERS",
+   "designation": "Manager Strategy",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "strategy and process improvement",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:527:1",
+   "company": "AXON DEVELOPERS",
+   "designation": "MDs Office",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "MD's office, strategy and execution",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:39:1",
+   "company": "Axxela Research & Analytics Private Limited",
+   "designation": "Trainee Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "commodities and fixed income trading",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:402:1",
+   "company": "BlackBuck",
+   "designation": "Associate Manager BlackBuck Leadership Program",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "general management leadership program",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:81:5",
+   "company": "BlackRock",
+   "designation": "AI & ML Engineer (Aladdin Engineering) Analyst",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:81:6",
+   "company": "BlackRock",
+   "designation": "Aladdin Data Engineering Analyst",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:92:3",
+   "company": "Capital One Services India Pvt. Ltd.",
+   "designation": "Associate (Software Engineer)",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:92:2",
+   "company": "Capital One Services India Pvt. Ltd.",
+   "designation": "Associate - BusinessAnalyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "business analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:418:1",
+   "company": "Cars24",
+   "designation": "AI/ML",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "ML engineering; no JD",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:418:3",
+   "company": "Cars24",
+   "designation": "Data Science",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "data science; no JD",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:418:4",
+   "company": "Cars24",
+   "designation": "Generative AI",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "generative AI engineering; no JD",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:418:2",
+   "company": "Cars24",
+   "designation": "Software Engineering",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "software engineering; no JD",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:339:1",
+   "company": "Cognizant Technology Solutions",
+   "designation": "Ace Frontier Engineer Associate",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:339:2",
+   "company": "Cognizant Technology Solutions",
+   "designation": "Ace Frontier Engineer Senior Associate",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:277:4",
+   "company": "Collins Aerospace",
+   "designation": "PGET - Advanced Methods",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core aerospace engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:277:6",
+   "company": "Collins Aerospace",
+   "designation": "PGET - AI/ML",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI/ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:277:7",
+   "company": "Collins Aerospace",
+   "designation": "PGET - Autonomous & Intelligent Aerospace Systems",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "aerospace systems engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:277:9",
+   "company": "Collins Aerospace",
+   "designation": "PGET - IP & Technology Research Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "IP and technology strategy analyst",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:277:12",
+   "company": "Collins Aerospace",
+   "designation": "PGET - Mechanical Design",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "mechanical design",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:277:5",
+   "company": "Collins Aerospace",
+   "designation": "PGET - Microelectronics",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "microelectronics engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:277:3",
+   "company": "Collins Aerospace",
+   "designation": "PGET - Power Electronics",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "power electronics engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:330:1",
+   "company": "Commonwealth Bank of Australia",
+   "designation": "Graduate Engineering",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:12:2",
+   "company": "D. E. Shaw India",
+   "designation": "Technology Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software development",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:453:2",
+   "company": "Dassault Systemes",
+   "designation": "AI Engineer-Data Scientist-PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering / data science",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:453:4",
+   "company": "Dassault Systemes",
+   "designation": "Software Engineer - Domain Engineering & AI Innovation-PG",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:282:1",
+   "company": "DB",
+   "designation": "Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "investment banking analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:283:1",
+   "company": "Deloitte",
+   "designation": "Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "technology consulting",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:463:5",
+   "company": "DELOITTE TOUCHE TOHMATSU INDIA LLP",
+   "designation": "Consultant | EAD OIDS ER&I",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:386:1",
+   "company": "Diageo",
+   "designation": "GBS MANAGEMENT TRAINEE",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "management trainee",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:321:1",
+   "company": "Energy Aspects",
+   "designation": "Energy Market Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "energy market research analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:521:1",
+   "company": "ESRI",
+   "designation": "Data Scientist I",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:554:1",
+   "company": "ETERNAL",
+   "designation": "Assistant Program Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "program management and strategy",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:43:5",
+   "company": "Eternal",
+   "designation": "Machine Learning Scientist",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "ML research",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:43:6",
+   "company": "Eternal",
+   "designation": "Product Analyst",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "product analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:43:4",
+   "company": "Eternal",
+   "designation": "Software Development Engineer I",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:391:1",
+   "company": "EXL Service",
+   "designation": "Analytics - Consultant I",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "analytics consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:144:4",
+   "company": "ExxonMobil Services & Technology Private Limited",
+   "designation": "Marine Engineer-PG",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "marine engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:444:1",
+   "company": "EY Global Delivery Services India LLP",
+   "designation": "Senior Analyst - Data Scientist",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science / ML",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:444:2",
+   "company": "EY Global Delivery Services India LLP",
+   "designation": "Senior Analyst - Supply Chain Management",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "supply chain and transaction consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:270:1",
+   "company": "EY Parthenon",
+   "designation": "Associate Consultant",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "strategy consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:462:1",
+   "company": "Finarb",
+   "designation": "AI Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:462:3",
+   "company": "Finarb",
+   "designation": "Data Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:462:2",
+   "company": "Finarb",
+   "designation": "Full Stack Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "full stack engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:451:1",
+   "company": "FirstClub",
+   "designation": "Product Management",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:225:5",
+   "company": "FischerJordan",
+   "designation": "Software Engineer (SWE)- Frontend Web Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "frontend engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:225:6",
+   "company": "FischerJordan",
+   "designation": "Software Engineer - Backend Web Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "backend engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:225:2",
+   "company": "FischerJordan",
+   "designation": "Sr. Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "client-facing business analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:66:2",
+   "company": "Flipkart",
+   "designation": "AI Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:297:1",
+   "company": "Flipspaces Technology Labs Pvt. Ltd.",
+   "designation": "Entrepreneur-in-Residence",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "entrepreneur-in-residence, business building",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:346:1",
+   "company": "GDi Partners",
+   "designation": "Associate Consultant",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "impact consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:38:3",
+   "company": "Glean Search Technologies India Private Limited",
+   "designation": "Software Engineer - India",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:38:4",
+   "company": "Glean Search Technologies India Private Limited",
+   "designation": "Software Engineer - US",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:87:3",
+   "company": "Goldman Sachs",
+   "designation": "Quantitative Strategist",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "quant strategist (finance)",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:541:1",
+   "company": "Groww",
+   "designation": "Associate Product Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:291:1",
+   "company": "Hakimo AI",
+   "designation": "Applied ML Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:291:3",
+   "company": "Hakimo AI",
+   "designation": "Associate Product Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:291:4",
+   "company": "Hakimo AI",
+   "designation": "Cloud Infrastructure & Platform Engineer (DevOps / SRE)",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "DevOps / infrastructure",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:291:5",
+   "company": "Hakimo AI",
+   "designation": "Founders Office Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "founder's office analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:291:6",
+   "company": "Hakimo AI",
+   "designation": "Full Stack Software Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "full stack engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:47:1",
+   "company": "Harness",
+   "designation": "Software Engineer I",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:415:1",
+   "company": "HILABS",
+   "designation": "AI Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:415:2",
+   "company": "HILABS",
+   "designation": "Associate Product Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:26:1",
+   "company": "Houlihan Lokey Advisory (India) Private Limited",
+   "designation": "Analyst",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "JD is DevOps platform engineering",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:524:1",
+   "company": "ICICI LOMBARD",
+   "designation": "Actuarial Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "actuarial analyst (finance)",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:324:2",
+   "company": "IDFC FIRST Bank",
+   "designation": "Associate Data Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "data analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:324:1",
+   "company": "IDFC FIRST Bank",
+   "designation": "Associate Data Scientist-AI Labs",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science / ML",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:324:3",
+   "company": "IDFC FIRST Bank",
+   "designation": "Associate Product Manager-AI",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "AI product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:363:1",
+   "company": "Indus Insights",
+   "designation": "Associate",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "consulting associate",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:61:4",
+   "company": "INFO EDGE INDIA LIMITED",
+   "designation": "Data Scientist",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:109:2",
+   "company": "InMobi Privated Limited and Glance Private Limited",
+   "designation": "SDEI",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:142:2",
+   "company": "Insurity Solutions India Private Limited",
+   "designation": "Software Engineer I",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:327:1",
+   "company": "IQVIA",
+   "designation": "Analyst",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "healthcare analytics analyst; no JD",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:327:2",
+   "company": "IQVIA",
+   "designation": "Associate Consultant",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "consulting; no JD",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:272:1",
+   "company": "IvyCap Ventures",
+   "designation": "Investment Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "venture investment analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:17:2",
+   "company": "Ixana",
+   "designation": "IC Design Engineer II",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "chip design",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:17:3",
+   "company": "Ixana",
+   "designation": "IC Design Engineer III",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "chip design",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:17:4",
+   "company": "Ixana",
+   "designation": "Silicon Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "chip design",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:20:4",
+   "company": "JP MorganChase",
+   "designation": "Commercial & Investment Bank Research & Analytics, Global Research - Full Time Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "investment banking research and analytics",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:560:1",
+   "company": "Kalam Labs (legal name: Elixar Systems Pvt Ltd)",
+   "designation": "Aerodynamics Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "aerodynamics engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:560:2",
+   "company": "Kalam Labs (legal name: Elixar Systems Pvt Ltd)",
+   "designation": "Avionics Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "avionics engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:560:3",
+   "company": "Kalam Labs (legal name: Elixar Systems Pvt Ltd)",
+   "designation": "Mechanical Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "mechanical engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:259:1",
+   "company": "KLA",
+   "designation": "Product Applications Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "semiconductor applications engineering",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:508:2",
+   "company": "LANDEED (JOHN SALT PVT LIMITED)",
+   "designation": "AI/ML Engineer (Post-Training)",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:508:1",
+   "company": "LANDEED (JOHN SALT PVT LIMITED)",
+   "designation": "Full Stack Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "full stack engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:54:2",
+   "company": "LAT AEROSPACE",
+   "designation": "Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "aerospace engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:486:2",
+   "company": "LTM",
+   "designation": "Post-Graduate Engineer Trainee",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "engineering trainee; JD only as a link",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:570:2",
+   "company": "LYSKRAFT Pvt Ltd",
+   "designation": "APM",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:570:1",
+   "company": "LYSKRAFT Pvt Ltd",
+   "designation": "SDE - 1",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:397:2",
+   "company": "MathWorks India Private Limited",
+   "designation": "Engineer (Dual Degree, Masters) in Engineering Development Group",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "engineering development",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:397:4",
+   "company": "MathWorks India Private Limited",
+   "designation": "Technical Writer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "technical writing",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:510:1",
+   "company": "Media.Net",
+   "designation": "Senior Product Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:215:1",
+   "company": "Meesho",
+   "designation": "Senior Assosiate - Business Management",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "business management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:476:1",
+   "company": "MeltPlan Inc",
+   "designation": "Software Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "full stack engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:42:3",
+   "company": "Microsoft Corporation",
+   "designation": "Software Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:504:1",
+   "company": "Moneyview Ltd",
+   "designation": "Business Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "business analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:504:2",
+   "company": "Moneyview Ltd",
+   "designation": "Data Scientist",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:222:2",
+   "company": "Mygate",
+   "designation": "Software Developer Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:135:2",
+   "company": "Nation with Namo",
+   "designation": "Associate",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "political campaign leadership program",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:73:2",
+   "company": "NATWEST",
+   "designation": "Software Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:116:13",
+   "company": "Navi Limited",
+   "designation": "AI strategy Operations",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "AI strategy and operations",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:116:11",
+   "company": "Navi Limited",
+   "designation": "Associate Product Manager I",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:116:12",
+   "company": "Navi Limited",
+   "designation": "Data Scientist I, Navi",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:116:9",
+   "company": "Navi Limited",
+   "designation": "SDE-1",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:175:1",
+   "company": "NexusOne",
+   "designation": "Data/App Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data and app engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:117:2",
+   "company": "NoBroker.com",
+   "designation": "Applied Scientist",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "applied ML research",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:117:3",
+   "company": "NoBroker.com",
+   "designation": "Associate Data Scientist",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science / ML",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:331:1",
+   "company": "OLA",
+   "designation": "Founder's Program - General Management",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "general management founder's program",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:331:2",
+   "company": "OLA",
+   "designation": "Founder's Program Technology",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "technology founder's program",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:331:4",
+   "company": "OLA",
+   "designation": "Graduate Engineer Trainee (GET) Product Engineering & Advanced Manufacturing",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "product engineering and manufacturing",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:331:3",
+   "company": "OLA",
+   "designation": "Graduate Engineer Trainee (GET) Software, Cloud Engineering & AI",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software and cloud engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:461:2",
+   "company": "Phyagents, Inc.",
+   "designation": "Machine Learning Engineer, Robotic Foundation Models",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "ML engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:461:1",
+   "company": "Phyagents, Inc.",
+   "designation": "Software Engineer, Gen AI & Robotics",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:558:1",
+   "company": "PhysicsWallah Limited",
+   "designation": "Associate Product Manager (APM)",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:276:1",
+   "company": "Pine Labs",
+   "designation": "Software Development Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:201:2",
+   "company": "Plutus Research Private Limited",
+   "designation": "Quantitative Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "quant analyst (finance)",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:201:1",
+   "company": "Plutus Research Private Limited",
+   "designation": "Trading Systems Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "trading systems development",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:57:5",
+   "company": "Pocket FM",
+   "designation": "Management Trainee",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "management trainee; JD only as a link",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:354:2",
+   "company": "Porter",
+   "designation": "Associate Product Manager (APM)",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:354:1",
+   "company": "Porter",
+   "designation": "Software Development Engineer - 1",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:454:1",
+   "company": "Prism (Oyo)",
+   "designation": "Young Leader",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "program management leadership track",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:336:2",
+   "company": "Prodigal Technologies Inc.",
+   "designation": "Associate Consultant",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "consulting for financial institutions",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:126:2",
+   "company": "Purplle",
+   "designation": "ALDI Graduate Engineering Trainee",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "engineering trainee; JD only in mail",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:439:2",
+   "company": "Route Mobile Limited",
+   "designation": "Business Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "business analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:439:1",
+   "company": "Route Mobile Limited",
+   "designation": "SDE 1",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:452:1",
+   "company": "RV Capital",
+   "designation": "Risk Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "risk analyst (finance)",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:456:3",
+   "company": "Searce Inc.",
+   "designation": "Associate Cloud Engineer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "cloud engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:456:2",
+   "company": "Searce Inc.",
+   "designation": "Associate Data Engineer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "data engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:456:4",
+   "company": "Searce Inc.",
+   "designation": "Associate Solutions Consultant",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "solutions consulting",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:456:1",
+   "company": "Searce Inc.",
+   "designation": "Evlos AI Engineer",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:98:6",
+   "company": "SLB",
+   "designation": "Datascientist",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:208:2",
+   "company": "slice",
+   "designation": "Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "analytics analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:208:1",
+   "company": "slice",
+   "designation": "Associate Product Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "product management",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:260:3",
+   "company": "SQUAREPOINT CAPITAL",
+   "designation": "Desk Quant Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "desk quant analyst (finance)",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:260:2",
+   "company": "SQUAREPOINT CAPITAL",
+   "designation": "Graduate Software Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "software development",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:260:1",
+   "company": "SQUAREPOINT CAPITAL",
+   "designation": "Infrastructure Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "infrastructure engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:284:1",
+   "company": "Sun Valley Investment Group through Sun Valley Resources Private Limited",
+   "designation": "Research Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "commodities research analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:165:2",
+   "company": "Swiggy Limited",
+   "designation": "Data Scientist 1",
+   "jd_missing": true,
+   "for_you": false,
+   "why": "data science; no JD",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:511:1",
+   "company": "Takshashila Consulting",
+   "designation": "Business Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "consulting business analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:556:1",
+   "company": "TATA AIG General Insurance",
+   "designation": "Senior Engineer Trainee - Analytics",
+   "jd_missing": true,
+   "for_you": true,
+   "why": "insurance analytics; JD attached only",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:313:2",
+   "company": "TCG DIGITAL SOLUTIONS PVT. LTD.",
+   "designation": "Consultant / Product Developer",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "analytics consulting",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:88:1",
+   "company": "Telus Digital",
+   "designation": "Associate Project Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "project management",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:436:1",
+   "company": "Tiger Analytics",
+   "designation": "Trainee Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "analytics trainee",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:426:1",
+   "company": "Tolaram Group",
+   "designation": "Management Trainee Enterprise Transformation",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "management trainee, transformation",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:335:1",
+   "company": "Tredence Analytics",
+   "designation": "DATA SCIENTIST",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "data science / ML",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:18:2",
+   "company": "Trexquant (India) Business Consulting LLP",
+   "designation": "Quantitative Researcher",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "quant research (finance)",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:196:1",
+   "company": "Urban Company",
+   "designation": "Senior Category Manager",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "category and business operations",
+   "unsure": true
+  },
+  {
+   "role_id": "sample:2026-2027:316:1",
+   "company": "Warner Music Group",
+   "designation": "Software Engineer - 1",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "backend engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:490:1",
+   "company": "Waterfly Technologies",
+   "designation": "Graduate Engineer 1",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:490:2",
+   "company": "Waterfly Technologies",
+   "designation": "Graduate Engineer 2",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "core engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:490:5",
+   "company": "Waterfly Technologies",
+   "designation": "Growth and Strategist",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "growth and strategy",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:490:3",
+   "company": "Waterfly Technologies",
+   "designation": "Management Consultant 1",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "management consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:490:4",
+   "company": "Waterfly Technologies",
+   "designation": "Managment Consultant 2",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "management consulting",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:178:1",
+   "company": "WhiteOak Capital",
+   "designation": "Research Executive",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "investment research",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:106:2",
+   "company": "windflow",
+   "designation": "AI Engineer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "AI engineering",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:305:1",
+   "company": "Xion Multiventures Pvt Ltd",
+   "designation": "Trainee Trader & Research Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "trading and research analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:166:1",
+   "company": "YCP India Private Limited (Formerly Known as Auctus Advisors Pvt. Ltd.)",
+   "designation": "Analyst",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "consulting business analyst",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:533:1",
+   "company": "YMS Financial Private Limited",
+   "designation": "Quant Researcher",
+   "jd_missing": false,
+   "for_you": true,
+   "why": "quant research (finance)",
+   "unsure": false
+  },
+  {
+   "role_id": "sample:2026-2027:19:3",
+   "company": "Zanskar Research LLP",
+   "designation": "Infrastructure Developer",
+   "jd_missing": false,
+   "for_you": false,
+   "why": "low-latency infrastructure engineering",
+   "unsure": false
+  }
+ ]
+}

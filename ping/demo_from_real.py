@@ -56,6 +56,7 @@ class Scrubber:
 
     def _plain(self, s: str) -> str:
         me = "\u0000ME\u0000"
+        s = s.replace(FAKE_ROLL, me)  # the demo's own fake roll number stays
         if self.roll:
             s = re.sub(re.escape(self.roll), me, s, flags=re.I)
         if self.mail:

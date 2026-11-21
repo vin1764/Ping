@@ -40,3 +40,7 @@ def test_verify_catches_leftovers():
     assert verify({"x": f"roll {ME}"}, ME, MAIL, NAME)
     assert verify({"x": "someone 22XY00000"}, ME, MAIL, NAME)
     assert verify({"x": "call 9876543210"}, ME, MAIL, NAME)
+
+
+def test_the_fake_roll_itself_survives():
+    assert scrub(f"roll {FAKE_ROLL}") == f"roll {FAKE_ROLL}"

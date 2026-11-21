@@ -29,6 +29,8 @@ test("what the bubble says while it runs, when it's done, when it fails", () => 
   const slow = L.describe(run({ stage: "queued", requested_at: "2026-11-21T12:00:00+05:30" }), [], NOW);
   assert.strictEqual(slow.line, "Still waiting for GitHub to start the check…");
   assert.strictEqual(L.describe(run({ stage: "done", demo: true, finished_at: NOW }), [], NOW).line, "Demo: sample data, nothing new to fetch");
+  assert.strictEqual(L.describe(run({ stage: "done", demo: true, finished_at: NOW, new_items: 1 }), [], NOW).line,
+    "Demo: found 1 new from the snapshot's last check");
 });
 
 test("in the thread: every Check now; an hourly run only when it brought something new", () => {

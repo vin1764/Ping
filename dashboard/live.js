@@ -52,7 +52,12 @@
     if (run.stage === "failed" || (run.status || "").startsWith("failed")) {
       return { kicker, state: "failed", steps: null, line: run.note || "The check couldn't finish. I'll try again at the next hourly check." };
     }
-    if (run.demo) return { kicker, state: "done", steps: null, line: "Demo: sample data, nothing new to fetch" };
+    if (run.demo) {
+      // the demo's first Check now finds what its snapshot's last check brought; later ones find nothing new
+      const k = Number(run.new_items) || 0;
+      return { kicker, state: "done", steps: null, line: k ? `Demo: found ${k} new from the snapshot's last check`
+                                                         : "Demo: sample data, nothing new to fetch" };
+    }
     const n = Number(run.new_items) || 0;
     if (n > 0) return { kicker, state: "done", steps: null, line: `Done at ${hm(run.finished_at)} — ${n} new item${n === 1 ? "" : "s"}` };
     const prev = previousDone(run, runs);

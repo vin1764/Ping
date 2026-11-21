@@ -113,14 +113,17 @@
       return data;
     }
     async load() {
-      const [items, roles, profile, runs] = await Promise.all([
+      const [items, roles, profile, runs, notices] = await Promise.all([
         this.q("items", (q) => q.order("first_seen", { ascending: true }).limit(3000)),
         this.q("roles", (q) => q.limit(2000)),
         this.q("profile"),
         this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
+        // the latest notices, one line each on Today (the full text is read when one is opened)
+        this.sb.from("notices").select("notice_id,company,subject,notice_time").order("notice_time", { ascending: false }).limit(80)
+          .then((r) => r.data || [], () => []),
       ]);
       // the demo is a snapshot: its profile row carries the time it was taken
-      return { items, roles, profile: profile[0] || {}, runs,
+      return { items, roles, profile: profile[0] || {}, runs, notices,
                generated_at: this.demo ? profile[0]?.updated_at : undefined };
     }
     // live updates (see startLive): the latest runs, and the items again once a run has finished
@@ -236,9 +239,12 @@
   }
 
   // ------------------------------------------------------------ state + boot
-  const state = { src: null, data: null, filter: "visible", companyQuery: "", chat: [], open: new Set(), asOf: null };
-  // The demo shows a snapshot: "now" is when it was taken, so its deadlines don't all read "passed" a week later.
-  const nowDate = () => new Date(state.asOf || Date.now());
+  const state = { src: null, data: null, filter: "visible", companyQuery: "", chat: [], open: new Set(), asOf: null,
+                  openedAt: Date.now(), held: [] };
+  // The demo shows a snapshot: "now" starts when it was taken (so its deadlines don't all read "passed" a week later)
+  // and moves on from there in real time, so its countdowns tick like the real ones.
+  const nowDate = () => new Date(state.asOf ? state.asOf + (Date.now() - state.openedAt) : Date.now());
+  const liveNow = () => nowDate().getTime();      // the clock runs are judged by (the demo's own, or the real one)
 
   async function boot() {
     const params = new URLSearchParams(location.search);
@@ -298,7 +304,11 @@
       state.readAt = await state.src.readAt();
       if (state.src.kind !== "real") {
         const run = (state.data.runs || [])[0] || {};
-        state.asOf = dt(state.data.generated_at || run.finished_at || run.started_at)?.getTime() || null;
+        const snap = dt(state.data.generated_at || run.finished_at || run.started_at)?.getTime() || null;
+        // the snapshot's minute, 48 s in: the demo's clock turns a minute a few seconds after it opens
+        state.asOf = snap ? Math.floor(snap / 60000) * 60000 + 48000 : null;
+        state.openedAt = Date.now();
+        holdBackLastCheck(snap);
       }
     } catch (e) { mountPage(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
     setupNav();
@@ -308,6 +318,16 @@
     route();
     startLive();
   }
+
+  // The demo: the messages its snapshot's last check brought (first seen at the snapshot time) are held back, and the
+  // demo's first Check now finds them, as that check did. Every later Check now finds nothing new.
+  function holdBackLastCheck(snap) {
+    if (!snap) return;
+    const fresh = (it) => inChat(it) && Math.abs(dt(it.first_seen) - snap) < 120000;
+    state.held = state.data.items.filter(fresh);
+    state.data.items = withoutHeld(state.data.items);
+  }
+  const withoutHeld = (items) => (state.held.length ? items.filter((it) => !state.held.some((x) => x.id === it.id)) : items);
 
   // ------------------------------------------------------------ live updates (no reloads)
   // Supabase Realtime pushes new chat_messages and every change to runs. Row rules hold on the channel: a demo
@@ -337,7 +357,7 @@
   function schedulePoll() {
     clearTimeout(live.timer);
     if (live.ok || !state.src?.liveRuns) return;
-    live.timer = setTimeout(sync, LIVE.pollEvery(!!LIVE.current(state.data.runs, Date.now())));
+    live.timer = setTimeout(sync, LIVE.pollEvery(!!LIVE.current(state.data.runs, liveNow())));
   }
 
   async function sync() {
@@ -348,7 +368,7 @@
       mergeRuns(await state.src.liveRuns(), true);
       const chat = await state.src.chat();
       for (const m of chat || []) addChatRow(m);
-      if (LIVE.lastFinished(state.data.runs)?.id !== before) state.data.items = await state.src.items();
+      if (LIVE.lastFinished(state.data.runs)?.id !== before) state.data.items = withoutHeld(await state.src.items());
       applyLive();
     } catch { /* offline for a moment: the next poll or focus tries again */ }
     finally { live.syncing = false; schedulePoll(); }
@@ -369,7 +389,8 @@
     const ended = ["done", "failed"].includes(row.stage) && (!was || !["done", "failed"].includes(was.stage));
     mergeRuns([row]);
     // a run that just finished: read its new messages first, so they arrive right after its "Done" line
-    if (ended && row.stage === "done") state.data.items = await state.src.items().catch(() => state.data.items);
+    if (ended && row.stage === "done") state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items));
+    if (ended && row.stage === "done" && Number(row.new_items) > 0) flash(`found ${row.new_items} new`);
     applyLive();
   }
 
@@ -392,6 +413,7 @@
   function applyLive() {
     if (!state.data) return;
     showLastRun();
+    renderToday();
     const page = location.hash.slice(1) || "chat";
     if (page === "chat" && !state.onb) liveRender();
     else navUnread(unreadOf(threadEntries()).unread.length);
@@ -479,7 +501,7 @@
   // ending in "Done at 12:17 — 2 new items" or the reason it couldn't finish. The demo plays the same steps on its
   // sample snapshot.
   async function checkNow() {
-    if (LIVE.current(state.data.runs, Date.now()) || state.starting) return;
+    if (LIVE.current(state.data.runs, liveNow()) || state.starting) return;
     if ((location.hash || "#chat") !== "#chat") location.hash = "#chat";
     if (state.src.kind === "demo") return demoCheck();
     state.starting = true;
@@ -500,7 +522,7 @@
 
   function demoCheck() {
     const run = { id: `demo-${Date.now()}`, demo: true, trigger: "manual", mode: "run", status: "queued", stage: "queued",
-                  requested_at: new Date().toISOString(), shown_at: new Date(nowDate().getTime() + 1000).toISOString() };
+                  requested_at: nowDate().toISOString(), shown_at: new Date(nowDate().getTime() + 1000).toISOString() };
     live.local.add(run.id);
     mergeRuns([run]);
     let i = 0;
@@ -508,12 +530,17 @@
       if (i < LIVE.DEMO_STAGES.length) {
         const [stage, ms] = LIVE.DEMO_STAGES[i++];
         Object.assign(run, { stage, status: stage === "queued" ? "queued" : "running" });
-        if (stage !== "queued" && !run.started_at) run.started_at = new Date().toISOString();
+        if (stage !== "queued" && !run.started_at) run.started_at = nowDate().toISOString();
         mergeRuns([{ ...run }]);
         setTimeout(step, ms);
       } else {
-        Object.assign(run, { stage: "done", status: "ok", finished_at: new Date().toISOString(), new_items: 0 });
+        // what the snapshot's last check brought arrives now, after the "Done" line (later checks: nothing new)
+        const found = state.held.splice(0);
+        for (const it of found) it.first_seen = new Date(nowDate().getTime() + 2000).toISOString();
+        if (found.length) state.data.items = [...state.data.items, ...found];
+        Object.assign(run, { stage: "done", status: "ok", finished_at: nowDate().toISOString(), new_items: found.length });
         mergeRuns([{ ...run }]);
+        if (found.length) flash(`found ${found.length} new`);
       }
     };
     step();
@@ -529,23 +556,38 @@
 
   // the header: "checking the ERP now…" while a run is going, else the last finished check. No banner for a failed
   // run: ERP hiccups are normal (Ping posts in the chat after 3 in a row, or at once if the ERP refuses the login).
+  // Ping's presence, like a contact's: "checked 4 min ago" → "checking the ERP…" (dots, the avatar pulses) →
+  // "found 2 new" (2 s, the avatar flashes) → back. From the runs table, live.
+  function flash(text) { state.flash = { text, until: Date.now() + 2000 }; showLastRun(); setTimeout(showLastRun, 2050); }
+  function agoText(t) {
+    const m = Math.floor((liveNow() - t) / 60000);
+    if (m < 1) return "checked just now";
+    if (m < 60) return `checked ${m} min ago`;
+    return istDay(new Date(t)) === istDay(nowDate()) ? `last checked ${clock(t)}` : `last checked ${when(t)}`;
+  }
   function showLastRun() {
-    const cur = LIVE.current(state.data.runs, Date.now());
-    const last = LIVE.lastFinished((state.data.runs || []).filter((r) => !r.demo));   // the demo's played check isn't a real one
-    $("#subtitle").textContent = cur ? "checking the ERP now…" : last ? `last checked ${when(last.finished_at)}`
-      : state.asOf ? `snapshot of ${when(state.asOf)}` : "placement updates";
+    const cur = LIVE.current(state.data.runs, liveNow());
+    const last = LIVE.lastFinished(state.data.runs || []);
+    const sub = $("#subtitle"), top = $("#presence");
+    const fl = state.flash && state.flash.until > Date.now() ? state.flash.text : null;
+    const mode = cur ? "checking" : fl ? "found" : "idle";
+    const text = cur ? "checking the ERP" : fl || (last ? agoText(dt(last.finished_at).getTime())
+      : state.asOf ? `snapshot of ${when(state.asOf)}` : "placement updates");
+    if (sub.textContent !== text) sub.textContent = text;
+    sub.classList.toggle("dots", mode === "checking");
+    if (top && top.dataset.state !== mode) top.dataset.state = mode;
     updateCheckButtons(cur);
   }
 
   // every Check now button (rail, header, Profile > Account): off while a run is going, with its step on it
-  function updateCheckButtons(cur = LIVE.current(state.data.runs, Date.now())) {
+  function updateCheckButtons(cur = LIVE.current(state.data.runs, liveNow())) {
     document.querySelectorAll("[data-check-now]").forEach((b) => {
       b.disabled = !!cur || !!state.starting;
       b.setAttribute("aria-busy", String(!!cur || !!state.starting));
       const label = b.querySelector(".check-label") || b;
       // the header's button (phones) is short; the rail and Profile > Account show the step too
       label.textContent = state.starting ? "Starting…" : b.id === "check-now-top" ? (cur ? "Checking…" : "Check now")
-        : LIVE.buttonLabel(cur, Date.now());
+        : LIVE.buttonLabel(cur, liveNow());
     });
   }
 
@@ -589,6 +631,7 @@
     const hash = location.hash.slice(1) || "chat";
     const page = hash.startsWith("co-") ? "companies" : hash;
     document.body.classList.toggle("chat-on", page === "chat");
+    document.body.classList.toggle("today-on", page === "today");
     document.querySelectorAll("#nav a").forEach((a) => {
       const on = a.dataset.route === page;
       a.classList.toggle("on", on);
@@ -599,7 +642,9 @@
       const name = [...byCompany().keys()].find((c) => slug(c) === hash.slice(3));
       return viewCompany(name || "");
     }
+    renderToday();
     if (hash === "feed") return viewFeed();
+    if (hash === "today") return viewToday();
     if (hash === "companies") return viewCompanies();
     if (hash === "profile") return viewProfile();
     if (state.onb) return viewOnboarding();
@@ -738,7 +783,7 @@
     const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
     const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text }));
     // a Check now (with its progress) and an hourly check that brought something new
-    const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, Date.now()))
+    const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, liveNow()))
       .map((r) => ({ kind: "run", at: r.shown_at || r.requested_at || r.started_at, run: r }));
     return [...items, ...talk, ...runs].filter((e) => e.at).sort((a, b) =>
       dt(a.at) - dt(b.at) || (a.kind === "item" && b.kind === "item" ? String(a.it.sort_at || "").localeCompare(String(b.it.sort_at || "")) : 0));
@@ -863,10 +908,10 @@
   }
 
   function runBubble(run, at) {
-    const d = LIVE.describe(run, state.data.runs, Date.now());
+    const d = LIVE.describe(run, state.data.runs, liveNow());
     return h("div", { class: `msg ping run r-${d.state}`, "data-key": `run:${run.id}`, "data-sig": runSig(run),
                       role: d.state === "active" ? "status" : null },
-      h("div", { class: "kicker" }, h("span", { class: "k" }, d.kicker),
+      h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping"), h("span", { class: "k2" }, d.kicker),
         d.state === "active" ? h("span", { class: "spin", "aria-hidden": "true" }) : null),
       h("span", { class: "text title" }, d.line),
       d.steps ? h("ol", { class: "steps", "aria-label": "Progress" },
@@ -883,19 +928,25 @@
     if (d.kind === "listing" || it.category === "listing" || it.category === "collapse") return "new";
     return "you";
   }
-  // "in 1h 56m" / "in 2 h" / "in 3 days" / "over", from the page's now (the demo's snapshot time)
-  function countdown(at) {
-    const ms = dt(at) - nowDate();
-    if (!(ms > 0)) return "over";
-    const m = Math.round(ms / 60000);
-    if (m < 60) return `in ${m} min`;
-    const hrs = Math.floor(m / 60), mm = m % 60;
-    if (hrs < 6) return mm ? `in ${hrs}h ${mm}m` : `in ${hrs} h`;
-    if (hrs < 48) return `in ${hrs} h`;
-    return `in ${Math.round(hrs / 24)} days`;
+  // "in 1 h 48 m" / "in 42 m" / "over": amber under 3 h, red under 1 h; every chip ticks (tick() below)
+  const TODAY = window.PingToday;
+  const countdown = (at) => TODAY.countdown(at, liveNow()).text;
+  const countPill = (at) => { const c = TODAY.countdown(at, liveNow());
+    return h("span", { class: `pill cd c-${c.level}`, "data-due": dt(at).toISOString(), title: when(at) }, c.text); };
+  function tick() {
+    if (!state.data) return;
+    const now = liveNow();
+    for (const el of document.querySelectorAll("[data-due]")) {
+      const c = TODAY.countdown(el.dataset.due, now);
+      if (el.textContent !== c.text) el.textContent = c.text;
+      const cls = `pill cd c-${c.level}`;
+      if (el.className !== cls) el.className = cls;
+    }
+    showLastRun();
+    const minute = Math.floor(now / 60000);
+    if (minute !== state.tickMinute) { state.tickMinute = minute; renderToday(); }
   }
-  const countPill = (at, kind) => { const c = countdown(at);
-    return h("span", { class: `pill ${c === "over" ? "over" : kind === "test" ? "test" : "soon"}`, title: when(at) }, c); };
+  setInterval(tick, 1000);
   const shortTime = (v) => { const d = dt(v); const k = istDay(d);
     return k === istDay(nowDate()) ? clock(v) : `${d.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" })} ${clock(v)}`; };
 
@@ -907,14 +958,14 @@
       : /deadline/.test(why) ? "Deadline passed" : "Over";
     const due = it.due_at || it.event_at;
     const label = past ? pastLabel : kind === "review" ? "Question"
-      : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" ? "Reminder" : due ? `Closing ${shortTime(due)}` : "Deadline")
+      : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" || it.category === "digest" ? "Reminder" : "Deadline")
       : kind === "test" ? ({ shortlist: "Shortlist", result: "Result" }[it.category] || "Test")
-      : kind === "new" ? "New roles" : LEVELS[it.level] || "For you";
+      : kind === "new" ? "New" : "Update";
     const open = state.open.has(it.id);
     const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
       tabindex: "0", "aria-expanded": String(open), "data-kind": kind, "data-key": `item:${it.id}`, "data-sig": itemSig(it) },
       h("div", { class: "kicker" }, h("span", { class: "k" }, label),
-        !past && due && (kind === "soon" || kind === "test") ? countPill(due, kind) : null),
+        !past && due && (kind === "soon" || kind === "test") ? countPill(due) : null),
       h("span", { class: "text title" }, retitle(it)),
       listBlock(it),
       h("div", { class: "foot" }, h("span", { class: "expand" }, open ? "Less ▴" : "Details ▾"), h("span", { class: "time" }, clock(at))));
@@ -987,7 +1038,10 @@
     const groups = (d.list || []).map((g) => {
       const rows = (g.rows || []).map(row);
       if (g.collapsed && rows.length) {
-        return h("details", { class: "grp", onclick: (ev) => ev.stopPropagation() }, h("summary", {}, g.head), rows);
+        const label = String(g.head || "").replace(/\s*\(\d+\)\s*$/, "") || "Others";
+        return h("details", { class: "grp more-rows", onclick: (ev) => ev.stopPropagation() },
+          h("summary", {}, h("span", { class: "closed" }, `Show ${rows.length} more ▸`),
+            h("span", { class: "opened" }, `${label} (${rows.length}) · hide ▴`)), rows);
       }
       return h("div", { class: "grp" }, g.head ? h("div", { class: "gh" }, g.head) : null, rows);
     });
@@ -1058,7 +1112,10 @@
     await state.src.addChat(mine).catch(() => {});
     let answer;
     state.sending = (state.sending || 0) + 1;
+    // the typing bubble shows at least briefly, even for an answer that comes back at once
+    const typing = new Promise((r) => setTimeout(r, 600));
     try { answer = await state.src.ask(q); } catch (e) { answer = e.message; } finally { state.sending -= 1; }
+    await typing;
     const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };
     state.chat.push(reply);
     state.waiting = false;
@@ -1088,6 +1145,69 @@
       Object.assign(state.data.profile, { targets: prefs.targets, reminder_hours: prefs.reminder_hours,
                                           list_other_roles: prefs.list_other_roles });
     } catch { /* keep the lists as the last run built them */ }
+  }
+
+  // ------------------------------------------------------------ Today (dashboard/today.js builds it)
+  const isMine = (r) => r.eligible !== false && (targetsOn() ? !!markOf(r)?.relevant : true);
+  function todayModel() {
+    return TODAY.build({ items: state.data.items.filter((it) => !it.dismissed), roles: state.data.roles,
+      notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat });
+  }
+  function todayPanel(m) {
+    const now = nowDate();
+    const head = h("div", { class: "today-head" }, h("h2", {}, "Today"),
+      h("span", { class: "muted small" }, now.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" })));
+    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), h("p", { class: "tomorrow" }, m.tomorrow.text));
+    const row = (r) => {
+      const status = r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
+        : r.status === "off" ? h("span", { class: "pill over" }, "not on the list") : null;
+      // the next check gets a plain time, not a deadline's colours
+      const right = r.kind === "notice" || r.kind === "more" ? null : r.over ? h("span", { class: "pill cd c-over" }, "over")
+        : r.kind === "check" ? h("span", { class: "pill c-plain", "data-check": "1" }, TODAY.countdown(r.due, liveNow()).text) : r.due ? countPill(r.due) : null;
+      const body = [h("span", { class: "t-title" }, r.title, status), h("span", { class: "t-sub" }, r.sub),
+                    r.names ? h("span", { class: "t-names" }, r.names) : null];
+      if (r.kind === "check") {
+        return h("div", { class: "today-row k-check" }, h("span", { class: "t-ico", "aria-hidden": "true" }),
+          h("span", { class: "t-body" }, body), right);
+      }
+      return h("button", { type: "button", class: `today-row k-${r.kind}${r.over ? " over" : ""}`, onclick: () => goTo(r.target) },
+        h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right);
+    };
+    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), h("p", { class: "tomorrow" }, m.tomorrow.text));
+  }
+  // a tap on Today: the chat message it came from, else the role, the notice or the company
+  function goTo(t) {
+    if (!t) return;
+    if (t.item) {
+      const show = () => {
+        const n = document.querySelector(`[data-key="${CSS.escape(`item:${t.item}`)}"]`), thread = $("#thread");
+        if (!n || !thread) return;
+        jumpTo(thread, n);
+        n.classList.remove("hl"); void n.offsetWidth; n.classList.add("hl");
+      };
+      if ((location.hash || "#chat") !== "#chat") { location.hash = "#chat"; setTimeout(show, 80); } else show();
+      return;
+    }
+    if (t.role) { const r = state.data.roles.find((x) => x.id === t.role); if (r) openRole(r); return; }
+    if (t.notice) return openNotice(t.notice);
+    if (t.company) { location.hash = companyHref(t.company); return; }
+    if (t.feed) { location.hash = "#feed"; return; }
+    if (t.companies) location.hash = "#companies";
+  }
+  function renderToday() {
+    if (!state.data || !TODAY) return;
+    const m = todayModel();
+    const badge = $("#nav-today");
+    if (badge) { badge.textContent = String(m.ahead); badge.hidden = !m.ahead;
+      badge.parentElement.setAttribute("aria-label", m.ahead ? `Today, ${m.ahead} still ahead` : "Today"); }
+    const rail = $("#today-rail");
+    if (rail) rail.replaceChildren(todayPanel(m));
+    const page = $("#today-page");
+    if (page) page.replaceChildren(todayPanel(m));
+  }
+  function viewToday() {
+    mountPage(h("div", { id: "today-page" }));
+    renderToday();
   }
 
   // ------------------------------------------------------------ all updates (list with the three level filters)
@@ -1233,7 +1353,7 @@
       h("span", { class: "rn" }, r.designation),
       h("span", { class: "meta" },
         dl ? h("span", { class: "num" }, `${open ? "Closes" : "Closed"} ${when(dl)}`) : h("span", {}, "No deadline yet"),
-        dl && open && !r.applied ? countPill(dl, "soon") : null,
+        dl && open && !r.applied ? countPill(dl) : null,
         r.applied ? h("span", { class: "pill applied" }, "✓ applied") : null,
         targetsOn() && mk?.relevant && !r.applied ? h("span", { class: "pill you" }, "For you") : null,
         r.eligible === false ? h("span", { class: "pill no" }, "Not eligible") : null,

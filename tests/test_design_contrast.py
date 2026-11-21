@@ -14,6 +14,10 @@ PAIRS = [
     ("soon", "surface"), ("soon", "soon-soft"),
     ("test", "surface"), ("test", "test-soft"),
     ("danger", "surface"), ("danger", "danger-soft"),
+    # chat bubbles: Ping's (left) and yours (right)
+    ("ink", "bubble-ping"), ("muted", "bubble-ping"), ("accent", "bubble-ping"), ("soon", "bubble-ping"),
+    ("test", "bubble-ping"), ("danger", "bubble-ping"), ("applied", "bubble-ping"),
+    ("ink", "bubble-me"), ("muted", "bubble-me"), ("accent", "bubble-me"),
 ]
 
 

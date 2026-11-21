@@ -50,38 +50,66 @@ Weights: 400 body, 600 headings and labels. Numbers that change (countdowns) use
 - Elevation: one shadow (`--shadow`) for sheets and the unread pill; cards are flat with a 1 px line.
 - Tap targets: 44 px minimum for anything you can press.
 
-## Message kinds (bubble anatomy)
+## Chat (a familiar messaging app)
 
-All of Ping's messages sit on the left at up to 640 px; yours on the right. Each has a **kicker** (a small label on
-top: what kind of message), the **title**, the **body** and a **footer** (source line, time).
+**Header, like a contact.** A round avatar with Ping's mark, the name, and a status line that is Ping's state, from
+the runs table in real time: "checked 4 min ago" (ticks; "last checked 13:24" after an hour) → "checking the ERP…"
+(the dots move, a ring pulses around the avatar) → "found 2 new" (2 s, the avatar flashes amber) → back.
 
-| kind | edge / kicker | body |
-|---|---|---|
-| **Digest** (applications closing together) | amber edge; kicker "Closing tonight 20:00" + a countdown chip ("in 1h 56m" / "over") | "For you" rows (company — role, reason in muted text, "Apply with: CV", ✓ applied badge), then "Others (N)" collapsed; eligibility note; source line |
-| **Reminder** | amber edge, kicker "Reminder" + countdown chip | same rows, unapplied only |
-| **Test alert** (test, room list, interview) | violet edge, kicker "Test" + time chip ("in 2 h" / "over") | where, your row (slot, room), link |
-| **New roles** | neutral edge, kicker "New roles" | rows grouped by close time |
-| **You applied / about you** | teal edge, kicker "You applied" | the update (extension, shortlist, result) |
-| **Ping system note** | no bubble: centred muted line | "Couldn't reach the ERP for the last 3 runs; I'll keep trying." |
-| **Your message** | right side, `--accent-soft` fill | your text |
-| **Ping's answer** | left, plain surface | the answer; lists keep the same row format |
+**Bubbles with tails.** Ping's on the left (`--bubble-ping`: white in light, dark grey in dark), yours on the right
+tinted green (`--bubble-me`). The tail is on the first bubble of a run; following bubbles from the same side sit
+closer and have none. The time sits inside the bubble, bottom right. Date pills ("Today", "Yesterday", "Thu 19 Nov")
+stick to the top while you scroll that day. Behind the thread is our own wallpaper: small line drawings (Ping's mark,
+a clock, a calendar page, an envelope, a briefcase, a tick, a notice, a sparkle) at 6-10% opacity, tinted to the
+theme. It was drawn for Ping, not copied from any app.
 
-Past items fade to 70% with a "Passed" kicker. New messages fade and rise in over 150 ms (nothing moves for
-people who ask for reduced motion), and nothing above them shifts.
+**The label line.** Every message from Ping starts with a small coloured label: **REMINDER** (amber: applications
+or forms closing), **TEST** (violet: tests, room lists, shortlists, results), **NEW** (green: new roles), **PING**
+(slate: Check now and hourly checks), plus QUESTION (when Ping needs you) and UPDATE (about a role you applied to).
+Then the title and body. A digest lists "For you" rows (company — role, the reason, "Apply with: CV", ✓ applied)
+and ends with **"Show 30 more ▸"**, which opens the other roles in place.
+
+**Countdown chips** tick every second on the page's clock: "in 1 h 48 m", "in 42 m", "in 35 s", "over". Neutral
+over 3 h, **amber under 3 h**, **red under 1 h** (with a slow beat), outlined grey when over. One format everywhere
+(`dashboard/today.js countdown`): chat, Today, Companies.
+
+**Motion** (all off for people who ask for reduced motion): a new bubble rises 10 px and fades in over 160 ms; the
+typing bubble's three dots bounce while Ask Ping answers (at least 0.6 s, so it never flickers); the send button is an
+outlined circle when empty, filled when there's text, and presses in; quick-reply chips press in; the "N new ↓" pill
+slides up; loading shows skeleton bubbles, not words; a message opened from Today flashes its outline.
+
+Past items fade to 70% with their own label ("Deadline passed", "Over").
+
+## Today
+
+Desktop (≥ 1100 px): a right rail beside the chat. Phones: a fourth tab (Chat · Today · Companies · Profile) whose
+badge counts what's still ahead today. In time order:
+
+- every **test** today: company, role, time, room or slot when a list gave them, "you're on the list" / "not on the
+  list", and the countdown;
+- every **deadline** today: the time, "N for you · M applied", the for-you companies; forms and submissions due;
+- **notices** that arrived today, one line each (a notice for several companies leads with its subject);
+- the **next ERP check** (a plain time, not a deadline's colours).
+
+What's over moves to the bottom, struck through. A tap opens the chat message it came from (which flashes), else the
+role sheet, the notice or the company. Under the list: "Tomorrow: 2 tests, 4 deadlines" (or "nothing scheduled
+yet"). An empty day says "Nothing scheduled today. Next check 14:11." The demo gets the same panel from its snapshot,
+on a clock that starts at the snapshot time and moves on; its first Check now finds what the snapshot's last check
+brought, later ones find nothing new.
 
 ## Chat furniture
 
-- **Day headers** stick to the top of the thread while you scroll through that day.
-- **Unread pill**: "N new" floats above the composer; tapping it scrolls to the unread divider.
-- **Typing indicator**: three dots in a small bubble while Ask Ping answers.
+- **Unread pill**: "N new ↓" slides in above the composer; tapping it scrolls to the first one.
 - **Quick replies**: a row of chips above the box ("What's due tonight?", "Anything for me?", "Which CV for ...?").
-- **Send button**: disabled while empty; shows "…" while waiting.
-- **Composer** stays above the on-screen keyboard (dynamic viewport and `interactive-widget=resizes-content`).
+- **Composer** stays above the on-screen keyboard (dynamic viewport and `interactive-widget=resizes-content`); the
+  bottom bar steps aside while you type.
 
 ## Navigation
 
-- Phone (< 900 px): a bottom bar with Chat · Companies · Profile (icons with labels, 56 px tall, safe-area aware).
-- Desktop (≥ 900 px): a slim left rail with the same three, plus Check now and the theme toggle.
+- Phone (< 900 px): a bottom bar with Chat · Today · Companies · Profile (icons with labels, 56 px tall, safe-area
+  aware); Check now is a round icon in the header.
+- Desktop (≥ 900 px): a slim left rail with the same, plus Check now and the theme toggle; from 1100 px Today sits
+  beside the chat instead of being a tab.
 - No hamburger menu.
 
 ## Pages

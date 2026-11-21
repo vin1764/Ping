@@ -16,6 +16,7 @@
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
   --r-ctl: 8px; --r-card: 14px; --r-pill: 999px;
   --rail: 88px; --bar: 56px;
+  --wall: #e5eae4; --bubble-ping: #ffffff; --bubble-me: #d3eee2;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -28,6 +29,7 @@
     --test: #c3b0f5; --test-soft: #262040;
     --danger: #ff8f86; --danger-soft: #3a1c1a;
     --shadow: 0 6px 24px rgba(0, 0, 0, .5);
+    --wall: #0b100e; --bubble-ping: #232a28; --bubble-me: #143f35;
     color-scheme: dark;
   }
 }
@@ -40,6 +42,7 @@
   --test: #c3b0f5; --test-soft: #262040;
   --danger: #ff8f86; --danger-soft: #3a1c1a;
   --shadow: 0 6px 24px rgba(0, 0, 0, .5);
+  --wall: #0b100e; --bubble-ping: #232a28; --bubble-me: #143f35;
   color-scheme: dark;
 }
 
@@ -419,3 +422,143 @@ body { grid-template-columns: minmax(0, 1fr); }
 .jd-role { font-weight: 600; }
 .jd-list { margin: var(--s1) 0 var(--s2); padding-left: 1.2em; font-size: var(--t-sm); line-height: 20px; }
 .jd-full summary { display: inline-flex; align-items: center; }
+
+/* ================================================================ the messaging look (docs/DESIGN.md, "Chat")
+   A familiar chat: a contact-like header whose status line is Ping's state, bubbles with tails on our own
+   wallpaper, a coloured label line per kind, live countdown chips, and a Today panel. */
+:root { --wall-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg fill='none' stroke='rgba(16,92,78,0.10)' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(26 28)'%3E%3Ccircle cx='0' cy='0' r='3.5'/%3E%3Cpath d='M-7 7a10,10,0,0,1,0-14M7-7a10,10,0,0,1,0 14'/%3E%3C/g%3E%3Cg transform='translate(112 22)'%3E%3Ccircle r='9'/%3E%3Cpath d='M0-5v5l3.5 2.5'/%3E%3C/g%3E%3Cg transform='translate(190 34) rotate(-8)'%3E%3Crect x='-9' y='-8' width='18' height='17' rx='3'/%3E%3Cpath d='M-9-2h18M-4-11v5M4-11v5M-4 3h3'/%3E%3C/g%3E%3Cg transform='translate(60 92) rotate(6)'%3E%3Crect x='-11' y='-7' width='22' height='15' rx='2.5'/%3E%3Cpath d='M-10-6l10 8 10-8'/%3E%3C/g%3E%3Cg transform='translate(150 98) rotate(-4)'%3E%3Crect x='-11' y='-6' width='22' height='15' rx='2.5'/%3E%3Cpath d='M-4-6v-3h8v3M-11 1h22'/%3E%3C/g%3E%3Cg transform='translate(222 120)'%3E%3Ccircle r='8'/%3E%3Cpath d='M-4 0l3 3 5-6'/%3E%3C/g%3E%3Cg transform='translate(100 160)'%3E%3Cpath d='M0-7v14M-7 0h14M-4-4l8 8M4-4l-8 8' stroke-width='1.1'/%3E%3C/g%3E%3Cg transform='translate(30 176) rotate(-10)'%3E%3Crect x='-8' y='-10' width='16' height='20' rx='2.5'/%3E%3Cpath d='M-4-4h8M-4 0h8M-4 4h5'/%3E%3C/g%3E%3Cg transform='translate(196 196) scale(.8)'%3E%3Ccircle cx='0' cy='0' r='3.5'/%3E%3Cpath d='M-7 7a10,10,0,0,1,0-14M7-7a10,10,0,0,1,0 14'/%3E%3C/g%3E%3Ccircle cx='170' cy='160' r='1.6'/%3E%3Ccircle cx='72' cy='222' r='1.6'/%3E%3Ccircle cx='236' cy='62' r='1.6'/%3E%3Ccircle cx='12' cy='120' r='1.6'/%3E%3C/g%3E%3C/svg%3E"); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --wall-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg fill='none' stroke='rgba(160,214,196,0.065)' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(26 28)'%3E%3Ccircle cx='0' cy='0' r='3.5'/%3E%3Cpath d='M-7 7a10,10,0,0,1,0-14M7-7a10,10,0,0,1,0 14'/%3E%3C/g%3E%3Cg transform='translate(112 22)'%3E%3Ccircle r='9'/%3E%3Cpath d='M0-5v5l3.5 2.5'/%3E%3C/g%3E%3Cg transform='translate(190 34) rotate(-8)'%3E%3Crect x='-9' y='-8' width='18' height='17' rx='3'/%3E%3Cpath d='M-9-2h18M-4-11v5M4-11v5M-4 3h3'/%3E%3C/g%3E%3Cg transform='translate(60 92) rotate(6)'%3E%3Crect x='-11' y='-7' width='22' height='15' rx='2.5'/%3E%3Cpath d='M-10-6l10 8 10-8'/%3E%3C/g%3E%3Cg transform='translate(150 98) rotate(-4)'%3E%3Crect x='-11' y='-6' width='22' height='15' rx='2.5'/%3E%3Cpath d='M-4-6v-3h8v3M-11 1h22'/%3E%3C/g%3E%3Cg transform='translate(222 120)'%3E%3Ccircle r='8'/%3E%3Cpath d='M-4 0l3 3 5-6'/%3E%3C/g%3E%3Cg transform='translate(100 160)'%3E%3Cpath d='M0-7v14M-7 0h14M-4-4l8 8M4-4l-8 8' stroke-width='1.1'/%3E%3C/g%3E%3Cg transform='translate(30 176) rotate(-10)'%3E%3Crect x='-8' y='-10' width='16' height='20' rx='2.5'/%3E%3Cpath d='M-4-4h8M-4 0h8M-4 4h5'/%3E%3C/g%3E%3Cg transform='translate(196 196) scale(.8)'%3E%3Ccircle cx='0' cy='0' r='3.5'/%3E%3Cpath d='M-7 7a10,10,0,0,1,0-14M7-7a10,10,0,0,1,0 14'/%3E%3C/g%3E%3Ccircle cx='170' cy='160' r='1.6'/%3E%3Ccircle cx='72' cy='222' r='1.6'/%3E%3Ccircle cx='236' cy='62' r='1.6'/%3E%3Ccircle cx='12' cy='120' r='1.6'/%3E%3C/g%3E%3C/svg%3E"); } }
+:root[data-theme="dark"] { --wall-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg fill='none' stroke='rgba(160,214,196,0.065)' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(26 28)'%3E%3Ccircle cx='0' cy='0' r='3.5'/%3E%3Cpath d='M-7 7a10,10,0,0,1,0-14M7-7a10,10,0,0,1,0 14'/%3E%3C/g%3E%3Cg transform='translate(112 22)'%3E%3Ccircle r='9'/%3E%3Cpath d='M0-5v5l3.5 2.5'/%3E%3C/g%3E%3Cg transform='translate(190 34) rotate(-8)'%3E%3Crect x='-9' y='-8' width='18' height='17' rx='3'/%3E%3Cpath d='M-9-2h18M-4-11v5M4-11v5M-4 3h3'/%3E%3C/g%3E%3Cg transform='translate(60 92) rotate(6)'%3E%3Crect x='-11' y='-7' width='22' height='15' rx='2.5'/%3E%3Cpath d='M-10-6l10 8 10-8'/%3E%3C/g%3E%3Cg transform='translate(150 98) rotate(-4)'%3E%3Crect x='-11' y='-6' width='22' height='15' rx='2.5'/%3E%3Cpath d='M-4-6v-3h8v3M-11 1h22'/%3E%3C/g%3E%3Cg transform='translate(222 120)'%3E%3Ccircle r='8'/%3E%3Cpath d='M-4 0l3 3 5-6'/%3E%3C/g%3E%3Cg transform='translate(100 160)'%3E%3Cpath d='M0-7v14M-7 0h14M-4-4l8 8M4-4l-8 8' stroke-width='1.1'/%3E%3C/g%3E%3Cg transform='translate(30 176) rotate(-10)'%3E%3Crect x='-8' y='-10' width='16' height='20' rx='2.5'/%3E%3Cpath d='M-4-4h8M-4 0h8M-4 4h5'/%3E%3C/g%3E%3Cg transform='translate(196 196) scale(.8)'%3E%3Ccircle cx='0' cy='0' r='3.5'/%3E%3Cpath d='M-7 7a10,10,0,0,1,0-14M7-7a10,10,0,0,1,0 14'/%3E%3C/g%3E%3Ccircle cx='170' cy='160' r='1.6'/%3E%3Ccircle cx='72' cy='222' r='1.6'/%3E%3Ccircle cx='236' cy='62' r='1.6'/%3E%3Ccircle cx='12' cy='120' r='1.6'/%3E%3C/g%3E%3C/svg%3E"); }
+
+/* header: avatar with presence, name, status line */
+.top .avatar { width: 40px; height: 40px; position: relative; transition: background-color .2s; }
+.top .avatar svg { width: 26px; height: 26px; fill: none; stroke: var(--on-accent); stroke-width: 2.2; stroke-linecap: round; }
+.top .avatar svg circle { fill: var(--on-accent); stroke: none; }
+.avatar[data-state="checking"]::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--accent);
+  animation: presence 1.4s ease-out infinite; }
+@keyframes presence { from { transform: scale(.9); opacity: .9; } to { transform: scale(1.25); opacity: 0; } }
+.avatar[data-state="found"] { background: var(--soon); animation: found .5s ease-out 2; }
+@keyframes found { 50% { transform: scale(1.12); } }
+.top .sub { font-size: var(--t-sm); line-height: 18px; }
+.top .avatar[data-state="checking"] + span .sub, .sub.dots { color: var(--accent); font-weight: 600; }
+.sub.dots::after { content: "…"; display: inline-block; vertical-align: bottom; overflow: hidden; width: 0; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { to { width: 1.05em; } }
+
+/* the thread: our own wallpaper, date pills, bubbles with tails */
+.thread { background-color: var(--wall); background-image: var(--wall-pattern); background-size: 240px 240px; }
+.day { background: var(--surface); border: 0; box-shadow: 0 1px 1px rgba(0, 0, 0, .1); text-transform: none; }
+.msg { border: 0; box-shadow: 0 1px 1px rgba(0, 0, 0, .12); border-radius: 12px; padding: 7px 10px 6px 12px; max-width: min(620px, 86%); }
+.msg.ping { background: var(--bubble-ping); border-top-left-radius: 0; margin-left: 8px; }
+.msg.me { background: var(--bubble-me); border-top-right-radius: 0; margin-right: 8px; }
+.msg.ping::before, .msg.me::before { content: ""; position: absolute; top: 0; width: 9px; height: 12px; background: inherit; }
+.msg.ping::before { left: -8px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.msg.me::before { right: -8px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+/* a run of bubbles from the same side: one tail, closer together */
+.msg.ping + .msg.ping, .msg.me + .msg.me { margin-top: -4px; border-radius: 12px; }
+.msg.ping + .msg.ping::before, .msg.me + .msg.me::before { display: none; }
+/* the time sits inside the bubble, bottom right */
+.msg .foot { margin-top: 0; }
+.msg .time { font-size: 11px; }
+.msg.item, .msg.run { border-left: 0; }
+.msg.item.past { opacity: .72; }
+/* the label line: REMINDER · TEST · NEW · PING */
+.kicker { margin-bottom: 1px; letter-spacing: .06em; font-size: 11px; }
+.kicker .k { font-weight: 700; }
+.k-soon .kicker .k { color: var(--soon); } .k-test .kicker .k { color: var(--test); } .k-new .kicker .k { color: var(--accent); }
+.k-you .kicker .k { color: var(--applied); } .k-review .kicker .k { color: var(--accent); }
+.msg.run .kicker .k { color: var(--applied); } .msg.run .kicker .k2 { color: var(--muted); }
+.msg.run.r-failed .kicker .k { color: var(--danger); }
+.msg .expand { opacity: .8; }
+/* digests: rows as a quiet list; "Show 30 more ▸" opens the rest in place */
+.msg .li { border-left-width: 2px; padding: 4px 0 4px 10px; }
+.msg details.more-rows > summary { min-height: 36px; text-transform: none; letter-spacing: 0; font-size: var(--t-sm); font-weight: 600; color: var(--accent); }
+.msg details.more-rows > summary::before { content: none; }
+.msg details.more-rows .opened, .msg details.more-rows[open] .closed { display: none; }
+.msg details.more-rows[open] .opened { display: inline; color: var(--muted); }
+/* a message Today pointed to */
+.msg.hl { animation: hl 1.6s ease-out; }
+@keyframes hl { 0%, 30% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 1px 1px rgba(0, 0, 0, .12); } }
+
+/* countdown chips: neutral, amber under 3 h, red under 1 h, "over" */
+.pill.cd { font-variant-numeric: tabular-nums; }
+.pill.c-plain { background: var(--thread); color: var(--ink); }
+.pill.c-amber { background: var(--soon-soft); color: var(--soon); }
+.pill.c-red { background: var(--danger-soft); color: var(--danger); }
+.pill.c-red::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: beat 1.2s ease-in-out infinite; }
+@keyframes beat { 50% { opacity: .25; } }
+.pill.c-over { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+/* motion: new bubbles rise (150 ms), the typing bubble, the send button, the unread pill */
+.msg.enter { animation: rise .16s ease-out both; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.msg.typing { padding: 12px 14px; }
+.msg.typing .dot { animation: typing 1.1s infinite ease-in-out; }
+@keyframes typing { 0%, 70%, 100% { transform: translateY(0); opacity: .35; } 35% { transform: translateY(-4px); opacity: 1; } }
+.composer { background: var(--surface); }
+.composer .send { background: transparent; color: var(--accent); border: 2px solid var(--accent); transition: background-color .12s, color .12s, transform .08s; }
+.composer .send:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+.composer .send:not(:disabled):active { transform: scale(.9); background: var(--ink); border-color: var(--ink); }
+.composer .send:disabled { opacity: .45; }
+.chip { transition: transform .08s, background-color .12s; }
+.chip:active { transform: scale(.95); background: var(--accent-soft); }
+.pill-btn:not([hidden]) { animation: pill-in .18s ease-out; }
+@keyframes pill-in { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* loading: skeleton bubbles instead of words */
+.skeleton { display: flex; flex-direction: column; gap: 12px; padding: var(--s4); max-width: 760px; margin: 0 auto; }
+.skeleton span { display: block; height: 52px; width: 62%; border-radius: 12px; border-top-left-radius: 0;
+  background: linear-gradient(90deg, var(--line) 0%, var(--surface) 50%, var(--line) 100%); background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite; }
+.skeleton span:nth-child(2) { width: 48%; height: 80px; }
+.skeleton span.me { align-self: flex-end; width: 40%; height: 40px; border-radius: 12px; border-top-right-radius: 0; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* Today: a right rail beside the chat on wide screens, a tab on phones */
+.today-rail { display: none; grid-area: today; min-height: 0; overflow-y: auto; background: var(--surface); border-left: 1px solid var(--line); }
+.today { padding: var(--s4); display: grid; gap: var(--s3); }
+.today-head { display: flex; align-items: baseline; gap: var(--s3); }
+.today-head h2 { margin: 0; font-size: var(--t-lg); }
+.today-list { display: grid; gap: 2px; }
+.today-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 2px var(--s3); align-items: start; width: 100%; text-align: left;
+  padding: 10px var(--s2); border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--ink); cursor: pointer; min-height: 44px; }
+button.today-row:hover { background: var(--bg); }
+.today-row .t-ico { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--line-strong); }
+.today-row.k-test .t-ico { background: var(--test); } .today-row.k-deadline .t-ico, .today-row.k-todo .t-ico { background: var(--soon); }
+.today-row.k-notice .t-ico, .today-row.k-more .t-ico { background: var(--applied); }
+.today-row.k-check .t-ico { background: transparent; border: 2px solid var(--accent); }
+.today-row .t-body { display: grid; gap: 1px; min-width: 0; }
+.today-row .t-title { font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.today-row .t-sub, .today-row .t-names { font-size: var(--t-sm); line-height: 20px; color: var(--muted); }
+.today-row .t-names { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-row > .pill { margin-top: 2px; }
+.today-row.over { opacity: .62; }
+.today-row.over .t-title { text-decoration: line-through; }
+.today-row.k-check { cursor: default; }
+.today-empty { margin: 0; color: var(--muted); }
+.tomorrow { margin: 0; padding-top: var(--s3); border-top: 1px solid var(--line); color: var(--muted); font-size: var(--t-sm); }
+body.today-on main { background: var(--surface); }
+#today-page .today { max-width: 720px; margin: 0 auto; }
+@media (min-width: 1100px) {
+  body.chat-on { grid-template-columns: var(--rail) minmax(0, 1fr) 340px; grid-template-areas: "nav top top" "nav status status" "nav main today"; }
+  body.chat-on .today-rail { display: block; }
+  .nav .today-tab { display: none; }
+}
+/* four tabs on phones: tighter labels */
+@media (max-width: 420px) { .nav a { font-size: 11px; } }
+
+/* the other pages speak the same language: the same radii, surfaces and chips; sign-in sits on the wallpaper */
+body:has(form.login) main { background-color: var(--wall); background-image: var(--wall-pattern); background-size: 240px 240px; }
+.login.card { box-shadow: var(--shadow); border: 0; }
+.role-row { border-left-width: 1px; box-shadow: 0 1px 1px rgba(0, 0, 0, .06); }
+.role-row.r-you { box-shadow: inset 3px 0 0 var(--accent), 0 1px 1px rgba(0, 0, 0, .06); }
+.role-row.r-applied { box-shadow: inset 3px 0 0 var(--applied), 0 1px 1px rgba(0, 0, 0, .06); }
+.role-row.r-soon { box-shadow: inset 3px 0 0 var(--soon), 0 1px 1px rgba(0, 0, 0, .06); }
+
+/* phones: Check now is a round icon in the header, so the status line keeps its words */
+@media (max-width: 600px) {
+  .check-top { width: 44px; padding: 0; justify-content: center; border-radius: 50%; }
+  .check-top .check-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .check-top[aria-busy="true"] svg { animation: spin 1s linear infinite; }
+  .top .sub { max-width: none; }
+}
+.today-row .t-names { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

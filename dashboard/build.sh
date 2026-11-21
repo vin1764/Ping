@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 -m pip install -q -r requirements.txt >/dev/null 2>&1 || true
 rm -rf _site && mkdir -p _site
-cp dashboard/index.html dashboard/style.css dashboard/app.js dashboard/onboarding.js dashboard/names.js dashboard/live.js supabase/functions/_shared/answer_rules.js _site/
+cp dashboard/index.html dashboard/style.css dashboard/app.js dashboard/onboarding.js dashboard/names.js dashboard/live.js dashboard/today.js supabase/functions/_shared/answer_rules.js _site/
 # the demo is the anonymised snapshot of a real run (Actions > Admin > build-demo writes it);
 # the made-up sample is only a fallback for a fresh copy of the project that hasn't built one yet
 if [ -s dashboard/demo-data.json ]; then cp dashboard/demo-data.json _site/; else python3 -m ping.sample _site/demo-data.json; fi

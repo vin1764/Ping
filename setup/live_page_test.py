@@ -148,12 +148,19 @@ def main(argv: list[str]) -> int:
         page.click("#check-now-top")
         page.wait_for_selector(".msg.run .steps", timeout=5000)
         check(page.locator("#check-now-top").is_disabled(), "Check now is off while the check runs")
+        # the demo's first Check now finds what its snapshot's last check brought; a later one finds nothing new
+        done_line = "() => [...document.querySelectorAll('.msg.run .text')].map(n => n.innerText)"
         try:
-            page.wait_for_function("() => [...document.querySelectorAll('.msg.run .text')].some(n => /Demo: sample data, nothing new to fetch/.test(n.innerText))",
+            page.wait_for_function(f"() => ({done_line})().some(t => /^Demo: (found \\d+ new from the snapshot's last check|sample data, nothing new to fetch)$/.test(t))",
                                    timeout=15000)
-            check(True, "the demo's Check now ends 'Demo: sample data, nothing new to fetch'")
+            check(True, f"the demo's Check now ends with its own line ({page.evaluate(done_line)[-1]!r})")
         except Exception:
-            check(False, "the demo's Check now ends 'Demo: sample data, nothing new to fetch'")
+            check(False, "the demo's Check now ends 'Demo: found N new ...' or 'Demo: sample data, nothing new to fetch'")
+        try:
+            page.wait_for_function("() => /found \\d+ new|checked just now|checked 1 min ago/.test(document.querySelector('#subtitle').innerText)", timeout=5000)
+            check(True, "the header's status line follows the check")
+        except Exception:
+            check(False, f"the header's status line follows the check ({page.inner_text('#subtitle')!r})")
         check(page.locator("#check-now-top").inner_text() == "Check now" and not page.locator("#check-now-top").is_disabled(),
               "Check now is back on after it")
         page.close()

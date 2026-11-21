@@ -228,6 +228,13 @@ class ErpClient:
         time.sleep(self.pause)
         return self.gate.get("/TrainingPlacementSSO/ShowContent.jsp", {"year": year, "id": notice_id}).text
 
+    def role_file(self, kind: str, yop: str, com_id: str, jnf_id: str = "") -> tuple[bytes, str]:
+        """A role's job description file (kind "JNF", the companies list's "Download") or the company's file ("COM")."""
+        time.sleep(self.pause)
+        params = {"type": kind, "year": yop, **({"jnf_id": jnf_id} if kind == "JNF" else {}), "com_id": com_id}
+        r = self.gate.get("/TrainingPlacementSSO/AdmFilePDF.htm", params)
+        return r.content, r.headers.get("content-type", "")
+
     def notice_attachment(self, year: str, notice_id: str) -> tuple[bytes, str]:
         time.sleep(self.pause)
         r = self.gate.get("/TrainingPlacementSSO/AdmFilePDF.htm", {"type": "NOTICE", "year": year, "id": notice_id})

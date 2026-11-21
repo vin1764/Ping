@@ -67,7 +67,8 @@
     "consulting finance financial quant research researcher scientist design designer marketing sales operations ops strategy " +
     "business hr core full stack frontend backend senior junior lead program programme officer executive role " +
     "use using used help look looking try go going make take put say think best good better fine sure wait start end let lets " +
-    "share send link links portal website site mail email notification notifications message messages question answer").split(" "));
+    "share send link links portal website site mail email notification notifications message messages question answer " +
+    "summarise summarize summary summaries jd jds description descriptions they them their would role's").split(" "));
 
   function editClose(a, b) {
     if (Math.abs(a.length - b.length) > 2 || Math.min(a.length, b.length) < 5) return false;
@@ -148,6 +149,11 @@
     const has = (re) => re.test(q);
     const out = new Set();
     if (has(/\b(which|what|best)\s+(cv|resume)\b|\bapply\s+with\b|\bcv\s+(for|to use)\b/)) out.add("whichcv");
+    // "summarise X's JD", "what's the JD for X", "what do they want for X", "job description of X"
+    if (has(/\bjds?\b|\bjob desc\w*|\bwhat do they (want|look|need)|\bwhat (is|s) the role\b|\bwhat would i do\b|\bsummari[sz]e\b/)) {
+      out.add("jd");
+      return out;                                  // a JD question is only that (its CV/skill words aren't a deadline)
+    }
     if (has(/\b(deadlines?|due|last date|closes?|closing|closed|submit\w*|submissions?|forms?|apply by|register\w*|registration)\b/) ||
         (has(/\b(cv|resume)\b/) && !out.has("whichcv"))) out.add("deadline");
     if (has(/\bshort ?list\w*|\bselected\b|\bresults?\b/)) out.add("shortlist");
@@ -235,7 +241,52 @@
       .sort((a, b) => String(b.notice_time).localeCompare(String(a.notice_time)))[0] || null;
   }
 
-  function aboutCompany(ent, intents, data, ents, checked) {
+  // ---------------------------------------------------------------- job descriptions
+  // The summary Ping made of a role's JD (roles.jd_summary, from the JD's own text: ping/jd.py), at most 120 words:
+  // role & team, what you'd do, must-haves, location, eligibility, anything unusual. Never written fresh here.
+  const words = (s) => String(s || "").split(/\s+/).filter(Boolean).length;
+  function jdAnswer(role, name) {
+    const who = `${name} (${role.designation})`;
+    if (role.jd_source === "link-unreadable" && role.jd_url) return `${who}: The JD is a link I can't open: ${role.jd_url}`;
+    const s = role.jd_summary;
+    if (!s) {
+      if (role.jd_text) return `${who}: ${String(role.jd_text).split(/\s+/).slice(0, 90).join(" ")}…`;
+      return `${who}: no JD on the ERP${role.jd_note ? ` (${String(role.jd_note).slice(0, 80)})` : ""}.`;
+    }
+    const lines = [`${who}: ${s.role_team || role.designation}`];
+    if ((s.do || []).length) lines.push("What you'd do:", ...s.do.slice(0, 3).map((x) => `- ${x}`));
+    if ((s.must_have || []).length) lines.push(`Must-have: ${s.must_have.slice(0, 5).join("; ")}`);
+    if (s.location) lines.push(`Location: ${s.location}`);
+    const elig = s.eligibility || (role.cgpa_cutoff ? `CG cut-off ${role.cgpa_cutoff} (ERP)` : "");
+    if (elig) lines.push(`Eligibility: ${elig}`);
+    const odd = [...(s.unusual || [])];
+    if (role.bond && !odd.some((x) => /bond|service/i.test(x)) && !/^no$/i.test(String(role.bond).trim())) odd.push(`bond: ${role.bond} (ERP)`);
+    if (odd.length) lines.push(`Unusual: ${odd.slice(0, 3).join("; ")}`);
+    // at most 120 words: drop from the end of the longest lists first
+    let out = lines;
+    while (words(out.join(" ")) > 120 && out.length > 2) {
+      const i = out.findLastIndex((l) => l.startsWith("- "));
+      out = out.filter((_, k) => k !== (i > 1 ? i : out.length - 1));
+    }
+    const src = role.jd_source === "attachment" ? "the JD file on the ERP" : role.jd_source === "link" ? "the JD link"
+      : role.jd_source === "detail" ? "the ERP's role details" : "the ERP's job description";
+    return out.join("\n") + `\n(From ${src}.)`;
+  }
+
+  function jdForCompany(ent, question, data) {
+    let roles = (data.roles || []).filter((r) => ent.raw.has(r.company));
+    // a role named in the question narrows it ("searce associate data engineer")
+    const q = new Set(tokensOf(question));
+    const scored = roles.map((r) => [r, keyWords(r.designation).filter((w) => q.has(w) && !LEGAL.has(w)).length]);
+    const best = Math.max(0, ...scored.map((x) => x[1]));
+    if (best > 0) roles = scored.filter((x) => x[1] === best).map((x) => x[0]);
+    if (!roles.length) return `I don't have a ${ent.name} role on your companies list.`;
+    const shown = roles.slice(0, 3).map((r) => jdAnswer(r, ent.name));
+    return shown.join("\n\n") + (roles.length > 3 ? `\n\n+${roles.length - 3} more ${ent.name} roles: name one to see its JD.` : "");
+  }
+
+  function aboutCompany(ent, intents, data, ents, checked, question) {
+    if (intents.has("jd")) return jdForCompany(ent, question, data);
     const now = data.now;
     const roles = (data.roles || []).filter((r) => ent.raw.has(r.company));
     const items = (data.items || []).filter((i) => i.company && ent.raw.has(i.company));
@@ -294,7 +345,7 @@
 
     if (hits.length) {
       return { kind: "company", companies: hits.map((e) => e.name),
-               text: hits.slice(0, 3).map((e) => aboutCompany(e, intents, data, ents, checked)).join("\n\n") };
+               text: hits.slice(0, 3).map((e) => aboutCompany(e, intents, data, ents, checked, question)).join("\n\n") };
     }
     // a name Ping has no company for: the words left once question words, intents and times are gone
     const left = tokensOf(question).filter((t) => !STOP.has(t) && !used.has(t) && t.length >= 3 && !/^\d+$/.test(t));
@@ -324,6 +375,7 @@
       return { kind: "intent", companies: [], text: ev.length ? `Tests and lists ${label}:\n${cap(ev.map((i) => `- ${i.title}${new Date(i.event_at) < now ? " (over)" : ""}`)).join("\n")}`
         : `No tests or lists ${label} in the ERP data (last checked ${checked}).` };
     }
+    if (intents.has("jd")) return { kind: "intent", companies: [], text: 'Which company\'s JD? For example: "summarise the JD for Groww".' };
     if (intents.size) {
       const ex = deadlineEntries(data, ents)[0];
       return { kind: "intent", companies: [], text: `Which company? For example: "${[...intents][0] === "whichcv" ? "which cv for" : [...intents][0] === "pay" ? "ctc at" : "deadline for"} ${ex ? ex.ent.name : "Groww"}".` };
@@ -333,7 +385,7 @@
       (soon.length ? cap(soon).join("\n") : `- nothing in the next 3 days (last checked ${checked})`) };
   }
 
-  const api = { answer, matchCompanies, intentsOf, entities, shortName, deadlineEntries };
+  const api = { answer, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

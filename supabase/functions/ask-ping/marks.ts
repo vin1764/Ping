@@ -35,7 +35,10 @@ async function h(s: string): Promise<string> {
 export const targetsHash = (targets: string, cvs = "") => h(clean(targets).toLowerCase() + (clean(cvs) ? "\n" + clean(cvs) : ""));
 export const cvsText = (cvs: any[] | null | undefined) =>
   (cvs || []).filter((c) => c?.label && c?.summary).map((c) => `- ${c.label}: ${c.summary}`).join("\n");
-export const roleHash = (r: any) => h(["company", "designation", "job_description"].map((k) => clean(r[k])).join("|"));
+// the JD Ping found (roles.jd_text: the ERP's file, a public link, more details) when there is one, else the ERP field;
+// same as ping/relevance.py jd_of(), so the "For you" cache keys stay shared
+export const jdOf = (r: any) => r.jd_text || r.job_description || "";
+export const roleHash = (r: any) => h([clean(r.company), clean(r.designation), clean(jdOf(r))].join("|"));
 
 export function noJd(jd: unknown): boolean {
   const s = clean(jd);
@@ -43,7 +46,7 @@ export function noJd(jd: unknown): boolean {
 }
 
 function roleText(r: any): string {
-  const jd = noJd(r.job_description) ? "" : clean(r.job_description);
+  const jd = noJd(jdOf(r)) ? "" : clean(jdOf(r));
   const fields = r.more_details?.fields || {};
   const extra = FIELDS.filter((k) => fields[k]).map((k) => `${k}: ${clean(fields[k]).slice(0, 120)}`);
   return `Company: ${clean(r.company)}\nTitle: ${clean(r.designation)}` + (extra.length ? "\n" + extra.join("\n") : "") +
@@ -103,7 +106,7 @@ export async function markRoles(roles: any[], targets: string, models: string[],
         if (!r || typeof a.relevant !== "boolean") continue;
         const cv = clean(a.best_cv);
         const mark = { relevant: a.relevant, reason: clean(a.reason).split(" ").slice(0, 8).join(" ").replace(/[.,;]+$/, ""),
-                       jd_missing: noJd(r.job_description), best_cv: labels.includes(cv) ? cv : "" };
+                       jd_missing: noJd(jdOf(r)), best_cv: labels.includes(cv) ? cv : "" };
         marks.set(r.id, mark);
         save.push({ targets_hash: th, role_hash: hashes.get(r.id), ...mark, model });
       }

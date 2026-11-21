@@ -1310,6 +1310,7 @@
             : h("span", { class: "pill over" }, "Eligibility not sure")),
         sec("Why it's for you", mk?.relevant && mk.reason ? h("p", { style: "margin:0" }, mk.reason) : null,
           bestCv(r) ? h("p", { style: "margin:0" }, "Apply with ", h("strong", {}, bestCv(r))) : null),
+        jdSection(r, kv, sec),
         sec("Pay", kv([["CTC", money(r.ctc, r.currency)], ...pay.map(([k, v]) => [k, /^\d+(\.\d+)?$/.test(String(v)) ? money(v, r.currency) : String(v)])])),
         sec("Eligibility", kv([
           ["You", r.eligible === true ? "Eligible" : r.eligible === false ? "Not eligible" : "Not sure"],
@@ -1329,8 +1330,7 @@
             i.pdf_status === "yes" ? h("span", { class: "pill you", style: "margin-left:6px" }, "you're on it") : null,
             i.notice_id ? [" ", h("button", { type: "button", class: "linklike", onclick: () => openNotice(i.notice_id) }, "Open notice")] : null)))
           : h("p", { class: "muted small", style: "margin:0" }, "No notices about this company yet.")),
-        r.job_description ? sec("Job description", h("details", {}, h("summary", { class: "linklike" }, "Show"),
-          h("pre", { class: "notice" }, r.job_description.slice(0, 4000)))) : null,
+        null,
         sec("Source", h("p", { class: "muted small", style: "margin:0" },
           `The ERP's companies list${r.last_seen ? `, last read ${when(r.last_seen)}` : ""}. Ping only reads the ERP: apply there. `),
           h("a", { href: companyHref(r.company), onclick: () => sheet.close() }, `All roles at ${cleanName(r.company)}`))));
@@ -1341,6 +1341,33 @@
     sheet.showModal();
     sheet.scrollTop = 0;
     close.focus();
+  }
+
+  // the JD: Ping's short summary of it (roles.jd_summary), the full text behind "Full JD", and where it came from
+  function jdSection(r, kv, sec) {
+    const s = r.jd_summary, text = r.jd_text || r.job_description || "";
+    const from = { attachment: "the JD file on the ERP", link: "the JD link", detail: "the ERP's role details", inline: "the ERP's job description" }[r.jd_source];
+    const srcLink = r.jd_url ? h("a", { href: r.jd_url, target: "_blank", rel: "noopener",
+      title: r.jd_source === "attachment" ? "Opens on the ERP; you need to be logged in to the ERP in this browser" : null },
+      r.jd_source === "attachment" ? "Open the JD file on the ERP" : "Open the JD link") : null;
+    const body = [];
+    if (r.jd_source === "link-unreadable") {
+      body.push(h("p", { style: "margin:0" }, "The JD is a link Ping can't open (private or gone). "), srcLink);
+    } else if (s) {
+      body.push(h("p", { style: "margin:0", class: "jd-role" }, s.role_team || r.designation));
+      if ((s.do || []).length) body.push(h("ul", { class: "jd-list" }, s.do.map((x) => h("li", {}, x))));
+      body.push(kv([["Must-have", (s.must_have || []).join("; ")], ["Location", s.location || ""],
+                    ["Eligibility", s.eligibility || (r.cgpa_cutoff ? `CG cut-off ${r.cgpa_cutoff} (ERP)` : "")],
+                    ["Unusual", (s.unusual || []).join("; ")]]));
+    } else if (!text.trim() || r.jd_source === "none") {
+      body.push(h("p", { class: "muted small", style: "margin:0" }, `No JD on the ERP${r.jd_note ? ` (${r.jd_note})` : ""}.`));
+    }
+    if (text.trim() && r.jd_source !== "link-unreadable") {
+      body.push(h("details", { class: "jd-full" }, h("summary", { class: "linklike" }, "Full JD"),
+        h("pre", { class: "notice" }, text.slice(0, 20000))));
+    }
+    if (from || srcLink) body.push(h("p", { class: "muted small", style: "margin:0" }, from ? `From ${from}. ` : "", r.jd_source !== "link-unreadable" ? srcLink : null));
+    return sec("Job description", body);
   }
 
   function viewCompany(name) {

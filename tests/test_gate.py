@@ -14,6 +14,11 @@ FORBIDDEN = [
     ("GET", B + "/TrainingPlacementSSO/TPFile.jsp?file_for=NOTICE&year=2026-2027&id=1797"),
     ("GET", B + "/TrainingPlacementSSO/Notice.jsp?mode=deactive&yop=2026-2027&id=1797"),
     ("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=CV&rollno=X&id=1"),
+    ("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=PPT&year=2026-2027&com_id=1"),
+    ("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=JNF&year=2026-2027&jnf_id=1&com_id=1&rollno=X"),
+    ("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=CV&year=2026-2027&jnf_id=1&com_id=1"),
+    ("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=2026-2027&jnf_id=1&com_id=1"),
+    ("GET", B + "/TrainingPlacementSSO/DownloadDoc.jsp?filepath=x"),
     ("GET", B + "/TrainingPlacement/StudentResumePDF?yop=1&rollno=X&com_id=1&jnf_id=1&file_for=ERPRESUME"),
     ("GET", B + "/TrainingPlacementSSO/cvGenerate.jsp?resume_no=1"),
     ("GET", B + "/TrainingPlacementSSO/NOCApply.jsp"),
@@ -65,6 +70,9 @@ def test_everything_ping_needs_is_allowed():
     check("GET", B + "/TrainingPlacementSSO/TPJNFView.jsp?jnf_id=2&com_id=313&yop=2026-2027&user_type=SU&rollno=X")
     check("GET", B + "/TrainingPlacementSSO/JnfMoreDet.jsp?mode=jnfMoreDet&rollno=X&year=2026-2027&com_id=313&jnf_id=2")
     check("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=2026-2027&id=1794")
+    # a role's JD file and the company's file (as the companies page opens them)
+    check("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=JNF&year=2026-2027&jnf_id=4&com_id=433")
+    check("GET", B + "/TrainingPlacementSSO/AdmFilePDF.htm?type=COM&year=2026-2027&com_id=433")
     check("GET", B + "/TrainingPlacementSSO/ShowContent.jsp?year=2026-2027&id=1794")
 
 

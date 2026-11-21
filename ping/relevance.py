@@ -62,9 +62,16 @@ def no_jd(jd: str) -> bool:
     return not jd or bool(PLACEHOLDER.match(jd)) or len(re.sub(r"https?://\S+", "", jd).strip()) < 25
 
 
+def jd_of(r: dict) -> str:
+    """The role's job description: the one Ping found (ping/jd.py: the ERP's file, a public link, more details) when
+    there is one, else the companies list's own field. A role that gets a JD therefore gets a new cache key and is
+    marked again; the others keep theirs."""
+    return r.get("jd_text") or r.get("job_description") or ""
+
+
 def role_text(r: dict) -> tuple[str, bool]:
-    """What Gemini reads about a role, and whether the ERP gave no job description."""
-    jd = _clean(r.get("job_description"))
+    """What Gemini reads about a role, and whether no job description was found."""
+    jd = _clean(jd_of(r))
     if no_jd(jd):
         jd = ""
     extra = []
@@ -91,8 +98,8 @@ def targets_hash(targets: str, cvs: str = "") -> str:
 
 
 def role_hash(r: dict) -> str:
-    """Same in marks.ts: company | title | job description, spaces squeezed (the ERP's own text)."""
-    return _h("|".join(_clean(r.get(k)) for k in ("company", "designation", "job_description")))
+    """Same in marks.ts: company | title | job description (jd_text when Ping found one), spaces squeezed."""
+    return _h("|".join(_clean(v) for v in (r.get("company"), r.get("designation"), jd_of(r))))
 
 
 def cache_key(targets: str, r: dict, cvs: str = "") -> str:

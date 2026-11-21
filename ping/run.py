@@ -61,6 +61,10 @@ def _failure_note(status: str) -> str:
     return f"The check stopped before the end ({why}). I'll try again at the next hourly check."
 
 
+JD_FETCH_PER_RUN = 40        # ERP files and public links read per run for job descriptions
+JD_SUMMARIES_PER_RUN = 40    # JD summaries made per run (Gemini; open roles first)
+
+
 UNREACHABLE_MSG = "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly."
 BACK_ONLINE_MSG = "Back online: reached the ERP again after {n} failed runs."
 
@@ -106,6 +110,7 @@ class Runner:
             "pdf_yes", "pdf_no", "pdf_unknown", "pdfs_skipped_not_relevant", "notices_rules_unsure")}
         self.problems: list[str] = []
         self.login_stats = None
+        self.jd_updates: list[dict] = []
         self.told: str | None = None        # the last message this run posted in the chat (failure policy)
         self.new_in_chat = 0                # new messages in the chat from this run (the dashboard says "N new")
         self.stage_off = False
@@ -210,6 +215,8 @@ class Runner:
             # ---- attachments (PDFs): yours first, other shortlists/schedules last
             self._stage("reading PDFs")
             checks = self._check_attachments(fresh_notices, index, all_roles, profile, roll)
+            # ---- job descriptions that aren't in the companies list's own field (ERP file, public link, more details)
+            self._jds(all_roles, stored_roles)
         except LoginError as e:
             status = f"failed: {e.kind}"
             self.problems.append(str(e))
@@ -232,6 +239,11 @@ class Runner:
         # ---- save + rebuild the feed
         self._stage("saving")
         self._save(list_roles, new_roles, fresh_notices, checks, emails, stored_roles)
+        if self.jd_updates and self.store_ok:
+            try:
+                self.store.upsert("roles", self.jd_updates)
+            except Exception as e:                       # e.g. before Admin > apply-sql added the columns
+                self.problems.append(f"saving job descriptions failed: {type(e).__name__}")
         items = self._rebuild(profile)
         self._login_failure_tracking(status)
 
@@ -297,6 +309,61 @@ class Runner:
             self.c("role_more_details_failed")
             self.problems.append(f"role {r['company']}: more details not read ({type(e).__name__})")
         return out
+
+    def _jds(self, roles: list[dict], stored: dict) -> None:
+        """Find each role's JD once, again only when the role's own JD information changes (jd_key)."""
+        from .jd import jd_key, resolve, usable
+        ups, fetched, tally = [], 0, Counter()
+        for r in roles:
+            old = stored.get(r["id"]) or {}
+            key = jd_key(r)
+            if old.get("jd_key") == key and old.get("jd_source"):
+                continue
+            needs_net = not usable(r.get("job_description") or "")
+            if needs_net and fetched >= JD_FETCH_PER_RUN:
+                continue                                  # the rest next run (each file is a request to the ERP)
+            fetched += needs_net
+            res = resolve(r, lambda kind, r=r: self.erp.role_file(kind, r["yop"], r["com_id"], r["jnf_id"]))
+            row = {"id": r["id"], "jd_key": key, "jd_text": res.get("jd_text"), "jd_source": res["jd_source"],
+                   "jd_url": res.get("jd_url"), "jd_note": res.get("jd_note")}
+            ups.append(row)
+            r.update(row)
+            tally[res["jd_source"]] += 1
+        self.jd_updates = ups
+        self.counts["jd_found"] = dict(tally)
+        if ups:
+            log(f"job descriptions: {dict(tally)}")
+
+    def _jd_summaries(self, roles: list[dict]) -> None:
+        """A short summary per JD (role & team, what you'd do, must-haves, location, eligibility, anything unusual),
+        made once per JD text: by Gemini when it answers, else from the JD's own labelled lines."""
+        from .jd import detail_text, rules_summary, summarise, text_key, usable
+        todo = []
+        for r in roles:
+            text = (r.get("jd_text") or "") + ("\n\n" + detail_text(r) if r.get("jd_source") == "inline" else "")
+            if not usable(text):
+                continue
+            key = text_key(text)
+            if (r.get("jd_summary") or {}).get("key") != key:
+                todo.append((r, text, key))
+        # open roles first: those are the ones you might apply to
+        todo.sort(key=lambda x: str(x[0].get("effective_deadline") or x[0].get("apply_end") or ""), reverse=True)
+        ups, made = [], Counter()
+        for i, (r, text, key) in enumerate(todo[:JD_SUMMARIES_PER_RUN]):
+            s = summarise(text, self.secrets.ai) if made["ai_failed"] < 3 else None
+            if s is None:
+                made["ai_failed"] += 1
+                s = rules_summary(text, r.get("designation") or "")
+            s["key"] = key
+            made[s.get("model") == "rules" and "rules" or "ai"] += 1
+            ups.append({"id": r["id"], "jd_summary": s})
+            r["jd_summary"] = s
+        if ups:
+            try:
+                self.store.upsert("roles", ups)
+            except Exception as e:
+                self.problems.append(f"saving JD summaries failed: {e}")
+        self.counts["jd_summaries"] = {k: v for k, v in made.items() if k != "ai_failed"}
 
     @staticmethod
     def _merge_roles(list_roles, stored_roles, new_roles) -> list[dict]:
@@ -431,6 +498,7 @@ class Runner:
 
     def _rebuild(self, profile) -> list[dict]:
         roles = self.store.select("roles", REAL)
+        self._jd_summaries(roles)
         notices = [n for n in self.store.select("notices", REAL) if n.get("analysis")]
         # Re-read stored notices with today's rules (cheap: text only), so fixes apply to past notices too.
         # Answers that came from the AI fallback are kept as they are.

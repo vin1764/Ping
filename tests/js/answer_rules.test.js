@@ -104,3 +104,26 @@ test("tests today include the one earlier today, marked over; tests not about yo
 test("schedule notices are not companies", () => {
   assert.ok(!R.entities(data).some((e) => /schedule/i.test(e.name)));
 });
+
+test("JD questions: the stored summary (≤120 words), a link that can't be opened, no JD", () => {
+  const d = { ...data, roles: [
+    { id: "j1", company: "JP MorganChase", designation: "Global Research - Full Time Analyst", cgpa_cutoff: 7.0, jd_source: "detail",
+      jd_text: "Developing deep insights ...", jd_summary: { role_team: "Analyst, Global Research (CIB Research & Analytics)",
+        do: ["Analyse public data for deep insights", "Build and maintain financial models", "Service key stakeholders"],
+        must_have: ["Strong analytical skills", "Excel and financial modelling"], location: "Mumbai", eligibility: null,
+        unusual: [], key: "k" } },
+    { id: "j2", company: "Searce Inc.", designation: "Associate Data Engineer", jd_source: "link-unreadable",
+      jd_url: "https://docs.google.com/document/d/14dVgbE3ZQouUB93/edit" },
+    { id: "j3", company: "Cars24", designation: "Data Science", jd_source: "none", jd_note: "-" },
+  ] };
+  const a = R.answer("summarise JPMC's JD", d);
+  assert.strictEqual(a.kind, "company");
+  assert.match(a.text, /^JP MorganChase \(Global Research - Full Time Analyst\): Analyst, Global Research/);
+  assert.match(a.text, /What you'd do:\n- Analyse public data for deep insights\n- Build and maintain financial models/);
+  assert.match(a.text, /Must-have: Strong analytical skills; Excel and financial modelling\nLocation: Mumbai\nEligibility: CG cut-off 7 \(ERP\)/);
+  assert.ok(a.text.split(/\s+/).length <= 125, a.text);          // 120 words + the "(From ...)" source line
+  assert.strictEqual(R.answer("what's the JD for searce associate data engineer", d).text,
+    "Searce (Associate Data Engineer): The JD is a link I can't open: https://docs.google.com/document/d/14dVgbE3ZQouUB93/edit");
+  assert.match(R.answer("what do they want for cars24", d).text, /^Cars24 \(Data Science\): no JD on the ERP/);
+  assert.match(R.answer("summarise google's jd", d).text, /^I don't have Google/);
+});

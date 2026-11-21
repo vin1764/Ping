@@ -38,6 +38,9 @@ Deno.test("cache keys match ping/relevance.py", async () => {
   eq(await targetsHash("  Backend   and Infrastructure roles "), "pboaociipcpjndci");
   eq(await roleHash({ company: "Alpha", designation: "Software Engineer I", job_description: "Build  backend services." }),
      "enobgabombhdlgoh");
+  // a role whose JD Ping found elsewhere (roles.jd_text) is keyed on that text: it gets marked again
+  eq(await roleHash({ company: "Alpha", designation: "Software Engineer I", job_description: "Find Attached",
+                      jd_text: "Build backend services in Go and run them on Kubernetes." }), "jhklhhanbjlpjbec");
 });
 
 Deno.test("schedule and feed preferences", () => {

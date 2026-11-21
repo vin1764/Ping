@@ -246,3 +246,36 @@ def test_a_failed_run_says_why_in_the_chat_words(monkeypatch):
     rec, store = run(fake, s=secrets(answers=[SecurityAnswer("no such question", "x")] * 3))
     row = next(r for r in store.select("runs") if r["id"] == rec["id"])
     assert row["stage"] == "failed" and row["note"], row
+
+
+def test_job_descriptions_found_off_the_companies_list(monkeypatch):
+    """'Find Attached' + Download -> the ERP's JD file; a JD inline stays as it is; a Drive link is read (public);
+    a placeholder with nothing behind it is 'none'. Found once, not again while the role doesn't change."""
+    import ping.jd as jd
+    from fake_erp import JD_FILE
+    from ping.relevance import cache_key, needs
+    monkeypatch.setattr(jd, "from_link", lambda url, session=None: {
+        "jd_text": "Associate, Accordion. Work across client analytics engagements; " * 6, "jd_source": "link", "jd_url": url})
+    fake = FakeErp(NOW)
+    rec, store = run(fake)
+    roles = {r["designation"]: r for r in store.select("roles")}
+    a, b, c, p = roles["Data & AI Analyst"], roles["Business Analyst"], roles["Associate"], roles["Software Development Engineer"]
+    assert a["jd_source"] == "attachment" and "Build dashboards" in a["jd_text"]
+    assert a["jd_url"].endswith("AdmFilePDF.htm?type=JNF&year=2026-2027&jnf_id=1&com_id=501")
+    assert b["jd_source"] == "inline" and b["jd_text"].startswith("As a Business Analyst")
+    assert c["jd_source"] == "link" and c["jd_url"].startswith("https://drive.google.com/")
+    assert p["jd_source"] == "none" and p["jd_text"] is None
+    # the summary of the file: from its own lines (no model in this test)
+    s = a["jd_summary"]
+    assert s["model"] == "rules" and s["location"] == "Gurugram"
+    assert any("SQL" in x for x in s["must_have"]) and any("service agreement" in x for x in s["unusual"])
+    # a role that got a JD is marked again (its cache key changed); one whose JD was inline keeps its key
+    before = dict(a, jd_text=None)
+    old = {"relevance": {"key": cache_key("analytics roles", before)}}
+    assert needs({**a, **old}, "analytics roles")
+    assert cache_key("analytics roles", b) == cache_key("analytics roles", dict(b, jd_text=None))
+    # the next run doesn't fetch it again
+    files = lambda: sum("AdmFilePDF" in x for x in fake.calls)  # noqa: E731
+    before_files = files()
+    rec2, store = run(fake, store)
+    assert files() == before_files, "no file fetched again (no new notice, the role's JD inputs unchanged)"

@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     for (const k of FIELDS.split(",")) if (o[k] != null) (prefs as any)[k] = o[k];
   }
   const classifiable = async () => (await sb.from("roles")
-    .select("id,company,designation,job_description,more_details,eligible").limit(400)).data?.filter((r: any) => r.eligible !== false) || [];
+    .select("id,company,designation,job_description,jd_text,more_details,eligible").limit(400)).data?.filter((r: any) => r.eligible !== false) || [];
 
   // The page asks for the "For you" marks of the caller's current targets (cache only, no Gemini) to split its lists.
   if (body?.marks === true) {
@@ -220,11 +220,23 @@ Deno.serve(async (req) => {
   const [items, roles, profile] = await Promise.all([
     sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
-    sb.from("roles").select("id,company,designation,job_description,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff").limit(400),
+    sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400),
     sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1),
   ]);
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
+  }
+  // "summarise X's JD" / "what's the JD for X" / "what do they want for X": the summary Ping made of the JD's own text
+  // (ping/jd.py, stored on the role), the same with or without Gemini, so no model call and no invention
+  if (Rules.intentsOf(ask).has("jd")) {
+    const jdData = (q: string) => Rules.answer(q, { now: asOf, lastChecked: null, items: [], notices: [],
+      roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline })) });
+    let jd = jdData(ask);
+    if (jd.kind === "intent" && lastQuestion) jd = jdData(`${ask} ${lastQuestion}`);   // "and their JD?"
+    if (jd.kind !== "intent") {
+      console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "jd-summary", kind: jd.kind, ms: Date.now() - t0 }));
+      return json({ answer: saved ? `${saved}\n\n${jd.text}` : jd.text, model: "jd-summary", ...(saved ? { prefs, prefs_changed: true } : {}) });
+    }
   }
   const companies = [...new Set((roles.data || []).map((r) => r.company as string))];
   // a follow-up that names no company ("same for analyst role?") is about the previous question's companies
@@ -234,7 +246,7 @@ Deno.serve(async (req) => {
   const [detail, lists, notices] = await Promise.all([
     names.length
       ? sb.from("roles").select("company,designation,more_details,bond,contract,backlog_rule,cgpa_cutoff,allowed," +
-          "selection_details,applied,effective_deadline").in("company", names).limit(20)
+          "selection_details,applied,effective_deadline,job_description,jd_text,jd_source,jd_url").in("company", names).limit(20)
       : Promise.resolve({ data: [] as any[], error: null }),
     // your results on shortlists / test room lists (also the ones already past), newest first
     sb.from("items").select("title,company,pdf_status,event_at,details").not("pdf_status", "is", null)
@@ -287,7 +299,10 @@ Deno.serve(async (req) => {
     ` | written test: ${r.selection_details?.["Written Test"] ?? "not stated"}` +
     ` | pay: ${payLines(r.more_details) || "no pay details given"}` +
     `${r.bond ? ` | bond: ${r.bond}` : ""}${r.contract ? ` | contract: ${r.contract}` : ""}` +
-    ` | departments allowed: ${depts(r.allowed) || "not stated"}`);
+    ` | departments allowed: ${depts(r.allowed) || "not stated"}` +
+    // the JD (ping/jd.py found it: the ERP's field, its file, a public link or the role's details)
+    (r.jd_text || r.job_description ? ` | JD (${r.jd_source || "ERP field"}): ${String(r.jd_text || r.job_description).replace(/\s+/g, " ").slice(0, 1500)}`
+      : r.jd_source === "link-unreadable" ? ` | JD: a link Ping can't open: ${r.jd_url}` : " | JD: none on the ERP"));
   const listLines = (lists.data || []).map((i: any) =>
     `- ${i.title}${i.event_at ? ` (test/event at ${ist(i.event_at)}${past(i.event_at)})` : ""}` +
     ` [${i.pdf_status === "yes" ? "you ARE on this list" : i.pdf_status === "no" ? "you are NOT on this list" : "list not readable"}]` +

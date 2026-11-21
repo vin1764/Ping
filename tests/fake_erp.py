@@ -42,6 +42,27 @@ def roster(include_me: bool, n: int = 40) -> list[list[str]]:
     return rows
 
 
+JD_FILE = ("Data & AI Analyst - Analytics team, Gurugram\n"
+           "Responsibilities\n- Build dashboards and models for client analytics projects\n"
+           "- Clean and join large datasets in SQL and Python\n- Present findings to client teams every week\n"
+           "Requirements\n- SQL\n- Python (pandas)\n- Statistics basics\n"
+           "Location: Gurugram\nEligibility: B.Tech, CGPA 7.0 and above\n"
+           "Note: a 1-year service agreement applies; rotational shifts during client launches.")
+JD_INLINE = ("As a Business Analyst you will work with product and operations teams to define metrics, run "
+             "experiments and turn data into decisions. You will write SQL every day, build dashboards in Tableau "
+             "and present weekly to leadership. Location: Bengaluru.")
+
+
+def jd_pdf(text: str) -> bytes:
+    from fpdf import FPDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=11)
+    for line in text.splitlines():
+        pdf.cell(0, 7, line, new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())
+
+
 class FakeErp:
     def __init__(self, now: datetime, question: str = "What is the name of your first pet?"):
         self.now = now
@@ -74,6 +95,11 @@ class FakeErp:
             (1700, "CV Submission", "OLD CO", d(-30), False, "Old notice, outside the first-run window."),
         ]
         self.pdfs = {1801: make_pdf(roster(include_me=True))}
+        # job descriptions: one in a file ("Find Attached" + Download), one inline, one a public link
+        self.jds = {("501", "1"): "Find Attached",
+                    ("501", "2"): JD_INLINE,
+                    ("501", "3"): "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view?usp=sharing"}
+        self.jd_files = {("501", "1"): jd_pdf(JD_FILE)}
 
     # -- transport interface used by the Gate
     def send(self, method: str, url: str, data: dict | None, headers: dict | None) -> Reply:
@@ -132,6 +158,8 @@ class FakeErp:
             return html(f'<div id="printableArea">\n<b>Type</b>    : PLACEMENT<br>\n<b>Subject</b> : {n[1]}<br>\n'
                         f'<b>Company</b> : {n[2]}<br>\n<br>{n[5]}<br>\n</div>', "text/html;charset=ISO-8859-1")
         if path == "/TrainingPlacementSSO/AdmFilePDF.htm":
+            if q.get("type") == "JNF":                    # a role's job description file
+                return Reply(200, url, {"content-type": "application/pdf"}, self.jd_files[(q["com_id"], q["jnf_id"])])
             return Reply(200, url, {"content-type": "application/pdf"}, self.pdfs[int(q["id"])])
         if path == "/IIT_ERP3/logout.htm":
             self.logged_in = False
@@ -146,7 +174,7 @@ class FakeErp:
                      a("", f'TPPPTDescription("2026-2027","{cid}");'),
                      a(desig, f'TPJNFView("{jid}","{cid}","2026-2027");'),
                      a("Apply", f'TPJNFView("{jid}","{cid}","2026-2027");'), f"<![CDATA[{ctc}]]>",
-                     f"<![CDATA[{cur}]]>", a("", f'TPJNFDescription("2026-2027","{cid}","{jid}");'),
+                     f"<![CDATA[{cur}]]>", a("Download" if (cid, jid) in self.jd_files else "", f'TPJNFDescription("2026-2027","{cid}","{jid}");'),
                      f"<![CDATA[{applied}]]>", f"<![CDATA[{(end - timedelta(days=4)).strftime('%Y-%m-%d %H:%M')}]]>",
                      f"<![CDATA[{end.strftime('%Y-%m-%d %H:%M')}]]>", "<![CDATA[]]>", "<![CDATA[]]>"]
             rows.append(f"<row id='{i}'>" + "".join(f"<cell>{c}</cell>" for c in cells) + "</row>")
@@ -188,7 +216,7 @@ class FakeErp:
 <tr><td>PLACEMENT</td><td>{role[3]}</td><td>{role[4]} {role[5]}</td><td></td><td></td><td>{cut}</td></tr>
 </table></td></tr>
 <tr><td colspan="6" class="header">Job Description</td></tr>
-<tr><td colspan="6">Work on interesting things.</td></tr>
+<tr><td colspan="6">{self.jds.get((cid, jid), "Work on interesting things.")}</td></tr>
 <tr><td colspan="6"><a href="javascript:void(0);" onclick="jnfMoreDet('2026-2027', '{ROLL}', '{cid}', '{jid}')">Click Here for more details</a></td></tr>
 <tr><td colspan="6" class="header">Allowed Departments and degrees</td></tr>
 {depts}

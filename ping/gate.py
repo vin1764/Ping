@@ -79,6 +79,10 @@ RULES: tuple[Rule, ...] = (
     Rule("GET", "/TrainingPlacementSSO/ShowContent.jsp", query=("year", "id"), purpose="full notice text"),
     Rule("GET", "/TrainingPlacementSSO/AdmFilePDF.htm", query=("type", "year", "id"),
          query_fixed=(("type", ("NOTICE",)),), purpose="notice attachment"),
+    # the job description file of a role ("Download" in the companies list: TPJNFDescription) and the company's
+    # own file (TPComDescription); never a CV or anything with a roll number
+    Rule("GET", "/TrainingPlacementSSO/AdmFilePDF.htm", query=("type", "year", "jnf_id", "com_id"),
+         query_fixed=(("type", ("JNF", "COM")),), purpose="a role's or company's job description file"),
 )
 
 
@@ -103,16 +107,21 @@ def check(method: str, url: str, data: dict | None = None, base: str = ERP_BASE)
             raise BlockedRequest(f"blocked word '{word}' in {path}")
     query = parse_qsl(parts.query, keep_blank_values=True)
     form = list((data or {}).items())
-    for rule in RULES:
+    refused = None
+    for rule in RULES:          # one address can have several rules (each a fixed shape): any one may allow it
         if rule.method != method or rule.path != path:
             continue
-        _check_fields("query", query, rule.query, rule.query_fixed, path)
-        if method == "POST":
-            _check_fields("form", form, rule.form, rule.form_fixed, path)
-        elif form:
-            raise BlockedRequest(f"GET with a body to {path}")
+        try:
+            _check_fields("query", query, rule.query, rule.query_fixed, path)
+            if method == "POST":
+                _check_fields("form", form, rule.form, rule.form_fixed, path)
+            elif form:
+                raise BlockedRequest(f"GET with a body to {path}")
+        except BlockedRequest as e:
+            refused = e
+            continue
         return rule
-    raise BlockedRequest(f"not on the allow list: {method} {path}")
+    raise refused or BlockedRequest(f"not on the allow list: {method} {path}")
 
 
 def _check_fields(kind: str, pairs: list, allowed: tuple, fixed: tuple, path: str) -> None:

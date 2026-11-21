@@ -415,3 +415,7 @@ body { grid-template-columns: minmax(0, 1fr); }
 .top .badge, .check-top { flex: none; }
 /* live updates keep your place themselves (app.js keepPlace); the browser's own anchoring would move it twice */
 .thread { overflow-anchor: none; }
+/* the role sheet's job description */
+.jd-role { font-weight: 600; }
+.jd-list { margin: var(--s1) 0 var(--s2); padding-left: 1.2em; font-size: var(--t-sm); line-height: 20px; }
+.jd-full summary { display: inline-flex; align-items: center; }

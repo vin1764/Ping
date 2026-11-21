@@ -10,6 +10,8 @@
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
   log-scan         search the logs of the last 20 workflow runs for any secret value (prints counts only)
+  live-page        live updates on the published dashboard: messages without a reload, scroll rules, the demo's
+                   Check now, catching up without the socket, and the row rules on the Realtime channel
   relevance-evals  score "For you" per fixture persona (evals/relevance) and commit its report
   demo-refeed      rebuild the demo's feed with the current code (digests, "For you"), from the same snapshot:
                    example targets on the demo profile, Gemini marks the demo roles, loads and commits it
@@ -352,6 +354,15 @@ def ask_ping_page(secrets) -> int:
                            "what's due tonight that's relevant to me", "which cv for groww"]).returncode
 
 
+def live_page(secrets) -> int:
+    """Live updates on the published dashboard (setup/live_page_test.py): a new message appears without a reload,
+    the scroll rules, the demo's Check now, catching up without the socket, and the row rules on the Realtime
+    channel, including an owner message (posted with the service key, deleted right after) never reaching a demo
+    session."""
+    import subprocess
+    return subprocess.run([sys.executable, str(ROOT / "setup" / "live_page_test.py")]).returncode
+
+
 def auth_config(secrets) -> int:
     token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
     owner = os.environ.get("GITHUB_REPOSITORY_OWNER", "")
@@ -591,7 +602,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

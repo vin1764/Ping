@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -29,7 +29,7 @@ jobs:
           cache: pip
       - run: pip install -q -r requirements.txt
       - name: Install a browser (ask-ping-page only)
-        if: inputs.task == 'ask-ping-page'
+        if: inputs.task == 'ask-ping-page' || inputs.task == 'live-page'
         run: pip install -q playwright && python -m playwright install --with-deps chromium > /dev/null
       - name: Run ${{ inputs.task }}
         env:

@@ -31,6 +31,11 @@ Row Level Security is on for every table. "Real rows" are rows with `is_sample` 
 Functions: `is_ping_owner()`, `is_ping_demo()` and `demo_take_question()` run with definer rights and are callable
 by signed-in users; `cleanup_demo_sessions()` only by the server.
 
+**Realtime (live updates):** `chat_messages` and `runs` are in Supabase's Realtime publication. Realtime sends a
+change only to the logins whose read rules let them see that row, so a demo session receives its own chat rows and
+the demo's runs, never the owner's. Checked live by Admin > `live-page` (`setup/live_page_test.py`): another demo
+session's message and an owner message (posted with the service key, deleted right after) never reach a demo session.
+
 ## Storage
 
 | bucket | owner | demo session / anyone else |

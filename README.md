@@ -358,6 +358,13 @@ text and your targets, never your name, roll number, CGPA or mail.
   All, and a sheet per role with pay, eligibility, deadlines, notices and source) ·
   Profile (cards edited in place; Account has Check now, All updates, the theme
   and sign out). Look and feel: [docs/DESIGN.md](docs/DESIGN.md).
+- **Live, no reloads:** new messages and each check's progress arrive as they happen
+  (Supabase Realtime on `chat_messages` and `runs`; the page catches up when you come
+  back to the tab, and polls if the socket is down). **Check now** (header on phones,
+  rail on desktop, Profile > Account) posts one message whose steps update in place:
+  queued, logging in, reading companies / notices / PDFs, then "Done at 12:17 — 2 new
+  items" or "Done — nothing new since 11:41", or why it couldn't finish. Scrolled up
+  while reading? Nothing moves; a "↓ N new" pill takes you to what arrived.
 - **View demo** (sign-in screen): a one-click anonymous session on the anonymised
   snapshot, with a "Demo - sample data, read-only" chip; its chat is kept for that
   session. `?demo=1` opens the same snapshot from a file, without the database. Both

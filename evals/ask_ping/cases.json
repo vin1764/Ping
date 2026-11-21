@@ -661,7 +661,8 @@
      "Ather",
      "Auro",
      "Microsoft",
-     "I couldn't tell what you meant"
+     "I couldn't tell what you meant",
+     "not yet"
     ]
    },
    "why": "(a) a company with an open deadline: roles: YMS Financial Private Limited, Quant Researcher, closes Sat 21 Nov 20:00, not applied. The answer is about YMS only."
@@ -674,7 +675,7 @@
    "checks": {
     "must_contain": [
      "No open deadline for Microsoft",
-     "last checked",
+     "last checked Sat 21 Nov",
      "PPO"
     ],
     "must_not_contain": [
@@ -702,7 +703,8 @@
      "Microsoft",
      "BlackBuck",
      "Due in",
-     "I couldn't tell what you meant"
+     "I couldn't tell what you meant",
+     "not yet"
     ]
    },
    "why": "(c) a company not in the data: no Google role and no Google notice."
@@ -740,7 +742,8 @@
     "must_not_contain": [
      "Ather",
      "Auro",
-     "I couldn't tell what you meant"
+     "I couldn't tell what you meant",
+     "not yet"
     ]
    },
    "why": "an alias: msft is Microsoft."

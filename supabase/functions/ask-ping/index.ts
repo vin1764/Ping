@@ -439,7 +439,8 @@ Question: ${ask}`;
   const run: any = lastRun.data?.[0];
   const ruled = Rules.answer(ask, {
     now: asOf,
-    lastChecked: run?.finished_at || run?.started_at || null,
+    // a demo session can't read the runs: its "last checked" is the snapshot's time
+    lastChecked: run?.finished_at || run?.started_at || (role === "demo" ? asOf.toISOString() : null),
     roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline, cv: rmarks.get(r.id)?.relevant ? rmarks.get(r.id)?.best_cv : null })),
     items: allItems.data || [],
     notices: allNotices.data || [],

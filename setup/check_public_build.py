@@ -20,7 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-EXPECTED = {"index.html", "app.js", "onboarding.js", "names.js", "live.js", "today.js", "answer_rules.js", "setup.html", "style.css", "config.js", "demo-data.json", "README.md", ".nojekyll"}
+EXPECTED = {"index.html", "app.js", "onboarding.js", "names.js", "live.js", "today.js", "answer_rules.js", "setup.html", "style.css", "config.js", "demo-data.json", "README.md", ".nojekyll",
+            "manifest.webmanifest", "sw.js"}
+# the installable app's icons: the one sub-folder allowed, these files only (PNGs are images: no text checks)
+ICONS = {"icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png", "badge-96.png", "favicon-32.png",
+         "ping.svg", "ping-maskable.svg", "badge.svg", "ios-install.svg"}
 LITERALS = ("sb_secret_", "service_role", "AIza", "+91")
 TEN = re.compile(r"(?<![\d\-./])\d(?:[ \-.]?\d){9}(?![ \-.]?\d)")
 DATE = re.compile(r"\d{1,2}[\-./]\d{1,2}[\-./]\d{4}|\d{4}[\-./]\d{1,2}[\-./]\d{1,2}")
@@ -37,9 +41,18 @@ def problems_in(folder: Path, roll: str = "", email: str = "") -> list[str]:
         out.append(f"unexpected files: {sorted(extra)}")
     if missing:
         out.append(f"missing files: {sorted(missing)}")
-    if any(p.is_dir() for p in folder.iterdir() if p.name != ".git"):
-        out.append("unexpected sub-folders")
-    for path in sorted(p for p in folder.iterdir() if p.is_file()):
+    dirs = {p.name for p in folder.iterdir() if p.is_dir() and p.name != ".git"}
+    if dirs - {"icons"}:
+        out.append(f"unexpected sub-folders: {sorted(dirs - {'icons'})}")
+    icons = folder / "icons"
+    if icons.is_dir():
+        have = {p.name for p in icons.iterdir()}
+        if have - ICONS:
+            out.append(f"unexpected files in icons/: {sorted(have - ICONS)}")
+        if any(p.is_dir() for p in icons.iterdir()):
+            out.append("unexpected sub-folders in icons/")
+    texts = [p for p in folder.iterdir() if p.is_file()] + ([p for p in icons.iterdir() if p.suffix == ".svg"] if icons.is_dir() else [])
+    for path in sorted(texts):
         text = path.read_text(encoding="utf-8", errors="replace")
         low = text.lower()
         for lit in LITERALS:

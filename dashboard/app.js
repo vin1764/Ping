@@ -73,6 +73,33 @@
   }
   const money = (n, cur) => (n == null ? "—" : `${Number(n).toLocaleString("en-IN")} ${cur || ""}`.trim());
 
+  // ------------------------------------------------------------ the installable app: an IndexedDB copy of the last
+  // thread (read offline) and the messages sent while offline (asked when back online)
+  const kv = (() => {
+    let db = null;
+    const open = () => db || (db = new Promise((ok, no) => {
+      const r = indexedDB.open("ping", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+    }));
+    const tx = async (mode, fn) => { const d = await open(); return new Promise((ok, no) => {
+      const t = d.transaction("kv", mode), req = fn(t.objectStore("kv")); t.oncomplete = () => ok(req?.result); t.onerror = () => no(t.error); }); };
+    return { get: (k) => tx("readonly", (s) => s.get(k)).catch(() => null), set: (k, v) => tx("readwrite", (s) => s.put(v, k)).catch(() => null) };
+  })();
+  // offline: the thread as it was when last loaded; reading works, sending queues
+  class OfflineSource {
+    constructor(snap) { this.s = snap; this.kind = snap.kind || "real"; this.demo = !!snap.demo; this.offline = true; }
+    async load() { return this.s.data; }
+    async chat() { return this.s.chat || []; }
+    async readAt() { return this.s.readAt || null; }
+    async setReadAt() {}
+    async addChat() {}
+    async ask() { const e = new TypeError("offline"); e.offline = true; throw e; }
+    async notice() { return { notice: null }; }
+    async checkNow() { throw new Error("You're offline: Check now works once you're back online."); }
+  }
+  const isNetErr = (e) => e && (e.offline || e instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(e.message || ""));
+
   // ------------------------------------------------------------ data sources
   class DemoSource {
     constructor(data) { this.d = data; this.kind = "demo"; }
@@ -248,10 +275,18 @@
   window.PingNow = liveNow;                       // read-only, for the page checks (setup/live_page_test.py)
 
   async function boot() {
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+      navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {});
+      // a tapped notification: the worker asks this window to open the message
+      navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.type === "open" && e.data.url) location.href = e.data.url; });
+    }
     const params = new URLSearchParams(location.search);
     const wantDemo = params.has("demo") || location.hash === "#demo";
     const hasBackend = CFG.supabaseUrl && CFG.supabaseKey && window.supabase;
     if (wantDemo || !hasBackend) return startDemo(!hasBackend && !wantDemo);
+    // no connection (or the library didn't load): the last-loaded thread, if there is one
+    const snap = await kv.get("snap");
+    if ((!navigator.onLine || !window.supabase) && snap) return startOffline(snap);
     const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return showLogin(sb);
@@ -268,8 +303,20 @@
     await afterStart();
   }
 
+  async function startOffline(snap) {
+    state.src = new OfflineSource(snap);
+    state.offline = true;
+    if (snap.demo) { $("#mode-badge").replaceChildren("Demo"); $("#mode-badge").hidden = false; }
+    await afterStart();
+    status(`Offline: your thread as of ${when(snap.savedAt)}. Messages you send wait until you're back online.`);
+    window.addEventListener("online", () => location.reload(), { once: true });
+  }
+
   async function startReal(sb) {
-    const { data: ok, error } = await sb.rpc("is_ping_owner");
+    let rpc;
+    try { rpc = await sb.rpc("is_ping_owner"); } catch (e) { rpc = { error: e }; }
+    if (rpc.error && isNetErr(rpc.error)) { const snap = await kv.get("snap"); if (snap) return startOffline(snap); }
+    const { data: ok, error } = rpc;
     let demo = false;
     if (!error && !ok) {
       const r = await sb.rpc("is_ping_demo");
@@ -312,12 +359,40 @@
         holdBackLastCheck(snap);
       }
     } catch (e) { mountPage(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
+    if (!state.offline) store.set("ping-visits", Number(store.get("ping-visits", 0)) + 1);   // the install offer comes on the 2nd
     setupNav();
     showLastRun();
     await decideOnboarding();
     window.addEventListener("hashchange", route);
     route();
+    if (state.offline) return;
     startLive();
+    saveSnapshot();
+    flushQueue();
+    window.addEventListener("online", () => { status(""); flushQueue(); });
+    window.addEventListener("offline", () => status("Offline: you can read your thread; messages you send wait until you're back online."));
+  }
+
+  // the copy of the thread the app opens offline (owner or demo session; the static ?demo=1 copy doesn't need one)
+  let snapTimer = null;
+  function saveSnapshot() {
+    if (!state.data || state.offline || !state.src?.sb) return;
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(() => kv.set("snap", { kind: state.src.kind, demo: !!state.src.demo, data: state.data, chat: state.chat,
+      readAt: state.readAt, asOf: state.asOf, savedAt: new Date().toISOString() }), 1500);
+  }
+  // messages written while offline, asked in order once the connection is back
+  async function flushQueue() {
+    const q = (await kv.get("queue")) || [];
+    if (!q.length || state.offline || !navigator.onLine) return;
+    await kv.set("queue", []);
+    document.querySelectorAll(".msg.queued, .msg.offline-note").forEach((n) => n.remove());
+    for (const m of q) {
+      const input = $("#ask-input"), thread = $("#thread");
+      if (!input || !thread) { await kv.set("queue", q.slice(q.indexOf(m))); return; }
+      input.value = m.text;
+      await send(input, thread.querySelector(".thread-inner"), thread, document.querySelector(".composer .send"));
+    }
   }
 
   // The demo: the messages its snapshot's last check brought (first seen at the snapshot time) are held back, and the
@@ -413,6 +488,7 @@
   // ones redrawn in place, never moving what you're reading
   function applyLive() {
     if (!state.data) return;
+    saveSnapshot();
     showLastRun();
     renderToday();
     const page = location.hash.slice(1) || "chat";
@@ -629,6 +705,10 @@
   // ------------------------------------------------------------ router
   // Plain "#name" links: #chat (home), #feed, #companies, #profile, #co-<company>
   function route() {
+    if (location.hash.startsWith("#m-")) {
+      state.jumpItem = decodeURIComponent(location.hash.slice(3));
+      history.replaceState(null, "", "#chat");
+    }
     const hash = location.hash.slice(1) || "chat";
     const page = hash.startsWith("co-") ? "companies" : hash;
     document.body.classList.toggle("chat-on", page === "chat");
@@ -870,10 +950,14 @@
     live.syncJump = syncJump;
     // open at the first unread message, otherwise at the bottom (the latest thing that happened)
     requestAnimationFrame(() => {
-      if (divider) (snapshot || divider).scrollIntoView({ block: "start" });
+      const target = state.jumpItem && inner.querySelector(`[data-key="${CSS.escape(`item:${state.jumpItem}`)}"]`);
+      state.jumpItem = null;
+      if (target) { target.scrollIntoView({ block: "center" }); target.classList.add("hl"); }
+      else if (divider) (snapshot || divider).scrollIntoView({ block: "start" });
       else thread.scrollTop = thread.scrollHeight;
       syncJump();
     });
+    offerInstall(inner);
     const latest = entries.length ? entries[entries.length - 1].at : null;
     if (latest && (!readAt || dt(latest) > readAt)) {
       state.readAt = new Date(Math.max(dt(latest), Date.now())).toISOString();
@@ -881,6 +965,39 @@
     }
     navUnread(0);
   }
+  // "Install Ping": a Ping message on the second visit, once (dismissed = never again). Android and desktop Chrome:
+  // the browser's own install prompt; iPhone/iPad Safari: the two taps, with a picture.
+  const standalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  function offerInstall(inner) {
+    if (standalone() || state.offline || Number(store.get("ping-visits", 0)) < 2 || store.get("ping-install", "") ||
+        inner.querySelector(".install") || !(state.installEvent || isIOS())) return;
+    const close = (how) => { store.set("ping-install", how); bubble.remove(); };
+    const at = new Date().toISOString();
+    const bubble = h("div", { class: "msg ping sys install enter", role: "group", "aria-label": "Install Ping" },
+      h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping")),
+      h("span", { class: "text" }, state.installEvent
+        ? "Install me? I'll open like an app, straight to this chat, and work offline for what you've already seen."
+        : "Add me to your Home Screen: I'll open like an app, and can notify you there. In Safari:"),
+      isIOS() && !state.installEvent ? h("img", { class: "ios-steps", src: "icons/ios-install.svg", alt: "Tap Share, then Add to Home Screen", width: 340, height: 150 }) : null,
+      h("div", { class: "chips wrap" },
+        state.installEvent ? h("button", { type: "button", class: "chip primary", onclick: async () => {
+          const ev = state.installEvent; state.installEvent = null;
+          ev.prompt(); const { outcome } = await ev.userChoice.catch(() => ({}));
+          close(outcome === "accepted" ? "installed" : "dismissed");
+        } }, "Install") : h("button", { type: "button", class: "chip primary", onclick: () => close("shown-ios") }, "Got it"),
+        h("button", { type: "button", class: "chip", onclick: () => close("dismissed") }, "Not now")),
+      h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
+    appendToday(inner, bubble);
+  }
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    state.installEvent = e;
+    const inner = document.querySelector("#thread .thread-inner");
+    if (inner) offerInstall(inner);
+  });
+  window.addEventListener("appinstalled", () => { store.set("ping-install", "installed"); document.querySelector(".msg.install")?.remove(); });
+
   const motion = () => (window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
   // to a message (or the bottom): smooth for a short way, at once for a long one (a long smooth scroll is slow)
   function jumpTo(thread, el) {
@@ -1098,6 +1215,7 @@
   async function send(input, inner, thread, btn) {
     const q = input.value.trim();
     if (!q || state.waiting) return;
+    if (state.offline || !navigator.onLine) return queueSend(q, input, inner, thread);
     input.value = "";
     state.waiting = true;
     btn.disabled = true;
@@ -1121,7 +1239,14 @@
     state.sending = (state.sending || 0) + 1;
     // the typing bubble shows at least briefly, even for an answer that comes back at once
     const typing = new Promise((r) => setTimeout(r, 600));
-    try { answer = await state.src.ask(q); } catch (e) { answer = e.message; } finally { state.sending -= 1; }
+    let lost = false;
+    try { answer = await state.src.ask(q); } catch (e) { if (isNetErr(e)) lost = true; answer = e.message; } finally { state.sending -= 1; }
+    if (lost) {                                   // the connection went while asking: this one waits too
+      clearTimeout(slow); wait.remove(); state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND());
+      state.chat = state.chat.filter((m) => m !== mine);
+      inner.querySelector(`[data-key="${CSS.escape(msgKey("me", mine.created_at))}"]`)?.remove();
+      return queueSend(q, input, inner, thread);
+    }
     await typing;
     clearTimeout(slow);
     const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };
@@ -1141,6 +1266,21 @@
     state.src.setReadAt(state.readAt).catch(() => {});
     // a preference was saved: fetch the new marks and show the lists split the new way
     if (state.prefsChanged) { state.prefsChanged = false; await loadMarks(); route(); }
+  }
+
+  async function queueSend(q, input, inner, thread) {
+    input.value = "";
+    const queue = (await kv.get("queue")) || [];
+    queue.push({ text: q, at: new Date().toISOString() });
+    await kv.set("queue", queue);
+    const at = new Date().toISOString();
+    appendToday(inner, h("div", { class: "msg me queued enter" }, h("span", { class: "text" }, q),
+      h("div", { class: "foot" }, h("span", { class: "time" }, "waiting for a connection"))));
+    if (!inner.querySelector(".offline-note")) {
+      appendToday(inner, h("div", { class: "msg ping offline-note enter" }, h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping")),
+        h("span", { class: "text" }, "You're offline. I'll ask this as soon as you're back."), h("div", { class: "foot" }, h("span", { class: "time" }, clock(at)))));
+    }
+    thread.scrollTop = thread.scrollHeight;
   }
 
   async function loadMarks() {
@@ -1699,17 +1839,22 @@
     const R = window.PingRules;
     if (!R) return "I can't answer that right now. Try again in a minute.";
     const run = (data.runs || [])[0] || {};
-    return R.answer(question, {
+    // the same shape the ask-ping function builds, so offline answers match the live ones (route + rules)
+    const facts = {
       now: nowDate(),
       lastChecked: run.finished_at || run.started_at || data.generated_at || null,
+      profile: data.profile || {}, prefs: { listOthers: (state.prefs || data.profile || {}).list_other_roles !== false },
       roles: (data.roles || []).map((r) => {
         const m = state.marks?.size ? state.marks.get(r.id) : r.relevance;
-        return { ...r, deadline: r.effective_deadline || r.apply_end, cv: m?.relevant ? m.best_cv : null };
+        return { ...r, deadline: r.effective_deadline || r.apply_end, for_you: targetsOn() ? !!m?.relevant : undefined,
+                 cv: m?.relevant ? m.best_cv : null, pay: r.more_details?.fields || {}, jd_location: r.jd_summary?.location || null };
       }),
-      items: (data.items || []).filter((i) => !i.dismissed)
-        .map((i) => ({ ...i, hidden_because: i.details?.hidden_because, subject: i.details?.subject })),
+      items: (data.items || []).filter((i) => !i.dismissed).map((i) => ({ ...i, hidden_because: i.details?.hidden_because,
+        subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time })),
       notices: data.notices || [],
-    }).text;
+    };
+    const previous = state.chat.filter((m) => m.role === "me" && m.text !== question).map((m) => m.text).reverse().slice(0, 4);
+    return R.routed(R.route(question, previous, facts), question, facts).text;
   }
 
   boot().catch((e) => mountPage(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, e.message))));

@@ -23,7 +23,7 @@ ICICI = ("The CV Submission for ICICI Lombard for the role of Actuarial Analyst 
 ETERNAL = ("PFA the test room allocation of shortlisted candidates for the Assessment of Eternal, scheduled from "
            "7:15 PM onwards on 19th November, 2026.\n\nVenue: Nalanda Classroom Complex\n\nStudents are required to "
            "carry their original Institute ID card.\n\nThe test link has been shared on their Institute Email ID.\n\n"
-           "POCs: [name] (+91 90000 11111), [name] (+91 90000 22222)\n\nCDC, IIT Kharagpur")
+           "POCs: Testpoc One (+91 90000 11111), Testpoc Two (+91 90000 22222)\n\nCDC, IIT Kharagpur")
 MULTI = ("The CV Submissions for the following companies have been extended till 8:00 PM, 21st November, 2026.\n"
          "1. ATHER ENERGY (Profile: All)\n2. BLACKBUCK  (Profile: Associate Manager)\n"
          "3. LTM  (Profile: Graduate Engineer Trainee, Post-Graduate Engineer Trainee)\n")
@@ -92,7 +92,7 @@ def test_eternal_notice_venue_contacts_and_email_hint():
     idx = CompanyIndex([role("Eternal", "Product Analyst", applied=True)])
     a = analyze({"subject": "Urgent", "company": "ETERNAL", "notice_time": REF.isoformat()}, ETERNAL, idx)
     assert a["venue"] == "Nalanda Classroom Complex"
-    assert [c["name"] for c in a["contacts"]] == ["[name]", "[name]"]
+    assert [c["name"] for c in a["contacts"]] == ["Testpoc One", "Testpoc Two"]
     assert a["email_hint"]
     assert a["events"][0]["at"].startswith("2026-11-19T19:15")
 

@@ -64,7 +64,7 @@ class FakeErp:
              "PFA the test room allocation of shortlisted candidates for the Assessment of Pine Labs, scheduled "
              f"from 10:00 AM onwards on {d(1, 10).day}th {d(1, 10).strftime('%B, %Y')}.<br><br>Venue: Nalanda "
              "Classroom Complex<br><br>The test link has been shared on their Institute Email ID.<br><br>"
-             "POCs: [name] (+91 90000 11111), [name] (+91 90000 22222)<br><br>CDC, IIT Kharagpur"),
+             "POCs: Testpoc One (+91 90000 11111), Testpoc Two (+91 90000 22222)<br><br>CDC, IIT Kharagpur"),
             (1802, "Date extension", "ACCORDION", d(0, 0), False,
              "The CV Submission for Accordion for the role of Data &amp; AI Analyst has been extended till 4:00 PM, "
              f"{d(3).day}th {d(3).strftime('%B')}, {d(3).year}.<br>All candidates who are applying for the role, are "

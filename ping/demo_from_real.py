@@ -32,7 +32,7 @@ REAL = {"is_sample": "not.is.true"}
 # text together ("TEST NAME - 22XY10051The students...").
 ROLL_RE = re.compile(r"\d{2}[A-Z]{2}[A-Z0-9]{5}")  # also back-to-back lists: "22XY1005122XY10052"
 URL_RE = re.compile(r"(https?://\S+)")
-# Any 10-digit Indian mobile, digits grouped any way ("98765 43210", "987 654 3210", "9876-543-210"), with or
+# Any 10-digit Indian mobile, digits grouped any way ("90000 12345", "900 001 2345", "9000-012-345"), with or
 # without +91 / 91 / 0 in front, in brackets or not.
 PHONE_RE = re.compile(r"(?<!\d)(?:\(?\+\s?91\)?[\s\-.]*|\b91[\s\-.]+|\b0[\s\-.]?)?[6-9](?:[\s\-.]?\d){9}(?![\s\-.]?\d)")
 # Any other number with exactly 10 digits (landlines, toll-free), except dates like "21-11-2026 00:07"

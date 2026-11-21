@@ -6,6 +6,7 @@
 // within 150 s. So dates are formatted with one shared formatter (making a new one per date was the
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
 import { caller, cors, json } from "../_shared/owner.ts";
+import { asksToAct, stripRefusal, todayNote } from "./wording.ts";
 
 // Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
 // free tier is sometimes overloaded (503) or slow, so try a few names in turn.
@@ -147,12 +148,13 @@ Deno.serve(async (req) => {
     return ` [your row in the PDF: ${pairs.join(", ")}]`;
   };
   const feed = (items.data || []).map((i) =>
-    `- [${i.level}] ${i.title}${i.due_at ? ` (due ${ist(i.due_at)})` : ""}${i.event_at ? ` (at ${ist(i.event_at)})` : ""}` +
+    `- [${i.level}] ${i.title}${i.due_at ? ` (due ${ist(i.due_at)}${todayNote(i.due_at, asOf)})` : ""}` +
+    `${i.event_at ? ` (at ${ist(i.event_at)}${todayNote(i.event_at, asOf)})` : ""}` +
     `${i.details?.venue ? ` (venue ${i.details.venue})` : ""}${myRow(i.details)}`);
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
-    ` | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"} | CTC ${r.ctc ?? "?"} ${r.currency ?? ""}`);
-  const past = (iso?: string | null) => (iso && new Date(iso) < asOf ? " (already passed)" : "");
+    `${todayNote(r.effective_deadline, asOf)} | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"} | CTC ${r.ctc ?? "?"} ${r.currency ?? ""}`);
+  const past = (iso?: string | null) => todayNote(iso, asOf) || (iso && new Date(iso) < asOf ? " (already passed)" : "");
   const depts = (allowed: any[]) => [...new Set((allowed || []).map((a) => a.department).filter(Boolean))].join("; ");
   const detailLines = (detail.data || []).map((r: any) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
@@ -169,6 +171,8 @@ Deno.serve(async (req) => {
   const noticeLines = (notices.data || []).slice(0, 3).map((n: any) =>
     `- ${ist(n.notice_time)} | ${n.company} | ${n.subject}: ${(n.text || "").replace(/\s+/g, " ").slice(0, 600)}`);
 
+  // decided here, not by the model: only a request to act may get the read-only refusal
+  const act = asksToAct(question);
   const prompt = `You are Ping, a placement assistant for one IIT Kharagpur student. Answer ONLY from the data below.
 Be short and concrete: dates in IST, times as HH:MM in 24-hour form (e.g. 20:00), money in rupees as written
 (e.g. 22,00,000 or 22 LPA). For pay questions, list every component the data gives (fixed / take-home, bonuses,
@@ -178,8 +182,8 @@ sentence and mention what the data does show. Never guess locations, scores, con
 When the answer is simply "no" or "nothing" (no other test, nothing due), say it short and specific, and add the
 next relevant thing if there is one: "No other tests today. Next one is X on Mon 24 Nov, 10:00." Never write a
 sentence about what the data does or doesn't contain for such an answer.
-Time: for anything today, say whether it is already over ("the Groww test was at 15:00 today, so it's over"), coming
-up ("in 2 hours") or happening now. For "anything else?"-type follow-ups answer with the count: "No, that was the only
+Time: times today carry a note in the data, "(earlier today, already over)" or "(later today, in 1h 25m)". Use it:
+"was at 15:00 today, so it's over" or "at 20:00 today (in 1h 25m)". Never say "is today at 15:00" once it's past. For "anything else?"-type follow-ups answer with the count: "No, that was the only
 test today" or "Two more: ...".
 Conversation: "Conversation so far" below is this thread, oldest first. A short or elliptical message ("nothing
 else?", "and tomorrow?", "what about slice?", "same for analyst role?", "when?", "why not?") continues the previous
@@ -188,9 +192,10 @@ words of the follow-up and never quote them back. If a follow-up could mean two 
 one line and offer the other in a second line; ask a question back only if neither can be answered. A message that
 starts a new topic ("ok. what's due this week?") is a new question: don't carry the old topic into it.
 Ping is read-only: it can never apply, withdraw, accept or decline offers, fill or submit forms, upload or change a CV,
-or change anything on the ERP or anywhere else. Only when the message asks Ping to DO one of those things, start
-with "Ping is read-only, so I can't" followed by what was asked, then add anything useful from the data (deadline,
-form link). Follow-ups like "why not?", "same for X?" or "and Y?" are questions, never requests to act.
+or change anything on the ERP or anywhere else. ${act
+    ? `This message asks Ping to do something: start with "Ping is read-only, so I can't" followed by what was asked,
+then add anything useful from the data (deadline, form link).`
+    : `This message is a question, not a request to act: do not mention being read-only or what Ping can't do.`}
 Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
 All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric" }).format(asOf)} unless they say otherwise.
 
@@ -232,9 +237,11 @@ Question: ${question}`;
         continue; // retired, busy or refused: try the next model
       }
       const out = await r.json();
-      const answer = out?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("").trim() || "";
+      const raw = out?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("").trim() || "";
+      const answer = act ? raw : stripRefusal(raw);
       if (!answer) { tried.push(`${model}:empty(${out?.candidates?.[0]?.finishReason})`); continue; }
-      console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, items: items.data?.length ?? 0,
+      console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, act,
+        refusal_removed: answer !== raw, items: items.data?.length ?? 0,
         roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0, prompt_chars: prompt.length, ms: Date.now() - t0 }));
       return json({ answer, model });
     } catch (e) {

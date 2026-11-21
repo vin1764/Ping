@@ -5,6 +5,8 @@ on:
     # GitHub's clock is UTC. 00:41-19:41 UTC = every hour from 06:11 to 01:11 IST (20 runs a day).
     # Minute 41 avoids the top of the hour, when GitHub is busiest and runs get delayed.
     - cron: "41 0-19 * * *"
+    # once a day, 02:53 IST: delete one-click demo sessions older than 7 days (the cleanup-demo job below)
+    - cron: "23 21 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -22,6 +24,7 @@ permissions:
 
 jobs:
   ping:
+    if: github.event.schedule != '23 21 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -51,3 +54,22 @@ jobs:
           PING_AI_KEY: ${{ secrets.PING_AI_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -m ping.run
+
+  cleanup-demo:
+    # anonymous demo users and their chat messages older than 7 days (sql: cleanup_demo_sessions)
+    if: github.event.schedule == '23 21 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Delete week-old demo sessions
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
+        run: python -m ping.admin cleanup-demo

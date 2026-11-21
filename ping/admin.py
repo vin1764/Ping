@@ -10,6 +10,8 @@
   auth-config      Supabase Auth settings for the live dashboard: Site URL and redirect allow-list point at
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
+  cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
+                   (also runs daily from the Ping workflow)
   ask-ping-evals   run evals/ask_ping (36 questions against the deployed function as the reviewer) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
@@ -318,6 +320,17 @@ def auth_config(secrets) -> int:
     return 0 if after.get("site_url") == live and after.get("external_anonymous_users_enabled") else 1
 
 
+def cleanup_demo(secrets) -> int:
+    r = requests.post(secrets.supabase_url.rstrip("/") + "/rest/v1/rpc/cleanup_demo_sessions", timeout=60,
+                      headers={"apikey": secrets.supabase_key, "Authorization": f"Bearer {secrets.supabase_key}",
+                               "Content-Type": "application/json"}, json={"days": 7})
+    if r.status_code >= 300:
+        say(f"cleanup failed: HTTP {r.status_code} {r.text[:200]}")
+        return 1
+    say(f"demo cleanup (older than 7 days): {r.json()}")
+    return 0
+
+
 def ask_ping_evals(secrets) -> int:
     import subprocess
     return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "run_ask_ping_evals.py")]).returncode
@@ -365,7 +378,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

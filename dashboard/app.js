@@ -17,7 +17,7 @@
   const CFG = window.PING_CONFIG || {};
   const TZ = "Asia/Kolkata";
   const $ = (s) => document.querySelector(s);
-  const LEVELS = { always: "Always show", show: "Apply by", hidden: "Hidden" };
+  const LEVELS = { always: "You applied", show: "Open for you", hidden: "Hidden" };
   const PAST = /deadline gone|already happened|older than 3 days|replaced by the 24h reminder|updated by a later message/;
 
   // ------------------------------------------------------------ tiny DOM helper (no innerHTML: notice text is untrusted)
@@ -314,7 +314,18 @@
   // ------------------------------------------------------------ chat (home)
   const itemTime = (it) => it.first_seen || it.details?.notice_time || it.sort_at;
   const isPast = (it) => it.level === "hidden" && PAST.test(it.details?.hidden_because || "");
-  const inChat = (it) => !it.dismissed && (it.level !== "hidden" || isPast(it));
+  // A past item stays in the chat only if Ping posted it while it still mattered. A role whose deadline
+  // had already gone when Ping first saw it was never news, so it isn't a message.
+  const wasLive = (it) => {
+    const seen = dt(itemTime(it)), why = it.details?.hidden_because || "";
+    if (!seen) return true;
+    if (/deadline gone/.test(why) && it.due_at) return seen < dt(it.due_at);
+    if (/already happened/.test(why) && it.event_at) return seen < +dt(it.event_at) + 12 * 3600000;
+    if (/older than 3 days/.test(why) && it.sort_at) return seen < +dt(it.sort_at) + 3 * 86400000;
+    if (/reminder/.test(why) && it.due_at) return seen < +dt(it.due_at) - 86400000;  // else the reminder alone says it
+    return true;
+  };
+  const inChat = (it) => !it.dismissed && (it.level !== "hidden" || (isPast(it) && wasLive(it)));
 
   function threadEntries() {
     const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
@@ -325,7 +336,9 @@
 
   function viewChat() {
     const entries = threadEntries();
-    const readAt = state.readAt ? dt(state.readAt) : null;
+    // first visit (or the demo): don't call two weeks of history "unread", only the last day
+    const lastAt = entries.length ? dt(entries[entries.length - 1].at) : null;
+    const readAt = state.readAt ? dt(state.readAt) : lastAt && new Date(lastAt - 86400000);
     const unread = entries.filter((e) => e.kind === "item" && (!readAt || dt(e.at) > readAt));
     const inner = h("div", { class: "thread-inner" });
     let lastDay = null, divider = null;
@@ -453,8 +466,8 @@
     const shown = items.filter((i) => state.filter === "visible" ? i.level !== "hidden" : i.level === state.filter).sort(sortNewest);
     mount(
       h("h1", {}, "All updates"),
-      h("p", { class: "muted small" }, "Newest first. “Always show” is anything about a role you applied to; " +
-        "“Apply by” is open roles you're eligible for; “Hidden” is kept but not yours (or past)."),
+      h("p", { class: "muted small" }, "Newest first. “You applied” is anything about a role you applied to; " +
+        "“Open for you” is roles you can still apply to; “Hidden” is kept but not about you (or already past)."),
       h("div", { class: "filters" }, filters.map(([key, label, n]) =>
         h("button", { class: "chip" + (state.filter === key ? " on" : ""), onclick: () => { state.filter = key; viewFeed(); } },
           label, h("span", { class: "n" }, n)))),
@@ -594,7 +607,7 @@
               h("div", { class: "small muted" }, [...(e.reasons || []), ...(e.flags || [])].join("; "))),
             h("td", { class: "small" },
               r.cgpa_cutoff ? `CGPA ≥ ${r.cgpa_cutoff}. ` : "No CGPA cut-off. ",
-              r.backlog_rule ? `Backlogs: ${r.backlog_rule}. ` : "",
+              r.backlog_rule ? `Backlogs: ${r.backlog_rule.replace(/\.+$/, "")}. ` : "",
               r.has_written_test === true ? "Written test. " : r.has_written_test === false ? "No written test. " : "",
               (r.allowed || []).length ? `${new Set(r.allowed.map((a) => a.department)).size} departments allowed.` : ""));
         }))) : h("p", { class: "muted" }, "No roles for this company in the companies list."),

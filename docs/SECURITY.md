@@ -83,6 +83,7 @@ secrets above and for key-shaped text; it prints counts only.
 | hourly run, AI | notice reader: at most 20 calls and 300 s a run; classifier: 240 s a run; CV summary: 60 s per model |
 | models, in order | Ask Ping: gemini-flash-latest, then gemini-3.1-flash-lite (`PING_AI_LITE_MODEL`). Role marks and the hourly run: gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-31b-it |
 | CV upload | PDF only, 5 MB, 3 CVs |
+| JD files and links | ERP JD files: `AdmFilePDF.htm` type JNF/COM only, through the gate. Links in a JD: GET only, public hosts only (no IPs, no ERP or internal names), 3 redirects, 20 s, 12 MB, no cookies, YouTube skipped; a sign-in page counts as unreadable. At most 40 roles with a file or link a run, again only when the role's JD information changes. 40 summaries a run |
 
 ## Cleanup
 

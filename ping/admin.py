@@ -203,19 +203,33 @@ def jd_report(secrets) -> int:
     say("by source: " + ", ".join(f"{k} {v}" for k, v in sorted(src.items(), key=lambda kv: -kv[1])))
     summ = [r for r in roles if r.get("jd_summary")]
     say(f"summaries: {len(summ)} ({sum((r['jd_summary'] or {}).get('model') == 'rules' for r in summ)} by rules)")
-    missing = [r for r in roles if (r.get("relevance") or {}).get("jd_missing")]
-    say(f"\nroles marked 'JD missing' by the last classification ({len(missing)}), and what was found:")
-    for r in sorted(missing, key=lambda r: r["company"]):
+    # the "(JD missing)" marks as the feed shows them: role_marks for the owner's targets and CVs
+    from . import relevance
+    from .cvs import cvs_text
+    prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
+    targets = "" if prof.get("feed_mode") == "all" else (prof.get("targets") or "")
+    marks = {}
+    if targets:
+        th = relevance.targets_hash(targets, cvs_text(prof.get("cvs")))
+        marks = {m["role_hash"]: m for m in store.select("role_marks", {"targets_hash": f"eq.{th}"})}
+    marked = [r for r in roles if relevance.role_hash(r) in marks]
+    flagged = [r for r in marked if marks[relevance.role_hash(r)].get("jd_missing")]
+    say(f"'For you' marks for the current JDs: {len(marked)} roles marked, {len(flagged)} shown '(JD missing)'"
+        + ("" if len(marked) else " (the next hourly run marks roles whose JD changed)"))
+    missing = [r for r in roles if not usable(r.get("job_description") or "")]
+    say(f"\nroles without a usable JD in the ERP's own field ({len(missing)}), and what was found:")
+    for r in sorted(missing, key=lambda r: (r.get("jd_source") or "", r["company"])):
         how = r.get("jd_source") or "not looked up yet"
-        extra = (f"{len(r.get('jd_text') or '')} chars" if r.get("jd_text") else
-                 (r.get("jd_url") or r.get("jd_note") or ""))
-        say(f"  {r['company'][:28]:28} | {(r.get('designation') or '')[:34]:34} | {how}: {str(extra)[:90]}")
+        extra = (f"{len(r.get('jd_text') or '')} chars" + (f" from {r['jd_url']}" if r.get("jd_url") else "")
+                 if r.get("jd_text") else (r.get("jd_url") or r.get("jd_note") or ""))
+        say(f"  {r['company'][:28]:28} | {(r.get('designation') or '')[:34]:34} | {how}: {str(extra)[:110]}")
     say("\nJPMC:")
     for r in roles:
         if re.search(r"(?i)\bj\.?\s*p\.?\s*morgan|jpmc", r["company"]):
             s = r.get("jd_summary") or {}
             say(f"  {r['company']} | {r.get('designation')} | source {r.get('jd_source')} | "
-                f"{len(r.get('jd_text') or '')} chars | marked jd_missing={bool((r.get('relevance') or {}).get('jd_missing'))}")
+                f"{len(r.get('jd_text') or '')} chars | own field {len(r.get('job_description') or '')} chars | "
+                f"'(JD missing)' now: {bool((marks.get(relevance.role_hash(r)) or {}).get('jd_missing'))}")
             say("  summary: " + json.dumps({k: v for k, v in s.items() if k != "key"}, ensure_ascii=False))
     return 0
 

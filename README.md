@@ -173,6 +173,8 @@ Actions > **Admin** > Run workflow, pick a task:
 | `cleanup-demo` | deletes demo sessions older than 7 days and their chat (also runs daily, from Supabase's scheduler) |
 | `schedule-setup` | sets up the hourly start in Supabase: a new shared secret for `kick-run` (function secret + database Vault), the two scheduled jobs from `sql/schedule.sql`, then a dry run of kick-run that starts nothing |
 | `schedule-status` | lists the scheduled jobs, their last 10 runs in Supabase, and the last Ping runs on GitHub with what started each |
+| `jd-report` | job descriptions on your real roles: usable before (the ERP's JD field) and now, by source, the roles that had none and what was found |
+| `demo-jd` | copies the JD fields of your real roles onto the demo roles, scrubbed and checked like the rest of the demo, and commits `dashboard/demo-data.json` |
 | `rearm-schedule` | switches the Ping workflow off and on through the API so GitHub re-registers its backup schedule |
 
 ---
@@ -431,6 +433,7 @@ are retried on network errors.
 | | `GET /TrainingPlacementSSO/Notice.jsp` | the notice board page (no parameters allowed) |
 | | `GET /TrainingPlacementSSO/ShowContent.jsp` | the full text of one notice |
 | | `GET /TrainingPlacementSSO/AdmFilePDF.htm` | a notice's attachment (`type=NOTICE` only) |
+| | `GET /TrainingPlacementSSO/AdmFilePDF.htm` | a role's or company's job description file (`type=JNF` or `COM` only, with `year`, `jnf_id`, `com_id`; never `PPT`, CVs or anything with a roll number) |
 | leaving | `GET /IIT_ERP3/logout.htm` | log out |
 
 The only things Ping ever sends are the login steps (pressing Get OTP makes the
@@ -438,6 +441,12 @@ ERP email you an OTP) and logging out. Refused by name, among others:
 `TPJNFViewAction.jsp` (applying, accepting/cancelling offers), `TPFile.jsp`
 (uploads), `Notice.jsp?mode=deactive`, CV pages, NOC, feedback. Each run's log
 ends with every address it actually visited and how many times.
+
+**Job description links.** When a role's JD is a link (Google Docs/Drive, a company page), Ping fetches it
+once with a plain GET: public web hosts only (no IP addresses, no ERP or internal names), at most 3
+redirects, 20 seconds and 12 MB, no cookies or sign-in; a link that asks for a sign-in or fails is kept as
+"a link I can't open" with its address. It is fetched again only when the role's own JD information on the
+ERP changes. Forms are never submitted.
 
 **Secrets.** Passwords and keys live only in GitHub Secrets (encrypted, hidden
 in logs, not copied when someone copies the repo), in Supabase function

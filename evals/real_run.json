@@ -1,0 +1,14 @@
+{
+  "about": "Numbers from Ping's real runs on 21 Nov 2026 (GitHub Actions logs). No ground truth exists for these: they show what Ping did, not whether every answer was right.",
+  "first_full_run": {"when": "21 Nov 2026, 12:05 IST", "login_seconds": 19.8, "otp_wait_seconds": 12.6, "get_otp_presses": 1,
+    "roles_seen": 201, "roles_with_details_read": 201, "notices_seen": 1624, "notices_read_in_full": 260,
+    "pdfs_checked": 64, "pdfs_read": 64, "pdfs_you_are_in": 19, "pdfs_you_are_not_in": 45, "pdfs_unreadable": 0, "pdfs_scanned": 0,
+    "mails_looked_at": 84, "mails_kept": 10, "erp_requests": 742, "run_minutes": 12.1,
+    "feed": {"always_show": 14, "apply_by": 43, "hidden": 331, "questions_for_you": 3}},
+  "earlier_runs": {"first_ever_run": {"when": "21 Nov 2026, 05:01 IST", "login_seconds": 16.9, "pdfs_checked": 64, "pdfs_read": 61,
+    "pdfs_you_are_in": 17, "pdfs_you_are_not_in": 44, "note": "3 PDFs failed to download (network); reads are now retried"},
+    "login_failures": "5 Log In attempts between 05:26 and 05:37 IST were refused by the ERP after a valid OTP; login worked again at 12:05 IST"},
+  "duplicate_merging_last_14_days": {"notice_messages_without_merging": 177, "repeats_merged": 15, "changes_sent_as_updates": 39,
+    "of_which_deadline_moves": 29, "of_which_time_changes": 10, "messages_after_merging": 162, "unsure_merges": 0,
+    "note": "computed on the real notice board of 7-21 Nov 2026 with Ping's rules; emails weren't part of this check"}
+}

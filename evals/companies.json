@@ -1,0 +1,809 @@
+{
+"about": "The student's companies list on 21 Nov 2026: company and role names only (no applied status).",
+"roles": [
+{
+"company": "Accenture India Private Limited",
+"designation": "Elite Technology Engineer"
+},
+{
+"company": "Accenture Japan",
+"designation": "Digital Consultant"
+},
+{
+"company": "Accenture Solutions Private Limited",
+"designation": "I&E- AI and Data PG FTE"
+},
+{
+"company": "Accordion India",
+"designation": "Data & AI Engineer 2"
+},
+{
+"company": "Accordion India",
+"designation": "Data & AI Analyst 2"
+},
+{
+"company": "Accordion India",
+"designation": "AI_ML Engineer 2"
+},
+{
+"company": "AiPrise",
+"designation": "Software Engineer I, Full Stack (Frontend Focused)"
+},
+{
+"company": "AiPrise",
+"designation": "Software Engineer I"
+},
+{
+"company": "AiPrise",
+"designation": "Software Engineer II"
+},
+{
+"company": "AiPrise",
+"designation": "Software Engineer II, Full Stack (Frontend Focused)"
+},
+{
+"company": "AIRAMATRIX PRIVATE LIMITED",
+"designation": "Trainee Engineer"
+},
+{
+"company": "Airbus India Private Limited",
+"designation": "Associate Engineer - Propulsion System Engineer_PG"
+},
+{
+"company": "Airbus India Private Limited",
+"designation": "Associate Engineer - Advanced Engineering & System Studies_PG"
+},
+{
+"company": "Airbus India Private Limited",
+"designation": "Associate Engineer - Cabin_PG"
+},
+{
+"company": "Airbus India Private Limited",
+"designation": "Associate Engineer - Industrialisation_PG"
+},
+{
+"company": "Airbus India Private Limited",
+"designation": "Associate Engineer Industrialisation_Robotics and Data Analytics_PG"
+},
+{
+"company": "Airbus India Private Limited",
+"designation": "Associate Engineer - Flight Physics_PG"
+},
+{
+"company": "Allegro Capital Advisors",
+"designation": "Investment Banking Analyst"
+},
+{
+"company": "Amazon",
+"designation": "Software Development Engineer I"
+},
+{
+"company": "American Express",
+"designation": "Management Trainee - Data Science & Analytics"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "PRODUCT MANAGER"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "Trading & WealthTech"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "Quantitative Research / Algorithmic Trading"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "Data Scientist / ML Engineer"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "AI/ML Engineer"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "Customer Data Analytics & Engagement Specialist (CleverTap)"
+},
+{
+"company": "Arihant Capital Markets Limited",
+"designation": "Backend Engineer"
+},
+{
+"company": "Astera Labs",
+"designation": "Software Quality Assurance (SQA) Engineer"
+},
+{
+"company": "Ather Energy",
+"designation": "Chief Engineer"
+},
+{
+"company": "Ather Energy",
+"designation": "Hardware Pack Engineering"
+},
+{
+"company": "Ather Energy",
+"designation": "Data Office"
+},
+{
+"company": "Ather Energy",
+"designation": "Product Ownership"
+},
+{
+"company": "Ather Energy",
+"designation": "System Intelligence"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "Data Analyst"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "AI/ML Software Engineer"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "Full Stack Developer"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "Product Manager"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "Frontend Developer"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "Back End Developer"
+},
+{
+"company": "Auro Group(www.AuroIM.com)",
+"designation": "Sales & Business Development"
+},
+{
+"company": "Auronova Consulting",
+"designation": "Analyst"
+},
+{
+"company": "Avathon",
+"designation": "Associate Software Engineer"
+},
+{
+"company": "Axis Bank",
+"designation": "BIU (Business Intelligence Unit)"
+},
+{
+"company": "AXON DEVELOPERS",
+"designation": "MDs Office"
+},
+{
+"company": "AXON DEVELOPERS",
+"designation": "Manager Strategy"
+},
+{
+"company": "Axxela Research & Analytics Private Limited",
+"designation": "Trainee Analyst"
+},
+{
+"company": "BlackBuck",
+"designation": "Associate Manager BlackBuck Leadership Program"
+},
+{
+"company": "BlackRock",
+"designation": "AI & ML Engineer (Aladdin Engineering) Analyst"
+},
+{
+"company": "BlackRock",
+"designation": "Aladdin Data Engineering Analyst"
+},
+{
+"company": "Capital One Services India Pvt. Ltd.",
+"designation": "Associate - BusinessAnalyst"
+},
+{
+"company": "Capital One Services India Pvt. Ltd.",
+"designation": "Associate (Software Engineer)"
+},
+{
+"company": "Cars24",
+"designation": "Data Science"
+},
+{
+"company": "Cars24",
+"designation": "AI/ML"
+},
+{
+"company": "Cars24",
+"designation": "Software Engineering"
+},
+{
+"company": "Cars24",
+"designation": "Generative AI"
+},
+{
+"company": "Cognizant Technology Solutions",
+"designation": "Ace Frontier Engineer Associate"
+},
+{
+"company": "Cognizant Technology Solutions",
+"designation": "Ace Frontier Engineer Senior Associate"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - Autonomous & Intelligent Aerospace Systems"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - Advanced Methods"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - AI/ML"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - Power Electronics"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - IP & Technology Research Analyst"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - Mechanical Design"
+},
+{
+"company": "Collins Aerospace",
+"designation": "PGET - Microelectronics"
+},
+{
+"company": "Commonwealth Bank of Australia",
+"designation": "Graduate Engineering"
+},
+{
+"company": "Dassault Systemes",
+"designation": "Software Engineer - Domain Engineering & AI Innovation-PG"
+},
+{
+"company": "Dassault Systemes",
+"designation": "AI Engineer-Data Scientist-PG"
+},
+{
+"company": "DB",
+"designation": "Analyst"
+},
+{
+"company": "Deloitte",
+"designation": "Analyst"
+},
+{
+"company": "DELOITTE TOUCHE TOHMATSU INDIA LLP",
+"designation": "Consultant | EAD OIDS ER&I"
+},
+{
+"company": "D. E. Shaw India",
+"designation": "Technology Developer"
+},
+{
+"company": "Diageo",
+"designation": "GBS MANAGEMENT TRAINEE"
+},
+{
+"company": "Energy Aspects",
+"designation": "Energy Market Analyst"
+},
+{
+"company": "ESRI",
+"designation": "Data Scientist I"
+},
+{
+"company": "Eternal",
+"designation": "Software Development Engineer I"
+},
+{
+"company": "Eternal",
+"designation": "Product Analyst"
+},
+{
+"company": "Eternal",
+"designation": "Machine Learning Scientist"
+},
+{
+"company": "ETERNAL",
+"designation": "Assistant Program Manager"
+},
+{
+"company": "EXL Service",
+"designation": "Analytics - Consultant I"
+},
+{
+"company": "ExxonMobil Services & Technology Private Limited",
+"designation": "Marine Engineer-PG"
+},
+{
+"company": "EY Global Delivery Services India LLP",
+"designation": "Senior Analyst - Data Scientist"
+},
+{
+"company": "EY Global Delivery Services India LLP",
+"designation": "Senior Analyst - Supply Chain Management"
+},
+{
+"company": "EY Parthenon",
+"designation": "Associate Consultant"
+},
+{
+"company": "Finarb",
+"designation": "AI Engineer"
+},
+{
+"company": "Finarb",
+"designation": "Data Engineer"
+},
+{
+"company": "Finarb",
+"designation": "Full Stack Developer"
+},
+{
+"company": "FirstClub",
+"designation": "Product Management"
+},
+{
+"company": "FischerJordan",
+"designation": "Sr. Analyst"
+},
+{
+"company": "FischerJordan",
+"designation": "Software Engineer - Backend Web Developer"
+},
+{
+"company": "FischerJordan",
+"designation": "Software Engineer (SWE)- Frontend Web Developer"
+},
+{
+"company": "Flipkart",
+"designation": "AI Engineer"
+},
+{
+"company": "Flipspaces Technology Labs Pvt. Ltd.",
+"designation": "Entrepreneur-in-Residence"
+},
+{
+"company": "GDi Partners",
+"designation": "Associate Consultant"
+},
+{
+"company": "Glean Search Technologies India Private Limited",
+"designation": "Software Engineer - US"
+},
+{
+"company": "Glean Search Technologies India Private Limited",
+"designation": "Software Engineer - India"
+},
+{
+"company": "Goldman Sachs",
+"designation": "Quantitative Strategist"
+},
+{
+"company": "Groww",
+"designation": "Associate Product Manager"
+},
+{
+"company": "Hakimo AI",
+"designation": "Cloud Infrastructure & Platform Engineer (DevOps / SRE)"
+},
+{
+"company": "Hakimo AI",
+"designation": "Associate Product Manager"
+},
+{
+"company": "Hakimo AI",
+"designation": "Full Stack Software Engineer"
+},
+{
+"company": "Hakimo AI",
+"designation": "Founders Office Analyst"
+},
+{
+"company": "Hakimo AI",
+"designation": "Applied ML Engineer"
+},
+{
+"company": "Harness",
+"designation": "Software Engineer I"
+},
+{
+"company": "HILABS",
+"designation": "AI Engineer"
+},
+{
+"company": "HILABS",
+"designation": "Associate Product Manager"
+},
+{
+"company": "Houlihan Lokey Advisory (India) Private Limited",
+"designation": "Analyst"
+},
+{
+"company": "ICICI LOMBARD",
+"designation": "Actuarial Analyst"
+},
+{
+"company": "IDFC FIRST Bank",
+"designation": "Associate Product Manager-AI"
+},
+{
+"company": "IDFC FIRST Bank",
+"designation": "Associate Data Analyst"
+},
+{
+"company": "IDFC FIRST Bank",
+"designation": "Associate Data Scientist-AI Labs"
+},
+{
+"company": "Indus Insights",
+"designation": "Associate"
+},
+{
+"company": "INFO EDGE INDIA LIMITED",
+"designation": "Data Scientist"
+},
+{
+"company": "InMobi Privated Limited and Glance Private Limited",
+"designation": "SDEI"
+},
+{
+"company": "Insurity Solutions India Private Limited",
+"designation": "Software Engineer I"
+},
+{
+"company": "IQVIA",
+"designation": "Analyst"
+},
+{
+"company": "IQVIA",
+"designation": "Associate Consultant"
+},
+{
+"company": "IvyCap Ventures",
+"designation": "Investment Analyst"
+},
+{
+"company": "Ixana",
+"designation": "Silicon Engineer"
+},
+{
+"company": "Ixana",
+"designation": "IC Design Engineer III"
+},
+{
+"company": "Ixana",
+"designation": "IC Design Engineer II"
+},
+{
+"company": "JP MorganChase",
+"designation": "Commercial & Investment Bank Research & Analytics, Global Research - Full Time Analyst"
+},
+{
+"company": "Kalam Labs (legal name: Elixar Systems Pvt Ltd)",
+"designation": "Avionics Engineer"
+},
+{
+"company": "Kalam Labs (legal name: Elixar Systems Pvt Ltd)",
+"designation": "Aerodynamics Engineer"
+},
+{
+"company": "Kalam Labs (legal name: Elixar Systems Pvt Ltd)",
+"designation": "Mechanical Engineer"
+},
+{
+"company": "KLA",
+"designation": "Product Applications Engineer"
+},
+{
+"company": "LANDEED (JOHN SALT PVT LIMITED)",
+"designation": "Full Stack Engineer"
+},
+{
+"company": "LANDEED (JOHN SALT PVT LIMITED)",
+"designation": "AI/ML Engineer (Post-Training)"
+},
+{
+"company": "LAT AEROSPACE",
+"designation": "Engineer"
+},
+{
+"company": "LTM",
+"designation": "Post-Graduate Engineer Trainee"
+},
+{
+"company": "LYSKRAFT Pvt Ltd",
+"designation": "APM"
+},
+{
+"company": "LYSKRAFT Pvt Ltd",
+"designation": "SDE - 1"
+},
+{
+"company": "MathWorks India Private Limited",
+"designation": "Technical Writer"
+},
+{
+"company": "MathWorks India Private Limited",
+"designation": "Engineer (Dual Degree, Masters) in Engineering Development Group"
+},
+{
+"company": "Media.Net",
+"designation": "Senior Product Analyst"
+},
+{
+"company": "Meesho",
+"designation": "Senior Assosiate - Business Management"
+},
+{
+"company": "MeltPlan Inc",
+"designation": "Software Engineer"
+},
+{
+"company": "Microsoft Corporation",
+"designation": "Software Engineer"
+},
+{
+"company": "Moneyview Ltd",
+"designation": "Business Analyst"
+},
+{
+"company": "Moneyview Ltd",
+"designation": "Data Scientist"
+},
+{
+"company": "Mygate",
+"designation": "Software Developer Engineer"
+},
+{
+"company": "Nation with Namo",
+"designation": "Associate"
+},
+{
+"company": "NATWEST",
+"designation": "Software Engineer"
+},
+{
+"company": "Navi Limited",
+"designation": "AI strategy Operations"
+},
+{
+"company": "Navi Limited",
+"designation": "SDE-1"
+},
+{
+"company": "Navi Limited",
+"designation": "Data Scientist I, Navi"
+},
+{
+"company": "Navi Limited",
+"designation": "Associate Product Manager I"
+},
+{
+"company": "NexusOne",
+"designation": "Data/App Engineer"
+},
+{
+"company": "NoBroker.com",
+"designation": "Associate Data Scientist"
+},
+{
+"company": "NoBroker.com",
+"designation": "Applied Scientist"
+},
+{
+"company": "OLA",
+"designation": "Founder's Program Technology"
+},
+{
+"company": "OLA",
+"designation": "Founder's Program - General Management"
+},
+{
+"company": "OLA",
+"designation": "Graduate Engineer Trainee (GET) Software, Cloud Engineering & AI"
+},
+{
+"company": "OLA",
+"designation": "Graduate Engineer Trainee (GET) Product Engineering & Advanced Manufacturing"
+},
+{
+"company": "Phyagents, Inc.",
+"designation": "Software Engineer, Gen AI & Robotics"
+},
+{
+"company": "Phyagents, Inc.",
+"designation": "Machine Learning Engineer, Robotic Foundation Models"
+},
+{
+"company": "PhysicsWallah Limited",
+"designation": "Associate Product Manager (APM)"
+},
+{
+"company": "Pine Labs",
+"designation": "Software Development Engineer"
+},
+{
+"company": "Plutus Research Private Limited",
+"designation": "Quantitative Analyst"
+},
+{
+"company": "Plutus Research Private Limited",
+"designation": "Trading Systems Developer"
+},
+{
+"company": "Pocket FM",
+"designation": "Management Trainee"
+},
+{
+"company": "Porter",
+"designation": "Software Development Engineer - 1"
+},
+{
+"company": "Porter",
+"designation": "Associate Product Manager (APM)"
+},
+{
+"company": "Prism (Oyo)",
+"designation": "Young Leader"
+},
+{
+"company": "Prodigal Technologies Inc.",
+"designation": "Associate Consultant"
+},
+{
+"company": "Purplle",
+"designation": "ALDI Graduate Engineering Trainee"
+},
+{
+"company": "Route Mobile Limited",
+"designation": "SDE 1"
+},
+{
+"company": "Route Mobile Limited",
+"designation": "Business Analyst"
+},
+{
+"company": "RV Capital",
+"designation": "Risk Analyst"
+},
+{
+"company": "Searce Inc.",
+"designation": "Evlos AI Engineer"
+},
+{
+"company": "Searce Inc.",
+"designation": "Associate Data Engineer"
+},
+{
+"company": "Searce Inc.",
+"designation": "Associate Solutions Consultant"
+},
+{
+"company": "Searce Inc.",
+"designation": "Associate Cloud Engineer"
+},
+{
+"company": "SLB",
+"designation": "Datascientist"
+},
+{
+"company": "slice",
+"designation": "Associate Product Manager"
+},
+{
+"company": "slice",
+"designation": "Analyst"
+},
+{
+"company": "SQUAREPOINT CAPITAL",
+"designation": "Infrastructure Engineer"
+},
+{
+"company": "SQUAREPOINT CAPITAL",
+"designation": "Desk Quant Analyst"
+},
+{
+"company": "SQUAREPOINT CAPITAL",
+"designation": "Graduate Software Developer"
+},
+{
+"company": "Sun Valley Investment Group through Sun Valley Resources Private Limited",
+"designation": "Research Analyst"
+},
+{
+"company": "Swiggy Limited",
+"designation": "Data Scientist 1"
+},
+{
+"company": "Takshashila Consulting",
+"designation": "Business Analyst"
+},
+{
+"company": "TATA AIG General Insurance",
+"designation": "Senior Engineer Trainee - Analytics"
+},
+{
+"company": "TCG DIGITAL SOLUTIONS PVT. LTD.",
+"designation": "Consultant / Product Developer"
+},
+{
+"company": "Telus Digital",
+"designation": "Associate Project Manager"
+},
+{
+"company": "Tiger Analytics",
+"designation": "Trainee Analyst"
+},
+{
+"company": "Tolaram Group",
+"designation": "Management Trainee Enterprise Transformation"
+},
+{
+"company": "Tredence Analytics",
+"designation": "DATA SCIENTIST"
+},
+{
+"company": "Trexquant (India) Business Consulting LLP",
+"designation": "Quantitative Researcher"
+},
+{
+"company": "Urban Company",
+"designation": "Senior Category Manager"
+},
+{
+"company": "Warner Music Group",
+"designation": "Software Engineer - 1"
+},
+{
+"company": "Waterfly Technologies",
+"designation": "Graduate Engineer 2"
+},
+{
+"company": "Waterfly Technologies",
+"designation": "Growth and Strategist"
+},
+{
+"company": "Waterfly Technologies",
+"designation": "Managment Consultant 2"
+},
+{
+"company": "Waterfly Technologies",
+"designation": "Graduate Engineer 1"
+},
+{
+"company": "Waterfly Technologies",
+"designation": "Management Consultant 1"
+},
+{
+"company": "WhiteOak Capital",
+"designation": "Research Executive"
+},
+{
+"company": "windflow",
+"designation": "AI Engineer"
+},
+{
+"company": "Xion Multiventures Pvt Ltd",
+"designation": "Trainee Trader & Research Analyst"
+},
+{
+"company": "YCP India Private Limited (Formerly Known as Auctus Advisors Pvt. Ltd.)",
+"designation": "Analyst"
+},
+{
+"company": "YMS Financial Private Limited",
+"designation": "Quant Researcher"
+},
+{
+"company": "Zanskar Research LLP",
+"designation": "Infrastructure Developer"
+}
+]
+}

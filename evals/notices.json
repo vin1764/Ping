@@ -1,0 +1,729 @@
+{
+ "about": "Real CDC notices from 7-21 Nov 2026 (other students' names, rolls and phone numbers removed). Expected answers were written by reading each notice, not by running Ping. The 15 notices marked held_out were labelled after Ping had been fixed on the others, and were never used to change Ping: they show how it does on notices it wasn't tuned for.",
+ "notices": [
+  {
+   "notice_id": 1733,
+   "posted": "2026-11-18T10:41:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "Intel",
+   "text": "The CV Submission for Intel for all the roles have been extended with revised eligibility till 4:00 PM, 18th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "apply",
+    "deadline": "2026-11-18T16:00",
+    "note": "Intel isn't in this student's companies list"
+   }
+  },
+  {
+   "notice_id": 1716,
+   "posted": "2026-11-16T23:18:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "SLB",
+   "text": "The CV Submission for SLB for all the roles have been opened till 4:00 PM, 17th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "SLB"
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-17T16:00"
+   }
+  },
+  {
+   "notice_id": 1761,
+   "posted": "2026-11-19T09:50:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "Flipspaces Technology Labs Pvt. Ltd.",
+   "text": "The CV submission of FLIPSPACES for Entrepreneur-in-Residence role has been extended with revised eligibility till 4:00 PM, 19th November 2026Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Flipspaces Technology Labs Pvt. Ltd."
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-19T16:00"
+   }
+  },
+  {
+   "notice_id": 1587,
+   "posted": "2026-11-11T16:24:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "TOLARAM GROUP",
+   "text": "The CV Submission for TOLARAM GROUP for the Management Trainee Enterprise Transformation role has been opened till 4:00 PM, 12th November, 2026.Interested and eligible students are advised to apply within the given deadline.No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Tolaram Group"
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-12T16:00"
+   }
+  },
+  {
+   "notice_id": 1692,
+   "posted": "2026-11-16T09:43:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "D.E. Shaw",
+   "text": "CV Submission for D. E. SHAW INDIA for the Technology Developer role has been extended till 4:00 PM, 16th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "D. E. Shaw India"
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-16T16:00"
+   }
+  },
+  {
+   "notice_id": 1649,
+   "posted": "2026-11-13T19:43:00+05:30",
+   "subject": "Date extension",
+   "company_column": "Arihant Capital Markets Limited",
+   "text": "The CV submission of Arihant Capital Markets Limited for all the roles have been extended till 2:00 PM, 14th November, 2026.Its mandatory for all the candidates who are applying for the roles, to fill the following google form attached below: Google Form: https://forms.gle/zxCKFvUtFpJaXdfJ8Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Arihant Capital Markets Limited"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-14T14:00",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1759,
+   "posted": "2026-11-18T23:25:00+05:30",
+   "subject": "Date extension",
+   "company_column": "INTEL",
+   "text": "The CV submission of Intel for all roles have been extended till 4:00 PM, 19th November 2026Its mandatory for all candidates who are applying for the roles, to fill the following Google Form attached below:Additional Details Form: https://forms.gle/68c1FHsCYKE4N9eo6Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "deadline moved",
+    "deadline": "2026-11-19T16:00",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1787,
+   "posted": "2026-11-20T13:24:00+05:30",
+   "subject": "Date extension",
+   "company_column": "Nation with Namo",
+   "text": "The CV submission of Nation with Namo has been extended till 11:59 PM, 20th November 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Nation with Namo"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-20T23:59"
+   }
+  },
+  {
+   "notice_id": 1797,
+   "posted": "2026-11-21T00:07:00+05:30",
+   "subject": "Date extension",
+   "company_column": "ICICI LOMBARD",
+   "text": "The CV Submission for ICICI Lombard for the role of Actuarial Analyst has been opened till 4:00 PM, 21st November, 2026.All candidates who are applying for the role, are required to kindly fill the Additional Details Form given below. Link: https://forms.gle/Di2j1Sw7VyCurUud7Deadline: 21st November 2026, 4:00 PMInterested and eligible students are advised to apply on the portal and fill the form within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "ICICI LOMBARD"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-21T16:00",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1689,
+   "posted": "2026-11-15T17:58:00+05:30",
+   "subject": "Date extension",
+   "company_column": "Multiple Companies",
+   "text": "The following companies are open for CV Submission till 4:00 PM, 16th November, 2026.1. ANALOG DEVICES (All Profiles)2. ⁠GROWW (Profile : Associate Product Manager)3. INTEL (All Profiles)Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Groww"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-16T16:00",
+    "note": "lists Analog Devices, Groww, Intel; only Groww is in the companies list"
+   }
+  },
+  {
+   "notice_id": 1597,
+   "posted": "2026-11-11T21:13:00+05:30",
+   "subject": "Urgent",
+   "company_column": "Accenture Solutions Private Limited",
+   "text": "Please note that the Test of Accenture Solutions for the role of I&E - AI and Data, has been scheduled from 12:30 AM, 12th November.Note: Room allocations and other necessary instructions for the tests will be communicated prior to the respective assessments.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Accenture Solutions Private Limited"
+    ],
+    "kind": "test",
+    "when": "2026-11-12T00:30"
+   }
+  },
+  {
+   "notice_id": 1675,
+   "posted": "2026-11-14T21:07:00+05:30",
+   "subject": "Urgent",
+   "company_column": "Tolaram Group",
+   "text": "PFA the test room allocation for the Assessment of Tolaram Group, scheduled from 9:20 PM onwards on 14th November 2026.The test links have been shared with the shortlisted students on their CDC-registered email IDs.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for test.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POCs: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Tolaram Group"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-14T21:20",
+    "venue": "Nalanda Classroom Complex"
+   }
+  },
+  {
+   "notice_id": 1513,
+   "posted": "2026-11-07T16:11:00+05:30",
+   "subject": "Urgent",
+   "company_column": "BLACKROCK",
+   "text": "PFA the test room allocation for the Assessment of Blackrock, scheduled from 4:30 PM onwards on 7th November, 2026.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for the test. Note: The test  link has already been shared with candidates through their CDC-registered email IDs. The link will be activated at 4:30 PM.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POC: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "BlackRock"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-07T16:30",
+    "venue": "Nalanda Classroom Complex"
+   }
+  },
+  {
+   "notice_id": 1526,
+   "posted": "2026-11-07T21:36:00+05:30",
+   "subject": "Urgent",
+   "company_column": "EXL",
+   "text": "PFA the test room allocation for the Assessment of EXL, scheduled from 12:00 AM onwards on 8th November, 2026.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for the test.Note: The test link has already been shared with candidates through their CDC-registered email IDs.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POC: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "EXL Service"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-08T00:00",
+    "venue": "Nalanda Classroom Complex"
+   }
+  },
+  {
+   "notice_id": 1775,
+   "posted": "2026-11-19T19:21:00+05:30",
+   "subject": "Urgent",
+   "company_column": "ETERNAL",
+   "text": "PFA the test room allocation of shortlisted candidates for the Assessment of Eternal, scheduled from 7:15 PM onwards on 19th November, 2026.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for test.The test link has been shared on their Institute Email ID.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POCs: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Eternal"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-19T19:15",
+    "venue": "Nalanda Classroom Complex"
+   }
+  },
+  {
+   "notice_id": 1687,
+   "posted": "2026-11-15T12:31:00+05:30",
+   "subject": "Urgent",
+   "company_column": "Tekion India Pvt Ltd",
+   "text": "PFA the test room allocation of shortlisted candidates for the Assessment of Tekion, scheduled from 1:00 PM onwards on 15th November, 2026.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for test.The Test link will be shared on the CDC Registered Email ID of the students.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POC: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "test rooms",
+    "when": "2026-11-15T13:00",
+    "note": "Tekion isn't in the companies list"
+   }
+  },
+  {
+   "notice_id": 1601,
+   "posted": "2026-11-12T01:11:00+05:30",
+   "subject": "Urgent",
+   "company_column": "HAKIMO.AI",
+   "text": "All the eligible students who have applied for Hakimo.ai for more than one role are required to kindly fill the preference form given below. Link: https://forms.gle/2AWwomnuFJNnMUAt6Deadline: 12th November 2026, 4:00 PMKindly ensure you have filled the form before the deadline. No further extensions will be provided.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Hakimo AI"
+    ],
+    "kind": "form",
+    "deadline": "2026-11-12T16:00",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1599,
+   "posted": "2026-11-11T22:33:00+05:30",
+   "subject": "Urgent",
+   "company_column": "Accenture Solutions Private Limited",
+   "text": "PFA the list of students eligible for the Assessment of Accenture Solutions Private Limited for the I&E- AI and Data role, scheduled from 12:30 AM onwards on 12th November, 2026.Venue: Nalanda Classroom ComplexThe Room Allocation will be released shortly.Students are requested to report 15 minutes prior to the reporting time.POC: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Accenture Solutions Private Limited"
+    ],
+    "kind": "shortlist",
+    "when": "2026-11-12T00:30",
+    "note": "'list of students eligible for the assessment' is a shortlist"
+   }
+  },
+  {
+   "notice_id": 1646,
+   "posted": "2026-11-13T18:44:00+05:30",
+   "subject": "Shortlist",
+   "company_column": "MathWorks India Private Limited",
+   "text": "PFA the test shortlist for the Assessment of Mathworks for the Technical Writer role, scheduled from 11:00 PM onwards on 13th November 2026.The test links have been shared with the shortlisted students on their Institute email IDs.Venue: Nalanda Classroom ComplexThe room allocation for the test will be released shortly.Students are requested to report 15 minutes prior to the scheduled start time.POCs: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "MathWorks India Private Limited"
+    ],
+    "kind": "shortlist",
+    "when": "2026-11-13T23:00"
+   }
+  },
+  {
+   "notice_id": 1651,
+   "posted": "2026-11-13T21:24:00+05:30",
+   "subject": "Shortlist",
+   "company_column": "Airbus",
+   "text": "PFA the test shortlist for the Assessment of AIRBUS for all the roles, scheduled for 14th November 2026.The test links have been shared with the shortlisted students on their CDC-registered email IDs.Note: Shortlisted candidates who have not received the test link are requested to fill out the following form.Form link: https://forms.gle/UGLr9tihnxFNurRR7Venue: Nalanda Classroom ComplexThe room allocation for the test will be released shortly.Students are requested to report 15 minutes prior to the scheduled start time.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Airbus India Private Limited"
+    ],
+    "kind": "shortlist",
+    "when": "2026-11-14",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1640,
+   "posted": "2026-11-13T16:42:00+05:30",
+   "subject": "Shortlist",
+   "company_column": "PHYAGENTS",
+   "text": "PFA the test shortlist for the Assessment of PhyAgents for both the roles, scheduled from 5:30 PM onwards on 13th November 2026.The test links have been shared with the shortlisted students on their CDC-registered email IDs.Note: Shortlisted candidates who have not received the test link are requested to fill out the following form.Form link: https://forms.gle/eUK9z3asQYWvnWQh9Venue: Nalanda Classroom ComplexThe room allocation for the test will be released shortly.Students are requested to report 15 minutes prior to the scheduled start time.POCs: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Phyagents, Inc."
+    ],
+    "kind": "shortlist",
+    "when": "2026-11-13T17:30",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1732,
+   "posted": "2026-11-18T00:14:00+05:30",
+   "subject": "Schedule",
+   "company_column": "CDC Placement Schedule for 18th November 2026",
+   "text": "All students eligible for placement are advised to take note of the tentative placement schedule for Wednesday, 18th November 2026.1. [PPT] NATION WITH NAMO (6:00 PM - 7:00 PM)2. [TEST] GE VERNOVA (All Profiles) (6:00 PM  7:00 PM)3. [PPT] GDI PARTNERS (7:00 PM - 8:00 PM)4. [PPT] BREVAN HOWARD (8:00 PM  9:00 PM)5. [TEST] INFINEON TECHNOLOGIES (Profile: Analog/Mixed-Signal Engineer) (9:30 PM  11:00 PM)Note: Links for the tests and other relevant details will be shared separately. Room allocations and other necessary instructions for the assessments will be communicated prior to the respective tests.CDC, IIT Kharagpur",
+   "expected": {
+    "entries": [
+     {
+      "company": "Nation with Namo",
+      "kind": "talk",
+      "when": "2026-11-18T18:00"
+     },
+     {
+      "company": "GDi Partners",
+      "kind": "talk",
+      "when": "2026-11-18T19:00"
+     }
+    ],
+    "note": "day schedule; GE Vernova, Brevan Howard and Infineon aren't in the companies list"
+   }
+  },
+  {
+   "notice_id": 1760,
+   "posted": "2026-11-19T03:30:00+05:30",
+   "subject": "Schedule",
+   "company_column": "CDC Placement Schedule for 19th November 2026",
+   "text": "All students eligible for placement are advised to take note of the tentative placement schedule for Thursday, 19th November 2026.1. [PPT] OLA (6:00 PM  7:00 PM)2. [TEST] ETERNAL (7:00 PM  9:00 PM)3. [TEST] TAKSHASHILA CONSULTING (9:30 PM  11:00 PM)Note: Links for the tests and other relevant details will be shared separately. Room allocations and other necessary instructions for the assessments will be communicated prior to the respective tests.CDC, IIT Kharagpur",
+   "expected": {
+    "entries": [
+     {
+      "company": "OLA",
+      "kind": "talk",
+      "when": "2026-11-19T18:00"
+     },
+     {
+      "company": "Eternal",
+      "kind": "test",
+      "when": "2026-11-19T19:00"
+     },
+     {
+      "company": "Takshashila Consulting",
+      "kind": "test",
+      "when": "2026-11-19T21:30"
+     }
+    ]
+   }
+  },
+  {
+   "notice_id": 1537,
+   "posted": "2026-11-09T16:17:00+05:30",
+   "subject": "Re-schedule",
+   "company_column": "CDC Placement Schedule for 9th November 2026",
+   "text": "All students eligible for placement are advised to take note of the revised tentative placement schedule for Monday, 9th November 2026 (and early morning of 10th November 2026).1.[TEST] ACCENTURE AI (Profile : AI and Data ) (6:00 PM  7:30 PM)2.[TEST] PINELABS (Profile : Software Development Engineer) (8:00 PM  9:30 PM)3.[TEST] URBAN COMPANY (Profile : Senior Category Manager) (12:30 AM  1:30 AM, 10th November)4.[TEST] PRODIGAL (Profile : Applied AI) (2:00 AM  4:30 AM, 10th November)5.[TEST] PRODIGAL (Profile : Associate Consultant ) (4:30 AM  5:30 AM, 10th November)Note: Links for the assessments and other relevant details will be shared separately. Room allocations and other necessary instructions for the tests will be communicated prior to the respective assessments.CDC, IIT Kharagpur",
+   "expected": {
+    "entries": [
+     {
+      "company": "?",
+      "kind": "test",
+      "when": "2026-11-09T18:00"
+     },
+     {
+      "company": "Pine Labs",
+      "kind": "test",
+      "when": "2026-11-09T20:00"
+     },
+     {
+      "company": "Urban Company",
+      "kind": "test",
+      "when": "2026-11-10T00:30"
+     },
+     {
+      "company": "Prodigal Technologies Inc.",
+      "kind": "test",
+      "when": "2026-11-10T02:00"
+     },
+     {
+      "company": "Prodigal Technologies Inc.",
+      "kind": "test",
+      "when": "2026-11-10T04:30"
+     }
+    ],
+    "note": "'ACCENTURE AI' could be any of three Accenture entries: the right answer is to ask"
+   }
+  },
+  {
+   "notice_id": 1721,
+   "posted": "2026-11-17T17:05:00+05:30",
+   "subject": "PPT/Workshop/Seminars etc",
+   "company_column": "Paytm",
+   "text": "Please note that the Pre-Placement Talk for Paytm has been rescheduled to 17th November 2026 at 6:15 PM.Link: https://meet.google.com/zpj-jcbe-yeiAll interested students are required to attend the PPT without fail. Attendance is compulsory. Students should join 15 minutes prior to the meeting time.POC: [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "talk",
+    "when": "2026-11-17T18:15",
+    "note": "Paytm isn't in the companies list"
+   }
+  },
+  {
+   "notice_id": 1768,
+   "posted": "2026-11-19T16:24:00+05:30",
+   "subject": "PPT/Workshop/Seminars etc",
+   "company_column": "OLA",
+   "text": "Please note that the Pre-Placement Talk for OLA will be held on 19th November 2026 from 6:00 PM.Link: https://olacabs.zoom.us/j/93832509211All interested students are required to attend the PPT without fail. Attendance is compulsory. Students should join 15 minutes prior to the meeting time.POC: [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "OLA"
+    ],
+    "kind": "talk",
+    "when": "2026-11-19T18:00"
+   }
+  },
+  {
+   "notice_id": 1700,
+   "posted": "2026-11-16T16:36:00+05:30",
+   "subject": "PPO",
+   "company_column": "INTEL",
+   "text": "INTEL has extended the offer to the following student(s):[student removed] students are advised to give offer acceptance by 16.11.2026.(For more details, check your email ID.)CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "offer",
+    "deadline": "2026-11-16",
+    "note": "offer list; names removed"
+   }
+  },
+  {
+   "notice_id": 1555,
+   "posted": "2026-11-10T12:08:00+05:30",
+   "subject": "PPO",
+   "company_column": "Sarvam",
+   "text": "Sarvam has extended the offer to the following student(s):[student removed] students are advised to give offer acceptance by 10.11.2026.(For more details, check your email ID.)CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "offer",
+    "deadline": "2026-11-10"
+   }
+  },
+  {
+   "notice_id": 1782,
+   "posted": "2026-11-20T00:41:00+05:30",
+   "subject": "Additional requirement",
+   "company_column": "OLA",
+   "text": "All the eligible students who have applied for Ola for the roles of (Founder's Program - General Management, Founder's Program  Technology) are required to kindly fill the preference form given below.Form: https://forms.gle/rFa8g4g9j2SjcQvd9Deadline: 20th November 2026, 10:00 AMKindly ensure you have filled the forms before the deadline. No further extensions will be provided.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "OLA"
+    ],
+    "kind": "form",
+    "deadline": "2026-11-20T10:00",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1783,
+   "posted": "2026-11-20T00:42:00+05:30",
+   "subject": "Additional requirement",
+   "company_column": "AIRAMATRIX",
+   "text": "All the eligible students who have applied for AIRAMATRIX are required to kindly fill the additional details form given below.Link: https://forms.gle/aMqTKukPq1gLVZQV8Deadline: 20th November 2026, 4:00 PMKindly ensure you have filled the form before the deadline. No further extensions will be provided.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "AIRAMATRIX PRIVATE LIMITED"
+    ],
+    "kind": "form",
+    "deadline": "2026-11-20T16:00",
+    "form": true
+   }
+  },
+  {
+   "notice_id": 1658,
+   "posted": "2026-11-14T03:27:00+05:30",
+   "subject": "General",
+   "company_column": "Important Instructions for Identity Verification",
+   "text": "All students appearing for placement assessments are hereby informed that their candidature will be verified exclusively against one of the following:1. Original Physical Institute ID Card2. Original Physical Institute Medical Book3. Live Login to the ERP ProfileCandidates failing to produce at least one of the above-mentioned documents at the time of verification will be marked ABSENT on the attendance sheet and will not be permitted to proceed with the assessment.Note: No alternative identification documents, including Aadhaar Card, PAN Card, EPIC/Voter ID, etc., will be accepted under any circumstances. Photocopies, scanned copies, and screenshots of institute credentials will also not be considered valid for verification.All candidates are strictly advised to ensure that they carry at least one of the specified documents before reporting for their respective assessments.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [],
+    "kind": "info",
+    "note": "general instructions, no company"
+   }
+  },
+  {
+   "notice_id": 1517,
+   "posted": "2026-11-07T17:33:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "NoBroker",
+   "text": "The CV submission of NoBroker for all the roles has been opened till 4:00 PM, 8th November 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "NoBroker.com"
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-08T16:00"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1520,
+   "posted": "2026-11-07T17:59:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "IQVIA",
+   "text": "The CV submission of IQVIA for all the roles, has been extended till 4:00 PM, 8th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "IQVIA"
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-08T16:00"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1664,
+   "posted": "2026-11-14T13:27:00+05:30",
+   "subject": "CV Submission",
+   "company_column": "D. E. Shaw India",
+   "text": "CV Submission for D. E. SHAW INDIA for the Technology Developer role has been extended till 4:00 PM, 15th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "D. E. Shaw India"
+    ],
+    "kind": "apply",
+    "deadline": "2026-11-15T16:00"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1647,
+   "posted": "2026-11-13T19:08:00+05:30",
+   "subject": "Date extension",
+   "company_column": "ETERNAL",
+   "text": "The CV Submission for Eternal for all the roles has been extended till 4:00 PM, 14th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Eternal"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-14T16:00"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1625,
+   "posted": "2026-11-12T21:01:00+05:30",
+   "subject": "Date extension",
+   "company_column": "ETERNAL",
+   "text": "The CV Submission for Eternal for all the roles has been extended till 4:00 PM, 13th November, 2026.Interested and eligible students are advised to apply within the given deadline. No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Eternal"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-13T16:00"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1620,
+   "posted": "2026-11-12T17:11:00+05:30",
+   "subject": "Date extension",
+   "company_column": "Multiple Companies",
+   "text": "The following companies are open for CV Submission till 4:00 PM, 13th November, 2026.1. GROWW (Profile: Associate Product Manager)2. RV CAPITAL (Profile: Risk Analyst)Interested and eligible students are advised to apply within the given deadline.No further extensions will be given.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Groww",
+     "RV Capital"
+    ],
+    "kind": "deadline moved",
+    "deadline": "2026-11-13T16:00"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1676,
+   "posted": "2026-11-14T22:18:00+05:30",
+   "subject": "Urgent",
+   "company_column": "Mathworks india private limited",
+   "text": "PFA the test room allocation for the Assessment of Mathworks for the Engineering Development Group role, scheduled from 11:00 PM onwards on 14th November 2026.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for test.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POCs: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "MathWorks India Private Limited"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-14T23:00",
+    "venue": "Nalanda Classroom Complex"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1241,
+   "posted": "2026-10-28T17:02:00+05:30",
+   "subject": "Urgent",
+   "company_column": "AMERICAN EXPRESS",
+   "text": "All eligible students who have applied for any role at AMERICAN EXPRESS are required to complete the registration process before 10:00 AM, 29th October 2026.Qualtrics Form : https://amex.co1.qualtrics.com/jfe/form/SV_8CYM7ewbkEQzIdEApplication Process:1.⁠ ⁠Fill out the American Express Campus Application Form with your personal and academic details.2.⁠ ⁠Upload your latest resume.3.⁠ ⁠Select the role(s) you wish to be considered for and submit your preferences.4.⁠ ⁠Apply through the relevant Business Unit Job Links provided in the form on the American Express Career Portal.5.⁠ ⁠After completing each application, return to the Qualtrics form to access the next applicable Job Link. Remember to click on the box beneath so that it turns from light blue to drak blue.6.⁠ ⁠Verify that you receive a confirmation email from American Express Careers for each submitted Business Unit application.Role-Specific Application Requirements:Data Science and Analytics - Credit and Fraud Riskhttps://egug.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/26010998AI Research - Credit and Fraud Riskhttps://egug.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/26015659Important Notes:Both the American Express Campus Application Form and the applicable American Express Career Portal applications are mandatory for consideration in subsequent stages of the hiring process.Deadline: 10:00 AM, 29th October 2026.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "American Express"
+    ],
+    "kind": "form",
+    "deadline": "2026-10-29T10:00",
+    "form": true,
+    "note": "registration form on a company site, not Google Forms"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1712,
+   "posted": "2026-11-16T20:46:00+05:30",
+   "subject": "Urgent",
+   "company_column": "CARS24",
+   "text": "PFA the test room allocation for the Assessment of Cars24 for all the roles, scheduled from 9:00 PM onwards on 16th November 2026.Venue: Nalanda Classroom ComplexNote: All shortlisted candidates are strictly instructed to report to their allocated rooms by 9:00 PM sharp, as the test schedule is fixed.Students are required to carry their original Institute ID card, failing which students will not be permitted to sit for test.Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POCs: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Cars24"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-16T21:00",
+    "venue": "Nalanda Classroom Complex"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1598,
+   "posted": "2026-11-11T21:45:00+05:30",
+   "subject": "Urgent",
+   "company_column": "Insurity Solutions India Private Limited",
+   "text": "PFA the test room allocation for the Assessment of Insurity for the Software Engineer I role, scheduled from 10:00 PM onwards on 11th November, 2026.Venue: Nalanda Classroom ComplexStudents are required to carry their original Institute ID card, failing which students will not be permitted to sit for test. Please carry your laptops, pens, and papers.Students are requested to report 15 minutes prior to the reporting time.POC: [name] [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Insurity Solutions India Private Limited"
+    ],
+    "kind": "test rooms",
+    "when": "2026-11-11T22:00",
+    "venue": "Nalanda Classroom Complex"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1305,
+   "posted": "2026-10-30T23:53:00+05:30",
+   "subject": "Shortlist",
+   "company_column": "ACCENTURE AEH",
+   "text": "Please find attached the list of eligible candidates for the in-campus coding assessment for the Accenture India Elite Technology Engineer FTE role. The slot timing and reporting room for each candidate are given in the attached list.Date: 31st October 2026Slot Timing and Reporting Room: As per the attached listNote: Students are requested to report to the venue 15 minutes before their slot time. The test will begin promptly at the scheduled time.Important Instructions: - MacBooks are strictly not allowed for this test.It is mandatory for all students to carry the following items to be eligible for the in-campus assessment: - A printout of the admit card sent to the registered email ID. A soft copy of the admit card will not be considered valid. - Original physical PAN card with photo. Scanned copies, photocopies, or laminated copies of the PAN card will not be accepted. DigiLocker PAN cards will not be considered valid. - If a student does not have their physical PAN card, they can download the official E-PAN card from an official source and bring a printed copy of it. - PAN cards made when the candidate was a minor will not be accepted, and such candidates will be rejected. - A PAN application acknowledgment will not be treated as valid proof.Laptop Requirements: - Operating system: Windows 11 - RAM: 8 GB or more - Processor: Intel i3 8th Generation 2.2 GHz or higher - Browser: Latest 3 versions of Google Chrome - Webcam and microphone must work and stay on during the test. The webcam must show a clear image. - Uninstall any VPN and proxy setups.Safe Exam Browser (SEB): - Uninstall any old version of Safe Exam Browser, then install the new version from this link: https://securetest.hirepro.in/accenture/v2/POC: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Accenture India Private Limited"
+    ],
+    "kind": "shortlist",
+    "when": "2026-10-31",
+    "note": "company column says 'ACCENTURE AEH'; the text names Accenture India's Elite Technology Engineer role"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1465,
+   "posted": "2026-11-05T19:04:00+05:30",
+   "subject": "Shortlist",
+   "company_column": "JPMC",
+   "text": "PFA the test shortlist for the Assessment of JPMC, scheduled from 7:30 PM onwards on 5th November, 2026.Venue: Nalanda Classroom ComplexNote: Students are requested to report 15 minutes prior to the reporting time. Students are also required to bring their Institute Id card for the test.POC: [contact removed], [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "JP MorganChase"
+    ],
+    "kind": "shortlist",
+    "when": "2026-11-05T19:30",
+    "venue": "Nalanda Classroom Complex"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1350,
+   "posted": "2026-11-02T02:57:00+05:30",
+   "subject": "Schedule",
+   "company_column": "CDC Placement Schedule for 2nd7th November 2026",
+   "text": "All students eligible for placement are advised to take note of the tentative placement schedule from Monday, 2nd November, to Saturday, 7th November 2026.Please note that this schedule is tentative and is subject to additions and subtractions.Monday, 2nd November 20261. [PPT] PINE LABS ( (12:00 PM  1:00 PM)2. [PPT] ITC (1:00 PM  2:00 PM)3. [PPT] KLA (4:00 PM  5:00 PM)4. [PPT] FUJITSU (5:00 PM  6:00 PM)5. [TEST] CAPITAL ONE (Profile: SDE 1) (6:00 PM  8:00 PM)6. [PPT : OFFLINE] TREDENCE ANALYTICS (8:00 PM  9:00 PM)7. [TEST] TREDENCE ANALYTICS (Profile: DATA SCIENTIST) (9:00 PM  10:00 PM)8. [TEST] FLIPKART (Profile: AI Engineer) (10:30 PM  12:00 AM)9. [TEST] KLA (Profile : Product Applications Engineer) (3rd November) (12:30 AM  2:00 AM)Tuesday, 3rd November 20261. [PPT] IBM (12:00 PM  1:00 PM)2. [PPT] JPMC (5:00 PM  6:00 PM)3. [TEST] POCKET FM (Profile: Member of Technical Staff) (6:00 PM  8:00 PM)4. [TEST] CAPITAL ONE (Profile: Business Analyst) (8:00 PM  8:30 PM)5. [TEST] NAVI (All Profiles) (9:00 PM  12:00 AM)Wednesday, 4th November 20261. [PPT] CATERPILLAR (12:00 PM  1:00 PM)2. [PPT] AIRBUS (5:00 PM  6:00 PM)3. [TEST] NK SECURITIES (All Profiles) (6:00 PM  8:00 PM)4. [TEST] APPLIED MATERIALS (Profile: Application Engineer) (8:00 PM  9:00 PM)5. [TEST] IBM (All Profiles) (9:00 PM  1:00 AM)Thursday, 5th November 20261. [PPT] GE AEROSPACE (5:00 PM  6:00 PM)2. [TEST] CAPITAL ONE (Profile: SDE Test 2) (6:00 PM  7:30 PM)3. [TEST] JPMC (Profile: CIB Research) (7:30 PM  9:30 PM)4. [TEST] AMAZON (Profile: SDE 1) (10:00 PM  12:00 AM)Friday, 6th November 20261. [PPT] EXXONMOBIL (1:00 PM  2:00 PM)2. [TEST] TEXAS INSTRUMENTS (All Profiles) (7:00 PM  10:00 PM)3. [TEST] PURPLLE (Profile: ALDI GET) (10:30 PM  12:00 AM)Saturday, 7th November 20261. [TEST] NVIDIA (Profile: Hardware Engineer) (10:00 AM  11:00 AM)2. [TEST] CARS 24 (All Profiles) (11:30 AM  12:00 PM)3. [TEST] PORTER (All Profiles) (2:00 - 4:00 PM)4. [TEST] INDUS INSIGHT (Profile: Associate) (8:00 PM  10:00 PM)Note: The schedule is tentative and subject to change. Links to the PPTs and other relevant details will be shared separately. Room allocations and other necessary instructions for tests will be communicated prior to the respective assessments.CDC, IIT Kharagpur",
+   "expected": {
+    "entries": [
+     {
+      "company": "Pine Labs",
+      "kind": "talk",
+      "when": "2026-11-02T12:00"
+     },
+     {
+      "company": "KLA",
+      "kind": "talk",
+      "when": "2026-11-02T16:00"
+     }
+    ],
+    "allow_extra": true,
+    "note": "a whole week's schedule; only Monday's entries are checked"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1281,
+   "posted": "2026-10-30T11:53:00+05:30",
+   "subject": "PPT/Workshop/Seminars etc",
+   "company_column": "TIGER ANALYTICS",
+   "text": "Please note that the Pre-Placement Talk for TIGER ANALYTICS will be held on 30th October, 2026 from 12:30 PM.Link: https://meet.google.com/sya-gcri-hdsAll interested students are required to attend the PPT without fail. Attendance is compulsory. Students should join 15 minutes prior to the meeting time.POC: [contact removed]CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "Tiger Analytics"
+    ],
+    "kind": "talk",
+    "when": "2026-10-30T12:30"
+   },
+   "held_out": true
+  },
+  {
+   "notice_id": 1731,
+   "posted": "2026-11-18T00:08:00+05:30",
+   "subject": "Additional requirement",
+   "company_column": "OLA",
+   "text": "All the eligible students who have applied for Ola for the roles of (Founder's Program - General Management, Founder's Program  Technology) are required to kindly fill the Additional Details Form by the company as linked below. Kindly note the updated deadline.Link: https://forms.gle/THbGxUBqBY61R1jC6Deadline: 18th November 2026, 11:59 AMKindly ensure you have filled the form before the deadline. No further extensions will be provided.CDC, IIT Kharagpur",
+   "expected": {
+    "companies": [
+     "OLA"
+    ],
+    "kind": "form",
+    "deadline": "2026-11-18T11:59",
+    "form": true
+   },
+   "held_out": true
+  }
+ ]
+}

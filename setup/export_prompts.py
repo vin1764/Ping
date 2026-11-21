@@ -66,6 +66,33 @@ def notice_prompt() -> dict:
     }
 
 
+def relevance_prompt() -> dict:
+    src = (ROOT / "ping" / "relevance.py").read_text(encoding="utf-8")
+    cfg = CONFIG_PY.read_text(encoding="utf-8")
+    first = _one(r'"model": ai\["model"\] or "([^"]+)"', cfg, "the default model")
+    fallbacks = _one(r'"fallback_models": \[([^\]]*)\]', cfg, "the fallback models")
+    return {
+        "title": "Role relevance (\"For you\" or not)",
+        "where": "`ping/relevance.py` (`PROMPT`, used by `classify`), called from the hourly run on GitHub Actions",
+        "when": ("Once per role, for roles you're not ruled out of (eligibility is applied first), and again only when "
+                 "the role's text or your \"What I'm looking for\" text changes (the answer is cached on the role)."),
+        "input": (f"`{{targets}}`: your \"What I'm looking for\" text (first 600 characters); `{{roles}}`: up to "
+                  f"{_py_constant(src, 'BATCH')} roles, each with its id, company, title, a few role fields and the first "
+                  f"{_py_constant(src, 'JD_CHARS')} characters of its job description (or \"none given; judge on the "
+                  "title\"). Never your name, roll number, CGPA or mail."),
+        "output": ("JSON list only: `id`, `relevant` (true/false), `reason` (cut to 8 words). Entries with an unknown id "
+                   "or a non-boolean answer are dropped; roles without an answer are tried again next run."),
+        "models": [first] + re.findall(r'"([^"]+)"', fallbacks),
+        "settings": [
+            "endpoint: the same OpenAI-compatible `/chat/completions` as the notice reader",
+            "temperature: " + _one(r'"temperature": ([\d.]+)', src, "the relevance temperature"),
+            f"timeout per model: {_one(r'timeout=(\d+)', src, 'the relevance timeout')} s; "
+            f"all classification in one run: {_py_constant(src, 'BUDGET_SECONDS')} s",
+        ],
+        "prompt": _py_constant(src, "PROMPT"),
+    }
+
+
 def ask_ping_prompt() -> dict:
     src = ASK_TS.read_text(encoding="utf-8")
     models_src = _one(r"const MODELS = \[(.*?)\];", src, "MODELS", re.S)
@@ -102,11 +129,11 @@ def render() -> str:
         "_Generated from the source by `python setup/export_prompts.py`; do not edit by hand. "
         "`tests/test_prompts_doc.py` fails when this file is out of date._",
         "",
-        "Ping sends text to a model in exactly two places. Everything else (reading the ERP, notices, PDFs, "
+        "Ping sends text to a model in exactly three places. Everything else (reading the ERP, notices, PDFs, "
         "eligibility, the feed) is rules, with no model involved.",
         "",
     ]
-    for i, p in enumerate((notice_prompt(), ask_ping_prompt()), 1):
+    for i, p in enumerate((notice_prompt(), relevance_prompt(), ask_ping_prompt()), 1):
         lines += [
             f"## {i}. {p['title']}", "",
             f"- **Where it runs:** {p['where']}",

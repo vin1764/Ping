@@ -47,7 +47,7 @@ const WD = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday:
 const ISO_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", weekday: "short" });
 
 type Ev = { title: string; at: string | null | undefined };
-type Role = { company: string; applied: boolean | null; effective_deadline: string | null | undefined };
+type Role = { company: string; applied: boolean | null; effective_deadline: string | null | undefined; for_you?: boolean };
 
 function endOfWeek(now: Date): number {
   // Sunday 23:59:59 IST of the week (Mon-Sun) that holds `now`
@@ -76,7 +76,9 @@ export function glance(events: Ev[], roles: Role[], now: Date): string {
   const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
   const count = (rs: Role[]) => {
     const no = rs.filter((r) => !r.applied).length;
-    return `${n(rs.length, "role", "roles")} at ${n(new Set(rs.map((r) => r.company)).size, "company", "companies")} (${no} not applied, ${rs.length - no} applied)`;
+    const mine = rs.filter((r) => r.for_you).length;
+    return `${n(rs.length, "role", "roles")} at ${n(new Set(rs.map((r) => r.company)).size, "company", "companies")} (${no} not applied, ${rs.length - no} applied` +
+      `${rs.some((r) => r.for_you !== undefined) ? `; ${mine} for you` : ""})`;
   };
   const todayRoles = open.filter((r) => DAY.format(new Date(r.effective_deadline!)) === today);
   lines.push(todayRoles.length

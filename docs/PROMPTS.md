@@ -2,7 +2,7 @@
 
 _Generated from the source by `python setup/export_prompts.py`; do not edit by hand. `tests/test_prompts_doc.py` fails when this file is out of date._
 
-Ping sends text to a model in exactly two places. Everything else (reading the ERP, notices, PDFs, eligibility, the feed) is rules, with no model involved.
+Ping sends text to a model in exactly three places. Everything else (reading the ERP, notices, PDFs, eligibility, the feed) is rules, with no model involved.
 
 ## 1. Notice reader fallback (deadlines and companies the rules couldn't find)
 
@@ -34,7 +34,34 @@ Reply with JSON only:
 Use [] when there is nothing. Do not invent dates.
 ````
 
-## 2. Ask Ping (the chat on the dashboard)
+## 2. Role relevance ("For you" or not)
+
+- **Where it runs:** `ping/relevance.py` (`PROMPT`, used by `classify`), called from the hourly run on GitHub Actions
+- **When:** Once per role, for roles you're not ruled out of (eligibility is applied first), and again only when the role's text or your "What I'm looking for" text changes (the answer is cached on the role).
+- **Input:** `{targets}`: your "What I'm looking for" text (first 600 characters); `{roles}`: up to 20 roles, each with its id, company, title, a few role fields and the first 900 characters of its job description (or "none given; judge on the title"). Never your name, roll number, CGPA or mail.
+- **Expected output:** JSON list only: `id`, `relevant` (true/false), `reason` (cut to 8 words). Entries with an unknown id or a non-boolean answer are dropped; roles without an answer are tried again next run.
+- **Models, in fallback order:** `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemma-4-31b-it`
+- endpoint: the same OpenAI-compatible `/chat/completions` as the notice reader
+- temperature: 0
+- timeout per model: 90 s; all classification in one run: 240 s
+
+**Prompt, verbatim:**
+
+````text
+A student at IIT Kharagpur describes the jobs they want:
+<<<
+{targets}
+>>>
+
+For each role below, decide whether it is one of the jobs they want. Judge the work the role actually does (from
+the job description when there is one), not just the company. Reply with JSON only, one entry per role, in order:
+[{{"id": "<role id>", "relevant": true or false, "reason": "at most 8 words"}}]
+
+Roles:
+{roles}
+````
+
+## 3. Ask Ping (the chat on the dashboard)
 
 - **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini key is a Supabase function secret and never reaches the browser
 - **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If it fails, the page answers with simple rules instead and says so. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
@@ -66,6 +93,14 @@ test today" or "Two more: ...", then add one line with the most urgent other thi
 below, with its count and time: "No other tests. 48 applications close at 20:00 today (in 1h 25m), 39 of them not
 applied." "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
+Lists of roles: when the student has said what they're looking for (Profile "targets" below), every list of roles
+is split: first "For you" (roles marked "for you: yes", each with its reason in brackets), then "Others" with one
+short line per role (company and title only)${prof.list_other_roles === false ? "; leave the others out and only say how many there are" : ""}.
+Roles marked eligible: no are never listed. If eligibility is "unknown", add one line "Eligibility not verified for
+<n> of these". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
+due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't
+re-judge roles yourself. If no targets are set, list roles normally and mention once that the Profile page's
+"What I'm looking for" box makes Ping split them.
 Conversation: "Conversation so far" below is this thread, oldest first. A short or elliptical message ("nothing
 else?", "and tomorrow?", "what about slice?", "same for analyst role?", "when?", "why not?") continues the previous
 turn: work out the full question from the last question and answer, then answer that. Never answer about the literal

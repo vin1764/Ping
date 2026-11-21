@@ -113,8 +113,8 @@ Deno.serve(async (req) => {
   const [items, roles, profile] = await Promise.all([
     sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
-    sb.from("roles").select("company,designation,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff").limit(400),
-    sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies").limit(1),
+    sb.from("roles").select("company,designation,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,relevance").limit(400),
+    sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1),
   ]);
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
@@ -152,9 +152,19 @@ Deno.serve(async (req) => {
     `- [${i.level}] ${i.title}${i.due_at ? ` (due ${ist(i.due_at)}${todayNote(i.due_at, asOf)})` : ""}` +
     `${i.event_at ? ` (at ${ist(i.event_at)}${todayNote(i.event_at, asOf)})` : ""}` +
     `${i.details?.venue ? ` (venue ${i.details.venue})` : ""}${myRow(i.details)}`);
+  // "For you" or not: the same answer the feed uses (cached on the role by the hourly run, ping/relevance.py),
+  // valid only for the targets the student has now
+  const prof = (profile.data?.[0] || {}) as any;
+  const targets = String(prof.targets || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const forYou = (r: any) => {
+    const rel = r.relevance;
+    if (!targets || !rel || typeof rel.relevant !== "boolean" || rel.targets !== targets) return "not classified";
+    return rel.relevant ? `yes (${rel.reason}${rel.jd_missing ? ", JD missing" : ""})` : "no";
+  };
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
-    `${todayNote(r.effective_deadline, asOf)} | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"} | CTC ${r.ctc ?? "?"} ${r.currency ?? ""}`);
+    `${todayNote(r.effective_deadline, asOf)} | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"}` +
+    ` | for you: ${forYou(r)} | CTC ${r.ctc ?? "?"} ${r.currency ?? ""}`);
   const past = (iso?: string | null) => todayNote(iso, asOf) || (iso && new Date(iso) < asOf ? " (already passed)" : "");
   const depts = (allowed: any[]) => [...new Set((allowed || []).map((a) => a.department).filter(Boolean))].join("; ");
   const detailLines = (detail.data || []).map((r: any) =>
@@ -178,7 +188,8 @@ Deno.serve(async (req) => {
       .map((i) => ({ title: i.title.replace(/\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} \w{3} \d{2}:\d{2}\.?$/, ""), at: i.event_at })),
     ...(lists.data || []).filter((i: any) => i.event_at && i.pdf_status === "yes").map((i: any) => ({ title: i.title, at: i.event_at })),
   ];
-  const atAGlance = glance(events, (roles.data || []) as any[], asOf);
+  const atAGlance = glance(events, (roles.data || []).filter((r: any) => r.eligible !== false)
+    .map((r: any) => ({ ...r, for_you: forYou(r).startsWith("yes") })) as any[], asOf);
 
   // decided here, not by the model: only a request to act may get the read-only refusal
   const act = asksToAct(question);
@@ -200,6 +211,14 @@ test today" or "Two more: ...", then add one line with the most urgent other thi
 below, with its count and time: "No other tests. 48 applications close at 20:00 today (in 1h 25m), 39 of them not
 applied." "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
+Lists of roles: when the student has said what they're looking for (Profile "targets" below), every list of roles
+is split: first "For you" (roles marked "for you: yes", each with its reason in brackets), then "Others" with one
+short line per role (company and title only)${prof.list_other_roles === false ? "; leave the others out and only say how many there are" : ""}.
+Roles marked eligible: no are never listed. If eligibility is "unknown", add one line "Eligibility not verified for
+<n> of these". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
+due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't
+re-judge roles yourself. If no targets are set, list roles normally and mention once that the Profile page's
+"What I'm looking for" box makes Ping split them.
 Conversation: "Conversation so far" below is this thread, oldest first. A short or elliptical message ("nothing
 else?", "and tomorrow?", "what about slice?", "same for analyst role?", "when?", "why not?") continues the previous
 turn: work out the full question from the last question and answer, then answer that. Never answer about the literal

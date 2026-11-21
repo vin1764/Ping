@@ -690,6 +690,12 @@
         field("cgpa", "CGPA", p.cgpa, { type: "number", step: "0.01", min: "0", max: "10" }),
         h("label", { class: "check" }, h("input", { type: "checkbox", name: "active_backlogs", id: "pf-backlogs", checked: !!p.active_backlogs }), "I have active backlogs")),
       h("div", { class: "row3" }, [0, 1, 2].map((i) => field(`cv${i}`, `CV ${i + 1} name`, cv[i]))),
+      h("label", {}, "What I'm looking for", h("span", { class: "hint" },
+        "In your own words. Ping marks each role \"For you\" or not (Gemini reads the role's title and job description once) and lists those first."),
+        h("textarea", { name: "targets", id: "pf-targets", rows: 3,
+          placeholder: "e.g. product, consulting, business/data analyst and finance roles; not core software engineering" }, p.targets || "")),
+      h("label", { class: "check" }, h("input", { type: "checkbox", name: "list_other_roles", id: "pf-list-others",
+        checked: p.list_other_roles !== false }), "Always list other roles separately so I don't miss anything"),
       h("div", { class: "row2" },
         field("reminder_hours", "Remind me before a deadline", p.reminder_hours ?? 2,
           { type: "number", step: "0.5", min: "0.5", max: "48" }, "Hours before it closes: one reminder per deadline, listing what you haven't applied to")),
@@ -715,6 +721,7 @@
         cv_names: [0, 1, 2].map((i) => String(f.get(`cv${i}`) || "").trim()).filter(Boolean),
         interested_companies: split("interested_companies"), not_interested_companies: split("not_interested_companies"),
         reminder_hours: Number(f.get("reminder_hours")) > 0 ? Number(f.get("reminder_hours")) : 2,
+        targets: String(f.get("targets") || "").trim() || null, list_other_roles: f.get("list_other_roles") === "on",
       };
       try {
         await state.src.saveProfile(patch);

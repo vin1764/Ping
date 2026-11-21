@@ -412,6 +412,7 @@ class Runner:
         self.counts["pdf_details_reread"] = len(fixed)
         emails = self.store.select("emails", REAL)
         corrections = {c["notice_id"]: c for c in self.store.select("corrections")} if self.store_ok else {}
+        self._classify(roles, profile)
         dstats: dict = {}
         previous = {p["id"]: p for p in self.store.select("items", REAL)}
         items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats,
@@ -444,6 +445,29 @@ class Runner:
         except Exception as e:
             self.problems.append(f"saving the feed failed: {e}")
         return items
+
+    def _classify(self, roles: list[dict], profile: dict) -> None:
+        """'For you' or not, for every role you could apply to (cached on the role; see ping/relevance.py)."""
+        from . import relevance
+        targets = profile.get("targets") or ""
+        not_int = profile.get("not_interested_companies") or []
+        open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False
+                 and not any(n and n.lower() in (r.get("company") or "").lower() for n in not_int)]
+        todo = [r for r in open_ if relevance.needs(r, targets)]
+        self.counts["relevance"] = {"targets_set": bool(targets.strip()), "roles_checked": len(open_), "to_classify": len(todo)}
+        if not todo:
+            return
+        found = relevance.classify(todo, targets, self.secrets.ai)
+        for r in roles:
+            if r["id"] in found:
+                r["relevance"] = found[r["id"]]
+        self.counts["relevance"].update({"classified": len(found), "for_you": sum(v["relevant"] for v in found.values()),
+                                         "calls": relevance.stats["calls"], "last_error": relevance.stats["last_error"]})
+        if found:
+            try:
+                self.store.upsert("roles", [{"id": k, "relevance": v} for k, v in found.items()])
+            except Exception as e:
+                self.problems.append(f"saving role relevance failed: {e}")
 
     @staticmethod
     def _item_counts(items) -> dict:

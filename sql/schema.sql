@@ -23,6 +23,9 @@ create table if not exists profile (
   updated_at timestamptz default now()
 );
 alter table profile add column if not exists reminder_hours numeric default 2;
+-- what you're looking for, in your own words, and whether to still list the other roles (Profile page)
+alter table profile add column if not exists targets text;
+alter table profile add column if not exists list_other_roles boolean default true;
 
 create table if not exists roles (
   id text primary key,             -- yop:com_id:jnf_id
@@ -44,6 +47,8 @@ create table if not exists roles (
   first_seen timestamptz default now(), last_seen timestamptz,
   is_sample boolean default false
 );
+-- "For you" or not, per role: {relevant, reason, jd_missing, key, targets, model} (ping/relevance.py)
+alter table roles add column if not exists relevance jsonb;
 
 create table if not exists notices (
   id text primary key,             -- year:notice_id
@@ -177,7 +182,7 @@ create policy owner_fix_notices on corrections for all to authenticated
 -- The dashboard may only change these columns:
 revoke update on profile, items from authenticated;
 grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, interested_companies,
-              not_interested_companies, notice_types, reminder_hours, updated_at) on profile to authenticated;
+              not_interested_companies, notice_types, reminder_hours, targets, list_other_roles, updated_at) on profile to authenticated;
 grant update (dismissed, done) on items to authenticated;
 grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
 grant insert, update, delete on corrections to authenticated;

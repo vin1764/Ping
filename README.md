@@ -258,6 +258,20 @@ what it said when it was first sent. Each list ends with its source: "ERP check
 (same-deadline grouping, reminder timing over a day of hourly runs, an extension
 as one update, nothing repeated).
 
+**For you first** (`ping/relevance.py`). On the Profile page, "What I'm looking
+for" takes your own words (e.g. "product, consulting, business/data analyst and
+finance roles; not core software engineering"). For every role you're not ruled
+out of, once, Gemini reads its company, title and job description and answers
+yes/no with a reason of at most 8 words; the answer is cached on the role and
+asked again only when the role's text or your words change. Eligibility is
+applied first and is never overridden. A role with no job description on the ERP
+is judged on its title and tagged "(JD missing)". Every list (digests, new
+roles, Ask Ping answers) then shows **For you** first, with the reason in grey,
+and **Others** one line per role (collapsed). Untick "Always list other roles
+separately" to see only their count. "Eligibility not verified for ..." is added
+when the ERP data or your profile is incomplete. Gemini sees only the roles' own
+text and your targets, never your name, roll number, CGPA or mail.
+
 ## The dashboard
 
 `dashboard/` is a plain web page (HTML + JavaScript, no build step). It opens on

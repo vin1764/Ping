@@ -22,8 +22,10 @@ def test_prompts_doc_matches_the_source():
 
 def test_every_prompt_is_in_the_doc_verbatim():
     from ping.ai import PROMPT
+    from ping.relevance import PROMPT as RELEVANCE
     doc = (ROOT / "docs" / "PROMPTS.md").read_text(encoding="utf-8")
     assert PROMPT.rstrip("\n") in doc
+    assert RELEVANCE.rstrip("\n") in doc
     ts = (ROOT / "supabase" / "functions" / "ask-ping" / "index.ts").read_text(encoding="utf-8")
     template = ts.split("const prompt = `", 1)[1].split("`;\n", 1)[0]
     assert template in doc

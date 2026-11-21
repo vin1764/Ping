@@ -310,6 +310,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
         _expire(it, now)
     # fewer, fuller messages: deadline digests, one "new roles" message per run, same-run list collapses
     from . import digests
+    from .relevance import tag
+    targets = profile.get("targets") or ""
     members = {}
     for r in roles:
         e = elig[r["id"]]
@@ -319,6 +321,7 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
         members[r["id"]] = {"id": r["id"], "company": r["company"], "label": r["designation"], "due": _dt(dl["at"]),
                             "source": dl["source"], "applied": bool(r.get("applied")), "eligible": e["eligible"],
                             "first_seen": r.get("first_seen")}
+        members[r["id"]]["tag"], members[r["id"]]["note"] = tag(r, targets)
     items = digests.build(items, members, previous or {}, profile, now)
     if stats is not None:
         stats.update(dstats)

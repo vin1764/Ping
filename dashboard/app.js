@@ -573,7 +573,7 @@
     const fl = state.flash && state.flash.until > Date.now() ? state.flash.text : null;
     const mode = cur ? "checking" : fl ? "found" : "idle";
     const text = cur ? "checking the ERP" : fl || (last ? agoText(dt(last.finished_at).getTime())
-      : state.asOf ? `snapshot of ${when(state.asOf)}` : "placement updates");
+      : state.asOf ? `snapshot of ${clock(state.asOf)}` : "placement updates");
     if (sub.textContent !== text) sub.textContent = text;
     sub.classList.toggle("dots", mode === "checking");
     if (top && top.dataset.state !== mode) top.dataset.state = mode;

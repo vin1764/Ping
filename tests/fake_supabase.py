@@ -28,7 +28,10 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qsl, urlsplit
 
-import psycopg
+try:
+    import psycopg
+except ImportError:  # GitHub's test machine: these tests are skipped there
+    psycopg = None
 
 PG_BIN = "/usr/lib/postgresql/16/bin"
 TOKEN = "sbp_test_access_token"
@@ -51,7 +54,7 @@ grant usage on schema auth to anon, authenticated, service_role;
 
 
 def available() -> bool:
-    return os.path.exists(f"{PG_BIN}/initdb") and shutil.which("runuser") is not None
+    return psycopg is not None and os.path.exists(f"{PG_BIN}/initdb") and shutil.which("runuser") is not None
 
 
 class FakeSupabase:

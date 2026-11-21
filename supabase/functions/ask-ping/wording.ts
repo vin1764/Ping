@@ -87,8 +87,8 @@ export function glance(events: Ev[], roles: Role[], now: Date): string {
     : "Application deadlines still open today: none");
   const week = open.filter((r) => new Date(r.effective_deadline!).getTime() <= endOfWeek(now));
   lines.push(`Application deadlines from now to the end of this week (Sunday; today counts as this week): ` + (week.length
-    ? group(week, (r) => DAY.format(new Date(r.effective_deadline!)))
-        .map(([, rs]) => `${WD.format(new Date(rs[0].effective_deadline!))}: ${count(rs)}`).join("; ")
+    ? group(week, (r) => r.effective_deadline!)
+        .map(([, rs]) => `${WD.format(new Date(rs[0].effective_deadline!))} ${HM.format(new Date(rs[0].effective_deadline!))}: ${count(rs)}`).join("; ")
     : "none"));
   return lines.join("\n");
 }

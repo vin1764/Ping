@@ -58,7 +58,8 @@ with `python evals/run_evals.py`).
 
 ### Not working or not verified yet
 - **The hourly schedule hasn't fired once.** Every run so far was started by
-  hand. See [What's left](#whats-left).
+  hand; checked again at 13:23 IST, the 13:11 slot didn't run although GitHub
+  lists the workflow as active. See [What's left](#whats-left).
 - **Login refusals.** Between 05:26 and 05:37 IST the ERP refused 5 Log Ins in
   a row after a valid OTP, with no message; it worked again at 12:05. Cause
   unknown (maybe too many OTPs in a short time while testing). Ping now retries

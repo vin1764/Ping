@@ -429,3 +429,11 @@ begin
     end if;
   end loop;
 end $rt$;
+
+-- Job descriptions (ping/jd.py): the text Ping found for each role and where it found it, and a short summary.
+alter table roles add column if not exists jd_text text;          -- the JD itself (ERP field, ERP file, public link, more details)
+alter table roles add column if not exists jd_source text;        -- inline / detail / attachment / link / link-unreadable / none
+alter table roles add column if not exists jd_url text;           -- the file on the ERP or the link it came from
+alter table roles add column if not exists jd_note text;          -- why there's none (e.g. "link: HTTP 401", "only by email")
+alter table roles add column if not exists jd_key text;           -- the role's JD inputs: fetched again only when they change
+alter table roles add column if not exists jd_summary jsonb;      -- {role_team, do[], must_have[], location, eligibility, unusual[], key}

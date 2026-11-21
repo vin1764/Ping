@@ -8,7 +8,7 @@ chat, like WhatsApp:
 - "Accordion opened, eligible for Data & AI Analyst (CG 7+, all depts). Apply by Fri 27 Nov 16:00."
 - "You're on the Eternal test room list (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121."
 - "Update - Ather Energy deadline: deadline moved from Fri 20 Nov 18:00 to Sat 21 Nov 20:00."
-- "Reminder: ICICI LOMBARD Actuarial Analyst closes Sat 21 Nov 16:00. You haven't applied."
+- "Reminder: 38 applications you haven't applied to close tonight, Sat 21 Nov 20:00 — 11 for you" (then the list: For you first, with the CV to apply with; Others collapsed)
 
 It **only reads**. It cannot apply, submit, upload or accept anything (see [Safety](#safety)).
 
@@ -27,8 +27,10 @@ up to 15 questions per visitor per hour and 100 per hour for all visitors
 together. A static copy with no login is also at
 https://claude.ai/artifact/TWGCZxEawg7zZrrjSDnur7 (the owner shares it from its Share menu).
 
-Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md), the index of both suites in plain words:
-parser evals (`python evals/run_evals.py`) and Ask Ping evals (Actions > Admin > `ask-ping-evals`).
+Evals for the submission: [`evals/REPORT.md`](evals/REPORT.md), the index of all three suites in plain words:
+parser evals (`python evals/run_evals.py`), Ask Ping evals (Actions > Admin > `ask-ping-evals`) and role relevance
+evals per persona (Actions > Admin > `relevance-evals`). Security: [`docs/SECURITY.md`](docs/SECURITY.md); setup for a
+new student: [`docs/SETUP.md`](docs/SETUP.md).
 The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), generated from the source.
 
 ---

@@ -1,13 +1,13 @@
 # Ask Ping evals
 
-_Run on 21 Nov 2026, 14:48 UTC against the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data), snapshot time fixed at 2026-11-21T17:32:18+05:30 (cases marked 'as_of' use their own). Re-run with Actions > Admin > ask-ping-evals, or `python evals/ask_ping/run_ask_ping_evals.py`._
+_Run on 21 Nov 2026, 17:51 UTC against the deployed `ask-ping` function, from one-click demo sessions (anonymised demo data), snapshot time fixed at 2026-11-21T17:32:18+05:30 (cases marked 'as_of' use their own). Re-run with Actions > Admin > ask-ping-evals, or `python evals/ask_ping/run_ask_ping_evals.py`._
 
 ## In short
 
-- **Single questions: 38 of 42 passed all their checks (90%).**
-- **Conversations (follow-ups in one thread): 20 of 21 passed every turn; 38 of 39 turns passed.**
-- Models that answered: gemini-flash-lite-latest (42)
-- Latency: median 5.0 s, slowest 49.1 s
+- **Single questions: 37 of 42 passed all their checks (88%).**
+- **Conversations (follow-ups in one thread): 21 of 21 passed every turn; 39 of 39 turns passed.**
+- Models that answered: gemini-flash-lite-latest (31), gemini-3.5-flash-lite (6), gemini-3.1-flash-lite (5)
+- Latency: median 4.5 s, slowest 50.7 s
 - Checks are deterministic (no model grades another model): required words or phrases, forbidden ones, numbers in any common format (28,00,000 = 28 L = 28 LPA), and a word limit.
 - **Warning:** the demo data changed after the expected answers were written.
 
@@ -15,58 +15,88 @@ _Run on 21 Nov 2026, 14:48 UTC against the deployed `ask-ping` function, from on
 
 | category | passed | out of | score |
 |---|---|---|---|
-| company facts | 7 | 8 | 88% |
-| deadlines | 6 | 8 | 75% |
-| notices | 6 | 6 | 100% |
-| negative | 6 | 6 | 100% |
+| company facts | 8 | 8 | 100% |
+| deadlines | 8 | 8 | 100% |
+| notices | 5 | 6 | 83% |
+| negative | 5 | 6 | 83% |
 | read-only | 5 | 5 | 100% |
-| robustness | 4 | 4 | 100% |
+| robustness | 2 | 4 | 50% |
 | time | 2 | 2 | 100% |
 | lists | 1 | 2 | 50% |
 | cvs | 1 | 1 | 100% |
 
 ## Failures
 
-### C2 (company facts): am I eligible for Harness
+### N2 (notices): when is the Eternal test and where
 
-- failed: must_contain '7.5'
-- expected: Harness Software Engineer I: CGPA cut-off 7.5; demo profile CGPA 8.0; department unknown so eligibility can't be confirmed, but the CG cut-off is met
-- model gemini-flash-lite-latest, 5.0 s
+- failed: must_contain 'nr 121'
+- expected: Eternal test Thu 19 Nov 19:15, Nalanda Classroom Complex, your room NR 121
+- model gemini-flash-lite-latest, 2.7 s
 
-> Harness (Software Engineer I): eligibility unknown, because Add your department and degree on the Profile page to check eligibility.
+> Eternal test was at 19:15 on Thu, 19 Nov 2026 (already passed) at Nalanda Classroom Complex.
 
-### D2 (deadlines): anything due today
+### X2 (negative): what's due on 30 November
 
-- failed: must_contain 'aiprise'; must_contain 'waterfly'; must_contain 'auro'
-- expected: today Sat 21 Nov: 41 reminders/deadlines all at 20:00 (AiPrise, Ather, Auro Group, Waterfly, Searce, ...)
-- model gemini-flash-lite-latest, 5.0 s
+- failed: must_contain 'nothing|no deadline|none|don't see any|do not see any|no items|not see anything|'
+- expected: nothing falls on 30 Nov
+- model gemini-flash-lite-latest, 4.0 s
 
-> Nothing due today except 47 roles at 22 companies closing at 20:00 (later today, in 2h 28m).
+> I don't have any notice for 30 November. Next deadline is Pine Labs (Software Development Engineer) on Sun 22 Nov, 20:00.
 
-### D3 (deadlines): what closes this week
+### B2 (robustness): eternl ctc brekdown
 
-- failed: must_contain '20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m'
-- expected: all 48 open role deadlines after the snapshot are Sat 21 Nov 20:00
-- model gemini-flash-lite-latest, 17.2 s
+- failed: numbers_present 5900000; numbers_present 4700000
+- expected: Eternal (typo): SDE I / ML Scientist 59L, Product Analyst 47L; ETERNAL Assistant Program Manager 17L
+- model gemini-3.5-flash-lite, 13.7 s
 
-> Sat, 21 Nov: 47 roles at 22 companies (38 not applied, 9 applied; 17 for you)
+> Eternal (Software Development Engineer I):
+> - Fixed / Take-home: Base Salary: 24,00,000 (Gross per annum: 24,00,000, Fixed take-home per annum: 24,00,000)
+> - Bonuses: Yearly Cash Bonus: 35,00,000 (1st year: 5,00,000 | 2nd year: 10,00,000 | 3rd year: 10,00,000 | 4th year: 10,00,000); 1st Year CTC: 29,00,000; Joining Bonus, Retention Bonus, Relocation Bonus: 0
+> - ESOPs: None
+> - Bond: No (Bond Amount: 0)
+> 
+> Eternal (Product Analyst):
+> - Fixed / Take-home: Base Salary: 21,00,000 (Gross per annum: 21,00,000, Fixed take-home per annum: 21,00,000)
+> - Bonuses: Yearly Cash Bonus: 26,00,000 (1st year: 3,00,000 | 2nd year: 5,00,000 | 3rd year: 8,00,000 | 4th year: 10,00,000); 1st Year CTC: 24,00,000; Joining Bonus, Retention Bonus, Relocation Bonus: 0
+> - ESOPs: None
+> - Bond: No (Bond Amount: 0)
+> 
+> Eternal (Machine Learning Scientist):
+> - Fixed / Take-home: Base Salary: 24,00,000 (Gross per annum: 24,00,000, Fixed take-home per annum: 24,00,000)
+> - Bonuses: Yearly Cash Bonus: 35,00,000 (1st year: 5,00,000 | 2nd year: 10,00,000 | 3rd year: 10,00,000 | 4th year: 10,00,000); 1st Year CTC: 29,00,000; Joining Bonus, Retention Bonus, Relocation Bonus: 0
+> - ESOPs: None
+> - Bond: No (Bond Amount: 0)
+> 
+> ETERNAL (Assistant Program Manager):
+> - Fixed / Take-home: Base Salary: 15,00,000 (Gross per annum: 17,00,000, Fixed take-home per annum: 15,00,000)
+> - Bonuses: Variable: 2,00,000; 1st Year CTC: 17,00,000; Joining Bonus, Retention Bonus, Relocation Bonus: 0
+> - ESOPs: None
+> - Bond: No (Bond Amount: 0)
+
+### B3 (robustness): what's slice's CTC and when does ESRI close?
+
+- failed: numbers_present 2800000
+- expected: two questions: slice 28L / 25L; ESRI Sat 21 Nov 20:00
+- model gemini-flash-lite-latest, 3.3 s
+
+> slice: 2500000 INR (19L base, 2L retention bonus, 4L ESOPs; fixed take-home 1900000, 0 joining bonus, 30000 relocation bonus, no bond). ESRI (Data Scientist I): closes Sat, 21 Nov, 20:00 (later today, in 2h 28m).
 
 ### L1 (lists): what's due tonight that's relevant to me
 
 - failed: must_contain 'Others'
 - expected: the ready-made list: deadline once in the heading, For you (unapplied, then ✓ applied), Others one 'Company — Role' line each, no reasons in chat
-- model gemini-flash-lite-latest, 11.0 s
+- model gemini-3.5-flash-lite, 3.5 s
 
 > Close tonight 20:00 (in 1h 25m), Sat, 21 Nov — 17 for you, 9 applied:
 > For you:
-> - Auro Group(www.AuroIM.com) — Data Analyst (apply with Analytics & Finance CV)
-> - Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)
-> - BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)
-> - Flipspaces Technology Labs Pvt. Ltd. — Entrepreneur-in-Residence (apply with Consulting CV)
-> - Waterfly Technologies — Growth and Strategist (apply with Consulting CV)
-> - Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)
-> - Xion Multiventures Pvt Ltd — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)
-> - YMS Financial Private Limited — Quant Researcher (apply with Analytics & Finance CV)
+> - Auro Group(www.AuroIM.com) — Data Analyst
+> - Axis Bank — BIU (Business Intelligence Unit)
+> - BlackBuck — Associate Manager BlackBuck Leadership Program
+> - Flipspaces Technology Labs Pvt. Ltd. — Entrepreneur-in-Residence
+> - Waterfly Technologies — Growth and Strategist
+> - Waterfly Technologies — Managment Consultant 2
+> - Xion Multiventures Pvt Ltd — Trainee Trader & Research Analyst
+> - YMS Financial Private Limited — Quant Researcher
 > - Ather Energy — Product Ownership ✓ applied
 > - Auro Group(www.AuroIM.com) — Product Manager ✓ applied
 > - AXON DEVELOPERS — Manager Strategy ✓ applied
@@ -91,7 +121,7 @@ Each conversation runs in one fresh demo session; the function reads the thread 
 | M5 | 2 | latest notice for harness | when is it? | pass |
 | M6 | 2 | slice ctc breakdown | same for analyst role? | pass |
 | M7 | 2 | when is the Eternal test | where? | pass |
-| M8 | 2 | eternal ctc | ok. what's due this week? | FAIL (turn 2) |
+| M8 | 2 | eternal ctc | ok. what's due this week? | pass |
 | M9 | 2 | does diageo have a bond | and harness? | pass |
 | M10 | 2 | any tests today? | anything else? | pass |
 | M11 | 2 | what's due tomorrow | what else? | pass |
@@ -108,62 +138,53 @@ Each conversation runs in one fresh demo session; the function reads the thread 
 
 ### Conversation failures
 
-#### M8 turn 2: ok. what's due this week?
-
-- failed: must_contain '20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m'; must_contain '21|today'
-- expected: topic change: after Eternal pay, 'what's due this week' is all Sat 21 Nov 20:00 and has nothing to do with Eternal
-- previous turn: "eternal ctc" → "Eternal: Software Development Engineer I has a CTC of 59,00,000 INR (Base Salary: 24,00,000 INR, yearly cash bonus: 35,00,000 INR over 4 years, no bonds, no joining/retention/relocation bonus).
-Produc"
-- model gemini-flash-lite-latest, 5.0 s
-
-> Nothing is due this week. Next application deadlines are on Monday, 23 November 2026.
-
+None.
 
 ## Every case
 
 | id | category | question | result | model | seconds |
 |---|---|---|---|---|---|
-| C1 | company facts | slice ctc breakdown | pass | gemini-flash-lite-latest | 15.8 |
-| C2 | company facts | am I eligible for Harness | FAIL | gemini-flash-lite-latest | 5.0 |
-| C3 | company facts | what is the CG cut-off for Axis Bank | pass | gemini-flash-lite-latest | 5.0 |
-| C4 | company facts | which departments can apply for Axis Bank | pass | gemini-flash-lite-latest | 11.1 |
-| C5 | company facts | what roles does Waterfly Technologies have | pass | gemini-flash-lite-latest | 5.7 |
-| C6 | company facts | Diageo joining bonus | pass | gemini-flash-lite-latest | 49.1 |
-| C7 | company facts | does Harness have a bond | pass | gemini-flash-lite-latest | 14.0 |
-| C8 | company facts | Harness take home salary | pass | gemini-flash-lite-latest | 5.4 |
-| D1 | deadlines | what's due tomorrow | pass | gemini-flash-lite-latest | 6.4 |
-| D2 | deadlines | anything due today | FAIL | gemini-flash-lite-latest | 5.0 |
-| D3 | deadlines | what closes this week | FAIL | gemini-flash-lite-latest | 17.2 |
-| D4 | deadlines | when does the Ather Energy application close | pass | gemini-flash-lite-latest | 4.4 |
-| D5 | deadlines | when does Diageo close | pass | gemini-flash-lite-latest | 9.9 |
-| D6 | deadlines | is the ESRI deadline today? | pass | gemini-flash-lite-latest | 4.4 |
-| D7 | deadlines | what's the deadline for Harness | pass | gemini-flash-lite-latest | 4.6 |
-| D8 | deadlines | what's due on 25 November | pass | gemini-flash-lite-latest | 4.4 |
-| N1 | notices | am I shortlisted anywhere | pass | gemini-flash-lite-latest | 8.1 |
-| N2 | notices | when is the Eternal test and where | pass | gemini-flash-lite-latest | 10.4 |
-| N3 | notices | which room was I in for the IQVIA test | pass | gemini-flash-lite-latest | 10.1 |
-| N4 | notices | latest notice for Groww | pass | gemini-flash-lite-latest | 6.6 |
-| N5 | notices | am I on the Pine Labs list | pass | gemini-flash-lite-latest | 4.7 |
-| N6 | notices | when is the Groww test | pass | gemini-flash-lite-latest | 11.4 |
-| X1 | negative | what's the CTC at Google | pass | gemini-flash-lite-latest | 4.6 |
-| X2 | negative | what's due on 30 November | pass | gemini-flash-lite-latest | 4.1 |
-| X3 | negative | where is the Diageo job located | pass | gemini-flash-lite-latest | 4.2 |
-| X4 | negative | what was my score in the Eternal test | pass | gemini-flash-lite-latest | 11.5 |
-| X5 | negative | what's the CTC at Netflix | pass | gemini-flash-lite-latest | 6.5 |
-| X6 | negative | who is the CDC contact for Groww and their phone number | pass | gemini-flash-lite-latest | 4.7 |
-| R1 | read-only | apply to Waterfly Graduate Engineer 1 for me | pass | gemini-flash-lite-latest | 4.6 |
-| R2 | read-only | withdraw my application to Diageo | pass | gemini-flash-lite-latest | 4.0 |
-| R3 | read-only | change my CV on the ERP to the Data CV | pass | gemini-flash-lite-latest | 4.5 |
-| R4 | read-only | fill the Groww additional details form for me | pass | gemini-flash-lite-latest | 4.8 |
-| B1 | robustness | waterfly ctc | pass | gemini-flash-lite-latest | 5.0 |
-| B2 | robustness | eternl ctc brekdown | pass | gemini-flash-lite-latest | 4.7 |
-| B3 | robustness | what's slice's CTC and when does ESRI close? | pass | gemini-flash-lite-latest | 4.3 |
-| B4 | robustness | did i apply to diageo?? and whats the bond | pass | gemini-flash-lite-latest | 4.3 |
-| R5 | read-only | apply to groww for me | pass | gemini-flash-lite-latest | 4.4 |
-| T1 | time | when is the groww test? | pass | gemini-flash-lite-latest | 4.4 |
-| T2 | time | when does ESRI close? | pass | gemini-flash-lite-latest | 7.2 |
-| L1 | lists | what's due tonight that's relevant to me | FAIL | gemini-flash-lite-latest | 11.0 |
-| L2 | lists | what closes tonight? | pass | gemini-flash-lite-latest | 11.5 |
-| CV1 | cvs | which cv should I use for groww | pass | gemini-flash-lite-latest | 7.4 |
+| C1 | company facts | slice ctc breakdown | pass | gemini-flash-lite-latest | 50.7 |
+| C2 | company facts | am I eligible for Harness | pass | gemini-flash-lite-latest | 5.7 |
+| C3 | company facts | what is the CG cut-off for Axis Bank | pass | gemini-flash-lite-latest | 49.0 |
+| C4 | company facts | which departments can apply for Axis Bank | pass | gemini-flash-lite-latest | 7.3 |
+| C5 | company facts | what roles does Waterfly Technologies have | pass | gemini-flash-lite-latest | 6.0 |
+| C6 | company facts | Diageo joining bonus | pass | gemini-flash-lite-latest | 3.8 |
+| C7 | company facts | does Harness have a bond | pass | gemini-flash-lite-latest | 4.4 |
+| C8 | company facts | Harness take home salary | pass | gemini-flash-lite-latest | 3.4 |
+| D1 | deadlines | what's due tomorrow | pass | gemini-flash-lite-latest | 4.9 |
+| D2 | deadlines | anything due today | pass | gemini-flash-lite-latest | 6.7 |
+| D3 | deadlines | what closes this week | pass | gemini-flash-lite-latest | 3.6 |
+| D4 | deadlines | when does the Ather Energy application close | pass | gemini-flash-lite-latest | 50.4 |
+| D5 | deadlines | when does Diageo close | pass | gemini-flash-lite-latest | 7.8 |
+| D6 | deadlines | is the ESRI deadline today? | pass | gemini-flash-lite-latest | 5.2 |
+| D7 | deadlines | what's the deadline for Harness | pass | gemini-flash-lite-latest | 5.1 |
+| D8 | deadlines | what's due on 25 November | pass | gemini-flash-lite-latest | 3.5 |
+| N1 | notices | am I shortlisted anywhere | pass | gemini-flash-lite-latest | 3.1 |
+| N2 | notices | when is the Eternal test and where | FAIL | gemini-flash-lite-latest | 2.7 |
+| N3 | notices | which room was I in for the IQVIA test | pass | gemini-flash-lite-latest | 3.3 |
+| N4 | notices | latest notice for Groww | pass | gemini-flash-lite-latest | 4.2 |
+| N5 | notices | am I on the Pine Labs list | pass | gemini-flash-lite-latest | 3.5 |
+| N6 | notices | when is the Groww test | pass | gemini-flash-lite-latest | 3.4 |
+| X1 | negative | what's the CTC at Google | pass | gemini-flash-lite-latest | 45.1 |
+| X2 | negative | what's due on 30 November | FAIL | gemini-flash-lite-latest | 4.0 |
+| X3 | negative | where is the Diageo job located | pass | gemini-3.5-flash-lite | 4.3 |
+| X4 | negative | what was my score in the Eternal test | pass | gemini-flash-lite-latest | 11.6 |
+| X5 | negative | what's the CTC at Netflix | pass | gemini-3.1-flash-lite | 4.0 |
+| X6 | negative | who is the CDC contact for Groww and their phone number | pass | gemini-flash-lite-latest | 3.2 |
+| R1 | read-only | apply to Waterfly Graduate Engineer 1 for me | pass | gemini-flash-lite-latest | 12.6 |
+| R2 | read-only | withdraw my application to Diageo | pass | gemini-flash-lite-latest | 3.4 |
+| R3 | read-only | change my CV on the ERP to the Data CV | pass | gemini-flash-lite-latest | 4.2 |
+| R4 | read-only | fill the Groww additional details form for me | pass | gemini-3.1-flash-lite | 3.8 |
+| B1 | robustness | waterfly ctc | pass | gemini-3.5-flash-lite | 12.5 |
+| B2 | robustness | eternl ctc brekdown | FAIL | gemini-3.5-flash-lite | 13.7 |
+| B3 | robustness | what's slice's CTC and when does ESRI close? | FAIL | gemini-flash-lite-latest | 3.3 |
+| B4 | robustness | did i apply to diageo?? and whats the bond | pass | gemini-3.5-flash-lite | 5.1 |
+| R5 | read-only | apply to groww for me | pass | gemini-3.1-flash-lite | 4.9 |
+| T1 | time | when is the groww test? | pass | gemini-3.5-flash-lite | 4.5 |
+| T2 | time | when does ESRI close? | pass | gemini-3.1-flash-lite | 5.0 |
+| L1 | lists | what's due tonight that's relevant to me | FAIL | gemini-3.5-flash-lite | 3.5 |
+| L2 | lists | what closes tonight? | pass | gemini-3.1-flash-lite | 4.9 |
+| CV1 | cvs | which cv should I use for groww | pass | gemini-flash-lite-latest | 3.8 |
 
 The questions, checks and the data each expected answer comes from are in [`cases.json`](cases.json); every answer is in `results.json`.

@@ -18,9 +18,9 @@
   },
   "why": "roles: slice APM CTC 28,00,000 (22L fixed + 2L retention + 4L ESOPs); Analyst 25,00,000 (19L + 2L RB + 4L ESOPs)",
   "status": 200,
-  "answer": "**Analyst:**\n- Base Salary / Fixed / Take-Home: 19,00,000 INR\n- Retention Bonus: 2,00,000 INR\n- ESOPs: 4,00,000 INR\n- Relocation Bonus: 30,000 INR\n- Joining Bonus: 0 INR\n- Bond: No (Amount: 0 INR)\n- 1st Year CTC: 25,00,000 INR\n\n**Associate Product Manager:**\n- Base Salary / Fixed / Take-Home: 22,00,000 INR\n- Retention Bonus: 2,00,000 INR\n- ESOPs: 4,00,000 INR\n- Relocation Bonus: 30,000 INR\n- Joining Bonus: 0 INR\n- Bond: No (Amount: 0 INR)\n- 1st Year CTC: 28,00,000 INR",
+  "answer": "**Analyst:**\n- Base Salary: 1,900,000\n- CTC Breakup: 19L base + 2L RB + 4L ESOPs\n- 1st Year CTC: 2,500,000\n- Gross (per Annum): 1,900,000\n- Joining Bonus: 0\n- Retention Bonus: 200,000\n- Relocation Bonus: 30,000\n- Fixed Take Home Salary (per Annum): 1,900,000\n- Bonds: No (Bond Amount: 0)\n\n**Associate Product Manager:**\n- Base Salary: 2,200,000\n- CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs\n- 1st Year CTC: 2,800,000\n- Gross (per Annum): 2,200,000\n- Joining Bonus: 0\n- Retention Bonus: 200,000\n- Relocation Bonus: 30,000\n- Fixed Take Home Salary (per Annum): 2,200,000\n- Bonds: No (Bond Amount: 0)",
   "model": "gemini-flash-lite-latest",
-  "seconds": 48.3,
+  "seconds": 5.2,
   "failed": []
  },
  {
@@ -38,12 +38,10 @@
   },
   "why": "Harness Software Engineer I: CGPA cut-off 7.5; demo profile CGPA 8.0; department unknown so eligibility can't be confirmed, but the CG cut-off is met",
   "status": 200,
-  "answer": "The data does not show your eligibility status for Harness; it only shows that you have not applied and lists its CTC as 7728117 INR (Base Salary: 2454545, Gross per Annum: 2700000, 1st Year CTC: 4728117, Joining Bonus: 500000, Relocation Bonus: 200000, Bonds: No with 0 bond amount, plus perks like Zomato credits, commuter stipend, and broadband reimbursement).",
+  "answer": "The data does not show whether you are eligible for Harness (eligibility is listed as unknown). However, the data shows that the CGPA cut-off is 7.5, backlogs are not allowed (\"No\"), and the departments allowed are: AEROSPACE ENGINEERING; AGRICULTURAL AND FOOD ENGINEERING; MS; ARCHITECTURE AND REGIONAL PLANNING; ARTIFICIAL INTELLIGENCE; BIOSCIENCE AND BIOTECHNOLOGY; CENTRE FOR OCEAN, RIVER, ATMOSPHERE AND LAND SCIENCES (CORAL); CHEMICAL ENGINEERING; CHEMISTRY; CIVIL ENGINEERING; COMPUTER SCIENCE AND ENGINEERING; CRYOGENIC ENGINEERING; EDUCATION; ELECTRICAL ENGINEERING; ELECTRONICS AND ELECTRICAL COMMUNICATION ENGG.; ENERGY SCIENCE AND ENGINEERING; GEOLOGY AND GEOPHYSICS; HUMANITIES AND SOCIAL SCIENCES; INDUSTRIAL AND SYSTEMS ENGINEERING; MATERIALS SCIENCE CENTRE; MATHEMATICS; MECHANICAL ENGINEERING; METALLURGICAL AND MATERIALS ENGINEERING; MINING ENGINEERING; OCEAN ENGG AND NAVAL ARCHITECTURE; PHYSICS; RAJENDRA MISHRA SCHOOL OF ENGG ENTREPRENEURSHIP; RANBIR AND CHITRA GUPTA SCHOOL OF INFRASTRUCTURE DESIGN AND MNGT.; RUBBER TECHNOLOGY; SUBIR CHOWDHURY SCHOOL OF QUALITY AND RELIABILITY.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 9.4,
-  "failed": [
-   "must_contain '7.5'"
-  ]
+  "seconds": 18.6,
+  "failed": []
  },
  {
   "id": "C3",
@@ -57,12 +55,10 @@
   },
   "why": "Axis Bank BIU: cgpa_cutoff 6.0",
   "status": 200,
-  "answer": "The provided data does not show the CG cut-off for Axis Bank; it only shows the CTC (1449563 INR), deadline (Sat, 21 Nov, 20:00), application status (not applied), and pay/bond breakup components.",
+  "answer": "6",
   "model": "gemini-flash-lite-latest",
-  "seconds": 35.8,
-  "failed": [
-   "numbers_present 6.0"
-  ]
+  "seconds": 4.3,
+  "failed": []
  },
  {
   "id": "C4",
@@ -79,16 +75,10 @@
   },
   "why": "Axis Bank BIU allowed departments (13): aerospace, agricultural & food, bioscience, chemical, civil, CSE, electrical, E&ECE, industrial & systems, mechanical, metallurgical, mining, ocean engg",
   "status": 200,
-  "answer": "The data does not show which departments can apply for Axis Bank; it only shows the pay components and CTC (1,449,563 INR) for the BIU (Business Intelligence Unit) role.",
+  "answer": "AEROSPACE ENGINEERING; AGRICULTURAL AND FOOD ENGINEERING; BIOSCIENCE AND BIOTECHNOLOGY; CHEMICAL ENGINEERING; CIVIL ENGINEERING; COMPUTER SCIENCE AND ENGINEERING; ELECTRICAL ENGINEERING; ELECTRONICS AND ELECTRICAL COMMUNICATION ENGG.; INDUSTRIAL AND SYSTEMS ENGINEERING; MECHANICAL ENGINEERING; METALLURGICAL AND MATERIALS ENGINEERING; MINING ENGINEERING; OCEAN ENGG AND NAVAL ARCHITECTURE",
   "model": "gemini-flash-lite-latest",
-  "seconds": 52.5,
-  "failed": [
-   "must_contain 'computer science'",
-   "must_contain 'electrical'",
-   "must_contain 'mechanical'",
-   "must_contain 'mining'",
-   "must_contain 'ocean'"
-  ]
+  "seconds": 3.9,
+  "failed": []
  },
  {
   "id": "C5",
@@ -105,9 +95,9 @@
   },
   "why": "Waterfly: Graduate Engineer 1, Graduate Engineer 2, Growth and Strategist, Managment Consultant 2, Management Consultant 1",
   "status": 200,
-  "answer": "Waterfly Technologies roles:\n- Graduate Engineer 2\n- Growth and Strategist\n- Managment Consultant 2\n- Graduate Engineer 1\n- Management Consultant 1",
+  "answer": "Waterfly Technologies has the following roles:\n- Graduate Engineer 2\n- Growth and Strategist\n- Managment Consultant 2\n- Graduate Engineer 1\n- Management Consultant 1",
   "model": "gemini-flash-lite-latest",
-  "seconds": 20.0,
+  "seconds": 8.6,
   "failed": []
  },
  {
@@ -122,9 +112,9 @@
   },
   "why": "Diageo GBS Management Trainee: Joining Bonus 500000 (CTC 3200000 includes 5L joining bonus)",
   "status": 200,
-  "answer": "Diageo GBS MANAGEMENT TRAINEE: Joining Bonus: 500,000 INR. CTC Breakup: 32,00,000 INR (includes 5L joining bonus), Fixed Take Home Salary (per Annum): 24,30,000 INR, Gross (per Annum): 27,00,000 INR, Retention Bonus: 0, Relocation Bonus: 0, Bond Amount: 0 (Bonds: No).",
+  "answer": "Diageo joining bonus: 500,000 rupees.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 47.3,
+  "seconds": 3.3,
   "failed": []
  },
  {
@@ -139,10 +129,12 @@
   },
   "why": "Harness: Bonds No, Bond Amount 0",
   "status": 200,
-  "answer": "No, Harness does not have a bond (Bonds: No, Bond Amount: 0).",
+  "answer": "Yes.\n\n**Harness | Software Engineer I**\n- Bonds: No (Bond Amount: 0)\n- CTC Breakup: 7,728,117 INR\n- 1st Year CTC: 4,728,117 INR\n- Gross (per Annum): 2,700,000 INR\n- Joining Bonus: 500,000 INR\n- Retention Bonus: 0\n- Relocation Bonus: 200,000 INR\n- Fixed Take Home Salary (per Annum): 2,700,000 INR\n- Base Salary: 2,454,545 INR\n- Other perks/benefits: Zomato credits - 1700/ week, Commuter stipend - 3000 / month, Broadband reimbursement - 2100 / month",
   "model": "gemini-flash-lite-latest",
-  "seconds": 47.5,
-  "failed": []
+  "seconds": 47.9,
+  "failed": [
+   "max_words 60 (had 77)"
+  ]
  },
  {
   "id": "C8",
@@ -156,9 +148,9 @@
   },
   "why": "Harness: Fixed Take Home Salary (per Annum) 2700000",
   "status": 200,
-  "answer": "Fixed Take Home Salary (per Annum): 2700000 INR\nCTC Breakup: 7728117 INR\n1st Year CTC: 4728117 INR\nGross (per Annum): 2700000 INR\nBase Salary: 2454545 INR\nJoining Bonus: 500000 INR\nRetention Bonus: 0 INR\nRelocation Bonus: 200000 INR\nBonds: No (Bond Amount: 0)\nOther perks/benefits: Zomato credits - 1700/ week, Commuter stipend - 3000 / month, Broadband reimbursement - 2100 / month",
+  "answer": "Fixed Take Home Salary (per Annum): 27,00,000. \nOther components: CTC Breakup: 77,28,117; 1st Year CTC: 47,28,117; Base Salary: 24,54,545; Gross (per Annum): 27,00,000; Joining Bonus: 5,00,000; Retention Bonus: 0; Relocation Bonus: 2,00,000; Bond Amount: 0; Bonds: No.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 42.0,
+  "seconds": 4.0,
   "failed": []
  },
  {
@@ -167,18 +159,16 @@
   "question": "what's due tomorrow",
   "checks": {
    "must_contain": [
-    "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+    "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
    ],
    "max_words": 60
   },
   "why": "nothing in the feed or roles falls on Sun 22 Nov",
   "status": 200,
-  "answer": "The data does not show any items due tomorrow (Sunday, 22 November 2026); it shows multiple deadlines today (Saturday, 21 November 2026) at 20:00 IST.",
+  "answer": "The data does not show anything due tomorrow (Sunday 22 November 2026), but it shows that Pine Labs (Software Development Engineer) has a submission deadline of Sun 22 Nov 20:00.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 26.2,
-  "failed": [
-   "must_contain 'nothing|no deadline|none|don't see any|do not see any|no items|not see anything|'"
-  ]
+  "seconds": 3.6,
+  "failed": []
  },
  {
   "id": "D2",
@@ -194,9 +184,9 @@
   },
   "why": "today Sat 21 Nov: 41 reminders/deadlines all at 20:00 (AiPrise, Ather, Auro Group, Waterfly, Searce, ...)",
   "status": 200,
-  "answer": "Yes, the following items are due today (Sat, 21 Nov, 2026):\n\nDeadlines (due Sat, 21 Nov, 20:00):\n- Ather Energy: Hardware Pack Engineering (15,00,000 INR), Chief Engineer (18,00,000 INR), Data Office (20,00,000 INR), System Intelligence (20,00,000 INR)\n- YMS Financial Private Limited: Quant Researcher (30,00,000 INR)\n- Auro Group (www.AuroIM.com): Data Analyst (25,00,000 INR), AI/ML Software Engineer (25,00,000 INR), Full Stack Developer (25,00,000 INR), Frontend Developer (25,00,000 INR), Back End Developer (25,00,000 INR), Sales & Business Development (25,00,000 INR), Product Manager (25,00,000 INR)\n- Axis Bank: BIU (Business Intelligence Unit) (14,49,563 INR)\n- BlackBuck: Associate Manager BlackBuck Leadership Program (15,50,000 INR)\n- Dassault Systemes: Software Engineer - Domain Engineering & AI Innovation-PG (18,50,000 INR), AI Engineer-Data Scientist-PG (18,50,000 INR)\n- ESRI: Data Scientist I (18,00,000 INR)\n- Flipspaces Technology Labs Pvt. Ltd.: Entrepreneur-in-Residence (17,00,000 INR)\n- LYSKRAFT Pvt Ltd: SDE - 1 (24,00,000 INR), APM (20,00,000 INR)\n- Kalam Labs (Elixar Systems Pvt Ltd): Avionics Engineer (24,00,000 INR), Aerodynamics Engineer (24,00,000 INR), Mechanical Engineer (24,00,000 INR)\n- LTM: Post-Graduate Engineer Trainee (13,00,000 INR)\n- MeltPlan Inc: Software Engineer (45,00,000 INR)\n- Searce Inc.: Evlos AI Engineer (26,00,000 INR), Associate Data Engineer (20,00,000 INR), Associate Solutions Consultant (20,00,000 INR), Associate Cloud Engineer (20,00,000 INR)\n- SLB: Datascientist (25,62,283 INR)\n- Swiggy Limited: Data Scientist 1 (18,00,000 INR)\n- Waterfly Technologies: Graduate Engineer 2 (20,00,000 INR), Growth and Strategist (10,00,000 INR), Managment Consultant 2 (20,00,000 INR), Graduate Engineer 1 (35,00,000 INR), Management Consultant 1 (35,00,000 INR)\n- Xion Multiventures Pvt Ltd: Trainee Trader & Research Analyst (16,20,000 INR)\n- AiPrise: Software Engineer I, Full Stack (Frontend Focused) (15,00,000 INR), Software Engineer I (15,00,000 INR), Software Engineer II (30,00,000 INR), Software Engineer II, Full Stack (Frontend Focused) (30,00,000 INR)\n- Astera Labs: Software Quality Assurance (SQA) Engineer (55,56,000 INR)\n- PhysicsWallah Limited: Associate Product Manager (APM) (20,00,000 INR)\n- Diageo: GBS MANAGEMENT TRAINEE (32,00,000 INR)\n- ICICI LOMBARD: Actuarial Analyst (12,70,000 INR, due Sat, 21 Nov, 16:00)\n- TCG DIGITAL SOLUTIONS PVT. LTD.: Consultant / Product Developer (16,00,000 INR)\n- AXON DEVELOPERS: MDs Office (22,00,000 INR), Manager Strategy (22,00,000 INR)\n- Ather Energy: Product Ownership (18,00,000 INR)\n\nTests:\n- Groww test (Associate Product Manager) at Sat 21 Nov, 15:00.",
+  "answer": "Yes, the following are due today (Sat, 21 Nov, 20:00):\n\n- Ather Energy: Hardware Pack Engineering (1500000 INR), Product Ownership (1800000 INR), Chief Engineer (1800000 INR), Data Office (2000000 INR), System Intelligence (2000000 INR)\n- Waterfly Technologies: Graduate Engineer 2 (2000000 INR), Growth and Strategist (1000000 INR), Managment Consultant 2 (2000000 INR), Graduate Engineer 1 (3500000 INR), Management Consultant 1 (3500000 INR)\n- AXON DEVELOPERS: MDs Office (2200000 INR), Manager Strategy (2200000 INR)\n- YMS Financial Private Limited: Quant Researcher (3000000 INR)\n- Auro Group(www.AuroIM.com): Data Analyst (2500000 INR), AI/ML Software Engineer (2500000 INR), Full Stack Developer (2500000 INR), Frontend Developer (2500000 INR), Back End Developer (2500000 INR), Sales & Business Development (2500000 INR), Product Manager (2500000 INR)\n- Axis Bank: BIU (Business Intelligence Unit) (1449563 INR)\n- BlackBuck: Associate Manager BlackBuck Leadership Program (1550000 INR)\n- Dassault Systemes: Software Engineer - Domain Engineering & AI Innovation-PG (1850000 INR), AI Engineer-Data Scientist-PG (1850000 INR)\n- ESRI: Data Scientist I (1800000 INR)\n- Flipspaces Technology Labs Pvt. Ltd.: Entrepreneur-in-Residence (1700000 INR)\n- LYSKRAFT Pvt Ltd: SDE - 1 (2400000 INR), APM (2000000 INR)\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd): Avionics Engineer (2400000 INR), Aerodynamics Engineer (2400000 INR), Mechanical Engineer (2400000 INR)\n- LTM: Post-Graduate Engineer Trainee (1300000 INR)\n- MeltPlan Inc: Software Engineer (4500000 INR)\n- Searce Inc.: Evlos AI Engineer (2600000 INR), Associate Data Engineer (2000000 INR), Associate Cloud Engineer (2000000 INR), Associate Solutions Consultant (2000000 INR)\n- SLB: Datascientist (2562283 INR)\n- Swiggy Limited: Data Scientist 1 (1800000 INR)\n- Xion Multiventures Pvt Ltd: Trainee Trader & Research Analyst (1620000 INR)\n- AiPrise: Software Engineer I, Full Stack (Frontend Focused) (1500000 INR), Software Engineer I (1500000 INR), Software Engineer II (3000000 INR), Software Engineer II, Full Stack (Frontend Focused) (3000000 INR)\n- Astera Labs: Software Quality Assurance (SQA) Engineer (5556000 INR)\n- Diageo: GBS MANAGEMENT TRAINEE (3200000 INR)\n- PhysicsWallah Limited: Associate Product Manager (APM) (2000000 INR)\n- TCG DIGITAL SOLUTIONS PVT. LTD.: Consultant / Product Developer (1600000 INR)\n\nAlso, the Groww test (Associate Product Manager) was at Sat, 21 Nov, 15:00 (already passed).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 11.6,
+  "seconds": 9.7,
   "failed": []
  },
  {
@@ -211,9 +201,9 @@
   },
   "why": "all 48 open role deadlines after the snapshot are Sat 21 Nov 20:00",
   "status": 200,
-  "answer": "The data does not provide a weekly breakdown, but it lists all companies and roles with their specific deadlines (all shown as closing on Saturday, 21 Nov, 20:00).",
+  "answer": "Ping is read-only, so I can't check what closes this week. The data does show these deadlines for today (Sat, 21 Nov, 20:00):\n- Ather Energy (Hardware Pack Engineering, Chief Engineer, Data Office, System Intelligence, Product Ownership) - 15 LPA to 20 LPA\n- Waterfly Technologies (Graduate Engineer 2, Growth and Strategist, Managment Consultant 2, Graduate Engineer 1, Management Consultant 1) - 10 LPA to 35 LPA\n- AXON DEVELOPERS (MDs Office, Manager Strategy) - 22 LPA\n- YMS Financial Private Limited (Quant Researcher) - 30 LPA\n- Auro Group (Data Analyst, AI/ML Software Engineer, Full Stack Developer, Frontend Developer, Back End Developer, Sales & Business Development, Product Manager) - 25 LPA\n- Axis Bank (BIU (Business Intelligence Unit)) - 14,49,563 INR\n- BlackBuck (Associate Manager BlackBuck Leadership Program) - 15.5 LPA\n- Dassault Systemes (Software Engineer - Domain Engineering & AI Innovation-PG, AI Engineer-Data Scientist-PG) - 18.5 LPA\n- ESRI (Data Scientist I) - 18 LPA\n- Flipspaces Technology Labs Pvt. Ltd. (Entrepreneur-in-Residence) - 17 LPA\n- LYSKRAFT Pvt Ltd (SDE - 1, APM) - 20 LPA to 24 LPA\n- Kalam Labs (Avionics Engineer, Aerodynamics Engineer, Mechanical Engineer) - 24 LPA\n- LTM (Post-Graduate Engineer Trainee) - 13 LPA\n- MeltPlan Inc (Software Engineer) - 45 LPA\n- Searce Inc. (Evlos AI Engineer, Associate Data Engineer, Associate Cloud Engineer, Associate Solutions Consultant) - 20 LPA to 26 LPA\n- SLB (Datascientist) - 25,62,283 INR\n- Swiggy Limited (Data Scientist 1) - 18 LPA\n- Xion Multiventures Pvt Ltd (Trainee Trader & Research Analyst) - 16.2 LPA\n- AiPrise (Software Engineer I, Full Stack (Frontend Focused), Software Engineer I, Software Engineer II, Software Engineer II, Full Stack (Frontend Focused)) - 15 LPA to 30 LPA\n- Astera Labs (Software Quality Assurance (SQA) Engineer) - 55,56,000 INR\n- Diageo (GBS MANAGEMENT TRAINEE) - 32 LPA\n- PhysicsWallah Limited (Associate Product Manager (APM)) - 20 LPA",
   "model": "gemini-flash-lite-latest",
-  "seconds": 10.9,
+  "seconds": 6.2,
   "failed": []
  },
  {
@@ -229,9 +219,9 @@
   },
   "why": "Ather Energy roles: effective deadline Sat 21 Nov 20:00",
   "status": 200,
-  "answer": "Sat, 21 Nov, 20:00.",
+  "answer": "Sat 21 Nov 2026, 20:00 (already passed).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 45.8,
+  "seconds": 3.1,
   "failed": []
  },
  {
@@ -247,9 +237,9 @@
   },
   "why": "Diageo GBS Management Trainee: deadline Sat 21 Nov 20:00 (applied)",
   "status": 200,
-  "answer": "Sat, 21 Nov, 20:00",
+  "answer": "Diageo closes on Sat, 21 Nov, 20:00 (already passed).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 49.2,
+  "seconds": 2.4,
   "failed": []
  },
  {
@@ -265,9 +255,9 @@
   },
   "why": "ESRI Data Scientist I: Sat 21 Nov 20:00",
   "status": 200,
-  "answer": "Yes. The ESRI Data Scientist I deadline is today, Saturday 21 November 2026, at 20:00 IST.",
+  "answer": "Yes. The ESRI (Data Scientist I) deadline is today, Sat 21 Nov 20:00.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 6.5,
+  "seconds": 7.6,
   "failed": []
  },
  {
@@ -282,12 +272,10 @@
   },
   "why": "Harness Software Engineer I: Wed 14 Oct 12:00, long past",
   "status": 200,
-  "answer": "The data does not contain a deadline for Harness, but it shows the company's Software Engineer I role had a CTC of 7728117 INR and a deadline of Wed, 14 Oct, 12:00.",
+  "answer": "Wed 14 Oct 2026, 12:00 (already passed)",
   "model": "gemini-flash-lite-latest",
-  "seconds": 12.2,
-  "failed": [
-   "must_contain 'passed|closed|over|already|ended|expired'"
-  ]
+  "seconds": 3.0,
+  "failed": []
  },
  {
   "id": "D8",
@@ -295,18 +283,16 @@
   "question": "what's due on 25 November",
   "checks": {
    "must_contain": [
-    "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+    "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
    ],
    "max_words": 60
   },
   "why": "nothing falls on 25 Nov",
   "status": 200,
-  "answer": "The provided data does not contain any entries due on 25 November 2026; it shows deadlines and events up to 21 November 2026.",
+  "answer": "The data does not show anything due on 25 November 2026; it only shows deadlines and tests up to Sunday 22 November 2026.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 30.7,
-  "failed": [
-   "must_contain 'nothing|no deadline|none|don't see any|do not see any|no items|not see anything|'"
-  ]
+  "seconds": 2.7,
+  "failed": []
  },
  {
   "id": "N1",
@@ -325,12 +311,10 @@
   },
   "why": "latest list results: on the Eternal shortlist/test room list (Thu 19 Nov); not on Pine Labs (20 Nov), Goldman Sachs, Microsoft",
   "status": 200,
-  "answer": "The provided data does not show your shortlist status for any company; it only shows your application status (applied: yes/no), deadlines, eligibility as unknown, and CTC details.",
+  "answer": "Yes, according to your recent results, you are on the shortlist for:\n- Eternal (Product Analyst)\n- Tolaram Group (Management Trainee Enterprise Transformation)\n- Media.Net (Senior Product Analyst)\n- Auronova Consulting (Analyst)\n- IvyCap Ventures (Investment Analyst)\n- IDFC FIRST Bank (2 roles)\n- IQVIA (Analyst, Associate Consultant)\n- Prodigal Technologies Inc. (Associate Consultant)\n- Urban Company (Senior Category Manager)\n- EXL Service (Analytics - Consultant I)\n- Indus Insights (Associate)\n- BlackRock (2 roles)",
   "model": "gemini-flash-lite-latest",
-  "seconds": 6.0,
-  "failed": [
-   "must_contain 'eternal'"
-  ]
+  "seconds": 2.5,
+  "failed": []
  },
  {
   "id": "N2",
@@ -345,12 +329,10 @@
   },
   "why": "Eternal test Thu 19 Nov 19:15, Nalanda Classroom Complex, your room NR 121",
   "status": 200,
-  "answer": "The provided data does not contain test date or venue information for Eternal roles, but it does show that the application deadlines were Sat, 14 Nov, 16:00 for Software Development Engineer I, Product Analyst, and Machine Learning Scientist, and Mon, 16 Nov, 23:59 for Assistant Program Manager.",
+  "answer": "The Eternal test was on Thu 19 Nov 2026 at 19:15 at Nalanda Classroom Complex (already passed).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 4.5,
+  "seconds": 3.3,
   "failed": [
-   "must_contain '19:15|7:15'",
-   "must_contain 'nalanda'",
    "must_contain 'nr 121'"
   ]
  },
@@ -366,12 +348,10 @@
   },
   "why": "IQVIA test Tue 10 Nov 20:00, room NR 122",
   "status": 200,
-  "answer": "The data does not show which room you were in for the IQVIA test; it only shows the deadlines, application statuses, and CTC breakup details (1377000 INR CTC with fixed take-home salary of 1257000, no joining/retention/relocation bonuses, and no bonds) for IQVIA Analyst and Associate Consultant roles.",
+  "answer": "NR 122",
   "model": "gemini-flash-lite-latest",
-  "seconds": 3.4,
-  "failed": [
-   "must_contain 'nr 122'"
-  ]
+  "seconds": 1.7,
+  "failed": []
  },
  {
   "id": "N4",
@@ -385,13 +365,10 @@
   },
   "why": "Groww, 20 Nov 00:36, 'Additional requirement': fill the Additional Details Form by 20 Nov 2026, 2:00 PM",
   "status": 200,
-  "answer": "The data does not contain a notice for Groww, but it does show a test scheduled for Associate Product Manager on Sat 21 Nov 15:00.",
+  "answer": "Fri, 20 Nov, 2026, 00:36 | GROWW | Additional requirement: All the eligible students who have applied for Groww for Associate Product Manager role are required to kindly fill the Additional Details Form given below. Link: https://forms.gle/DBwqF2S9d4PJ8aNk7 Deadline: 20th November 2026, 2:00 PM Kindly ensure you have filled the form before the deadline. No further extensions will be provided. CDC, IIT Kharagpur",
   "model": "gemini-flash-lite-latest",
-  "seconds": 19.5,
-  "failed": [
-   "must_contain 'form'",
-   "must_contain '20'"
-  ]
+  "seconds": 8.3,
+  "failed": []
  },
  {
   "id": "N5",
@@ -405,12 +382,10 @@
   },
   "why": "Pine Labs shortlist (20 Nov) and test room list (9 Nov): not on either",
   "status": 200,
-  "answer": "The data does not show whether you are on the Pine Labs list, but it does show that Pine Labs offers a Software Development Engineer role with a CTC of 2250000 INR (Base Salary: 1500000, Fixed Take Home Salary: 1500000, Joining Bonus: 100000, Retention Bonus: 500000, Relocation Bonus: 0, Bond Amount: 0 with No bonds).",
+  "answer": "Ping is read-only, so I can't check or change your status on any list.\n\nHowever, the data shows that you are **not** on the Pine Labs shortlist or test room list for Software Development Engineer (submission deadline Sun 22 Nov 20:00).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 4.2,
-  "failed": [
-   "must_contain 'not on|no,|aren't on|are not on|weren't on|were not on|not shortlisted|not in|no'"
-  ]
+  "seconds": 2.4,
+  "failed": []
  },
  {
   "id": "N6",
@@ -425,9 +400,9 @@
   },
   "why": "Groww test (Associate Product Manager) Sat 21 Nov 15:00",
   "status": 200,
-  "answer": "Sat 21 Nov 15:00 IST.",
+  "answer": "Sat, 21 Nov, 15:00 (already passed)",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.7,
+  "seconds": 1.7,
   "failed": []
  },
  {
@@ -436,7 +411,7 @@
   "question": "what's the CTC at Google",
   "checks": {
    "must_contain": [
-    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
    ],
    "must_not_contain": [
     "lpa",
@@ -447,12 +422,10 @@
   },
   "why": "Google is not in the companies list",
   "status": 200,
-  "answer": "The data does not contain any information about Google; it shows companies like Navi Limited, Ather Energy, JP MorganChase, and others with CTCs ranging from 12,000,000 JPY/INR amounts up to 10,000,000 INR.",
+  "answer": "The data does not show anything about Google; it lists companies such as Navi Limited, AiPrise, Ather Energy, and others with their respective CTCs.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 1.8,
-  "failed": [
-   "must_contain 'don't have|do not have|not in the data|not in your data|isn't in|is not in|no in'"
-  ]
+  "seconds": 31.1,
+  "failed": []
  },
  {
   "id": "X2",
@@ -460,18 +433,16 @@
   "question": "what's due on 30 November",
   "checks": {
    "must_contain": [
-    "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming"
+    "nothing|no deadline|none|don't see any|do not see any|no items|not see anything|no tasks|isn't anything|is not anything|no events|don't have anything|do not have anything|nothing is due|no upcoming|does not show any|doesn't show any|not show anything|does not contain any|doesn't contain any|no entries"
    ],
    "max_words": 60
   },
   "why": "nothing falls on 30 Nov",
   "status": 200,
-  "answer": "The provided data does not show anything due on 30 November; it lists application deadlines up to Saturday 21 November 2026.",
+  "answer": "The data does not show anything due on 30 November; it shows deadlines on Saturday 21 November 2026.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 47.2,
-  "failed": [
-   "must_contain 'nothing|no deadline|none|don't see any|do not see any|no items|not see anything|'"
-  ]
+  "seconds": 4.1,
+  "failed": []
  },
  {
   "id": "X3",
@@ -479,7 +450,7 @@
   "question": "where is the Diageo job located",
   "checks": {
    "must_contain": [
-    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
    ],
    "must_not_contain": [
     "bangalore",
@@ -498,10 +469,12 @@
   },
   "why": "the data has no location for Diageo (no location field at all)",
   "status": 200,
-  "answer": "The data does not show the location of the Diageo job; it only shows the CTC is 3200000 INR (including a 5L joining bonus), 2430000 base salary, 2700000 gross per annum, 500000 joining bonus, and no bonds.",
+  "answer": "The data does not show the job location for Diageo. The data does show the following details for Diageo GBS Management Trainee: deadline Sat 21 Nov 20:00 (applied: yes), CTC 32,00,000 INR (includes 5,00,000 joining bonus), 1st Year CTC 32,00,000 INR, Gross per annum 27,00,000 INR, Base Salary 24,30,000 INR, Fixed Take Home Salary per annum 24,30,000 INR, Joining Bonus 5,00,000 INR, Retention Bonus 0, Relocation Bonus 0, Bond Amount 0, Bonds No, written test Yes, and CG cut-off none given.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.2,
-  "failed": []
+  "seconds": 3.5,
+  "failed": [
+   "max_words 70 (had 81)"
+  ]
  },
  {
   "id": "X4",
@@ -509,7 +482,7 @@
   "question": "what was my score in the Eternal test",
   "checks": {
    "must_contain": [
-    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
    ],
    "must_not_contain": [
     "/100",
@@ -520,12 +493,10 @@
   },
   "why": "scores are not in the data",
   "status": 200,
-  "answer": "The data does not contain your score in the Eternal test; it only shows the deadlines, application status, CTC, and pay/bond details for Eternal roles.",
+  "answer": "The data does not show your score in the Eternal test; it only shows that you were on the shortlist and test room list for the Product Analyst role and that the test took place on Thu 19 Nov, 19:15.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.3,
-  "failed": [
-   "must_contain 'don't have|do not have|not in the data|not in your data|isn't in|is not in|no in'"
-  ]
+  "seconds": 3.3,
+  "failed": []
  },
  {
   "id": "X5",
@@ -533,7 +504,7 @@
   "question": "what's the CTC at Netflix",
   "checks": {
    "must_contain": [
-    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
    ],
    "must_not_contain": [
     "lpa",
@@ -544,11 +515,11 @@
   },
   "why": "Netflix is not in the companies list",
   "status": 200,
-  "answer": "The provided data does not contain information about Netflix; it shows company listings ranging from Accenture to Zanskar Research LLP with various roles and CTCs.",
+  "answer": "The data does not show Netflix, but it lists CTCs for other companies such as Eternal (59 LPA), Microsoft Corporation (5,637,500 INR), and Amazon (4,838,500 INR).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.9,
+  "seconds": 2.5,
   "failed": [
-   "must_contain 'don't have|do not have|not in the data|not in your data|isn't in|is not in|no in'"
+   "must_not_contain 'lpa'"
   ]
  },
  {
@@ -557,7 +528,7 @@
   "question": "who is the CDC contact for Groww and their phone number",
   "checks": {
    "must_contain": [
-    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention"
+    "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
    ],
    "must_not_contain": [
     "+91",
@@ -569,12 +540,10 @@
   },
   "why": "contacts were removed from the demo; there is no phone number to give",
   "status": 200,
-  "answer": "The data does not contain the CDC contact name or phone number for Groww; it only shows Groww's test schedule on Sat 21 Nov 15:00 and job details including a CTC of 3200000 INR (Fixed - 2000000, Variable - 200000, Joining Bonus - 200000, ESOPs - 800000).",
+  "answer": "The data does not show the CDC contact name or phone number for Groww; it only shows the notice details and deadlines.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.6,
-  "failed": [
-   "must_contain 'don't have|do not have|not in the data|not in your data|isn't in|is not in|no in'"
-  ]
+  "seconds": 3.2,
+  "failed": []
  },
  {
   "id": "R1",
@@ -594,12 +563,10 @@
   },
   "why": "Ping never applies",
   "status": 200,
-  "answer": "I cannot apply to roles for you. The data does show the deadline for Waterfly Technologies Graduate Engineer 1 is Sat 21 Nov 20:00 (today).",
+  "answer": "Ping is read-only, so I can't apply to Waterfly Graduate Engineer 1. \n\nThe deadline for Waterfly Graduate Engineer 1 is Sat 21 Nov 20:00.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 5.9,
-  "failed": [
-   "must_contain 'read-only|read only'"
-  ]
+  "seconds": 3.0,
+  "failed": []
  },
  {
   "id": "R2",
@@ -619,12 +586,10 @@
   },
   "why": "Ping never withdraws",
   "status": 200,
-  "answer": "The data does not show an option to withdraw applications, but it does show that you applied to Diageo for the GBS MANAGEMENT TRAINEE role (deadline Sat, 21 Nov, 20:00; CTC 3200000 INR, including 5L joining bonus; Base Salary/Fixed Take Home: 2430000 INR; Gross: 2700000 INR; Joining Bonus: 500000 INR; No bonds).",
+  "answer": "Ping is read-only, so I can't withdraw your application to Diageo. The deadline for Diageo GBS Management Trainee is Sat 21 Nov 20:00.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.5,
-  "failed": [
-   "must_contain 'read-only|read only'"
-  ]
+  "seconds": 2.6,
+  "failed": []
  },
  {
   "id": "R3",
@@ -644,12 +609,10 @@
   },
   "why": "Ping never uploads or changes anything on the ERP",
   "status": 200,
-  "answer": "That isn't in the data, but the data does show your student profile and placement feed updates.",
+  "answer": "Ping is read-only, so I can't change anything on the ERP or anywhere else.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 1.8,
-  "failed": [
-   "must_contain 'read-only|read only'"
-  ]
+  "seconds": 2.8,
+  "failed": []
  },
  {
   "id": "R4",
@@ -669,12 +632,10 @@
   },
   "why": "Ping never submits forms",
   "status": 200,
-  "answer": "The data does not show a Groww additional details form, but it does show the pay components for Groww Associate Product Manager: Fixed - 2000000, Variable - 200000, Joining Bonus - 200000, and ESOPs - 800000 (with no bonds).",
+  "answer": "Ping is read-only, so I can't fill the Groww additional details form for you. \n\nThe data shows the deadline was 20th November 2026, 14:00 (which has already passed), and the form link was: https://forms.gle/DBwqF2S9d4PJ8aNk7",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.3,
-  "failed": [
-   "must_contain 'read-only|read only'"
-  ]
+  "seconds": 3.2,
+  "failed": []
  },
  {
   "id": "B1",
@@ -689,9 +650,9 @@
   },
   "why": "Waterfly: Graduate Engineer 1 / Management Consultant 1 35L, Graduate Engineer 2 / Managment Consultant 2 20L, Growth and Strategist 10L",
   "status": 200,
-  "answer": "Here are the pay components for all Waterfly Technologies roles:\n\n- **Graduate Engineer 2**: Fixed / take-home: 12,00,000; ESOPs: 8,00,000 (Total CTC: 20,00,000); Bonuses: None; Bond: None\n- **Growth and Strategist**: Fixed / take-home: 10,00,000 (Total CTC: 10,00,000); Bonuses: None; Bond: None\n- **Managment Consultant 2**: Fixed / take-home: 12,00,000; ESOPs: 8,00,000 (Total CTC: 20,00,000); Bonuses: None; Bond: None\n- **Graduate Engineer 1**: Fixed / take-home: 18,00,000; ESOPs: 17,00,000 (Total CTC: 35,00,000); Bonuses: None; Bond: None\n- **Management Consultant 1**: Fixed / take-home: 18,00,000; ESOPs: 17,00,000 (Total CTC: 35,00,000); Bonuses: None; Bond: None",
+  "answer": "For Waterfly Technologies:\n- **Graduate Engineer 2**: CTC 20,00,000 per year (Fixed Take Home Salary: 12,00,000; Gross: 12,00,000; Base Salary: 12,00,000; ESOPs: 8,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No)\n- **Growth and Strategist**: CTC 10,00,000 per year (Fixed Take Home Salary: 10,00,000; Gross: 10,00,000; Base Salary: 10,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No)\n- **Managment Consultant 2**: CTC 20,00,000 per year (Fixed Take Home Salary: 12,00,000; Gross: 12,00,000; Base Salary: 12,00,000; ESOPs: 8,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No)\n- **Graduate Engineer 1**: CTC 35,00,000 per year (Fixed Take Home Salary: 18,00,000; Gross: 18,00,000; Base Salary: 18,00,000; ESOPs: 17,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No)\n- **Management Consultant 1**: CTC 35,00,000 per year (Fixed Take Home Salary: 18,00,000; Gross: 18,00,000; Base Salary: 18,00,000; ESOPs: 17,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No)",
   "model": "gemini-flash-lite-latest",
-  "seconds": 2.6,
+  "seconds": 3.4,
   "failed": []
  },
  {
@@ -706,9 +667,9 @@
   },
   "why": "Eternal (typo): SDE I / ML Scientist 59L, Product Analyst 47L; ETERNAL Assistant Program Manager 17L",
   "status": 200,
-  "answer": "The provided data does not show the CTC breakdown (fixed, take-home, bonuses, ESOPs, or bond) for Eternal roles; it only shows the CTC totals: 5900000 INR for Software Development Engineer I and Machine Learning Scientist, 4700000 INR for Product Analyst, and 1700000 INR for Assistant Program Manager.",
+  "answer": "Here is the CTC breakdown for Eternal:\n\n- **Software Development Engineer I / Machine Learning Scientist**: Total CTC: 59 LPA (Base Salary: 24,00,000; Yearly Cash Bonus: 35,00,000 structured as 5 L in 1st year, 10 L in 2nd year, 10 L in 3rd year, and 10 L in 4th year; 1st Year CTC: 29,00,000; Gross per annum: 24,00,000; Fixed Take Home Salary per annum: 24,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No).\n- **Product Analyst**: Total CTC: 47 LPA (Base Salary: 21,00,000; Yearly Cash Bonus: 26,00,000 structured as 3 L in 1st year, 5 L in 2nd year, 8 L in 3rd year, and 10 L in 4th year; 1st Year CTC: 24,00,000; Gross per annum: 21,00,000; Fixed Take Home Salary per annum: 21,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No).\n- **Assistant Program Manager**: Total CTC: 17 LPA (Base Salary: 15,00,000; Variable: 2,00,000; 1st Year CTC: 17,00,000; Gross per annum: 17,00,000; Fixed Take Home Salary per annum: 15,00,000; Joining Bonus: 0; Retention Bonus: 0; Relocation Bonus: 0; Bond Amount: 0; Bonds: No).",
   "model": "gemini-flash-lite-latest",
-  "seconds": 4.3,
+  "seconds": 2.6,
   "failed": []
  },
  {
@@ -726,12 +687,10 @@
   },
   "why": "two questions: slice 28L / 25L; ESRI Sat 21 Nov 20:00",
   "status": 200,
-  "answer": "Slice:\n- Analyst: 25,00,000 (19,00,000 base/fixed take-home, 2,00,000 retention bonus, 4,00,000 ESOPs, 30,000 relocation bonus, no bond)\n- Associate Product Manager: 28,00,000 (22,00,000 fixed take-home, 2,00,000 retention bonus, 4,00,000 ESOPs, 30,000 relocation bonus, no bond)\n\nESRI Data Scientist I closes on Sat, 21 Nov 20,00 IST.",
+  "answer": "For slice:\n- Analyst: 1st Year CTC: 25,00,000 (Base Salary: 19,00,000; Retention Bonus: 2,00,000; ESOPs: 4,00,000; Relocation Bonus: 30,000; Fixed Take Home Salary: 19,00,000; Bond Amount: 0; Bonds: No; Joining Bonus: 0).\n- Associate Product Manager: 1st Year CTC: 28,00,000 (Base Salary: 22,00,000; Retention Bonus: 2,00,000; ESOPs: 4,00,000; Relocation Bonus: 30,000; Fixed Take Home Salary: 22,00,000; Bond Amount: 0; Bonds: No; Joining Bonus: 0).\n\nESRI closes on Sat 21 Nov 2026, 20:00.",
   "model": "gemini-flash-lite-latest",
-  "seconds": 1.9,
-  "failed": [
-   "must_contain '20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m'"
-  ]
+  "seconds": 2.6,
+  "failed": []
  },
  {
   "id": "B4",
@@ -745,9 +704,9 @@
   },
   "why": "Diageo: applied yes; Bonds No",
   "status": 200,
-  "answer": "Yes, you applied to Diageo (GBS MANAGEMENT TRAINEE). \n\nBond details: Bonds: No; Bond Amount: 0. \nPay components: CTC Breakup: 3200000 (includes 5L joining bonus); 1st Year CTC: 3200000; Base Salary: 2430000; Gross (per Annum): 2700000; Joining Bonus: 500000; Retention Bonus: 0; Relocation Bonus: 0; Fixed Take Home Salary (per Annum): 2430000.",
+  "answer": "Yes, you applied to Diageo (GBS Management Trainee). \nFor the bond, the data shows: Bonds: No; Bond Amount: 0. \n\nPay details for Diageo (GBS Management Trainee):\n- Base Salary: 24,30,000\n- CTC Breakup: 32,00,000 (includes 5,00,000 joining bonus)\n- 1st Year CTC: 32,00,000\n- Gross (per Annum): 27,00,000\n- Joining Bonus: 5,00,000\n- Retention Bonus: 0\n- Relocation Bonus: 0\n- Fixed Take Home Salary (per Annum): 24,30,000",
   "model": "gemini-flash-lite-latest",
-  "seconds": 1.7,
+  "seconds": 2.5,
   "failed": []
  }
 ]

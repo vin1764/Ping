@@ -91,3 +91,25 @@ def test_wrong_answer_is_reported():
 def test_question_matching(shown, stored, ok):
     from ping.erp import match_question
     assert (match_question(shown, [SecurityAnswer(stored, "x")]) is not None) == ok
+
+
+def test_login_failure_after_otp_is_retried_once(monkeypatch):
+    import ping.erp as erp_mod
+    monkeypatch.setattr(erp_mod.time, "sleep", lambda s: None)
+    fake = FakeErp(NOW)
+    real_send = fake.send
+    state = {"auth": 0}
+
+    def flaky(method, url, data, headers):
+        if url.endswith("/SSOAdministration/auth.htm"):
+            state["auth"] += 1
+            if state["auth"] == 1:
+                from ping.gate import Reply
+                return Reply(200, url, {"content-type": "text/html"},
+                             b"<div class='x'>Invalid OTP. Please try again.</div>")
+        return real_send(method, url, data, headers)
+
+    fake.send = flaky
+    rec, _ = run(fake)
+    assert rec["status"] == "ok", rec["problems"]
+    assert state["auth"] == 2

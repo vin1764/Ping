@@ -64,6 +64,19 @@ def _clean_question(raw: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _login_failure_hint(reply) -> str:
+    """What the ERP showed after Log In, without echoing anything we typed."""
+    from urllib.parse import urlsplit
+    text = re.sub(r"(?is)<(script|style).*?</\1>", " ", reply.text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    m = re.search(r"[^.]{0,80}\b(invalid|incorrect|wrong|expired|mismatch|not match|blocked|locked|"
+                  r"try again|already|error|fail\w*)\b[^.]{0,80}", text, re.I)
+    where = urlsplit(reply.url).path
+    return (f"HTTP {reply.status} at {where}; ERP says: \"{m.group(0).strip()[:200]}\"" if m
+            else f"HTTP {reply.status} at {where}; no home page and no error text")
+
+
 class ErpClient:
     def __init__(self, gate: Gate, secrets: Secrets, mailbox, log=print,
                  otp_wait: float = OTP_WAIT_SECONDS, pause: float = REQUEST_PAUSE_SECONDS):
@@ -78,6 +91,21 @@ class ErpClient:
 
     # ------------------------------------------------------------------ login
     def login(self) -> LoginStats:
+        """Log in; if Log In itself fails after a valid OTP, start over once, a minute later."""
+        try:
+            return self._login_once()
+        except LoginError as e:
+            if e.kind != "login_failed":
+                raise
+            self.log(f"login attempt 1 failed ({e}); trying once more in 60s")
+            time.sleep(60)
+            self.gate.transport = type(self.gate.transport)() if hasattr(self.gate.transport, "session") \
+                else self.gate.transport  # fresh cookies on the real network
+            stats = self._login_once()
+            stats.notes.insert(0, f"first attempt failed: {e}")
+            return stats
+
+    def _login_once(self) -> LoginStats:
         stats = LoginStats()
         t0 = time.monotonic()
         page = self.gate.get(LOGIN_ENTRY)
@@ -122,6 +150,9 @@ class ErpClient:
             code, uid = self.mailbox.wait_for_otp(clicked, timeout=self.otp_wait, ignore_uids=used)
             stats.seconds_waiting_otp += time.monotonic() - w0
             if code:
+                delay = getattr(self.mailbox, "last_otp_delay", None)
+                if delay is not None:
+                    self.log(f"OTP mail arrived {delay:+.0f}s after Get OTP")
                 break
             stats.notes.append(f"no OTP mail within {int(self.otp_wait)}s (attempt {attempt})")
         if not code:
@@ -130,9 +161,7 @@ class ErpClient:
         form["email_otp"] = code
         done = self.gate.post("/SSOAdministration/auth.htm", form)
         if "/IIT_ERP3/home.htm" not in done.url and "logout.htm" not in done.text:
-            err = re.search(r'(?is)class="[^"]*(?:alert|error)[^"]*"[^>]*>(.*?)<', done.text)
-            hint = _clean_question(err.group(1))[:160] if err else "no home page after Log In"
-            raise LoginError(f"Login failed: {hint}", "login_failed")
+            raise LoginError(f"Login failed: {_login_failure_hint(done)}", "login_failed")
         self.logged_in = True
         stats.seconds_total = time.monotonic() - t0
         return stats

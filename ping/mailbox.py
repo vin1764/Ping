@@ -87,6 +87,7 @@ class Mailbox:
         self.gmail = False
         self.last_otp_sender = ""
         self.last_otp_subject = ""
+        self.last_otp_delay = None
 
     # -- connection ----------------------------------------------------------
     def connect(self) -> None:
@@ -170,6 +171,7 @@ class Mailbox:
                     code = extract_otp(mail.subject, mail.text)
                     if code:
                         self.last_otp_sender, self.last_otp_subject = mail.sender, mail.subject
+                        self.last_otp_delay = (mail.received - clicked_at).total_seconds()
                         return code, mail.uid
             except imaplib.IMAP4.abort:
                 self.close()

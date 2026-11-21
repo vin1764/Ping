@@ -693,7 +693,7 @@
       h("label", {}, "What I'm looking for", h("span", { class: "hint" },
         "In your own words. Ping marks each role \"For you\" or not (Gemini reads the role's title and job description once) and lists those first."),
         h("textarea", { name: "targets", id: "pf-targets", rows: 3,
-          placeholder: "e.g. product, consulting, business/data analyst and finance roles; not core software engineering" }, p.targets || "")),
+          placeholder: "In your own words: the kinds of roles you want, and any you don't" }, p.targets || "")),
       h("label", { class: "check" }, h("input", { type: "checkbox", name: "list_other_roles", id: "pf-list-others",
         checked: p.list_other_roles !== false }), "Always list other roles separately so I don't miss anything"),
       h("div", { class: "row2" },

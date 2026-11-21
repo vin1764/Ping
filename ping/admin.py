@@ -104,7 +104,10 @@ def build_demo(secrets) -> int:
     return 0 if not left and not file_left else 1
 
 
-DEMO_TARGETS = "product, consulting, business/data analyst and finance roles; not core software engineering"
+def demo_persona() -> dict:
+    """The demo's made-up student (evals/relevance/personas.json): the only place its targets are written."""
+    data = json.loads((ROOT / "evals" / "relevance" / "personas.json").read_text(encoding="utf-8"))
+    return next(p for p in data["personas"] if p["id"] == "demo")
 
 
 def demo_refeed(secrets) -> int:
@@ -118,8 +121,10 @@ def demo_refeed(secrets) -> int:
     out = ROOT / "dashboard" / "demo-data.json"
     data = json.loads(out.read_text(encoding="utf-8"))
     now = datetime.fromisoformat(data["generated_at"])
-    profile = {**data["profile"], "targets": DEMO_TARGETS, "list_other_roles": True, "reminder_hours": 2,
-               "updated_at": data["generated_at"]}
+    persona = demo_persona()
+    DEMO_TARGETS = persona["targets"]
+    profile = {**data["profile"], "targets": DEMO_TARGETS, "list_other_roles": persona["list_other_roles"],
+               "reminder_hours": persona["reminder_hours"], "updated_at": data["generated_at"]}
     roles = data["roles"]
     open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False]
     for attempt in range(3):            # the free tier allows a few calls a minute; whatever is left goes next round

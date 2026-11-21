@@ -259,8 +259,8 @@ what it said when it was first sent. Each list ends with its source: "ERP check
 as one update, nothing repeated).
 
 **For you first** (`ping/relevance.py`). On the Profile page, "What I'm looking
-for" takes your own words (e.g. "product, consulting, business/data analyst and
-finance roles; not core software engineering"). For every role you're not ruled
+for" takes your own words: the kinds of roles you want and any you don't. For
+every role you're not ruled
 out of, once, Gemini reads its company, title and job description and answers
 yes/no with a reason of at most 8 words; the answer is cached on the role and
 asked again only when the role's text or your words change. Eligibility is
@@ -321,7 +321,7 @@ One row in the `profile` table, edited from the dashboard:
 |---|---|
 | roll | leave empty to use your ERP user id |
 | name | only used when a PDF has names but no roll numbers |
-| department | `COMPUTER SCIENCE AND ENGINEERING` (as the ERP writes it; the dashboard suggests the exact spellings) |
+| department | your department exactly as the ERP writes it (the dashboard suggests the exact spellings) |
 | degree | `B.TECH`, `DUAL DEGREE`, `M.SC(5YR)`, ... |
 | CGPA | `8.12` |
 | active backlogs | yes / no |

@@ -1,0 +1,12 @@
+{
+ "about": "Fixture personas for the relevance evals and the one-click demo. Made-up people; nothing here is any real student's preference. A real student's targets live only in their own profile row, set through the chat or the Profile page.",
+ "personas": [
+  {
+   "id": "demo",
+   "used_by": "the one-click demo profile (Admin > demo-refeed) and evals/relevance",
+   "targets": "product, consulting, business/data analyst and finance roles; not core software engineering",
+   "reminder_hours": 2,
+   "list_other_roles": true
+  }
+ ]
+}

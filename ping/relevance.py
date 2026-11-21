@@ -1,8 +1,7 @@
 """Which roles are what you're looking for ("For you") and which are the others.
 
-You write what you're looking for on the Profile page (e.g. "product, consulting, business/data analyst and finance
-roles; not core software engineering"). For every role, once, Gemini reads the company, the title and the job
-description from the ERP and answers {relevant: yes/no, reason: <= 8 words}. The answer is cached on the role
+You say what you're looking for in your own words (in the chat, or on the Profile page): the kinds of roles you want
+and any you don't. For every role, once, Gemini reads the company, the title and the job description from the ERP and answers {relevant: yes/no, reason: <= 8 words}. The answer is cached on the role
 (roles.relevance) with a key made from your text and the role's text, so a role is asked about again only when one
 of them changes.
 

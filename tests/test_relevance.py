@@ -2,12 +2,14 @@
 
 import json
 from datetime import timedelta
+from pathlib import Path
 
 from ping import relevance
 from ping.items import build_items
 from tests.test_digests import DUE, PROFILE, role, visible
 
-TARGETS = "product, consulting, business/data analyst and finance roles; not core software engineering"
+TARGETS = json.loads((Path(__file__).resolve().parent.parent / "evals" / "relevance" / "personas.json")
+                     .read_text())["personas"][0]["targets"]     # the fixture persona, not anyone's real preference
 CFG = {"provider": "openai_compatible", "base_url": "https://example.invalid/v1", "key": "k", "model": "m",
        "fallback_models": ["m2"]}
 

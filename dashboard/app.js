@@ -262,7 +262,8 @@
     out.hidden = false;
     out.onclick = async () => { await sb.auth.signOut(); location.reload(); };
     await afterStart();
-    loadMarks().then(() => { if (state.marks?.size && (location.hash || "#chat") === "#chat") route(); });
+    // split the lists by the current marks once they arrive, but never while a question is waiting for its answer
+    loadMarks().then(() => { if (state.marks?.size && (location.hash || "#chat") === "#chat" && !state.sending) route(); });
   }
 
   async function afterStart() {
@@ -554,11 +555,16 @@
     // saved before asking: Ask Ping reads the thread (for follow-ups like "nothing else?") from the database
     await state.src.addChat(mine).catch(() => {});
     let answer;
-    try { answer = await state.src.ask(q); } catch (e) { answer = e.message; }
+    state.sending = (state.sending || 0) + 1;
+    try { answer = await state.src.ask(q); } catch (e) { answer = e.message; } finally { state.sending -= 1; }
     const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };
     state.chat.push(reply);
-    wait.replaceWith(textBubble("ping", reply.text, reply.created_at));
-    thread.scrollTop = thread.scrollHeight;
+    if (wait.isConnected) {
+      wait.replaceWith(textBubble("ping", reply.text, reply.created_at));
+      thread.scrollTop = thread.scrollHeight;
+    } else {
+      route();   // the chat was drawn again meanwhile (e.g. the "For you" marks arrived): draw it with the reply
+    }
     state.src.addChat(reply).catch(() => {});
     state.readAt = reply.created_at;
     state.src.setReadAt(state.readAt).catch(() => {});

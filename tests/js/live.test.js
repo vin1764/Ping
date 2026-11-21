@@ -49,3 +49,22 @@ test("a stuck run stops counting as running; polling is faster while one runs", 
   assert.strictEqual(L.buttonLabel(run({ stage: "reading PDFs" }), NOW), "Checking… reading PDFs");
   assert.strictEqual(L.buttonLabel(run({ stage: "done" }), NOW), "Check now");
 });
+
+test("checks in a row that found nothing: one thin line that updates in place; a find keeps its bubble", () => {
+  const r = (id, fin, n = 0, extra = {}) => ({ id, trigger: "manual", stage: "done", status: "ok", requested_at: fin, started_at: fin,
+                                              finished_at: fin, new_items: n, ...extra });
+  const hourly = r("h0", "2026-11-21T02:53:00+05:30", 0, { trigger: "schedule" });
+  const a = r("a", "2026-11-21T03:05:00+05:30"), b = r("b", "2026-11-21T03:18:00+05:30");
+  const found = r("c", "2026-11-21T03:40:00+05:30", 2), d = r("d", "2026-11-21T03:55:00+05:30");
+  const runs = [hourly, a, b, found, d];
+  const e = (run) => ({ kind: "run", at: run.requested_at, run });
+  const out = L.collapseQuiet([e(a), e(b), e(found), { kind: "me", at: "2026-11-21T03:50:00+05:30" }, e(d)], runs, Date.parse("2026-11-21T04:00:00+05:30"));
+  assert.deepStrictEqual(out.map((x) => x.kind), ["quiet", "run", "me", "quiet"]);
+  assert.strictEqual(out[0].line, "Checked 03:18 · nothing new since 02:53");
+  assert.strictEqual(out[0].key, "run:a");                       // the line keeps the first check's place and key
+  assert.strictEqual(out[3].line, "Checked 03:55 · nothing new since 03:40");
+  const going = { ...d, stage: "reading notices", finished_at: null };
+  assert.strictEqual(L.collapseQuiet([e(going)], runs, Date.parse("2026-11-21T03:56:00+05:30"))[0].kind, "run");   // still going: its bubble
+  const failed = { ...d, stage: "failed", status: "failed: erp" };
+  assert.strictEqual(L.collapseQuiet([e(failed)], runs, Date.now())[0].kind, "run");
+});

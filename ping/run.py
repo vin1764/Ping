@@ -351,13 +351,19 @@ class Runner:
 
     def _jds(self, roles: list[dict], stored: dict) -> None:
         """Find each role's JD once, again only when the role's own JD information changes (jd_key)."""
-        from .jd import jd_key, links_in, resolve, usable
+        from .jd import clean, jd_key, links_in, resolve, usable
         ups, fetched, tally = [], 0, Counter()
         # open roles first (latest application end first): with more to fetch than one run allows, those matter now
         for r in sorted(roles, key=lambda r: str(r.get("apply_end") or ""), reverse=True):
             old = stored.get(r["id"]) or {}
             key = jd_key(r)
             if old.get("jd_key") == key and old.get("jd_source"):
+                # stored before the glyph clean-up: the same text without boxes for bullets (no fetch)
+                if old.get("jd_text") and clean(old["jd_text"]) != old["jd_text"]:
+                    row = {"id": r["id"], "jd_text": clean(old["jd_text"])}
+                    ups.append(row)
+                    r.update(row)
+                    tally["recleaned"] += 1
                 continue
             inline = r.get("job_description") or ""
             # a request to the ERP or a link only when there is a file or a link to read
@@ -366,7 +372,8 @@ class Runner:
                 continue                                  # the rest next run (each file is a request to the ERP)
             fetched += needs_net
             res = resolve(r, lambda kind, r=r: self.erp.role_file(kind, r["yop"], r["com_id"], r["jnf_id"]))
-            row = {"id": r["id"], "jd_key": key, "jd_text": res.get("jd_text"), "jd_source": res["jd_source"],
+            row = {"id": r["id"], "jd_key": key, "jd_text": clean(res["jd_text"]) if res.get("jd_text") else None,
+                   "jd_source": res["jd_source"],
                    "jd_url": res.get("jd_url"), "jd_note": res.get("jd_note")}
             ups.append(row)
             r.update(row)

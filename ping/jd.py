@@ -38,8 +38,30 @@ def fix_c1(text: str) -> str:
     return re.sub(r"[\x80-\x9f]", lambda m: C1.get(m.group(0), ""), text or "")
 
 
+# Characters the ERP and PDF/Word text hand over that fonts can't draw (they show as □): bullets from the Symbol
+# and Wingdings fonts (private-use code points such as U+F0B7), boxes and arrows used as bullets, the replacement
+# character, zero-width and soft-hyphen marks, odd spaces, and ligatures.
+BULLETISH = re.compile(r"[\ue000-\uf8ff\u25a0-\u25ff\u2794-\u27bf\u2219\u2023\u2043\u204c\u204d\u2b9a-\u2b9f\u27a2"
+                       r"\u2713\u2714\u2716\u2756\u274f-\u2752\u25e6\ufffd]")
+INVISIBLE = re.compile(r"[\u200b-\u200f\u2060-\u2064\ufeff\u00ad\u034f]")
+ODD_SPACE = re.compile(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000]")
+LIGATURES = {"\ufb00": "ff", "\ufb01": "fi", "\ufb02": "fl", "\ufb03": "ffi", "\ufb04": "ffl", "\ufb05": "st", "\ufb06": "st"}
+
+
+def glyphs(text: str) -> str:
+    """Every bullet-like or undrawable character as a plain "•" (at the start of a line or item) or nothing."""
+    text = INVISIBLE.sub("", ODD_SPACE.sub(" ", fix_c1(text or "")))
+    text = re.sub("[\ufb00-\ufb06]", lambda m: LIGATURES[m.group(0)], text)
+    # a bullet-ish mark at a line start, or before a word: "•"; one standing between words or at the end: nothing
+    text = re.sub(r"(^|\n)[ \t]*(?:" + BULLETISH.pattern + r"|[·•*])+[ \t]*", r"\1• ", text)
+    text = re.sub(r"[ \t]*\ufffd[ \t]*", lambda m: " " if m.group(0).startswith(" ") and m.group(0).endswith(" ") else "", text)
+    text = re.sub(r"[ \t]*" + BULLETISH.pattern + r"+[ \t]*(?=\S)", " • ", text)
+    text = BULLETISH.sub("", text)
+    return re.sub(r"•[ \t]*(?=\S)", "• ", text)
+
+
 def clean(text: str) -> str:
-    text = re.sub(r"[ \t\r\f\v]+", " ", fix_c1(text))
+    text = re.sub(r"[ \t\r\f\v]+", " ", glyphs(text))
     text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
     return text.strip()
 
@@ -388,7 +410,7 @@ def _short(x: str, n: int = 12) -> str:
     return head + "…"
 
 
-RULES_VERSION = 3      # bump when rules_summary changes: stored rules summaries are redone (no model call)
+RULES_VERSION = 4      # bump when rules_summary changes: stored rules summaries are redone (no model call)
 
 
 def rules_summary(text: str, designation: str = "") -> dict:

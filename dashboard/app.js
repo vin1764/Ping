@@ -503,7 +503,11 @@
     const have = new Map([...inner.querySelectorAll("[data-key]")].map((n) => [n.dataset.key, n]));
     const added = [];
     keepPlace(thread, atBottom, () => {
-      for (const e of threadEntries()) {
+      const entries = threadEntries();
+      // a check that joined a line of "nothing new" checks: its own bubble goes, the line above it updates
+      const keys = new Set(entries.map(entryKey));
+      for (const [k, n] of have) if (k.startsWith("run:") && !keys.has(k)) { n.remove(); have.delete(k); }
+      for (const e of entries) {
         const k = entryKey(e), old = have.get(k);
         if (old) {
           if (old.dataset.sig !== entrySig(e)) old.replaceWith(renderEntry(e));
@@ -868,8 +872,10 @@
     // a Check now (with its progress) and an hourly check that brought something new
     const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, liveNow()))
       .map((r) => ({ kind: "run", at: r.shown_at || r.requested_at || r.started_at, run: r }));
-    return [...items, ...talk, ...runs].filter((e) => e.at).sort((a, b) =>
+    const sorted = [...items, ...talk, ...runs].filter((e) => e.at).sort((a, b) =>
       dt(a.at) - dt(b.at) || (a.kind === "item" && b.kind === "item" ? String(a.it.sort_at || "").localeCompare(String(b.it.sort_at || "")) : 0));
+    // checks in a row that found nothing: one thin line that updates in place, not a bubble each
+    return LIVE.collapseQuiet(sorted, state.data.runs, liveNow());
   }
 
   function unreadOf(entries) {
@@ -1149,10 +1155,12 @@
   const itemSig = (it) => [retitle(it), it.level, it.done ? 1 : 0, it.details?.hidden_because || "", (it.details?.list || []).length,
                             (it.details?.list || []).length ? state.marksVersion || 0 : 0].join("|");
   const runSig = (r) => [r.stage, r.status, r.new_items, r.note, r.finished_at].join("|");
-  function entryKey(e) { return e.kind === "item" ? `item:${e.it.id}` : e.kind === "run" ? `run:${e.run.id}` : msgKey(e.kind, e.at); }
-  function entrySig(e) { return e.kind === "item" ? itemSig(e.it) : e.kind === "run" ? runSig(e.run) : "1"; }
+  function entryKey(e) { return e.kind === "item" ? `item:${e.it.id}` : e.kind === "run" ? `run:${e.run.id}` : e.kind === "quiet" ? e.key : msgKey(e.kind, e.at); }
+  function entrySig(e) { return e.kind === "item" ? itemSig(e.it) : e.kind === "run" ? runSig(e.run) : e.kind === "quiet" ? `quiet|${e.line}` : "1"; }
   function renderEntry(e) {
-    return e.kind === "item" ? itemBubble(e.it, e.at) : e.kind === "run" ? runBubble(e.run, e.at) : textBubble(e.kind, e.text, e.at);
+    return e.kind === "item" ? itemBubble(e.it, e.at) : e.kind === "run" ? runBubble(e.run, e.at)
+      : e.kind === "quiet" ? h("p", { class: "note-line sysline", role: "status", "data-key": e.key, "data-sig": entrySig(e) }, e.line)
+      : textBubble(e.kind, e.text, e.at);
   }
 
   function runBubble(run, at) {
@@ -1693,7 +1701,7 @@
     const kv = (rows) => { rows = rows.filter(([, v]) => v != null && v !== "" && v !== false);
       return rows.length ? h("dl", { class: "kv" }, rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])) : null; };
     const sec = (title, ...body) => { const b = body.flat().filter(Boolean); return b.length ? h("section", {}, h("h3", {}, title), b) : null; };
-    const f = r.more_details?.fields || {};
+    const f = Object.fromEntries(Object.entries(r.more_details?.fields || {}).map(([k, v]) => [k, typeof v === "string" ? tidyText(v) : v]));
     const pay = Object.entries(f).filter(([k, v]) => v && /ctc|salary|gross|base|stipend|bonus|esop|joining|relocation|bond|variable|retention/i.test(k)
       && String(v).length < 400);
     const e = r.eligibility || {}, mk = markOf(r), dl = deadlineOf(r);
@@ -1745,10 +1753,19 @@
     close.focus();
   }
 
+  // ERP / PDF text as fonts can draw it: Windows-1252 bullets and quotes, Symbol/Wingdings bullets (U+F0B7...), boxes
+  // and arrows used as bullets become "•"; zero-width marks go (the same as ping/jd.py glyphs(), for text stored
+  // before that clean-up and for the role's other fields)
+  const C1 = { "\x95": "•", "\x96": "–", "\x97": "—", "\x91": "'", "\x92": "'", "\x93": '"', "\x94": '"', "\x85": "…" };
+  const BULLETISH = "[\\ue000-\\uf8ff\\u25a0-\\u25ff\\u2794-\\u27bf\\u2219\\u2023\\u2043\\u2b9a-\\u2b9f\\u2713\\u2714\\u2756]";
+  function tidyText(t) {
+    return String(t || "").replace(/[\x80-\x9f]/g, (c) => C1[c] || "").replace(/[\u200b-\u200f\u2060-\u2064\ufeff\u00ad]/g, "")
+      .replace(/\u00a0/g, " ").replace(new RegExp(`(^|\\n)[ \\t]*${BULLETISH}+[ \\t]*`, "g"), "$1• ")
+      .replace(new RegExp(`[ \\t]*${BULLETISH}+[ \\t]*(?=\\S)`, "g"), " • ").replace(new RegExp(BULLETISH, "g"), "").replace(/\ufffd/g, "");
+  }
   // the JD: Ping's short summary of it (roles.jd_summary), the full text behind "Full JD", and where it came from
   function jdSection(r, kv, sec) {
-    const C1 = { "\x95": "•", "\x96": "–", "\x97": "—", "\x91": "'", "\x92": "'", "\x93": '"', "\x94": '"', "\x85": "…" };
-    const s = r.jd_summary, text = (r.jd_text || r.job_description || "").replace(/[\x80-\x9f]/g, (c) => C1[c] || "");
+    const s = r.jd_summary, text = tidyText(r.jd_text || r.job_description || "");
     const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     const linkShut = r.jd_source === "link-unreadable" || (r.jd_source === "detail" && r.jd_url);
     const from = { attachment: "the JD file on the ERP", link: "the JD link", detail: "the ERP's role details", inline: "the ERP's job description" }[r.jd_source];

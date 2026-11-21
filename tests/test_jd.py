@@ -67,3 +67,26 @@ def test_only_a_private_link():
                   get_link=lambda url: {"jd_text": None, "jd_source": "link-unreadable", "jd_url": url, "jd_note": "401"})
     assert got == {"jd_text": None, "jd_source": "link-unreadable", "jd_url": "https://docs.google.com/document/d/abc/edit",
                    "jd_note": "401"}
+
+
+def test_bullets_and_odd_characters_are_normalised():
+    from ping.jd import clean
+    assert clean(" Strong SQL\nPython\n Excel") == "• Strong SQL\n• Python\n• Excel"     # Symbol-font bullets
+    assert clean("Skills:▪ SQL ▪ Python") == "Skills: • SQL • Python"
+    assert clean("➢ Build models\n\x95 Ship") == "• Build models\n• Ship"
+    assert clean("Good communi­cation​ skills") == "Good communication skills"
+    assert clean("ﬁnance oﬃce") == "finance office"
+    assert "�" not in clean("company�s team")
+    assert clean("C++ and C# fine; 3.5 GPA; a*b") == "C++ and C# fine; 3.5 GPA; a*b"     # ordinary text untouched
+
+
+def test_stored_jd_text_is_recleaned_without_fetching(monkeypatch):
+    from ping.run import Runner
+    r = Runner.__new__(Runner)
+    r.counts = {}
+    r.erp = None                                   # any fetch would fail
+    role = {"id": "x", "job_description": " Strong SQL " * 40, "apply_end": "2026-11-22"}
+    from ping.jd import jd_key
+    stored = {"x": {"jd_key": jd_key(role), "jd_source": "inline", "jd_text": " Strong SQL"}}
+    r._jds([role], stored)
+    assert r.jd_updates == [{"id": "x", "jd_text": "• Strong SQL"}]

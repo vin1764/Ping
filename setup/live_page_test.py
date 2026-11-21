@@ -5,7 +5,8 @@
 3. row rules on the channel: another demo session's message and an owner message (only with SUPABASE_SERVICE_KEY,
    as in Admin; deleted right after) never reach this demo session
 4. no socket (WebSocket blocked): the page says so and still catches up on tab focus
-5. Check now in the demo plays queued -> logging in -> reading -> "Demo: sample data, nothing new to fetch"
+5. Check now in the demo plays queued -> logging in -> reading -> "Demo: found N new..." (a bubble) or a thin
+   "Checked HH:MM · nothing new" line
 
     python setup/live_page_test.py            # the published site
     python setup/live_page_test.py --local    # a local build
@@ -149,13 +150,14 @@ def main(argv: list[str]) -> int:
         page.wait_for_selector(".msg.run .steps", timeout=5000)
         check(page.locator("#check-now-top").is_disabled(), "Check now is off while the check runs")
         # the demo's first Check now finds what its snapshot's last check brought; a later one finds nothing new
-        done_line = "() => [...document.querySelectorAll('.msg.run .text')].map(n => n.innerText)"
+        # (a check that finds nothing is a thin line, "Checked 18:05 · nothing new (demo sample data)", not a bubble)
+        done_line = "() => [...document.querySelectorAll('.msg.run .text, .note-line.sysline')].map(n => n.innerText)"
         try:
-            page.wait_for_function(f"() => ({done_line})().some(t => /^Demo: (found \\d+ new from the snapshot's last check|sample data, nothing new to fetch)$/.test(t))",
+            page.wait_for_function(f"() => ({done_line})().some(t => /^(Demo: found \\d+ new from the snapshot's last check|Checked \\d\\d:\\d\\d · nothing new \\(demo sample data\\))$/.test(t))",
                                    timeout=15000)
             check(True, f"the demo's Check now ends with its own line ({page.evaluate(done_line)[-1]!r})")
         except Exception:
-            check(False, "the demo's Check now ends 'Demo: found N new ...' or 'Demo: sample data, nothing new to fetch'")
+            check(False, "the demo's Check now ends 'Demo: found N new ...' or a 'Checked HH:MM · nothing new' line")
         try:
             page.wait_for_function("() => /found \\d+ new|checked just now|checked 1 min ago/.test(document.querySelector('#subtitle').innerText)", timeout=5000)
             check(True, "the header's status line follows the check")

@@ -71,6 +71,37 @@
     return run.stage === "done" && Number(run.new_items) > 0;
   }
 
+  // a finished check that found nothing (and didn't fail): not a bubble, a thin line
+  function quiet(run, now) {
+    if (!run || isActive(run, now) || run.stage !== "done" || (run.status || "").startsWith("failed")) return false;
+    return !(Number(run.new_items) > 0);
+  }
+  // Consecutive "nothing new" checks in the thread become ONE thin line that updates in place:
+  // "Checked 03:18 · nothing new since 02:53" (since = the check before the first of them). Only a check that found
+  // something, failed, or is still going keeps its bubble. entries: the thread, sorted; -> the same with
+  // { kind: "quiet", at, key: "run:<first id>", runs, line } in place of each run of quiet checks.
+  function collapseQuiet(entries, runs, now) {
+    const out = [];
+    for (const e of entries) {
+      if (e.kind === "run" && quiet(e.run, now)) {
+        const prev = out[out.length - 1];
+        if (prev && prev.kind === "quiet") { prev.runs.push(e.run); prev.at = e.at; continue; }
+        out.push({ kind: "quiet", at: e.at, runs: [e.run] });
+        continue;
+      }
+      out.push(e);
+    }
+    for (const q of out) {
+      if (q.kind !== "quiet") continue;
+      const first = q.runs[0], last = q.runs[q.runs.length - 1];
+      const since = previousDone(first, runs);
+      q.key = `run:${first.id}`;
+      q.line = `Checked ${hm(last.finished_at || last.started_at || last.requested_at)} · nothing new` +
+        (first.demo ? " (demo sample data)" : since ? ` since ${hm(since.finished_at)}` : "");
+    }
+    return out;
+  }
+
   const pollEvery = (active) => (active ? 15000 : 60000);
 
   function buttonLabel(run, now) {
@@ -87,7 +118,7 @@
     return (runs || []).filter((r) => r.finished_at).sort((a, b) => t(b.finished_at) - t(a.finished_at))[0] || null;
   }
 
-  const api = { ACTIVE, STEPS, isActive, steps, describe, inThread, pollEvery, buttonLabel, DEMO_STAGES, current,
+  const api = { ACTIVE, STEPS, isActive, steps, describe, inThread, quiet, collapseQuiet, pollEvery, buttonLabel, DEMO_STAGES, current,
                 lastFinished, previousDone };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingLive = api;

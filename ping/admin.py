@@ -7,6 +7,8 @@
   gemini-check     call Gemini once and show exactly what comes back, plus retry the notices the rules missed
   functions-check  the Ask Ping / Check now functions on Supabase: deployed versions, which secrets they have
                    (names only), their logs from the last 24 hours, and two test questions as the reviewer
+  ask-ping-page    open the dashboard page in a real browser, sign in as the reviewer, type the two test
+                   questions into the chat and print the replies shown on screen
 """
 
 from __future__ import annotations
@@ -229,11 +231,17 @@ def functions_check(secrets) -> int:
     return 0
 
 
+def ask_ping_page(secrets) -> int:
+    import subprocess
+    return subprocess.run([sys.executable, str(ROOT / "setup" / "ask_ping_page_test.py"),
+                           "slice ctc breakdown", "what's due tomorrow"]).returncode
+
+
 def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "create-reviewer": create_reviewer, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

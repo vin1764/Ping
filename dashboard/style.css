@@ -525,7 +525,6 @@ button.today-row:hover { background: var(--bg); }
 .today-row .t-ico { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--line-strong); }
 .today-row.k-test .t-ico { background: var(--test); } .today-row.k-deadline .t-ico, .today-row.k-todo .t-ico { background: var(--soon); }
 .today-row.k-notice .t-ico, .today-row.k-more .t-ico { background: var(--applied); }
-.today-row.k-check .t-ico { background: transparent; border: 2px solid var(--accent); }
 .today-row .t-body { display: grid; gap: 1px; min-width: 0; }
 .today-row .t-title { font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
 .today-row .t-sub, .today-row .t-names { font-size: var(--t-sm); line-height: 20px; color: var(--muted); }
@@ -533,7 +532,12 @@ button.today-row:hover { background: var(--bg); }
 .today-row > .pill { margin-top: 2px; }
 .today-row.over { opacity: .62; }
 .today-row.over .t-title { text-decoration: line-through; }
-.today-row.k-check { cursor: default; }
+.today-row.group { grid-template-columns: 12px minmax(0, 1fr) auto 14px; }
+.today-row .t-caret { color: var(--muted); margin-top: 2px; transition: transform .15s ease; }
+.today-row.group[aria-expanded="true"] .t-caret { transform: rotate(90deg); }
+.today-sub { margin: 0 0 var(--s2) 22px; border-left: 2px solid var(--line); }
+.today-sub .today-row { padding-top: 6px; padding-bottom: 6px; }
+.today-sub .today-row .t-ico { width: 6px; height: 6px; margin-top: 8px; }
 .today-empty { margin: 0; color: var(--muted); }
 .tomorrow { margin: 0; padding-top: var(--s3); border-top: 1px solid var(--line); color: var(--muted); font-size: var(--t-sm); }
 body.today-on main { background: var(--surface); }

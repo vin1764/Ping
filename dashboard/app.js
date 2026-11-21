@@ -146,7 +146,7 @@
         this.q("profile"),
         this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
         // the latest notices, one line each on Today (the full text is read when one is opened)
-        this.sb.from("notices").select("notice_id,company,subject,notice_time").order("notice_time", { ascending: false }).limit(80)
+        this.sb.from("notices").select("notice_id,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(80)
           .then((r) => r.data || [], () => []),
       ]);
       // the demo is a snapshot: its profile row carries the time it was taken
@@ -648,8 +648,10 @@
     const sub = $("#subtitle"), top = $("#presence");
     const fl = state.flash && state.flash.until > Date.now() ? state.flash.text : null;
     const mode = cur ? "checking" : fl ? "found" : "idle";
-    const text = cur ? "checking the ERP" : fl || (last ? agoText(dt(last.finished_at).getTime())
-      : state.asOf ? `snapshot of ${clock(state.asOf)}` : "placement updates");
+    // the next check lives here (not on Today): "checked 4 min ago · next 14:11"
+    const next = !cur && !fl && TODAY ? TODAY.nextCheck(state.data.runs, state.data.profile, liveNow()) : null;
+    const text = cur ? "checking the ERP" : fl || ((last ? agoText(dt(last.finished_at).getTime())
+      : state.asOf ? `snapshot of ${clock(state.asOf)}` : "placement updates") + (next ? ` · next ${clock(new Date(next).toISOString())}` : ""));
     if (sub.textContent !== text) sub.textContent = text;
     sub.classList.toggle("dots", mode === "checking");
     if (top && top.dataset.state !== mode) top.dataset.state = mode;
@@ -1437,14 +1439,18 @@
     const row = (r) => {
       const status = r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
         : r.status === "off" ? h("span", { class: "pill over" }, "not on the list") : null;
-      // the next check gets a plain time, not a deadline's colours
       const right = r.kind === "notice" || r.kind === "more" ? null : r.over ? h("span", { class: "pill cd c-over" }, "over")
-        : r.kind === "check" ? h("span", { class: "pill c-plain", "data-check": "1" }, TODAY.countdown(r.due, liveNow()).text) : r.due ? countPill(r.due) : null;
-      const body = [h("span", { class: "t-title" }, r.title, status), h("span", { class: "t-sub" }, r.sub),
+        : r.due ? countPill(r.due) : null;
+      const body = [h("span", { class: "t-title" }, r.title, status), r.sub ? h("span", { class: "t-sub" }, r.sub) : null,
                     r.names ? h("span", { class: "t-names" }, r.names) : null];
-      if (r.kind === "check") {
-        return h("div", { class: "today-row k-check" }, h("span", { class: "t-ico", "aria-hidden": "true" }),
-          h("span", { class: "t-body" }, body), right);
+      if (r.children) {
+        // "5 forms due 20:00": tap to open the single ones (each opens its own message)
+        const list = h("div", { class: "today-sub", hidden: true }, r.children.map((c) => row({ ...c, over: r.over })));
+        const head = h("button", { type: "button", class: `today-row k-${r.kind} group${r.over ? " over" : ""}`, "aria-expanded": "false",
+          onclick: () => { const open = list.hidden; list.hidden = !open; head.setAttribute("aria-expanded", String(open)); } },
+          h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right,
+          h("span", { class: "t-caret", "aria-hidden": "true" }, "▸"));
+        return h("div", { class: "today-group" }, head, list);
       }
       return h("button", { type: "button", class: `today-row k-${r.kind}${r.over ? " over" : ""}`, onclick: () => goTo(r.target) },
         h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right);

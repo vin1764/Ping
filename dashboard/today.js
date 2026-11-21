@@ -3,8 +3,10 @@
  * chip in the app uses.
  *
  * build({ items, roles, notices, runs, profile, now, isMine, inChat }) ->
- *   { rows: [{ kind: "test" | "deadline" | "todo" | "notice" | "more" | "check", at, over, title, sub, names, status,
- *              due, target }], ahead, tomorrow: { tests, deadlines, text }, nextCheck, empty, emptyText }
+ *   { rows: [{ kind: "test" | "deadline" | "todo" | "notice" | "more", at, over, title, sub, names, status, due, target,
+ *              children }], ahead, tomorrow: { tests, deadlines, text }, nextCheck, empty, emptyText }
+ *   Forms / to-dos due at the same time are one row ("5 forms due 20:00") whose children are the single ones; tests
+ *   stay one row each. The next ERP check isn't a row: the header's status line says it (nextCheck is still returned).
  *   isMine(role): the role is one you'd apply to (eligible and "for you"); inChat(item): it is a chat message.
  */
 (function (root) {
@@ -16,6 +18,15 @@
   // display names (dashboard/names.js): the website in brackets goes, the raw ERP name stays in the data
   const NAMES = root.PingNames || (typeof require === "function" ? require("./names.js") : null);
   const cleanName = (s) => (NAMES ? NAMES.cleanName(s) : String(s || "").trim());
+  // "Piramal" for "Piramal Capital & Housing Finance Ltd", "TATA AIG" for "TATA AIG General Insurance": a list of names
+  const LEGALISH = /\b(private|pvt|limited|ltd|inc|llp|llc|plc|co|company|corp|corporation|technologies|technology|services|solutions|group|global|labs|systems|software|india|general|insurance|capital|housing|finance|financial|bank|consulting|developers|energy|the|and)\b\.?/gi;
+  const shortName = (s) => {
+    const c = cleanName(s).replace(/\s*\(.*?\)/g, "").replace(/[.,&]/g, " ");
+    const core = c.replace(LEGALISH, " ").replace(/\s+/g, " ").trim();
+    const words = (core || c).split(" ").filter(Boolean);
+    return words.slice(0, 2).join(" ") || c.trim();
+  };
+  const listNames = (names, n) => names.length > n ? `${names.slice(0, n).join(", ")}, …` : names.join(", ");
   const TEST_KINDS = ["test", "test_rooms", "interview", "gd"];
 
   // "in 1 h 48 m" / "in 42 m" / "in 35 s" / "in 3 days" / "over"; level: over | red (<1 h) | amber (<3 h) | plain
@@ -92,12 +103,54 @@
     });
   }
 
+  const todoWhat = (it) => (/fill the form/i.test(it.title || "") || it.details?.todo?.action === "fill_form" ? "form"
+    : /submit/i.test(it.title || "") ? "submission" : "to-do");
   function todos(items, day, inChat) {
-    return (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day
-      && (it.level !== "hidden" || /digest/.test(it.details?.hidden_because || "")))
-      .map((it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do",
-                      sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
-                      target: inChat(it) ? { item: it.id } : { company: it.company } }));
+    const one = (it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do",
+                           sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
+                           target: inChat(it) ? { item: it.id } : { company: it.company } });
+    const list = (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day
+      && (it.level !== "hidden" || /digest/.test(it.details?.hidden_because || "")));
+    const groups = new Map();
+    for (const it of list) { const t = ms(it.due_at); if (!groups.has(t)) groups.set(t, []); groups.get(t).push(it); }
+    return [...groups.entries()].map(([t, its]) => {
+      if (its.length === 1) return one(its[0]);
+      const child = (it) => ({ ...one(it), sub: [roleOfTitle(it.title), todoWhat(it) === "form" ? "fill the form" : todoWhat(it)].filter(Boolean).join(" · ") });
+      // same time: one row, "5 forms due 20:00", that opens into the single ones
+      const whats = new Set(its.map(todoWhat));
+      const what = whats.size === 1 ? [...whats][0] : "to-do";
+      const names = [...new Set(its.map((it) => shortName(it.company)).filter(Boolean))];
+      const digest = (items || []).find((x) => inChat(x) && x.category === "digest" && x.details?.kind === "form" && ms(x.due_at) === t);
+      return { kind: "todo", group: true, at: t, due: new Date(t).toISOString(),
+               title: `${its.length} ${what}s due ${clock(t)}`, sub: "", names: listNames(names, 4),
+               children: its.map(child).sort((a, b) => a.title.localeCompare(b.title)),
+               target: digest ? { item: digest.id } : null };
+    });
+  }
+
+  // a notice for several companies: which ones (first 3 + N) and what it asks ("fill the form by 16:00")
+  const ACTION_WORDS = { fill_form: "fill a form", submit: "submit", accept_offer: "accept the offer", apply: "apply" };
+  function noticeAsks(n) {
+    const a = n.analysis || {};
+    const todos = (n.todos || a.todos || []).filter((t) => t && t.action);
+    const acts = [...new Set(todos.map((t) => t.action))];
+    const main = acts.find((x) => x !== "apply") || acts[0];
+    if (main) {
+      const due = todos.find((t) => t.action === main && t.due)?.due;
+      return `${ACTION_WORDS[main] || main.replace(/_/g, " ")}${due ? ` by ${clock(ms(due))}` : ""}`;
+    }
+    const kind = n.kind || a.kind;
+    const KIND = { apply_open: "open for applications", deadline_extended: "deadlines extended", test: "tests", test_rooms: "test rooms",
+                   shortlist: "shortlists", result: "results", ppt: "pre-placement talks", schedule: "schedule" };
+    if (KIND[kind]) return KIND[kind];
+    const first = String(n.preview || "").split(/(?<=[.!?])\s/)[0];
+    return first ? first.slice(0, 80) : "";
+  }
+  function noticeCompanies(n) {
+    const a = n.analysis || {};
+    const names = (n.targets || a.targets || []).map((t) => shortName(t.company || String(t.name || "").replace(/^\s*\d+\s*\.\s*/, "")))
+      .filter(Boolean);
+    return [...new Set(names)];
   }
 
   const NOTICE_MAX = 6;
@@ -109,8 +162,13 @@
       const it = (items || []).find((x) => x.notice_id === nid && inChat(x));
       // a notice for several companies says what it is first ("CV Submission"), then "several companies"
       const many = /multiple|several|various/i.test(n.company || "");
-      return { kind: "notice", at: ms(n.notice_time), title: many ? (n.subject || "Notice") : cleanName(n.company),
-               sub: `${clock(ms(n.notice_time))} · ${many ? "several companies" : n.subject || "Notice"}`,
+      if (!many) return { kind: "notice", at: ms(n.notice_time), title: cleanName(n.company),
+                          sub: `${clock(ms(n.notice_time))} · ${n.subject || "Notice"}`, target: it ? { item: it.id } : { notice: nid } };
+      // several companies: say which (first 3 + N) and what it asks, not "several companies"
+      const names = noticeCompanies(n), asks = noticeAsks(n);
+      const who = names.length ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ")) : "several companies";
+      return { kind: "notice", at: ms(n.notice_time), title: n.subject || "Notice",
+               sub: `${clock(ms(n.notice_time))}${asks ? ` · ${asks}` : ""}`, names: who,
                target: it ? { item: it.id } : { notice: nid } };
     });
     if (today.length > NOTICE_MAX) rows.push({ kind: "more", at: ms(today[NOTICE_MAX].notice_time),
@@ -127,23 +185,23 @@
     const next = nextCheck(runs, profile, now);
     const ahead = timed.filter((r) => !r.over);
     const done = timed.filter((r) => r.over).sort((a, b) => a.at - b.at);
-    const rows = [...ahead, ...news, ...(next ? [{ kind: "check", at: next, over: false, due: new Date(next).toISOString(),
-      title: "Next ERP check", sub: clock(next), target: { check: true } }] : [])].sort((a, b) => a.at - b.at);
+    const rows = [...ahead, ...news].sort((a, b) => a.at - b.at);
     const tTests = tests(items, tomorrow, inChat).length;
     const tDead = (roles || []).filter((r) => { const t = ms(r.effective_deadline || r.apply_end);
-      return t > 0 && dayOf(t) === tomorrow && !r.applied && isMine(r); }).length + todos(items, tomorrow, inChat).length;
+      return t > 0 && dayOf(t) === tomorrow && !r.applied && isMine(r); }).length
+      + todos(items, tomorrow, inChat).reduce((n, r) => n + (r.children ? r.children.length : 1), 0);
     const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
     return {
       rows: [...rows, ...done], ahead: ahead.length, nextCheck: next,
       empty: !timed.length && !news.length,
-      emptyText: `Nothing scheduled today.${next ? ` Next check ${clock(next)}.` : ""}`,
+      emptyText: "Nothing scheduled today.",
       tomorrow: { tests: tTests, deadlines: tDead,
                   text: tTests || tDead ? `Tomorrow: ${[tTests ? plural(tTests, "test") : "", tDead ? plural(tDead, "deadline") : ""]
                     .filter(Boolean).join(", ")}` : "Tomorrow: nothing scheduled yet" },
     };
   }
 
-  const api = { build, countdown, nextCheck, clock, dayOf, cleanName };
+  const api = { build, countdown, nextCheck, clock, dayOf, cleanName, shortName };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingToday = api;
 })(typeof window !== "undefined" ? window : globalThis);

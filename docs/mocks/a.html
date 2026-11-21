@@ -1,0 +1,242 @@
+<!doctype html>
+<!-- Mock A, "Night desk": a static page, not app code. Real demo content (dashboard/demo-data.json, snapshot of
+     Sat 21 Nov); the clock is held at 13:12 IST so the countdowns read as they would then, and tick from there. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #171411; --bg-2: #1f1b17; --rail: #13110e; --line: rgba(239, 228, 208, .09);
+    --paper: #efe5d3; --paper-2: #e6dac4; --ink: #2a231b; --ink-soft: #6b5d4b; --ink-faint: #8f806b;
+    --on-dark: #e9dfcd; --on-dark-soft: #a89b86; --on-dark-faint: #766b5c;
+    --amber: #f0a43a; --amber-ink: #3a2405; --amber-soft: rgba(240, 164, 58, .16);
+    --you: #2b2620;
+    --display: "Alegreya", Georgia, serif; --body: "Source Sans 3", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--on-dark); font: 400 16px/1.45 var(--body); -webkit-font-smoothing: antialiased; }
+  /* texture: fine grain + a warm lamp in the middle, darker edges */
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(120% 90% at 50% 30%, rgba(255, 214, 160, .07), transparent 60%),
+                radial-gradient(140% 120% at 50% 50%, transparent 55%, rgba(0, 0, 0, .55)); }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .16; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .app { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; grid-template-rows: 100vh; height: 100vh; overflow: hidden; }
+  .rail, .side { display: none; }
+
+  /* header */
+  header { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    background: linear-gradient(var(--bg) 70%, transparent); }
+  .avatar { position: relative; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; flex: none;
+    background: var(--paper); color: var(--ink); font: 800 21px/1 var(--display); box-shadow: 0 0 0 1px rgba(0,0,0,.4) inset; }
+  .avatar::after { content: ""; position: absolute; right: -1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%;
+    background: #8fb174; box-shadow: 0 0 0 2.5px var(--bg); }
+  .who { min-width: 0; flex: 1; }
+  .who h1 { margin: 0; font: 700 22px/1.1 var(--display); letter-spacing: .01em; color: var(--paper); }
+  .status { margin-top: 2px; color: var(--on-dark-soft); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status b { color: var(--on-dark); font-weight: 600; }
+  .check { border: 1px solid rgba(239, 228, 208, .22); background: transparent; color: var(--on-dark); border-radius: 999px;
+    padding: 8px 14px; font: 600 14px var(--body); display: inline-flex; gap: 7px; align-items: center; }
+  .check svg { width: 15px; height: 15px; }
+
+  /* thread */
+  main { min-width: 0; min-height: 0; display: flex; flex-direction: column; height: 100vh; }
+  .thread { min-height: 0; }
+  .thread { flex: 1; overflow: auto; padding: 4px 16px 12px; display: flex; flex-direction: column; gap: 14px; }
+  .day { align-self: center; color: var(--on-dark-faint); font: 600 12px var(--body); letter-spacing: .12em; text-transform: uppercase; margin: 6px 0 2px; }
+  .note { align-self: stretch; color: var(--on-dark-soft); font: 400 15.5px/1.5 var(--body); padding: 0 6px; }
+  .note .t { color: var(--on-dark-faint); font-size: 12.5px; margin-left: 6px; }
+  .note em { font-style: normal; color: var(--paper); }
+  .bubble { position: relative; max-width: 560px; background: var(--paper); color: var(--ink); border-radius: 4px 16px 16px 16px;
+    padding: 14px 16px 12px; box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 10px 24px rgba(0,0,0,.35);
+    background-image: linear-gradient(180deg, rgba(255,255,255,.25), transparent 40%); }
+  .kicker { font: 700 12px var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); display: flex; gap: 8px; align-items: center; }
+  .bubble h2 { margin: 4px 0 2px; font: 700 21px/1.2 var(--display); color: var(--ink); }
+  .meta { color: var(--ink-soft); font-size: 14px; }
+  .rows { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid rgba(42, 35, 27, .12); }
+  .rows li { padding: 8px 0; border-bottom: 1px solid rgba(42, 35, 27, .09); display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+  .rows .co { font-weight: 700; }
+  .rows .rn { grid-column: 1; color: var(--ink-soft); font-size: 14px; }
+  .rows .cv { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12.5px; color: var(--ink-soft);
+    border: 1px solid rgba(42,35,27,.18); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .others { margin-top: 8px; display: flex; gap: 8px; align-items: baseline; color: var(--ink-soft); font-size: 14px; }
+  .others b { color: var(--ink); }
+  .others .more { margin-left: auto; color: var(--ink); font-weight: 600; white-space: nowrap; }
+  .chip-time { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 10px; font: 600 13px var(--body);
+    background: rgba(42,35,27,.08); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .chip-time.soon { background: var(--amber); color: var(--amber-ink); }
+  .chip-time.soon::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--amber-ink); opacity: .7; }
+  .bubble.urgent { box-shadow: 0 0 0 2px var(--amber), 0 10px 24px rgba(0,0,0,.35); }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; color: var(--ink-soft); font-size: 14px; }
+  .facts b { color: var(--ink); font-weight: 600; }
+  .when { margin-top: 8px; color: var(--ink-faint); font-size: 12.5px; }
+  .you { align-self: flex-end; max-width: 420px; background: var(--you); color: var(--on-dark); border-radius: 16px 4px 16px 16px;
+    padding: 10px 14px; border: 1px solid rgba(239,228,208,.08); }
+  .you .when { color: var(--on-dark-faint); text-align: right; margin-top: 4px; }
+  .answer p { margin: 0; font-size: 15.5px; }
+  .answer b { font-weight: 700; }
+
+  /* composer */
+  .composer { padding: 8px 16px 14px; background: linear-gradient(transparent, var(--bg) 30%); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .chips button { flex: none; border: 1px solid rgba(239,228,208,.2); background: rgba(239,228,208,.04); color: var(--on-dark);
+    border-radius: 999px; padding: 7px 13px; font: 500 14px var(--body); }
+  form { display: flex; gap: 8px; align-items: center; background: var(--bg-2); border: 1px solid rgba(239,228,208,.14);
+    border-radius: 16px; padding: 6px 6px 6px 16px; }
+  form input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--on-dark); font: 400 16px var(--body); outline: none; }
+  form input::placeholder { color: var(--on-dark-faint); }
+  .send { width: 40px; height: 40px; border-radius: 12px; border: 0; background: var(--paper); color: var(--ink); display: grid; place-items: center; }
+  .send svg { width: 18px; height: 18px; }
+  nav.bottom { display: flex; justify-content: space-around; padding: 8px 0 12px; border-top: 1px solid var(--line); background: var(--rail); }
+  nav.bottom a { color: var(--on-dark-faint); text-decoration: none; font: 600 12px var(--body); display: grid; justify-items: center; gap: 3px; }
+  nav.bottom a.on { color: var(--paper); }
+  nav svg { width: 22px; height: 22px; }
+
+  /* phones: a digest shows its first 3 rows, then "+5 more for you" */
+  .rows li.more-row { display: none; color: inherit; }
+  .m-wide { display: none; }
+  @media (min-width: 900px) { .m-phone { display: none; } .m-wide { display: inline; } }
+  @media (max-width: 899px) {
+    .rows li:nth-child(n+3) { display: none; }
+    .rows li.more-row { display: block; font-weight: 600; padding: 7px 0; }
+    .rows li { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 0; }
+    .rows .rn { margin-left: 6px; } .rows .cv { display: none; }
+    .others { white-space: nowrap; } .others .ex { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .others .more, .others b { flex: none; }
+    .wide { display: none; }
+    .thread { gap: 10px; padding-bottom: 6px; } .bubble { padding: 12px 14px 10px; } .bubble h2 { font-size: 18px; } .composer { padding: 6px 16px 10px; } .chips { padding-bottom: 8px; }
+    .bubble .when, .day { display: none; } .note { font-size: 15px; } .you { padding: 8px 12px; } .you .when { display: none; }
+    .rows { margin-top: 8px; } .others { margin-top: 6px; }
+  }
+  @media (min-width: 900px) {
+    /* wide: For-you rows in two columns, the first 4 then "+4 more" */
+    .rows { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+    .rows li:nth-child(n+5) { display: none; }
+    .rows li.more-row { display: block; grid-column: 1 / -1; font-weight: 600; }
+    .rows li { display: block; padding: 7px 0; }
+    .rows li .rn { margin-left: 6px; }
+    .rows li .cv { display: block; border: 0; padding: 0; margin-top: 1px; font-size: 12.5px; }
+    .bubble:not(.answer) > .when, .you .when { display: none; } .thread { gap: 12px; }
+
+    .app { grid-template-columns: 88px minmax(0, 1fr) 300px; }
+    .rail { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 22px 0; background: var(--rail); border-right: 1px solid var(--line); }
+    .rail .avatar { margin-bottom: 10px; }
+    .rail a { color: var(--on-dark-faint); text-decoration: none; font: 600 12px var(--body); display: grid; justify-items: center; gap: 4px; }
+    .rail a.on { color: var(--paper); }
+    .rail svg { width: 22px; height: 22px; }
+    nav.bottom, header .avatar { display: none; }
+    header { padding: 20px 32px 14px; }
+    .thread, .composer { padding-left: 32px; padding-right: 32px; }
+    .thread > *, .composer > * { width: 100%; max-width: 680px; margin-left: auto; margin-right: auto; }
+    .thread > .you { width: auto; margin-right: max(0px, calc((100% - 680px) / 2)); }
+    .side { display: block; padding: 22px 22px; border-left: 1px solid var(--line); background: rgba(0,0,0,.18); }
+    .side h3 { margin: 0 0 12px; font: 700 18px var(--display); color: var(--paper); }
+    .side .item { padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .side .item b { display: block; font-weight: 600; }
+    .side .item span { color: var(--on-dark-soft); font-size: 14px; }
+    .side .chip-time { margin-top: 6px; background: rgba(239,228,208,.08); color: var(--on-dark-soft); }
+    .side .chip-time.soon { background: var(--amber); color: var(--amber-ink); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="Sections">
+    <div class="avatar" aria-hidden="true">P</div>
+    <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v11H9l-5 4z"/></svg>Chat</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20V8l6-3v15M10 20h10V10l-10-3"/></svg>Companies</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profile</a>
+  </aside>
+
+  <main>
+    <header>
+      <div class="avatar" aria-hidden="true">P</div>
+      <div class="who">
+        <h1>Ping</h1>
+        <div class="status">Idle · <b>checked <span data-ago="13:08">4 min</span> ago</b><span class="wide"> · next check 14:11</span></div>
+      </div>
+      <button class="check" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Check now</button>
+    </header>
+
+    <section class="thread" aria-label="Chat">
+      <div class="day">Saturday 21 November</div>
+
+
+      <article class="bubble">
+        <div class="kicker">Reminder · closes tonight <span class="chip-time" data-due="20:00">in 6 h 48 m</span></div>
+        <h2>8 for you close at 20:00</h2>
+        <div class="meta">38 roles you haven't applied to close tonight, Sat 21 Nov 20:00.</div>
+        <ul class="rows">
+          <li><span class="co">Auro Group</span><span class="rn">Data Analyst</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li><span class="co">Axis Bank</span><span class="rn">BIU (Business Intelligence Unit)</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li><span class="co">BlackBuck</span><span class="rn">Associate Manager — Leadership Program</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Flipspaces</span><span class="rn">Entrepreneur-in-Residence</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Waterfly Technologies</span><span class="rn">Growth and Strategist</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Waterfly Technologies</span><span class="rn">Management Consultant 2</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Xion Multiventures</span><span class="rn">Trainee Trader &amp; Research Analyst</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li><span class="co">YMS Financial</span><span class="rn">Quant Researcher</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li class="more-row"><span class="m-phone">+6 more for you: BlackBuck, Flipspaces, Waterfly ×2, Xion, YMS</span><span class="m-wide">+4 more for you: Waterfly ×2, Xion, YMS</span></li>
+        </ul>
+        <div class="others"><b>Others (30)</b> <span class="ex">AiPrise, Astera Labs, Ather Energy +11</span> <span class="more">Show ▸</span></div>
+        <div class="when">09:11 · from the companies list</div>
+      </article>
+
+      <article class="bubble urgent">
+        <div class="kicker">Test today · 2 h before <span class="chip-time soon" data-due="15:00">in 1 h 48 m</span></div>
+        <h2>Groww — Associate Product Manager</h2>
+        <div class="facts"><span>Starts <b>15:00</b></span><span>CTC <b>32 L</b></span><span>You applied</span></div>
+        <div class="when">13:00 · from the CDC schedule notice of Fri 20 Nov</div>
+      </article>
+
+      <p class="note">Afternoon. One new list since 09:11; <em>8 for you close at 20:00</em>. Groww's test comes first.<span class="t">13:11</span></p>
+
+      <div class="you">which cv for blackbuck?<div class="when">13:14</div></div>
+
+      <article class="bubble answer">
+        <p><b>BlackBuck</b> (Associate Manager — Leadership Program): apply with <b>Consulting CV</b>. It closes today at 20:00; you haven't applied yet.</p>
+        <div class="when">13:14</div>
+      </article>
+    </section>
+
+    <div class="composer">
+      <div class="chips" role="group" aria-label="Quick questions">
+        <button type="button">What's due tonight?</button><button type="button">Anything for me?</button>
+        <button type="button">Which CV for …?</button><button type="button">My preferences</button>
+      </div>
+      <form onsubmit="return false"><input placeholder="Ask about your ERP…" aria-label="Ask Ping"><button class="send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></form>
+    </div>
+    <nav class="bottom" aria-label="Sections">
+      <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v11H9l-5 4z"/></svg>Chat</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20V8l6-3v15M10 20h10V10l-10-3"/></svg>Companies</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profile</a>
+    </nav>
+  </main>
+
+  <aside class="side" aria-label="Today">
+    <h3>Today</h3>
+    <div class="item"><b>Groww test</b><span>Associate Product Manager · 15:00</span><br><span class="chip-time soon" data-due="15:00">in 1 h 48 m</span></div>
+    <div class="item"><b>8 for you close</b><span>Auro Group, Axis Bank, BlackBuck +5 · 20:00</span><br><span class="chip-time" data-due="20:00">in 6 h 48 m</span></div>
+    <div class="item"><b>Next check</b><span>14:11, or press Check now</span></div>
+  </aside>
+</div>
+<script>
+  // the mock's clock: 13:12 IST on the snapshot day, moving forward from when the page opened
+  const start = Date.now(), base = Date.parse("2026-11-21T13:12:00+05:30");
+  const now = () => base + (Date.now() - start);
+  const at = (hm) => Date.parse(`2026-11-21T${hm}:00+05:30`);
+  function tick() {
+    for (const el of document.querySelectorAll("[data-due]")) {
+      const m = Math.round((at(el.dataset.due) - now()) / 60000);
+      el.textContent = m <= 0 ? "over" : m < 60 ? `in ${m} m` : `in ${Math.floor(m / 60)} h ${m % 60} m`;
+      el.classList.toggle("soon", m > 0 && m < 180);
+    }
+    for (const el of document.querySelectorAll("[data-ago]")) el.textContent = `${Math.max(1, Math.round((now() - at(el.dataset.ago)) / 60000))} min`;
+  }
+  tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>

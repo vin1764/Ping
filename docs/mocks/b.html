@@ -1,0 +1,231 @@
+<!doctype html>
+<!-- Mock B, "Signal": a static page, not app code. Same real demo content as mock A (dashboard/demo-data.json,
+     snapshot of Sat 21 Nov), clock held at 13:12 IST and ticking from there. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0d; --panel: #101216; --line: rgba(214, 224, 240, .085); --line-2: rgba(214, 224, 240, .16);
+    --text: #e4e9f0; --soft: #9aa3b0; --faint: #626b78;
+    --accent: #c8ff3d; --accent-ink: #0d1400;
+    /* spines by kind: muted, so only the accent shouts */
+    --s-digest: #6f7fa3; --s-reminder: #a68f66; --s-test: var(--accent); --s-system: #3a404a; --s-you: #e4e9f0;
+    --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 400 15.5px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  .num { font-family: var(--mono); font-size: .92em; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .app { display: grid; grid-template-columns: 1fr; grid-template-rows: 100vh; height: 100vh; overflow: hidden; }
+  .rail, .side { display: none; }
+  main { min-width: 0; min-height: 0; display: flex; flex-direction: column; height: 100vh; }
+  .thread { min-height: 0; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .mark { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line-2); display: grid; place-items: center; flex: none; position: relative; }
+  .mark i { width: 10px; height: 10px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 4px rgba(228,233,240,.08); }
+  .who { flex: 1; min-width: 0; }
+  .who h1 { margin: 0; font: 600 17px/1.1 var(--sans); letter-spacing: .02em; }
+  .status { margin-top: 3px; color: var(--soft); font-size: 12.5px; display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+  .status .dot { width: 6px; height: 6px; border-radius: 50%; background: #6d7a8c; flex: none; }
+  .check { border: 1px solid var(--line-2); background: transparent; color: var(--text); border-radius: 8px; padding: 7px 12px;
+    font: 500 13.5px var(--sans); display: inline-flex; gap: 7px; align-items: center; }
+  .check kbd { font: 500 11px var(--mono); color: var(--faint); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; }
+
+  .thread { flex: 1; overflow: auto; padding: 10px 16px 12px; display: flex; flex-direction: column; }
+  .day { display: flex; align-items: center; gap: 10px; color: var(--faint); font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; margin: 8px 0 6px; }
+  .day::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* a message: a card hung on a coloured spine, separated by hairlines */
+  .msg { position: relative; padding: 12px 0 12px 16px; border-bottom: 1px solid var(--line); }
+  .msg::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 2px; background: var(--spine); }
+  .msg.digest { --spine: var(--s-digest); } .msg.reminder { --spine: var(--s-reminder); } .msg.test { --spine: var(--s-test); }
+  .msg.system { --spine: var(--s-system); } .msg.you { --spine: var(--s-you); }
+  .top { display: flex; align-items: center; gap: 8px; font: 500 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .top .k { color: var(--soft); }
+  .top .t { margin-left: auto; letter-spacing: 0; }
+  .msg h2 { margin: 6px 0 2px; font: 600 18px/1.3 var(--sans); }
+  .msg p { margin: 4px 0 0; color: var(--text); }
+  .msg.system p { color: var(--soft); }
+  .msg.system p b { color: var(--text); font-weight: 500; }
+  .sub { color: var(--soft); font-size: 14px; }
+  .rows { list-style: none; margin: 10px 0 0; padding: 0; }
+  .rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; padding: 7px 0; border-top: 1px solid var(--line); }
+  .rows .co { font-weight: 600; }
+  .rows .rn { color: var(--soft); font-size: 14px; grid-column: 1; }
+  .rows .cv { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--soft); font: 500 12px var(--mono); }
+  .others { display: flex; gap: 10px; align-items: baseline; padding: 8px 0 0; border-top: 1px solid var(--line); color: var(--soft); font-size: 14px; }
+  .others b { color: var(--text); font-weight: 600; }
+  .others .more { margin-left: auto; white-space: nowrap; color: var(--text); font: 500 12px var(--mono); }
+  .count { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 8px;
+    color: var(--soft); font: 500 12px var(--mono); letter-spacing: 0; text-transform: none; }
+  .count.soon { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .count.soon::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-ink); }
+  .kv { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; color: var(--soft); font-size: 14px; }
+  .kv b { color: var(--text); font-weight: 500; }
+  .msg.you { align-self: stretch; }
+  .msg.you p { font-size: 15.5px; }
+
+  .composer { padding: 10px 16px 14px; border-top: 1px solid var(--line); background: var(--bg); }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .chips button { flex: none; border: 1px solid var(--line-2); background: transparent; color: var(--soft); border-radius: 6px; padding: 6px 10px; font: 500 13.5px var(--sans); }
+  form { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; padding: 5px 5px 5px 14px; background: var(--panel); }
+  form input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: 400 15.5px var(--sans); outline: none; }
+  form input::placeholder { color: var(--faint); }
+  .send { width: 38px; height: 38px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--text); color: var(--bg); display: grid; place-items: center; }
+  .send svg { width: 17px; height: 17px; }
+  nav.bottom { display: flex; justify-content: space-around; padding: 8px 0 12px; border-top: 1px solid var(--line); }
+  nav.bottom a { color: var(--faint); text-decoration: none; font: 500 11.5px var(--sans); display: grid; justify-items: center; gap: 3px; }
+  nav.bottom a.on { color: var(--text); }
+  nav svg { width: 21px; height: 21px; }
+
+  /* phones: a digest shows its first 3 rows, then "+5 more for you" */
+  .rows li.more-row { display: none; color: inherit; }
+  .m-wide { display: none; }
+  @media (min-width: 900px) { .m-phone { display: none; } .m-wide { display: inline; } }
+  @media (max-width: 899px) {
+    .rows li:nth-child(n+3) { display: none; }
+    .rows li.more-row { display: block; font-weight: 600; padding: 7px 0; }
+    .rows li { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 0; }
+    .rows .rn { margin-left: 6px; } .rows .cv { display: none; }
+    .others { white-space: nowrap; } .others .ex { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .others .more, .others b { flex: none; }
+    .wide { display: none; }
+    .msg { padding: 9px 0 9px 14px; } .msg h2 { font-size: 17px; margin-top: 4px; } .day { display: none; } .thread { padding-top: 4px; }
+  }
+  @media (min-width: 900px) {
+    /* wide: For-you rows in two columns, the first 4 then "+4 more" */
+    .rows { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+    .rows li:nth-child(n+5) { display: none; }
+    .rows li.more-row { display: block; grid-column: 1 / -1; font-weight: 600; }
+    .rows li { display: block; padding: 7px 0; }
+    .rows li .rn { margin-left: 6px; }
+    .rows li .cv { display: block; border: 0; padding: 0; margin-top: 1px; font-size: 12.5px; }
+    .msg { padding: 10px 0 10px 16px; }
+
+    .app { grid-template-columns: 220px minmax(0, 1fr) 320px; }
+    .rail { display: flex; flex-direction: column; gap: 2px; padding: 18px 12px; border-right: 1px solid var(--line); }
+    .rail .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; font-weight: 600; }
+    .rail a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; color: var(--soft); text-decoration: none; font-size: 14.5px; }
+    .rail a.on { color: var(--text); background: rgba(228,233,240,.05); }
+    .rail a .num { margin-left: auto; color: var(--faint); }
+    .rail svg { width: 18px; height: 18px; }
+    nav.bottom, header .mark { display: none; }
+    header { padding: 16px 28px; }
+    .thread, .composer { padding-left: 28px; padding-right: 28px; }
+    .thread > *, .composer > * { width: 100%; max-width: 720px; margin-left: auto; margin-right: auto; }
+    .side { display: block; border-left: 1px solid var(--line); padding: 18px 20px; }
+    .side h3 { margin: 0 0 8px; font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+    .side .row { display: grid; grid-template-columns: 52px 1fr; gap: 2px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .side .row > .num { grid-column: 1; grid-row: 1; color: var(--soft); padding-top: 2px; }
+    .side .row > b { grid-column: 2; grid-row: 1; font-weight: 600; }
+    .side .row > span:not(.num) { grid-column: 2; color: var(--soft); font-size: 13.5px; }
+    .side .row > .count { justify-self: start; margin-top: 6px; }
+    .side .row > .count.soon { color: var(--accent-ink); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="Sections">
+    <div class="brand"><span class="mark"><i></i></span>Ping</div>
+    <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H9l-5 4z"/></svg>Chat</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V8l6-3v15M10 20h10V10l-10-3"/></svg>Companies<span class="num">201</span></a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profile</a>
+  </aside>
+
+  <main>
+    <header>
+      <span class="mark" aria-hidden="true"><i></i></span>
+      <div class="who">
+        <h1>Ping</h1>
+        <div class="status"><span class="dot"></span>idle · checked <span class="num" data-ago="13:08">4 min</span> ago<span class="wide"> · next <span class="num">14:11</span></span></div>
+      </div>
+      <button class="check" type="button">Check now <kbd>R</kbd></button>
+    </header>
+
+    <section class="thread" aria-label="Chat">
+      <div class="day">Sat 21 Nov</div>
+
+
+      <div class="msg reminder">
+        <div class="top"><span class="k">Reminder</span><span class="count" data-due="20:00">in 6 h 48 m</span><span class="t num">09:11</span></div>
+        <h2>8 for you close at <span class="num">20:00</span></h2>
+        <div class="sub">38 roles you haven't applied to close tonight.</div>
+        <ul class="rows">
+          <li><span class="co">Auro Group</span><span class="rn">Data Analyst</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li><span class="co">Axis Bank</span><span class="rn">BIU (Business Intelligence Unit)</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li><span class="co">BlackBuck</span><span class="rn">Associate Manager — Leadership Program</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Flipspaces</span><span class="rn">Entrepreneur-in-Residence</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Waterfly Technologies</span><span class="rn">Growth and Strategist</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Waterfly Technologies</span><span class="rn">Management Consultant 2</span><span class="cv">Consulting CV</span></li>
+          <li><span class="co">Xion Multiventures</span><span class="rn">Trainee Trader &amp; Research Analyst</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li><span class="co">YMS Financial</span><span class="rn">Quant Researcher</span><span class="cv">Analytics &amp; Finance CV</span></li>
+          <li class="more-row"><span class="m-phone">+6 more for you: BlackBuck, Flipspaces, Waterfly ×2, Xion, YMS</span><span class="m-wide">+4 more for you: Waterfly ×2, Xion, YMS</span></li>
+        </ul>
+        <div class="others"><b>Others <span class="num">30</span></b> <span class="ex">AiPrise, Astera Labs, Ather Energy +11</span> <span class="more">expand ▸</span></div>
+      </div>
+
+      <div class="msg test">
+        <div class="top"><span class="k">Test</span><span class="count soon" data-due="15:00">in 1 h 48 m</span><span class="t num">13:00</span></div>
+        <h2>Groww — Associate Product Manager</h2>
+        <div class="kv"><span>starts <b class="num">15:00</b></span><span>CTC <b class="num">32.0 L</b></span><span>applied</span></div>
+      </div>
+
+      <div class="msg system">
+        <div class="top"><span class="k">Ping</span><span class="t num">13:11</span></div>
+        <p>Afternoon. One new list since <span class="num">09:11</span>; <b>8 for you close at <span class="num">20:00</span></b>. Groww's test comes first.</p>
+      </div>
+
+      <div class="msg you">
+        <div class="top"><span class="k">You</span><span class="t num">13:14</span></div>
+        <p>which cv for blackbuck?</p>
+      </div>
+
+      <div class="msg digest">
+        <div class="top"><span class="k">Ping</span><span class="t num">13:14</span></div>
+        <p><b>BlackBuck</b> (Associate Manager — Leadership Program): apply with <b>Consulting CV</b>. Closes today <span class="num">20:00</span>; not applied yet.</p>
+      </div>
+    </section>
+
+    <div class="composer">
+      <div class="chips" role="group" aria-label="Quick questions">
+        <button type="button">What's due tonight?</button><button type="button">Anything for me?</button>
+        <button type="button">Which CV for …?</button><button type="button">My preferences</button>
+      </div>
+      <form onsubmit="return false"><input placeholder="Ask about your ERP" aria-label="Ask Ping"><button class="send" type="submit" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></form>
+    </div>
+    <nav class="bottom" aria-label="Sections">
+      <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H9l-5 4z"/></svg>Chat</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20V8l6-3v15M10 20h10V10l-10-3"/></svg>Companies</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Profile</a>
+    </nav>
+  </main>
+
+  <aside class="side" aria-label="Today">
+    <h3>Today</h3>
+    <div class="row"><span class="num">15:00</span><b>Groww test</b><span>Associate Product Manager</span><span class="count soon" data-due="15:00">in 1 h 48 m</span></div>
+    <div class="row"><span class="num">20:00</span><b>8 for you close</b><span>Auro Group, Axis Bank, BlackBuck +5</span><span class="count" data-due="20:00">in 6 h 48 m</span></div>
+    <div class="row"><span class="num">14:11</span><b>Next check</b><span>or press Check now</span></div>
+  </aside>
+</div>
+<script>
+  const start = Date.now(), base = Date.parse("2026-11-21T13:12:00+05:30");
+  const now = () => base + (Date.now() - start);
+  const at = (hm) => Date.parse(`2026-11-21T${hm}:00+05:30`);
+  function tick() {
+    for (const el of document.querySelectorAll("[data-due]")) {
+      const m = Math.round((at(el.dataset.due) - now()) / 60000);
+      el.textContent = m <= 0 ? "over" : m < 60 ? `in ${m} m` : `in ${Math.floor(m / 60)} h ${m % 60} m`;
+      el.classList.toggle("soon", m > 0 && m < 180);
+    }
+    for (const el of document.querySelectorAll("[data-ago]")) el.textContent = `${Math.max(1, Math.round((now() - at(el.dataset.ago)) / 60000))} min`;
+  }
+  tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>

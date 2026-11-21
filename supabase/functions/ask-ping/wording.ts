@@ -81,7 +81,7 @@ export function glance(events: Ev[], roles: Role[], now: Date): string {
   };
   const count = (rs: Role[]) => {
     const no = rs.filter((r) => !r.applied).length;
-    const mine = rs.filter((r) => r.for_you).length;
+    const mine = rs.filter((r) => r.for_you && !r.applied).length;      // the digest's count: for you and not applied yet
     return `${n(rs.length, "role", "roles")} at ${n(new Set(rs.map((r) => r.company)).size, "company", "companies")} (${no} not applied, ${rs.length - no} applied` +
       `${rs.some((r) => r.for_you !== undefined) ? `; ${mine} for you` : ""}: ${named(rs)})`;
   };

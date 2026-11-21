@@ -130,10 +130,13 @@ below, with its count and time: "No other tests. 48 applications close at 20:00 
 applied: Ather Energy, Auro Group, Axis Bank, BlackBuck, Diageo +15 more." Never give a count without the names that
 "Today and this week" lists after it (the first 5, then "+N more"). "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
+Numbers: you may phrase, never compute. Every number, time, count, amount and company name in your answer must be
+copied from FACTS below: never add, subtract, count or convert yourself. If FACTS has no number for something,
+say you don't have it. An answer with a number that isn't in FACTS is thrown away.
 Lists of roles: "Role lists by closing time" below is ready-made. When an answer lists roles that close at one of
-those times, copy that time's whole block exactly: its heading (the deadline is said once, there), "For you" with
-"✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each (keep Others unless
-the question narrows the list). Don't add
+those times, copy that time's whole block exactly: its heading (the deadline is said once, there; "8 for you" means
+for you and not applied yet), "For you", "Applied" (each with "✓ applied"), then "Others", one "Company — Role" line
+each (keep Others unless the question narrows the list). Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
 CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what
@@ -155,7 +158,8 @@ or change anything on the ERP or anywhere else. ${act
     ? `This message asks Ping to do something: start with "Ping is read-only, so I can't" followed by what was asked,
 then add anything useful from the data (deadline, form link).`
     : `This message is a question, not a request to act: do not mention being read-only or what Ping can't do.`}
-Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
+FACTS start here.
+${ruledFacts ? `Ping's own answer from the data (the rules), for: ${routed.resolved || ask}\n${ruledFacts}\n\n` : ""}Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
 All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric" }).format(asOf)} unless they say otherwise.
 
 Today and this week (counted from the data below):
@@ -175,6 +179,8 @@ ${detailLines.length ? `\nDetails for the companies in the question (from the ER
 Your results on shortlists and test room lists in the last 21 days, newest first:
 ${listLines.join("\n") || "(none)"}
 ${noticeLines.length ? `\nLatest notices for the companies in the question, newest first:\n${noticeLines.join("\n")}\n` : ""}
+FACTS end here.
+
 Conversation so far, oldest first:
 ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
 

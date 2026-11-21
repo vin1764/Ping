@@ -6,7 +6,7 @@
 // within 150 s. So dates are formatted with one shared formatter (making a new one per date was the
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
 import { caller, cors, json } from "../_shared/owner.ts";
-import { asksToAct, glance, roleLists, stripRefusal, todayNote, wantsLists } from "./wording.ts";
+import { asksToAct, glance, stripRefusal, todayNote, wantsLists } from "./wording.ts";
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
@@ -332,7 +332,12 @@ Deno.serve(async (req) => {
   };
   // the follow-up's own words may be short ("and tomorrow?"): the last question counts too
   const blocks = wantsLists(`${ask} ${lastQuestion}`)
-    ? roleLists((roles.data || []) as any[], rmarks, asOf, hasTargets, prefs.list_other_roles !== false) : "";
+    ? Rules.dueBlocks(factsData, asOf.getTime(), asOf.getTime() + 7 * 86_400_000).join("\n\n") : "";
+  // what the rules make of this question (the router's reading of it, a follow-up included): the model phrases, the
+  // rules count
+  await withDetails(routed.spec?.hits || []);
+  const ruledFacts = routed.spec && (routed.spec.intents?.length || routed.spec.hits?.length)
+    ? Rules.answer(ask, factsData, routed.spec).text : "";
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
     `${todayNote(r.effective_deadline, asOf)} | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"}` +
@@ -394,10 +399,13 @@ below, with its count and time: "No other tests. 48 applications close at 20:00 
 applied: Ather Energy, Auro Group, Axis Bank, BlackBuck, Diageo +15 more." Never give a count without the names that
 "Today and this week" lists after it (the first 5, then "+N more"). "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
+Numbers: you may phrase, never compute. Every number, time, count, amount and company name in your answer must be
+copied from FACTS below: never add, subtract, count or convert yourself. If FACTS has no number for something,
+say you don't have it. An answer with a number that isn't in FACTS is thrown away.
 Lists of roles: "Role lists by closing time" below is ready-made. When an answer lists roles that close at one of
-those times, copy that time's whole block exactly: its heading (the deadline is said once, there), "For you" with
-"✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each (keep Others unless
-the question narrows the list). Don't add
+those times, copy that time's whole block exactly: its heading (the deadline is said once, there; "8 for you" means
+for you and not applied yet), "For you", "Applied" (each with "✓ applied"), then "Others", one "Company — Role" line
+each (keep Others unless the question narrows the list). Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
 CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what
@@ -419,7 +427,8 @@ or change anything on the ERP or anywhere else. ${act
     ? `This message asks Ping to do something: start with "Ping is read-only, so I can't" followed by what was asked,
 then add anything useful from the data (deadline, form link).`
     : `This message is a question, not a request to act: do not mention being read-only or what Ping can't do.`}
-Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
+FACTS start here.
+${ruledFacts ? `Ping's own answer from the data (the rules), for: ${routed.resolved || ask}\n${ruledFacts}\n\n` : ""}Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
 All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric" }).format(asOf)} unless they say otherwise.
 
 Today and this week (counted from the data below):
@@ -439,6 +448,8 @@ ${detailLines.length ? `\nDetails for the companies in the question (from the ER
 Your results on shortlists and test room lists in the last 21 days, newest first:
 ${listLines.join("\n") || "(none)"}
 ${noticeLines.length ? `\nLatest notices for the companies in the question, newest first:\n${noticeLines.join("\n")}\n` : ""}
+FACTS end here.
+
 Conversation so far, oldest first:
 ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
 
@@ -474,6 +485,8 @@ Question: ${ask}`;
       return { busy: true };                       // a timeout or a dropped connection: worth another try
     }
   };
+  // FACTS: the prompt between its two markers (the instructions' examples and the conversation don't count)
+  const factsText = prompt.slice(prompt.indexOf("FACTS start here."), prompt.indexOf("FACTS end here."));
   const noAi = body?.no_ai === true;               // the evals test the rules path on its own
   if (!noAi) {
     for (let i = 0; i <= BACKOFF_MS.length; i++) {
@@ -492,20 +505,30 @@ Question: ${ask}`;
     console.error(JSON.stringify({ event: "no_answer", key: keyName, role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
   }
   function answered(answer: string, model: string) {
+    const bad = Rules.unsupportedNumbers(answer, factsText, ask);
+    if (bad.length) {
+      // a number the model made up (or worked out): the rules answer instead
+      console.log(JSON.stringify({ event: "model_count_mismatch", key: keyName, role, model, numbers: bad.slice(0, 8), route: routed.kind,
+        why: routed.why, ms: Date.now() - t0 }));
+      return rulesReply("model_count_mismatch");
+    }
     console.log(JSON.stringify({ event: "answered", key: keyName, role, model, tried, history: kept.length, act,
       items: items.data?.length ?? 0, roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0,
       prompt_chars: prompt.length, ms: Date.now() - t0 }));
     return done(answer, model);
   }
 
-  // No AI answer: the rules answer the question asked (a company: only that company; no company: what was asked
-  // about; nothing understood: says so, then what's due soon). Same code as the dashboard's offline answers.
-  // the rules answer for what the router made of it (a follow-up: the last question's companies and intent)
-  await withDetails(routed.spec?.hits || []);
-  const ruled = routed.spec && (routed.spec.intents?.length || routed.spec.hits?.length)
-    ? Rules.answer(ask, factsData, routed.spec) : Rules.answer(ask, factsData);
-  console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", kind: ruled.kind, companies: ruled.companies.length,
-    no_ai: noAi, tried, ms: Date.now() - t0 }));
-  return done(ruled.text + (noAi ? "" : "\n\n(Gemini busy: answered from your ERP data by rules, not by the model.)"), "rules",
-              { fallback: true, kind: ruled.kind });
+  return rulesReply(noAi ? "no_ai" : "model_busy");
+
+  // No model answer (busy, switched off, or a number it made up): the rules answer for what the router made of the
+  // question (a follow-up: the last question's companies and intent); nothing understood: says so, then what's due
+  // soon. Same code as the dashboard's offline answers.
+  function rulesReply(reason: string) {
+    const ruled = routed.spec && (routed.spec.intents?.length || routed.spec.hits?.length)
+      ? Rules.answer(ask, factsData, routed.spec) : Rules.answer(ask, factsData);
+    console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", reason, route: routed.kind, kind: ruled.kind,
+      companies: ruled.companies.length, no_ai: noAi, tried, ms: Date.now() - t0 }));
+    const note = reason === "model_busy" ? "\n\n(Gemini busy: answered from your ERP data by rules, not by the model.)" : "";
+    return done(ruled.text + note, "rules", { fallback: true, kind: ruled.kind, reason });
+  }
 });

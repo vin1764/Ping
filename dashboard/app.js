@@ -222,7 +222,7 @@
   async function startDemo(noBackend) {
     const r = await fetch("demo-data.json", { cache: "no-store" });
     state.src = new DemoSource(await r.json());
-    $("#mode-badge").textContent = DEMO_CHIP;
+    $("#mode-badge").replaceChildren("Demo", h("span", { class: "long" }, DEMO_CHIP.replace(/^Demo/, "")));
     $("#mode-badge").title = "Anonymised snapshot of a real run, no login";
     $("#mode-badge").hidden = false;
     if (!noBackend) {
@@ -252,7 +252,8 @@
     }
     state.src = new SupabaseSource(sb, demo);
     if (demo) {
-      $("#mode-badge").textContent = DEMO_CHIP;
+      // "Demo — sample data, read-only"; the second part is hidden on narrow phones
+      $("#mode-badge").replaceChildren("Demo", h("span", { class: "long" }, DEMO_CHIP.replace(/^Demo/, "")));
       $("#mode-badge").title = "Anonymised snapshot of a real run: real companies, a made-up student";
       $("#mode-badge").hidden = false;
       $("#sign-out").textContent = "Exit demo";

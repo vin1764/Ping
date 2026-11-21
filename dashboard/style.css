@@ -188,3 +188,10 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .cvs .cv-slot input[type=file] { flex: 1 1 200px; min-width: 0; max-width: 100%; }
 .cvs .cv-slot > div { flex-basis: 100%; }
 .btn.small { padding: 4px 10px; font-size: 0.9em; }
+
+/* phones: the name never shrinks; the demo chip says just "Demo" on narrow screens; the page follows the visible
+   viewport so the message box and Send stay above the on-screen keyboard */
+.brand { flex: none; }
+.badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 420px) { .badge .long { display: none; } }
+@supports (height: 100dvh) { html, body { height: 100dvh; } }

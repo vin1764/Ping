@@ -108,6 +108,16 @@ create table if not exists emails (
   company text, links jsonb,
   is_sample boolean default false
 );
+-- placement mail as a source (ping/mail_source.py): what the mail is, its dates and link, the attachment check
+-- (your row and the table heading only). Mails that aren't about placements are never stored.
+alter table emails add column if not exists kind text;
+alter table emails add column if not exists main_link text;
+alter table emails add column if not exists due_at timestamptz;
+alter table emails add column if not exists event_at timestamptz;
+alter table emails add column if not exists when_text text;
+alter table emails add column if not exists pdf jsonb;
+alter table emails add column if not exists kept_because text;
+alter table emails add column if not exists rules_version int;
 
 create table if not exists contacts (
   id text primary key,

@@ -4,6 +4,11 @@ The mailbox is opened with EXAMINE (read-only) and messages are fetched with
 BODY.PEEK, so Ping never marks anything as read, moves or deletes anything.
 It searches "All Mail" so it still finds OTP mails after you add a filter
 that skips the inbox.
+
+Placement mail (ping/mail_source.py) is read in two steps: first only the
+headers of every new mail (From, Subject, Date, List-Unsubscribe), then the
+full message, attachments included, of the mails the filter keeps. A mail the
+filter drops is never read beyond those headers.
 """
 
 from __future__ import annotations
@@ -77,6 +82,68 @@ def parse_message(uid: str, raw: bytes, internal: datetime | None) -> Mail:
     return Mail(uid, internal.astimezone(IST), sender, subject, text, links)
 
 
+@dataclass
+class Head:
+    """What the filter sees of a mail: headers only."""
+    uid: str
+    received: datetime
+    sender: str
+    subject: str
+    bulk: bool = False          # List-Unsubscribe / Precedence: bulk (newsletters, promotions)
+
+
+@dataclass
+class Attachment:
+    filename: str
+    content_type: str
+    data: bytes
+
+
+HEADER_FIELDS = "FROM SUBJECT DATE LIST-UNSUBSCRIBE PRECEDENCE"
+
+
+def parse_head(uid: str, raw: bytes, internal: datetime | None) -> Head:
+    msg = email.message_from_bytes(raw or b"", policy=email.policy.default)
+    subject = " ".join(str(msg.get("subject", "") or "").split())
+    sender = str(msg.get("from", "") or "")
+    bulk = bool(msg.get("list-unsubscribe")) or str(msg.get("precedence", "")).lower() in ("bulk", "list", "junk")
+    if internal is None:
+        try:
+            internal = parsedate_to_datetime(str(msg.get("date")))
+        except Exception:
+            internal = datetime.now(timezone.utc)
+    return Head(uid, internal.astimezone(IST), sender, subject, bulk)
+
+
+def attachments_of(raw: bytes, limit_bytes: int = 12_000_000) -> list[Attachment]:
+    """PDF / Excel attachments of a kept mail (in memory only; nothing is written to disk)."""
+    msg = email.message_from_bytes(raw, policy=email.policy.default)
+    out = []
+    for part in msg.walk():
+        if part.is_multipart():
+            continue
+        name = part.get_filename() or ""
+        ctype = part.get_content_type()
+        if not (name.lower().endswith((".pdf", ".xlsx")) or ctype in (
+                "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")):
+            continue
+        try:
+            data = part.get_payload(decode=True) or b""
+        except Exception:
+            continue
+        if 0 < len(data) <= limit_bytes:
+            out.append(Attachment(name, ctype, data))
+    return out
+
+
+def _internal(meta: bytes | None) -> datetime | None:
+    m = re.search(rb'INTERNALDATE "([^"]+)"', meta or b"")
+    if not m:
+        return None
+    t = imaplib.Internaldate2tuple(b'INTERNALDATE "' + m.group(1) + b'"')
+    return datetime.fromtimestamp(time.mktime(t), timezone.utc) if t else None
+
+
 class Mailbox:
     def __init__(self, address: str, app_password: str, host: str = "imap.gmail.com"):
         self.address = address
@@ -138,19 +205,37 @@ class Mailbox:
         return data[0].decode().split()
 
     def fetch(self, uids: list[str], limit: int = 200) -> list[Mail]:
+        """Whole messages. Used for OTP mails only (searched by the word OTP); placement mail goes through
+        heads_after() and fetch_full()."""
         out = []
         for uid in uids[-limit:]:
             typ, data = self.imap.uid("FETCH", uid, "(INTERNALDATE BODY.PEEK[])")
             if typ != "OK" or not data or not isinstance(data[0], tuple):
                 continue
-            meta, raw = data[0][0], data[0][1]
-            internal = None
-            m = re.search(rb'INTERNALDATE "([^"]+)"', meta or b"")
-            if m:
-                internal = imaplib.Internaldate2tuple(b'INTERNALDATE "' + m.group(1) + b'"')
-                internal = datetime.fromtimestamp(time.mktime(internal), timezone.utc) if internal else None
-            out.append(parse_message(uid, raw, internal))
+            out.append(parse_message(uid, data[0][1], _internal(data[0][0])))
         return out
+
+    def heads_after(self, after: datetime, limit: int = 400) -> list[Head]:
+        """Headers only (From, Subject, Date, List-Unsubscribe, Precedence) of every mail since `after`."""
+        uids = self._search_uids(after)[-limit:]
+        out = []
+        for uid in uids:
+            typ, data = self.imap.uid("FETCH", uid, f"(INTERNALDATE BODY.PEEK[HEADER.FIELDS ({HEADER_FIELDS})])")
+            if typ != "OK" or not data or not isinstance(data[0], tuple):
+                continue
+            h = parse_head(uid, data[0][1], _internal(data[0][0]))
+            if h.received >= after - timedelta(seconds=5):
+                out.append(h)
+        return out
+
+    def fetch_full(self, uid: str) -> tuple[Mail, list[Attachment]] | None:
+        """The whole message of one mail the filter kept: its text, links and PDF/Excel attachments."""
+        self.connect()
+        typ, data = self.imap.uid("FETCH", uid, "(INTERNALDATE BODY.PEEK[])")
+        if typ != "OK" or not data or not isinstance(data[0], tuple):
+            return None
+        raw = data[0][1]
+        return parse_message(uid, raw, _internal(data[0][0])), attachments_of(raw)
 
     def mails_after(self, after: datetime, words: str = "") -> list[Mail]:
         mails = self.fetch(self._search_uids(after, words))

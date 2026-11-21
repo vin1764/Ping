@@ -238,11 +238,21 @@ class FakeMailbox:
                 return m.text.split("OTP is ")[1][:6], m.uid
         return None, None
 
+    EXTRA = Mail("99", datetime.now(IST), "Pine Labs Hiring <jobs@pinelabs.example>",
+                 "Pine Labs online assessment link", "Your link: https://assess.example.com/pl/xyz",
+                 ["https://assess.example.com/pl/xyz"])
+
     def mails_after(self, after, words=""):
-        extra = Mail("99", datetime.now(IST), "Pine Labs Hiring <jobs@pinelabs.example>",
-                     "Pine Labs online assessment link", "Your link: https://assess.example.com/pl/xyz",
-                     ["https://assess.example.com/pl/xyz"])
-        return [m for m in self.mails + [extra] if m.received >= after]
+        return [m for m in self.mails + [self.EXTRA] if m.received >= after]
+
+    def heads_after(self, after, limit=400):
+        from ping.mailbox import Head
+        return [Head(m.uid, m.received, m.sender, m.subject) for m in self.mails_after(after)]
+
+    def fetch_full(self, uid):
+        self.bodies = getattr(self, "bodies", []) + [uid]
+        m = next((m for m in self.mails + [self.EXTRA] if m.uid == uid), None)
+        return (m, []) if m else None
 
     def close(self):
         pass

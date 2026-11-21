@@ -34,6 +34,7 @@ PROFILE_DEFAULTS = {"roll": None, "name": None, "department": None, "degree": No
                     "active_backlogs": False, "cv_names": [], "interested_companies": [],
                     "not_interested_companies": [], "notice_types": ["PLACEMENT"]}
 LIST_KINDS = ("test", "test_rooms", "shortlist", "result")
+MAIL_LOOKBACK_DAYS = 14
 ROLE_LIST_COLUMNS = ("id", "yop", "com_id", "jnf_id", "company", "designation", "ctc", "ctc_text", "currency",
                      "has_company_doc", "has_ppt_doc", "has_form_doc", "applied", "apply_start", "apply_end",
                      "apply_end_text", "interview_date", "contract")
@@ -239,7 +240,7 @@ class Runner:
         # ---- mailbox: placement mails since last run (read-only)
         emails = []
         if status == "ok":
-            emails = self._scan_mail(list_roles or list(stored_roles.values()))
+            emails = self._scan_mail(list_roles or list(stored_roles.values()), profile)
 
         # ---- save + rebuild the feed
         self._stage("saving")
@@ -501,30 +502,32 @@ class Runner:
         return checks
 
     # ----------------------------------------------------------------- mail
-    def _scan_mail(self, roles) -> list[dict]:
+    def _scan_mail(self, roles, profile: dict | None = None) -> list[dict]:
+        """Placement mail since the last scan (ping/mail_source.py): headers of every mail, the body and
+        attachments of placement mail only. The first scan with new mail rules looks back 14 days."""
+        from . import mail_source
         out = []
         try:
-            last = self.store.get_state("last_mail_scan") if self.store_ok else None
+            st = self.store if self.store_ok else None
+            last = st.get_state("last_mail_scan") if st else None
+            version = st.get_state("mail_rules_version") if st else None
             since = datetime.fromisoformat(last) if last else self.now - timedelta(days=3)
-            index = CompanyIndex(roles)
-            mails = self.mailbox.mails_after(since)
-            self.c("mails_scanned", len(mails))
-            for m in mails:
-                if "otp" in m.subject.lower():
-                    continue
-                head = f"{m.subject} {m.sender}"
-                found = index.scan_text(head)
-                cdc = any(w in m.sender.lower() for w in ("cdc", "placement", "erp"))
-                if not found and not cdc:
-                    continue
-                out.append({
-                    "id": hashlib.sha1(f"{m.received.isoformat()}|{m.sender}|{m.subject}".encode()).hexdigest()[:20],
-                    "received_at": m.received.isoformat(), "sender": m.sender[:200], "subject": m.subject[:300],
-                    "snippet": " ".join(m.text.split())[:300], "company": found[0] if found else None,
-                    "links": m.links[:15]})
-            self.c("mails_kept", len(out))
-            if self.store_ok:
-                self.store.set_state("last_mail_scan", self.now.isoformat())
+            if str(version) != str(mail_source.RULES_VERSION):
+                since = min(since, self.now - timedelta(days=MAIL_LOOKBACK_DAYS))
+            profile = profile or {}
+            extra = tuple(x.strip() for x in os.environ.get("PING_PLACEMENT_SENDERS", "").split(",") if x.strip())
+            out, stats = mail_source.scan(self.mailbox, since, CompanyIndex(roles), profile.get("roll") or "",
+                                          profile.get("name") or "", extra)
+            self.c("mails_scanned", stats.headers_seen)
+            self.c("mails_kept", stats.kept)
+            self.c("mail_bodies_read", stats.bodies_read)
+            self.c("mail_attachments_read", stats.attachments_read)
+            self.c("mail_otp_skipped", stats.otp_skipped)
+            self.counts["mail_dropped"] = stats.dropped
+            self.counts["mail_kept_because"] = stats.kept_because
+            if st:
+                st.set_state("last_mail_scan", self.now.isoformat())
+                st.set_state("mail_rules_version", mail_source.RULES_VERSION)
         except Exception as e:
             self.c("mail_scan_failed")
             self.problems.append(f"mailbox scan failed ({type(e).__name__}: {str(e)[:120]})")
@@ -562,11 +565,20 @@ class Runner:
                     "status", "matched_by", "format", "pages", "text_chars", "scanned", "ocr", "roll_like_count",
                     "header", "my_row", "context", "details", "error")}} for k, v in checks.items()],
                     key="notice_id")
-            if emails:
-                self.store.upsert("emails", emails)
         except Exception as e:
             self.problems.append(f"saving failed: {e}")
             log(f"saving failed: {e}")
+
+        if emails:
+            try:
+                self.store.upsert("emails", emails)
+            except Exception as e:                       # before Admin > apply-sql added the mail columns
+                try:
+                    self.store.upsert("emails", [{k: m.get(k) for k in (
+                        "id", "received_at", "sender", "subject", "snippet", "company", "links")} for m in emails])
+                    self.problems.append(f"emails saved without kind/dates (run Admin > apply-sql): {str(e)[:80]}")
+                except Exception as e2:
+                    self.problems.append(f"saving emails failed: {e2}")
 
     def _rebuild(self, profile) -> list[dict]:
         roles = self.store.select("roles", REAL)
@@ -745,7 +757,8 @@ class Runner:
             f"attachments       : {c.get('pdfs_considered', 0)} checked, {c.get('pdfs_read', 0)} read, "
             f"yes {c.get('pdf_yes', 0)} / no {c.get('pdf_no', 0)} / unknown {c.get('pdf_unknown', 0)}, "
             f"scanned {c.get('pdf_scanned', 0)}, skipped (not yours) {c.get('pdfs_skipped_not_relevant', 0)}",
-            f"mailbox           : {c.get('mails_scanned', 0)} mails looked at, {c.get('mails_kept', 0)} kept",
+            f"mailbox           : {c.get('mails_scanned', 0)} mails (headers only), {c.get('mails_kept', 0)} placement mails "
+            f"kept and read, {c.get('mail_otp_skipped', 0)} OTP mails skipped",
             f"job descriptions  : {c.get('jd_found') or 'none looked up (no role changed)'}; summaries "
             f"{c.get('jd_summaries') or 'none needed'}",
             f"AI fallback       : {c.get('ai', {}).get('calls', 0)} calls, {c.get('ai', {}).get('answers', 0)} answers, "

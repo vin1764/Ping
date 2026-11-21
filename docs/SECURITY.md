@@ -38,6 +38,36 @@ change only to the logins whose read rules let them see that row, so a demo sess
 the demo's runs, never the owner's. Checked live by Admin > `live-page` (`setup/live_page_test.py`): another demo
 session's message and an owner message (posted with the service key, deleted right after) never reach a demo session.
 
+## Mailbox (read-only, placement mail only)
+
+The institute mailbox is opened read-only (IMAP `EXAMINE`, every fetch is `BODY.PEEK`: nothing is marked read,
+moved, flagged or deleted). Ping reads it in two steps (`ping/mail_source.py`, `ping/mailbox.py`):
+
+**Step 1, every new mail: headers only.** `BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE LIST-UNSUBSCRIBE PRECEDENCE)]`.
+The filter decides from these alone, in this order:
+
+| # | rule | result |
+|---|---|---|
+| 1 | subject says OTP / one-time password / verification code / login, security or sign-in code | **dropped**: OTP mails are used for the ERP login only (searched separately by the word "OTP" during login), never stored or shown |
+| 2 | sender is a job board (LinkedIn, Naukri, Indeed, Glassdoor, Internshala, Instahyre, Foundit, Monster, Apna, Cutshort, Wellfound, Angel, TimesJobs, Shine, IIMJobs, Hirist) and not the placement office | dropped |
+| 3 | subject is an account or shopping mail (security alert, sign-in, password, "verify your email/account", receipt, invoice, order shipped/delivered, refund, payment, subscription, newsletter, unsubscribe, % off, sale, cashback, coupon) and the sender isn't the placement office | dropped |
+| 4 | sender is the placement office: the name, address or domain has CDC, placement(s), placement cell, career development, TnP, T&P, training and/or placement, recruitment cell; or the address/domain is in `PING_PLACEMENT_SENDERS` (comma-separated, optional) | **kept** |
+| 5 | subject, sender name or sender domain names a company in the ERP companies list (whole name, name written together, its distinctive first word, or one typo in a word of 6+ letters, as notices are matched); a bulk mail (List-Unsubscribe / Precedence: bulk) from it only with a hiring word in the subject | **kept** |
+| 6 | sender domain is an online-test platform (HackerRank, HackerEarth, Mettl, Codility, CodeSignal, iMocha, SHL, Aon, Talview, HirePro, AMCAT, CoCubes, Glider, TestGorilla, Karat, Mercer, Superset, HireVue, InterviewBit, MyAnatomy, Eklavvya) | **kept** |
+| 7 | any other bulk mail | dropped |
+| 8 | subject has a placement signal: test link, assessment, online/coding/aptitude/written test, shortlist, interview, pre-placement talk, offer letter, job offer, pre-placement offer, placement, recruitment, campus drive/hiring/recruitment, hiring process, selection process. Weaker words (form, deadline, offer, registration, last date, due, and PPT / PPO in capitals) count only next to internship, job, role, hiring, campus, CV, resume, candidate, selection, recruit, drive, CTC, stipend or profile | **kept** |
+| 9 | everything else | dropped |
+
+A dropped mail is never read beyond those headers and nothing of it is stored (the run log keeps only counts:
+how many were dropped and by which rule).
+
+**Step 2, kept mails only: the whole message.** Text, links and PDF / Excel attachments (in memory; never written
+to disk). If the body turns out to carry an OTP the mail is dropped after all. Stored in `emails` (owner only, see
+Tables): sender, subject, the first 300 characters, company, kind (form / test / interview / shortlist / PPT / offer
+/ announcement), deadline and date-time, links (no unsubscribe or tracking links), why it was kept, and for an
+attachment only what the notice attachment check keeps: status, the table heading and your own row. Nothing from a
+mail ever changes "applied": that comes from the ERP alone.
+
 ## Storage
 
 | bucket | owner | demo session / anyone else |
@@ -60,7 +90,7 @@ answers a wrong password with "Invalid login credentials". The result of the lat
 | secret | lives in | used by | in git? |
 |---|---|---|---|
 | ERP_USER_ID, ERP_PASSWORD, ERP_SECQ_1..3 | GitHub Actions secrets | the hourly run (ERP login) | no |
-| MAIL_ADDRESS, MAIL_APP_PASSWORD | GitHub Actions secrets | the hourly run (OTP mail, read-only IMAP; alerts) | no |
+| MAIL_ADDRESS, MAIL_APP_PASSWORD | GitHub Actions secrets | the hourly run (OTP mail for the login and placement mail, read-only IMAP: see Mailbox; alerts) | no |
 | SUPABASE_URL, SUPABASE_SERVICE_KEY | GitHub Actions secrets; the service key also as function secret PING_SERVICE_KEY | hourly run, Admin tasks; ask-ping (cache, first profile row) | no |
 | SUPABASE_PUBLISHABLE_KEY | GitHub secret; also in the public dashboard's `config.js` (public by design) and function secret PING_PUBLISHABLE_KEY | the browser and the functions (with the caller's own login) | only in the built `config.js` of the public repo |
 | SUPABASE_ACCESS_TOKEN | GitHub Actions secret | deploys the functions; Admin tasks (SQL, auth settings, logs) | no |

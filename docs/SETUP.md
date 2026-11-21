@@ -63,6 +63,12 @@ Source repo: SOURCE_REPO_URL
    gh workflow run admin.yml -f task=schedule-setup
    ```
 
+   For notifications on your phone, also make the push keys (one command; the private key goes straight into your Supabase secrets, see `docs/PUSH.md`):
+
+   ```
+   gh workflow run admin.yml -f task=push-setup
+   ```
+
 6. **Open your dashboard.** On `<you>/ping-dashboard` > Settings > Pages, choose Deploy from a branch, `main`, `/ (root)`, and leave Custom domain empty. Then Actions > Dashboard > Run workflow, and open `https://<you>.github.io/ping-dashboard/`.
 
 7. **Answer Ping's first questions in the chat:** your feed, degree and department, what you're looking for, a CV, how often to check, when to remind you. Every answer can be changed later by just telling Ping ("check every 30 minutes").

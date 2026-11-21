@@ -175,6 +175,8 @@ Actions > **Admin** > Run workflow, pick a task:
 | `schedule-status` | lists the scheduled jobs, their last 10 runs in Supabase, and the last Ping runs on GitHub with what started each |
 | `jd-report` | job descriptions on your real roles: usable before (the ERP's JD field) and now, by source, the roles that had none and what was found |
 | `demo-jd` | copies the JD fields of your real roles onto the demo roles, scrubbed and checked like the rest of the demo, and commits `dashboard/demo-data.json` |
+| `push-setup` | notifications: a VAPID key pair made on the runner, the private key straight into the Supabase function secrets, the public key committed and deployed into config.js (does nothing if already set up; `push-rotate` makes a new pair) |
+| `push-check` | push without a phone: the function's key, an encrypted notification decrypted with a test subscription's keys, the VAPID token, the row rules (`docs/PUSH.md`) |
 | `rearm-schedule` | switches the Ping workflow off and on through the API so GitHub re-registers its backup schedule |
 
 ---

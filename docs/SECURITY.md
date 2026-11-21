@@ -27,6 +27,8 @@ Row Level Security is on for every table. "Real rows" are rows with `is_sample` 
 | role_marks ("For you" cache) | nothing | nothing | server only; hashes and yes/no only |
 | demo_questions (demo rate limit) | nothing | nothing (through `demo_take_question()` only) | |
 | allowed_users, state | nothing | nothing | server only |
+| push_subscriptions (docs/PUSH.md) | add, read, remove (each device that said yes: push endpoint + the browser's public keys) | nothing (can't subscribe) | read by send-push with the service key |
+| push_queue | nothing | nothing | server only: pushes sent (never twice) and test-day reminders waiting |
 
 Functions: `is_ping_owner()`, `is_ping_demo()` and `demo_take_question()` run with definer rights and are callable
 by signed-in users; `cleanup_demo_sessions()` only by the server.
@@ -67,7 +69,9 @@ answers a wrong password with "Invalid login credentials". The result of the lat
 | PING_AI_LITE_MODEL = `gemini-3.1-flash-lite` (a setting, not a secret) | Supabase function secret, set by the deploy (`dashboard.yml`) | Ask Ping's lighter model: main model with retries, then this once, then the rules answer | yes (the value is in `dashboard.yml`) |
 | PING_GITHUB_TOKEN | GitHub Actions secret; Supabase function secret | Check now and kick-run (start the Ping workflow) | no |
 | DASHBOARD_DEPLOY_TOKEN | GitHub Actions secret | pushes the built dashboard to the public repo | no |
-| PING_CRON_SECRET | Supabase function secret + Vault (`ping_cron_secret`) | pg_cron's call to kick-run | no |
+| PING_CRON_SECRET | Supabase function secret + Vault (`ping_cron_secret`) | pg_cron's calls to kick-run and send-push | no |
+| VAPID_PRIVATE_KEY | Supabase function secret only, set by Admin > `push-setup` (made on GitHub's runner, sent straight there, never printed) | send-push (signs every push) | no |
+| VAPID_PUBLIC_KEY, VAPID_SUBJECT | Supabase function secrets; the public key also in `dashboard/push-public-key.txt` and `config.js` (public by design) | send-push; the page subscribing | the public key only |
 
 Checks: `git log --all -p` has no Supabase secret key, access token, Google key or GitHub token (the one
 `sb_secret_` match is the fake `sb_secret_test...` in a test), and no `.env` file was ever committed. Actions >
@@ -83,6 +87,7 @@ secrets above and for key-shaped text; it prints counts only.
 | hourly run, AI | notice reader: at most 20 calls and 300 s a run; classifier: 240 s a run; CV summary: 60 s per model |
 | models, in order | Ask Ping: gemini-flash-latest, then gemini-3.1-flash-lite (`PING_AI_LITE_MODEL`). Role marks and the hourly run: gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-31b-it |
 | CV upload | PDF only, 5 MB, 3 CVs |
+| push | at most 1 per check (the most urgent new for-you message) plus test-day reminders; never twice for a message; nothing outside the check window; a notification older than 6 h isn't shown (TTL); dead subscriptions (404/410) are removed |
 | JD files and links | ERP JD files: `AdmFilePDF.htm` type JNF/COM only, through the gate. Links in a JD: GET only, public hosts only (no IPs, no ERP or internal names), 3 redirects, 20 s, 12 MB, no cookies, YouTube skipped; a sign-in page counts as unreadable. At most 40 roles with a file or link a run, again only when the role's JD information changes. 40 summaries a run |
 
 ## Cleanup

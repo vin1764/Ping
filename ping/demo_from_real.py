@@ -15,6 +15,7 @@ finds anything, nothing is written.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -61,8 +62,36 @@ ROLL_NAME_RE = re.compile(r"\[roll removed\]\s*[-–:,)]?\s*\d{0,3}\s*" + _NAME)
 LEFTOVER_RE = re.compile(r"[A-Z][a-z]+\s+[A-Z][a-z]+\s*\[(?:roll|student) removed\]|\[(?:roll|student) removed\]\s*[A-Z][a-z]+\s+[A-Z][a-z]+")
 YOUR_CG_RE = re.compile(r"\byour (?:CGPA )?\d{1,2}(?:\.\d+)?\b", re.I)
 NAMEISH = re.compile(r"^[A-Za-z.]+(?:\s+[A-Za-z.]+)+$")
-# Names of real people seen in the real data; the build fails if any of them survives anywhere.
-DENYLIST = ("[name]", "[name]", "[name]", "[name]", "[name]", "[name]")
+# Names of real people seen in the real data; the build fails if any of them survives anywhere. Kept as
+# SHA-256 of the lowercased name (one word, or two words joined by one space) so the names themselves
+# aren't in the code. To add one: hashlib.sha256("first last".encode()).hexdigest().
+DENY_HASHES = frozenset({
+    "3af40b5168a5a66e941f92f93459cc81f055cd6d0b7e281b475f60c96f0bd89d",
+    "2d8c49c359726b5d770713eab20cb5ae733a828d8870d314c301ce2cd0b32c2c",
+    "3728a121efabad8dd43c044d9832ca3b8d79fe3d14055613dfdcce96c9405710",
+    "6ac7f00933165014d1db908e1181ffa75bc7298e8143aa61062b0a08ac6366c0",
+    "aa03bd0734ef137df356430385dedcd10ee6791b38925e88d1d9c3173e3a1a46",
+    "da9660c38bcd7f409ec94a6c749af6c4cb1af22699071fc2d32a2d99acaeaf66",
+})
+WORD_RE = re.compile(r"[A-Za-z]+")
+
+
+def _sha(w: str) -> str:
+    return hashlib.sha256(w.lower().encode()).hexdigest()
+
+
+def deny_hits(text: str, hashes=DENY_HASHES) -> list[tuple[int, int]]:
+    """Spans of denylisted names in text: single words and two-word names."""
+    words = list(WORD_RE.finditer(text))
+    out = []
+    for i, m in enumerate(words):
+        if _sha(m.group(0)) in hashes:
+            out.append((m.start(), m.end()))
+        if i + 1 < len(words):
+            n = words[i + 1]
+            if text[m.end():n.start()] == " " and _sha(f"{m.group(0)} {n.group(0)}") in hashes:
+                out.append((m.start(), n.end()))
+    return out
 
 
 def _ten_digit_numbers(text: str) -> list[str]:
@@ -110,8 +139,8 @@ class Scrubber:
             s = ROLL_NAME_RE.sub("[roll removed]", s)
         s = re.sub(r"(?:\[roll removed\][\s,;]*)+", "[student removed] ", s)
         s = YOUR_CG_RE.sub("your CGPA", s)
-        for name in DENYLIST:  # last line of defence for names we know are real
-            s = re.sub(rf"\b{re.escape(name)}\b", "[name removed]", s, flags=re.I)
+        for a, b in sorted(deny_hits(s), reverse=True):  # last line of defence for names we know are real
+            s = s[:a] + "[name removed]" + s[b:]
         return s.replace(me, FAKE_ROLL)
 
     def walk(self, obj):
@@ -268,10 +297,9 @@ def final_check(data) -> list[str]:
         problems.append(f"{len(tens)} ten-digit numbers left (e.g. ...{tens[0][-4:]})")
     if "+91" in text:
         problems.append(f"{text.count('+91')} '+91' left")
-    for name in DENYLIST:
-        n = len(re.findall(rf"\b{re.escape(name)}\b", text, flags=re.I))
-        if n:
-            problems.append(f"real name '{name}' left {n} times")
+    hits = deny_hits(text)
+    if hits:
+        problems.append(f"{len(hits)} real names from the denylist left")
     emails = {e for e in EMAIL_RE.findall(text) if not e.lower().endswith("example.com")}
     if emails:
         problems.append(f"{len(emails)} email addresses left")

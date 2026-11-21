@@ -71,16 +71,23 @@ def test_verify_catches_leftovers():
 
 
 def test_final_check_fails_the_build_on_any_leftover():
-    from ping.demo_from_real import DENYLIST, final_check
+    from ping.demo_from_real import final_check
     assert final_check({"x": "fine text, deadline 21-11-2026 16:00, CTC 2800000"}) == []
     assert final_check({"x": "landline 3222 28 2001"})             # any ten-digit number
     assert final_check({"x": "call +91 now"})                     # a stray +91
     assert final_check({"x": "https://example.org/?id=9000012357"})  # links are checked too
-    for name in DENYLIST:
-        assert final_check({"x": f"contact {name.lower()} please"}), name
     assert final_check({"x": "ID: 900 111 222 333 444"}) and final_check({"x": "Passcode: Ab12Cd"})
     assert final_check({"x": "mail hr@acme-test.com"}) and not final_check({"x": "mail careers@example.com"})
 
 
 def test_the_fake_roll_itself_survives():
     assert scrub(f"roll {FAKE_ROLL}") == f"roll {FAKE_ROLL}"
+
+
+def test_denylist_matches_hashed_names_in_any_case():
+    import hashlib
+    from ping.demo_from_real import DENY_HASHES, deny_hits
+    assert len(DENY_HASHES) == 6  # the real names stay out of the code; only their hashes are here
+    mine = {hashlib.sha256(n.encode()).hexdigest() for n in ("testpoc", "dummy person")}
+    text = "Ask TESTPOC or Dummy Person, not Dummy  Personnel"
+    assert [text[a:b] for a, b in deny_hits(text, mine)] == ["TESTPOC", "Dummy Person"]

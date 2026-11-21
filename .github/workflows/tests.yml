@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    paths: ["ping/**", "tests/**", "requirements*.txt"]
+    paths: ["ping/**", "tests/**", "requirements*.txt", "dashboard/**", "supabase/functions/**", "evals/ask_ping/**"]
   workflow_dispatch:
 
 permissions:
@@ -20,3 +20,15 @@ jobs:
           cache: pip
       - run: pip install -q -r requirements-dev.txt
       - run: python -m pytest -q
+      # the page's and Ask Ping's shared JS (rules, router, Today, live updates, onboarding, names)
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - run: node --test tests/js/*.test.js
+      # Ask Ping's router on every eval case and conversation, offline (FACT answers must pass with no model)
+      - run: node evals/ask_ping/route_offline.js | tail -1
+      # the Supabase functions' own tests
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: cd supabase/functions && deno test -A ask-ping

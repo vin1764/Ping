@@ -26,7 +26,7 @@ import requests
 
 from . import ai, supabase_admin as sa
 from .config import IST, load_secrets
-from .demo_from_real import REAL, build_from_store, load_to_db, verify
+from .demo_from_real import REAL, build_from_store, final_check, load_to_db, verify
 from .store import SupabaseStore
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -115,9 +115,17 @@ def build_demo(secrets) -> int:
     counts = load_to_db(store, data)
     visible = sum(1 for i in data["items"] if i["level"] != "hidden")
     say(f"demo built from the real data: {counts}; {visible} items shown in the chat")
-    say(f"anonymising check: passed (no real roll, email or name; no other rolls/phones). Wrote {out.name}, "
-        f"{out.stat().st_size // 1024} KB")
-    return 0
+    say(f"anonymising check: passed (no real roll, email or name; no other rolls, phones, ten-digit numbers, "
+        f"'+91', meeting links or real names from the denylist). Wrote {out.name}, {out.stat().st_size // 1024} KB")
+    # read back exactly what the reviewer login now sees and check it again
+    live = {t: store.select(t, {"is_sample": "is.true"}) for t in
+            ("profile", "roles", "notices", "pdf_checks", "items", "runs", "contacts", "emails")}
+    left = final_check(live)
+    say(f"reviewer's database rows read back ({', '.join(f'{t} {len(r)}' for t, r in live.items())}): "
+        + ("clean" if not left else "NOT CLEAN: " + "; ".join(left)))
+    file_left = final_check(out.read_text(encoding="utf-8"))
+    say(f"{out.name} as written: " + ("clean" if not file_left else "NOT CLEAN: " + "; ".join(file_left)))
+    return 0 if not left and not file_left else 1
 
 
 def gemini_check(secrets) -> int:

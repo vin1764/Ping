@@ -28,17 +28,45 @@ PREFIX = "sample:"
 REAL = {"is_sample": "not.is.true"}
 
 # Uppercase on purpose ("11thNovember" must not match); no word boundaries, because the ERP glues
-# text together ("[name] [name] - 22XY00000The students...").
-ROLL_RE = re.compile(r"\d{2}[A-Z]{2}[A-Z0-9]{5}")  # also back-to-back lists: "23CH3001023CH30020"
+# text together ("TEST NAME - 22XY10051The students...").
+ROLL_RE = re.compile(r"\d{2}[A-Z]{2}[A-Z0-9]{5}")  # also back-to-back lists: "22XY1005122XY10052"
 URL_RE = re.compile(r"(https?://\S+)")
-PHONE_RE = re.compile(r"(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)")
+# Any 10-digit Indian mobile, digits grouped any way ("98765 43210", "987 654 3210", "9876-543-210"), with or
+# without +91 / 91 / 0 in front, in brackets or not.
+PHONE_RE = re.compile(r"(?<!\d)(?:\(?\+\s?91\)?[\s\-.]*|\b91[\s\-.]+|\b0[\s\-.]?)?[6-9](?:[\s\-.]?\d){9}(?![\s\-.]?\d)")
+# Any other number with exactly 10 digits (landlines, toll-free), except dates like "21-11-2026 00:07"
+TEN_DIGITS_RE = re.compile(r"(?<![\d\-./])\d(?:[\s\-.]?\d){9}(?![\s\-.]?\d)")
+DATEISH = re.compile(r"\d{1,2}[\-./]\d{1,2}[\-./]\d{4}|\d{4}[\-./]\d{1,2}[\-./]\d{1,2}")
+PLUS91_RE = re.compile(r"\(?\+\s?91\)?[\s\-.]*")
+# Who to contact: keep the role word ("POC", "Placement coordinator"), drop every name after it, up to the
+# end of the line, "CDC, IIT Kharagpur", or the end of the sentence.
+CONTACT_LINE_RE = re.compile(
+    r"(?i)(\b(?:POCs?|points? of contact|(?:student |placement |company |campus |cdc )?coordinators?|"
+    r"contact (?:persons?|details|us)|for (?:any )?(?:queries|doubts)[^:\n]{0,30}|contacts?)\s*[:\-–]\s*)"
+    r"([^\n]{1,200}?)(?=CDC\b|\\n|\n|(?<=[\w\])])\.(?:\s|$)|$)")
 CONTACT_RE = re.compile(r"[A-Z][A-Za-z.]+(?:\s+[A-Z][A-Za-z.]+){0,2}\s*\(\s*\[phone removed\]\s*\)")
+MEETING_RE = re.compile(r"(?i)\b(meeting|webinar|conference)\s*(id|number|no\.?)\s*[:\-]?\s*[\d ]{6,}\d")
+PASSCODE_RE = re.compile(r"(?i)\b(pass ?code|meeting password|password|pwd)\s*[:\-]\s*\S+")
+MEETING_URL = re.compile(r"(?i)teams\.(?:microsoft|live)\.com|zoom\.us|meet\.google\.com|webex\.com|gotomeet")
+# meeting links written without https:// ("meet.google.com/abc-defg-hij"), glued to the next word or not
+BARE_MEETING_RE = re.compile(r"(?i)(?:[\w-]+\.)?(?:teams\.(?:microsoft|live)\.com|zoom\.us|meet\.google\.com|webex\.com)"
+                             r"/[\w\-/?=&.%]*?[\w-]{3}-[\w]{4}-[\w]{3}|(?:[\w-]+\.)?(?:teams\.(?:microsoft|live)\.com|"
+                             r"zoom\.us|meet\.google\.com|webex\.com)/[\w\-/?=&.%]*")
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+DEMO_EMAIL = "careers@example.com"
 _NAME = r"[A-Z][A-Za-z.]*(?:\s+[A-Z][A-Za-z.]*){0,3}"
 NAME_ROLL_RE = re.compile(_NAME + r"\s*[-–:(,]?\s*\[roll removed\]\)?")          # "Name - ROLL", "Name ROLL"
 ROLL_NAME_RE = re.compile(r"\[roll removed\]\s*[-–:,)]?\s*\d{0,3}\s*" + _NAME)     # "ROLL Name", "ROLL 20Name"
 LEFTOVER_RE = re.compile(r"[A-Z][a-z]+\s+[A-Z][a-z]+\s*\[(?:roll|student) removed\]|\[(?:roll|student) removed\]\s*[A-Z][a-z]+\s+[A-Z][a-z]+")
 YOUR_CG_RE = re.compile(r"\byour (?:CGPA )?\d{1,2}(?:\.\d+)?\b", re.I)
 NAMEISH = re.compile(r"^[A-Za-z.]+(?:\s+[A-Za-z.]+)+$")
+# Names of real people seen in the real data; the build fails if any of them survives anywhere.
+DENYLIST = ("[name]", "[name]", "[name]", "[name]", "[name]", "[name]")
+
+
+def _ten_digit_numbers(text: str) -> list[str]:
+    return [m.group(0) for m in TEN_DIGITS_RE.finditer(text) if not DATEISH.search(m.group(0))
+            and not DATEISH.search(text[max(0, m.start() - 6):m.end() + 6])]
 
 
 class Scrubber:
@@ -48,11 +76,13 @@ class Scrubber:
         self.mail = (mail or "").strip()
 
     def text(self, s: str) -> str:
-        """Scrub everything except links (a form link's random code can look like a roll number)."""
+        """Scrub everything; links are kept as they are (a form link's random code can look like a roll
+        number), except meeting links, which are removed."""
         if not s:
             return s
         parts = URL_RE.split(s)
-        return "".join(p if i % 2 else self._plain(p) for i, p in enumerate(parts))
+        return "".join(("[meeting link removed]" if MEETING_URL.search(p) else p) if i % 2 else self._plain(p)
+                       for i, p in enumerate(parts))
 
     def _plain(self, s: str) -> str:
         me = "\u0000ME\u0000"
@@ -61,16 +91,26 @@ class Scrubber:
             s = re.sub(re.escape(self.roll), me, s, flags=re.I)
         if self.mail:
             s = re.sub(re.escape(self.mail), "[email removed]", s, flags=re.I)
+        s = EMAIL_RE.sub(lambda m: m.group(0) if m.group(0).lower().endswith("example.com") else DEMO_EMAIL, s)
         if len(self.name) > 3:
             s = re.sub(re.escape(self.name), FAKE_NAME, s, flags=re.I)
+        s = BARE_MEETING_RE.sub("[meeting link removed]", s)
+        s = MEETING_RE.sub(lambda m: f"{m.group(1)} {m.group(2)}: [removed]", s)
+        s = PASSCODE_RE.sub(lambda m: f"{m.group(1)}: [removed]", s)
         s = PHONE_RE.sub("[phone removed]", s)
+        s = TEN_DIGITS_RE.sub(lambda m: m.group(0) if DATEISH.search(s[max(0, m.start() - 6):m.end() + 6])
+                              else "[number removed]", s)
+        s = PLUS91_RE.sub("", s)
         s = CONTACT_RE.sub("[contact removed]", s)
+        s = CONTACT_LINE_RE.sub(lambda m: m.group(1) + "[contact removed]", s)
         s = ROLL_RE.sub("[roll removed]", s)
         for _ in range(3):  # lists of students: names on either side of each roll
             s = NAME_ROLL_RE.sub("[roll removed]", s)
             s = ROLL_NAME_RE.sub("[roll removed]", s)
         s = re.sub(r"(?:\[roll removed\][\s,;]*)+", "[student removed] ", s)
         s = YOUR_CG_RE.sub("your CGPA", s)
+        for name in DENYLIST:  # last line of defence for names we know are real
+            s = re.sub(rf"\b{re.escape(name)}\b", "[name removed]", s, flags=re.I)
         return s.replace(me, FAKE_ROLL)
 
     def walk(self, obj):
@@ -210,12 +250,32 @@ def verify(data: dict, real_roll: str, mail: str, real_name: str | None) -> list
     rolls = {m.group(0).upper() for m in ROLL_RE.finditer(plain)} - {FAKE_ROLL}
     if rolls:
         problems.append(f"{len(rolls)} other roll-number-like strings left")
-    phones = PHONE_RE.findall(plain)
-    if phones:
-        problems.append(f"{len(phones)} phone-number-like strings left")
     names = LEFTOVER_RE.findall(plain)
     if names:
         problems.append(f"{len(names)} names still next to a removed roll number")
+    problems += final_check(data)
+    return problems
+
+
+def final_check(data) -> list[str]:
+    """The last gate before anything is written: anywhere in the output (links included), no 10-digit number,
+    no "+91", and none of the real names we know of. Any hit fails the build."""
+    text = data if isinstance(data, str) else json.dumps(data, default=str, ensure_ascii=False)
+    problems = []
+    tens = _ten_digit_numbers(text)
+    if tens:
+        problems.append(f"{len(tens)} ten-digit numbers left (e.g. ...{tens[0][-4:]})")
+    if "+91" in text:
+        problems.append(f"{text.count('+91')} '+91' left")
+    for name in DENYLIST:
+        n = len(re.findall(rf"\b{re.escape(name)}\b", text, flags=re.I))
+        if n:
+            problems.append(f"real name '{name}' left {n} times")
+    emails = {e for e in EMAIL_RE.findall(text) if not e.lower().endswith("example.com")}
+    if emails:
+        problems.append(f"{len(emails)} email addresses left")
+    if MEETING_URL.search(text):
+        problems.append("a meeting link is left")
     return problems
 
 

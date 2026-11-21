@@ -155,13 +155,43 @@ def _logs(ref: str, token: str, sql: str, hours: int = 23) -> list:
                      headers={"Authorization": f"Bearer {token}"},
                      params={"sql": sql, "iso_timestamp_start": _z(end - timedelta(hours=hours)),
                              "iso_timestamp_end": _z(end)})
+    _logs.last_error = None
     if r.status_code >= 400:
-        say(f"  (logs query failed: HTTP {r.status_code} {r.text[:300]})")
+        _logs.last_error = f"HTTP {r.status_code} {r.text[:300]}"
+        say(f"  (logs query failed: {_logs.last_error})")
         return []
     body = r.json()
     if body.get("error"):
-        say(f"  (logs query error: {str(body['error'])[:300]})")
+        _logs.last_error = str(body["error"])[:300]
+        say(f"  (logs query error: {_logs.last_error})")
     return body.get("result") or []
+
+
+def _when(ts) -> str:
+    try:
+        v = float(ts)
+        v = v / 1e6 if v > 1e14 else v / 1e3 if v > 1e11 else v
+        return f"{datetime.fromtimestamp(v, IST):%d %b %H:%M:%S}"
+    except (TypeError, ValueError):
+        try:
+            return f"{datetime.fromisoformat(str(ts).replace('Z', '+00:00').replace(' ', 'T')).astimezone(IST):%d %b %H:%M:%S}"
+        except ValueError:
+            return str(ts)
+
+
+def _source_logs(ref: str, token: str, source: str, function_id, fields: str, limit: int) -> list:
+    """Supabase's logs API (ClickHouse SQL): one `logs` table, filtered by source; its docs name the
+    column both source_name and source, so try both."""
+    for col in ("source_name", "source"):
+        rows = _logs(ref, token, f"""
+            SELECT timestamp, {fields}
+            FROM logs
+            WHERE {col} = '{source}' AND log_attributes['function_id'] = '{function_id}'
+            ORDER BY timestamp DESC
+            LIMIT {limit}""")
+        if rows or not _logs.last_error:
+            return rows
+    return []
 
 
 def ask_as_reviewer(url: str, question: str) -> tuple[int, float, str]:
@@ -200,32 +230,20 @@ def functions_check(secrets) -> int:
     say(f"  GEMINI_API_KEY on the Supabase side: {'yes' if 'GEMINI_API_KEY' in names else 'NO'}")
     ask_id = next((i for i, slug in ids.items() if slug == "ask-ping"), None)
 
-    say("\nask-ping requests, last 24 h (newest first):")
-    rows = _logs(ref, token, f"""
-        select timestamp, response.status_code as status, request.method as method, m.execution_time_ms as ms,
-               m.version as version
-        from function_edge_logs
-        cross join unnest(metadata) as m
-        cross join unnest(m.response) as response
-        cross join unnest(m.request) as request
-        where m.function_id = '{ask_id}'
-        order by timestamp desc
-        limit 40""")
+    say("\nask-ping requests, last 23 h (newest first):")
+    rows = _source_logs(ref, token, "function_edge_logs", ask_id, """
+        log_attributes['response.status_code'] AS status, log_attributes['request.method'] AS method,
+        log_attributes['execution_time_ms'] AS ms, log_attributes['version'] AS version""", 40)
     for x in rows:
-        ts = datetime.fromtimestamp(int(x["timestamp"]) / 1e6, IST)
-        say(f"  {ts:%d %b %H:%M:%S} {x.get('method')} -> HTTP {x.get('status')} in {x.get('ms')} ms (v{x.get('version')})")
-    say("\nask-ping messages (errors, crashes, shutdown reasons), last 24 h:")
-    rows = _logs(ref, token, f"""
-        select timestamp, event_message, m.level as level, m.event_type as event_type
-        from function_logs
-        cross join unnest(metadata) as m
-        where m.function_id = '{ask_id}'
-        order by timestamp desc
-        limit 60""")
+        say(f"  {_when(x.get('timestamp'))} {x.get('method')} -> HTTP {x.get('status')} in {x.get('ms')} ms "
+            f"(version {x.get('version')})")
+    say("\nask-ping messages (errors, crashes, shutdown reasons), last 23 h:")
+    rows = _source_logs(ref, token, "function_logs", ask_id, """
+        event_message, severity_text AS severity, log_attributes['level'] AS level,
+        log_attributes['event_type'] AS event_type""", 60)
     for x in rows:
-        ts = datetime.fromtimestamp(int(x["timestamp"]) / 1e6, IST)
         msg = " ".join(str(x.get("event_message") or "").split())[:400]
-        say(f"  {ts:%d %b %H:%M:%S} [{x.get('level')}/{x.get('event_type')}] {msg}")
+        say(f"  {_when(x.get('timestamp'))} [{x.get('level') or x.get('severity')}/{x.get('event_type')}] {msg}")
 
     if os.environ.get("REVIEWER_PASSWORD") and os.environ.get("SUPABASE_PUBLISHABLE_KEY"):
         say("\ntest questions, asked as the reviewer login (demo data, same function):")

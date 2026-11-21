@@ -9,6 +9,7 @@
   auth-config      Supabase Auth settings for the live dashboard: Site URL and redirect allow-list point at
                    https://<owner>.github.io/ping-dashboard/ (localhost kept for development), anonymous
                    sign-ins on (the one-click demo), and the old reviewer login deleted
+  relevance-evals  score "For you" per fixture persona (evals/relevance) and commit its report
   demo-refeed      rebuild the demo's feed with the current code (digests, "For you"), from the same snapshot:
                    example targets on the demo profile, Gemini marks the demo roles, loads and commits it
   demo-clock       set the demo's "now" (the demo profile's updated_at) to the snapshot time in
@@ -477,6 +478,11 @@ def ask_ping_evals(secrets) -> int:
     return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "run_ask_ping_evals.py")]).returncode
 
 
+def relevance_evals(secrets) -> int:
+    import subprocess
+    return subprocess.run([sys.executable, str(ROOT / "evals" / "relevance" / "run_relevance_evals.py")]).returncode
+
+
 def rearm_schedule(secrets) -> int:
     """GitHub registers a workflow's cron when it sees the file on the default branch. ping.yml has been there
     since the repo was created and never fired, so the registration was lost; disable + enable re-registers it."""
@@ -519,7 +525,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

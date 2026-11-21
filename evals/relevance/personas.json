@@ -7,6 +7,13 @@
    "targets": "product, consulting, business/data analyst and finance roles; not core software engineering",
    "reminder_hours": 2,
    "list_other_roles": true
+  },
+  {
+   "id": "core-software",
+   "used_by": "evals/relevance only",
+   "targets": "software engineering roles: backend, frontend, full-stack and SDE; not data science, machine learning, product management, consulting, analyst, finance or core (non-software) engineering roles",
+   "reminder_hours": 2,
+   "list_other_roles": true
   }
  ]
 }

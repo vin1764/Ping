@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -58,11 +58,13 @@ jobs:
           # a push made with this workflow's token doesn't start other workflows; ask for the dashboard deploy
           gh workflow run dashboard.yml --ref "$GITHUB_REF_NAME" && echo "dashboard deploy started"
       - name: Save the Ask Ping eval report
-        if: inputs.task == 'ask-ping-evals'
+        if: inputs.task == 'ask-ping-evals' || inputs.task == 'relevance-evals'
         run: |
           git config user.name "ping-admin"
           git config user.email "ping-admin@users.noreply.github.com"
-          git add evals/ask_ping/REPORT.md evals/ask_ping/results.json
+          for f in evals/ask_ping/REPORT.md evals/ask_ping/results.json evals/relevance/REPORT.md; do
+            [ -f "$f" ] && git add "$f"
+          done
           git diff --cached --quiet && { echo "report unchanged"; exit 0; }
-          git commit -q -m "Ask Ping evals: report from the latest run"
+          git commit -q -m "${{ inputs.task == 'relevance-evals' && 'Relevance evals' || 'Ask Ping evals' }}: report from the latest run"
           git pull -q --rebase && git push

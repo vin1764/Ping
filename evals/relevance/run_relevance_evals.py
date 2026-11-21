@@ -1,16 +1,19 @@
-"""Score "For you": the demo roles' marks (what the demo shows, from Gemini via Admin > demo-refeed) against the
-labels in cases.json, once the owner has confirmed them.
+"""Score "For you" per fixture persona: the classifier (ping/relevance.py, the same one the hourly run and the chat
+use) marks each persona's roles in ONE call with that persona's targets text, and the marks are compared with the
+labels in cases.json.
 
-    python evals/relevance/run_relevance_evals.py
+    python evals/relevance/run_relevance_evals.py        (needs GEMINI_API_KEY; Actions > Admin > relevance-evals)
 
-Refuses to score until cases.json says labels_confirmed: true (the labels are Claude's proposal until then).
-Writes evals/relevance/REPORT.md: precision and recall of "For you", and every disagreement.
+Two personas with opposite targets (personas.json) over overlapping roles: a classifier that followed a fixed rule
+instead of the stated targets would score well on one and badly on the other.
+Writes evals/relevance/REPORT.md.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -19,39 +22,58 @@ sys.path.insert(0, str(ROOT))
 
 
 def main() -> int:
-    from ping.relevance import tag
+    from ping import relevance
+    from ping.config import load_dotenv, load_secrets
+    load_dotenv()
+    cfg = load_secrets().ai
     spec = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
-    if not spec.get("labels_confirmed"):
-        print("Not scored: the labels in evals/relevance/cases.json are a proposal until you correct them "
-              "(see LABELS.md) and set labels_confirmed to true.")
-        return 0
-    demo = json.loads((ROOT / "dashboard" / "demo-data.json").read_text(encoding="utf-8"))
-    roles = {r["id"]: r for r in demo["roles"]}
-    rows, missing = [], []
-    for c in spec["cases"]:
-        r = roles.get(c["role_id"])
-        got, why = tag(r, spec["targets"]) if r else (None, "")
-        if got is None:
-            missing.append(c)
-            continue
-        rows.append({**c, "got": got == "for_you", "got_why": why})
-    tp = sum(1 for x in rows if x["got"] and x["for_you"])
-    fp = sum(1 for x in rows if x["got"] and not x["for_you"])
-    fn = sum(1 for x in rows if not x["got"] and x["for_you"])
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
+    personas = {p["id"]: p for p in json.loads((HERE / "personas.json").read_text(encoding="utf-8"))["personas"]}
+    roles = {r["id"]: r for r in json.loads((ROOT / "dashboard" / "demo-data.json").read_text(encoding="utf-8"))["roles"]}
     out = ["# Role relevance evals", "",
-           f"Targets: **{spec['targets']}**. {len(rows)} demo roles scored against the confirmed labels"
-           + (f"; {len(missing)} not marked (ruled out by eligibility, or not classified yet)." if missing else "."), "",
-           f"- **Precision of \"For you\": {precision:.0%}** ({tp} of {tp + fp} roles marked For you are right)",
-           f"- **Recall of \"For you\": {recall:.0%}** ({tp} of {tp + fn} roles that are for you were marked)", "",
-           "## Disagreements", "", "| company | role | label | Ping | Ping's reason |", "|---|---|---|---|---|"]
-    for x in rows:
-        if x["got"] != x["for_you"]:
-            out.append(f"| {x['company']} | {x['designation']} | {'for you' if x['for_you'] else 'not'} | "
-                       f"{'for you' if x['got'] else 'not'} | {x['got_why']} |")
+           "Each fixture persona's roles are marked by the classifier in one call with that persona's targets text "
+           "(`personas.json`), and compared with labels that are correct for that text (`cases.json`). Re-run: "
+           "Actions > Admin > `relevance-evals`.", "",
+           "| persona | targets | roles | precision of \"For you\" | recall of \"For you\" | not answered |", "|---|---|---|---|---|---|"]
+    details = []
+    for p in spec["personas"]:
+        if not p.get("labels_confirmed"):
+            out.append(f"| {p['persona']} | | | not scored (labels not confirmed) | | |")
+            continue
+        targets = personas[p["persona"]]["targets"]
+        rs = [dict(roles[c["role_id"]]) for c in p["cases"] if c["role_id"] in roles]
+        for r in rs:
+            r.pop("relevance", None)
+        t0 = time.monotonic()
+        before = relevance.stats["calls"]
+        got = relevance.classify(rs, targets, cfg)
+        secs, calls = time.monotonic() - t0, relevance.stats["calls"] - before
+        tp = fp = fn = 0
+        wrong = []
+        for c in p["cases"]:
+            g = got.get(c["role_id"])
+            if g is None:
+                continue
+            if g["relevant"] and c["for_you"]:
+                tp += 1
+            elif g["relevant"]:
+                fp += 1
+            elif c["for_you"]:
+                fn += 1
+            if g["relevant"] != c["for_you"]:
+                wrong.append(f"| {p['persona']} | {c['company']} | {c['designation']} | {'for you' if c['for_you'] else 'not'} | "
+                             f"{'for you' if g['relevant'] else 'not'} | {g['reason']} |")
+        prec = tp / (tp + fp) if tp + fp else 0.0
+        rec = tp / (tp + fn) if tp + fn else 0.0
+        missing = len(p["cases"]) - len(got)
+        out.append(f"| {p['persona']} | {targets} | {len(p['cases'])} | **{prec:.0%}** ({tp} of {tp + fp}) | "
+                   f"**{rec:.0%}** ({tp} of {tp + fn}) | {missing} |")
+        details += wrong
+        print(f"{p['persona']}: precision {prec:.0%}, recall {rec:.0%}, {missing} unanswered, {calls} call(s), {secs:.1f}s, "
+              f"last error {relevance.stats['last_error']}")
+    out += ["", "## Disagreements", "", "| persona | company | role | label | classifier | classifier's reason |",
+            "|---|---|---|---|---|---|", *details]
     (HERE / "REPORT.md").write_text("\n".join(out) + "\n", encoding="utf-8")
-    print(f"precision {precision:.0%}, recall {recall:.0%} ({len(rows)} roles); wrote evals/relevance/REPORT.md")
+    print("wrote evals/relevance/REPORT.md")
     return 0
 
 

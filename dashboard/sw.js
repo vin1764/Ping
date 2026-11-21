@@ -5,7 +5,7 @@
 const BUILD = "__BUILD__";
 const SHELL = `ping-shell-${BUILD}`;
 const DATA = "ping-data";
-const FILES = ["./", "index.html", "style.css", "app.js", "onboarding.js", "names.js", "live.js", "today.js", "answer_rules.js",
+const FILES = ["./", "index.html", "style.css", "app.js", "onboarding.js", "names.js", "live.js", "today.js", "help.js", "answer_rules.js",
   "config.js", "manifest.webmanifest", "setup.html", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png",
   "icons/badge-96.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";

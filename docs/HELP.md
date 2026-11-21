@@ -1,0 +1,69 @@
+# Ping help
+
+What Ping says about itself. This file is the only source: `setup/build_help.py` turns it into
+`supabase/functions/_shared/help.js`, which the page and the Ask Ping function both load, and a test fails if the
+two drift apart. Each `##` section is one topic; a `###` section inside "install" is one platform. Keep every line
+true for any student's copy of Ping (no names, departments or preferences).
+
+## overview
+
+I'm Ping: I read the placement ERP for you every hour or so and tell you what matters here. I can help with:
+- what's due (today, tonight, tomorrow, a date), tests and rooms, shortlists, CTC, eligibility, which CV to use
+- installing me as an app: ask "how do I install Ping?"
+- notifications: ask "how do I get notifications?"
+- how often I check: ask "how often do you check?"
+- your preferences: ask "how do I change my preferences?"
+- what I can and can't do, and where your data lives: ask "what can you do?" or "where is my data?"
+
+## install
+
+Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline.
+
+### windows
+
+On Windows in Chrome: open the ⋮ menu → "Install Ping…" (newer Chrome: ⋮ → "Cast, save and share" → "Install Ping…"), or click the install icon at the right end of the address bar (a screen with a down arrow). In Edge: … menu → Apps → "Install Ping". Then open Ping from the Start menu or the taskbar.
+
+### mac
+
+On a Mac in Chrome: open the ⋮ menu → "Install Ping…" (newer Chrome: ⋮ → "Cast, save and share" → "Install Ping…"), or click the install icon at the right end of the address bar. In Safari: File → "Add to Dock". Then open Ping from the Dock or Launchpad.
+
+### android
+
+On Android (Chrome): tap "Install" when I offer it, or open the ⋮ menu → "Install app" (some phones say "Add to Home screen" → Install). Then open Ping from your home screen.
+
+### ios
+
+On iPhone or iPad: open this page in Safari, tap Share (the square with an arrow), then "Add to Home Screen" → Add. Open Ping from the Home Screen icon: on iPhone, notifications only work from there.
+
+### other
+
+In Chrome or Edge, look for the install icon at the right end of the address bar, or "Install Ping" in the browser's menu. Firefox can't install sites as apps; Ping still works in a normal tab.
+
+## notifications
+
+I send at most one notification per ERP check: the most urgent new thing that's for you (a test or shortlist that names you, a form to fill, a deadline for a role you'd apply to), plus a reminder before a test you're on. Never twice for the same thing, and never in your quiet hours (outside the hours I check).
+To turn them on: Profile → Notifications → "Turn on", then allow notifications when your browser asks. "Send a test" there checks it works. On iPhone and iPad, add Ping to your Home Screen first and open it from there.
+Prefer email? Profile → Notifications → "Also email me what's for you".
+
+## checks
+
+I check the ERP every hour by default, between 06:00 and 01:00 IST; you can also tap "Check now" for a check right away.
+To change it: Profile → Schedule & reminders (how often: every 30 minutes, every hour or every 2 hours; and between which hours), or tell me here, for example "check every 2 hours" or "only check between 8 and 23".
+Reminders before a deadline: Profile → Schedule & reminders → "Remind me before a deadline (hours)", or "remind me 3 hours before".
+
+## can
+
+I can: read the ERP's companies list, notices and attached lists (I keep only your own row and the table heading), read placement mail in your institute mailbox, work out what's due and what you're eligible for, say which CV fits a role, answer questions here, and notify you.
+I can't: do anything on the ERP. I never apply, withdraw, submit, upload, fill forms or accept offers for you; I only read. Applying and forms are always yours to do on the ERP or the form's own page.
+
+## preferences
+
+Your preferences change what I show you, never anything on the ERP:
+- Profile → Targets: the kinds of roles you want ("product, consulting"); or tell me "only show me product and consulting roles", "also include data roles", "don't count SDE".
+- Profile → Interested / Not interested companies, Feed (only what fits me first, or everything), Other roles (listed separately or not).
+- Profile → About you: CGPA, department, degree, backlogs (used for eligibility). Profile → CVs: the CVs I pick from.
+Ask "what are my preferences?" to see them, or "reset my preferences" to start over.
+
+## data
+
+Your data lives in your own copy of Ping: a private database that only your login can read (the demo can't see it), the ERP and mail passwords only as encrypted secrets of your own GitHub repository (never in the code, never in this page), and your CVs in a private storage bucket. Ping keeps placement mail only; other mail is never read beyond its sender and subject, and login OTP mails are never stored.

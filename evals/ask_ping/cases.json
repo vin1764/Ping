@@ -924,6 +924,109 @@
     ]
    },
    "why": "The same count asked as a count: 8, as in the digest."
+  },
+  {
+   "id": "H1",
+   "category": "help (Ping about itself)",
+   "question": "how to install",
+   "checks": {
+    "must_contain": [
+     "install"
+    ],
+    "must_not_contain": [
+     "I don't have any information",
+     "I don't have information",
+     "couldn't tell what you meant"
+    ]
+   },
+   "why": "Install steps from docs/HELP.md for the asker's platform; never 'I don't have any information'."
+  },
+  {
+   "id": "H2",
+   "category": "help (Ping about itself)",
+   "question": "how do I install Ping on my iPhone?",
+   "checks": {
+    "must_contain": [
+     "Share",
+     "Add to Home Screen"
+    ],
+    "must_not_contain": [
+     "I don't have any information",
+     "I don't have information",
+     "couldn't tell what you meant"
+    ]
+   },
+   "why": "A platform named in the question wins: the iPhone steps."
+  },
+  {
+   "id": "H3",
+   "category": "help (Ping about itself)",
+   "question": "how do I get notifications",
+   "checks": {
+    "must_contain": [
+     "Profile → Notifications",
+     "Turn on",
+     "at most one"
+    ],
+    "must_not_contain": [
+     "I don't have any information",
+     "I don't have information",
+     "couldn't tell what you meant"
+    ]
+   },
+   "why": "How notifications work and where to turn them on."
+  },
+  {
+   "id": "H4",
+   "category": "help (Ping about itself)",
+   "question": "what can you do",
+   "checks": {
+    "must_contain": [
+     "only read",
+     "never apply"
+    ],
+    "must_not_contain": [
+     "I don't have any information",
+     "I don't have information",
+     "couldn't tell what you meant"
+    ]
+   },
+   "why": "What Ping can and can't do: read-only."
+  },
+  {
+   "id": "H5",
+   "category": "help (Ping about itself)",
+   "question": "help",
+   "checks": {
+    "must_contain": [
+     "install",
+     "notifications",
+     "preferences"
+    ],
+    "must_not_contain": [
+     "I don't have any information",
+     "I don't have information",
+     "couldn't tell what you meant"
+    ]
+   },
+   "why": "The overview: the topics Ping can explain."
+  },
+  {
+   "id": "H6",
+   "category": "help (Ping about itself)",
+   "question": "how often do you check the ERP?",
+   "checks": {
+    "must_contain": [
+     "every hour",
+     "Schedule & reminders"
+    ],
+    "must_not_contain": [
+     "I don't have any information",
+     "I don't have information",
+     "couldn't tell what you meant"
+    ]
+   },
+   "why": "How often it checks and how to change it."
   }
  ],
  "check_changes": [

@@ -80,3 +80,27 @@ test("the model's numbers must be in the facts", () => {
   assert.deepStrictEqual(R.unsupportedNumbers("They close at 21:00.", facts, ""), ["21:00"]);
   assert.deepStrictEqual(R.unsupportedNumbers("CTC is 30 L.", facts, ""), ["30 L"]);
 });
+
+// ---- help: Ping about itself (docs/HELP.md -> help.js), never "I don't have any information"
+test("help questions route to help, with the asker's platform for installing", () => {
+  const d = { now: new Date("2026-11-21T10:00:00+05:30"), roles: [{ id: "1", company: "Groww", designation: "PA" }], items: [], notices: [] };
+  const topic = (q) => { const r = R.route(q, [], d); return r.kind === "help" ? r.topic : r.kind; };
+  assert.equal(topic("how to install"), "install");
+  assert.equal(topic("how do I get notifications"), "notifications");
+  assert.equal(topic("what can you do"), "can");
+  assert.equal(topic("help"), "overview");
+  assert.equal(topic("how often do you check?"), "checks");
+  assert.equal(topic("how do I change my preferences"), "preferences");
+  assert.equal(topic("where is my data stored"), "data");
+  assert.notEqual(topic("any alerts for groww?"), "notifications");       // a company: a question about Groww
+  assert.equal(topic("whats due tonight"), "fact");
+  const steps = (q, platform, installed) => R.routed(R.route(q, [], d), q, { ...d, platform, installed }).text;
+  assert.match(steps("how to install", "windows"), /⋮ menu → "Install Ping…"/);
+  assert.match(steps("how to install", "android"), /Install app/);
+  assert.match(steps("how to install", "ios"), /Add to Home Screen/);
+  assert.match(steps("how do I install on iphone", "windows"), /Add to Home Screen/);   // the named platform wins
+  assert.match(steps("how to install", "windows", true), /already using Ping as an installed app/);
+  assert.equal(R.platformOf("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131"), "windows");
+  assert.equal(R.platformOf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari", 5), "ios");   // an iPad
+  assert.equal(R.platformOf("Mozilla/5.0 (Linux; Android 14) Chrome/131 Mobile"), "android");
+});

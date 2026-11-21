@@ -646,7 +646,54 @@
     const unknown = hits.length ? [] : tokensOf(text).filter((t) => !STOP.has(t) && !used.has(t) && t.length >= 3 && !/^\d+$/.test(t));
     return { intents, hits, range, unknown, toks: tokensOf(text) };
   }
-  // -> { kind: "fact" | "act" | "ack" | "open", spec, why, resolved }  (spec goes to answer(question, data, spec))
+  // ---------------------------------------------------------------- help: Ping about itself (docs/HELP.md -> help.js)
+  const HELP_DOC = () => root.PingHelp || (typeof require === "function" ? (() => { try { return require("./help.js"); } catch { return null; } })() : null);
+  const HELP_TOPICS = [
+    ["install", /\binstall\w*\b|\bhome ?screen\b|\badd (?:it |ping |this )?to (?:my |the )?(?:home|dock|desktop|taskbar)|\bdownload (?:ping|the app|this app|an app|app)\b|\b(?:get|use|have|is there) (?:ping |this )?(?:as )?an? (?:app|desktop app|mobile app)\b|\bpwa\b|\b(?:ping|this|there an?) app\b|\bapp version\b/],
+    ["notifications", /\bnotif\w*|\bpush(?: messages?| alerts?)?\b(?! (?:the|my) )|\balerts?\b|\bnotify\b|\bbuzz\b|\bquiet hours\b/],
+    ["checks", /\bhow (?:often|frequently)\b|\bwhen (?:do|does|will) (?:you|ping|it) (?:check|look|refresh|update)|\bcheck(?:ing)? (?:interval|frequency|schedule|window)\b|\bhow (?:do i|can i|to) (?:change|set) (?:the |how often|when)|\bevery (?:hour|30 min)\b.*\?|\bhow (?:fresh|up to date|recent)\b|\blast check(?:ed)?\b.*\bhow\b/],
+    ["can", /\bwhat (?:can|can't|cannot|do|does|are) (?:you|ping)(?: do| help with| for)?\b|\bwho are you\b|\bwhat is ping\b|\bwhat(?:'s| is) this\b|\b(?:your|ping'?s) (?:features|abilities|capabilities|limits|limitations)\b|\bread[- ]only\b|\bcan (?:you|ping) (?:apply|submit|fill|upload|withdraw|accept)\b(?! (?:for|to) )|\bis it (?:safe|read[- ]only)\b|\bare you (?:a bot|an ai|real)\b/],
+    ["preferences", /\b(?:how (?:do|can) i|how to|where (?:do|can) i) (?:change|set|edit|update|see|reset|pick|choose) (?:my )?(?:preferences|settings|targets?|interests?|feed|cgpa|cv|profile|companies)|\bwhere (?:are|is) (?:my )?(?:preferences|settings|profile)\b|\bhow (?:do|does) (?:the )?(?:targets?|preferences|for you) work\b/],
+    ["data", /\bwhere (?:is|does|do) (?:my )?(?:data|info|information|password|passwords|cv|cvs) (?:live|go|stored|kept|saved)?|\b(?:is|are) my (?:data|password|passwords|cvs?|mails?|email) (?:safe|stored|private|shared|secure)\b|\bprivacy\b|\bwho can see\b|\bdo you (?:store|keep|save|read) (?:my )?(?:data|password|passwords|mails?|emails?|otp)\b|\bwhat do you (?:store|keep|save)\b/],
+  ];
+  const HELP_ALONE = /^(?:help|\?+|menu|commands|options|how (?:do i|to) use (?:ping|this|you)|how does (?:ping|this|it) work|about(?: ping)?|getting started|start|hi|hello|hey)[\s.!?]*$/;
+  function helpTopic(question) {
+    const q = norm(question);
+    if (HELP_ALONE.test(q)) return "overview";
+    for (const [topic, re] of HELP_TOPICS) if (re.test(q)) return topic;
+    if (/\bhelp\b/.test(q) && tokensOf(q).length <= 4) return "overview";
+    return null;
+  }
+  // "windows" | "mac" | "android" | "ios" | "other", from a browser's user agent (and touch points: an iPad says Mac)
+  function platformOf(ua, touchPoints) {
+    const u = String(ua || "");
+    if (/iphone|ipad|ipod/i.test(u) || (/macintosh/i.test(u) && Number(touchPoints) > 1)) return "ios";
+    if (/android/i.test(u)) return "android";
+    if (/windows/i.test(u)) return "windows";
+    if (/macintosh|mac os x/i.test(u)) return "mac";
+    return "other";
+  }
+  function helpAnswer(topic, data) {
+    const doc = HELP_DOC();
+    if (!doc || !doc[topic]) return { kind: "help", topic, companies: [], text: "Ask me what's due, about a company, or say \"help\"." };
+    const t = doc[topic];
+    let text = t.text;
+    if (topic === "install") {
+      const plat = (data && data.platform) || "other";
+      const steps = (t.platforms || {})[plat] || (t.platforms || {}).other || "";
+      text = data && data.installed ? "You're already using Ping as an installed app." :
+        `${t.text}\n${steps}${plat !== "other" ? "\n(On another device? Ask \"how do I install on iPhone\" or Android, Windows, Mac.)" : ""}`;
+    }
+    return { kind: "help", topic, companies: [], text };
+  }
+  // "how do I install on iphone": the platform named in the question wins over the browser asking
+  function platformNamed(question) {
+    const q = norm(question);
+    return /\b(iphone|ipad|ios|safari)\b/.test(q) ? "ios" : /\bandroid\b/.test(q) ? "android" : /\b(windows|pc|laptop)\b/.test(q) ? "windows"
+      : /\b(mac|macbook|macos)\b/.test(q) ? "mac" : null;
+  }
+
+  // -> { kind: "fact" | "act" | "ack" | "help" | "open", spec, why, resolved }  (spec goes to answer(question, data, spec))
   function route(question, previous, data) {
     data = { ...data, now: new Date(data.now || Date.now()) };
     const ents = entities(data);
@@ -655,6 +702,10 @@
     const text = raw.replace(/^(ok(ay)?|alright|cool|thanks|great|right|hmm+)[,.!]+\s*/i, "");
     const q = norm(text);
     const cur = parse(text, data, ents);
+    // about Ping itself ("how do I install", "help"); a company in the question makes it a question about that company
+    const topic = helpTopic(raw);
+    if (topic && (!cur.hits.length || ["install", "can", "data"].includes(topic) && !cur.intents.size))
+      return { kind: "help", topic, platform: platformNamed(raw), why: `help: ${topic}` };
     let spec = { ents, intents: [...cur.intents], hits: cur.hits, range: cur.range, unknown: cur.unknown };
     let resolved = text, why = "";
     const isElse = ELSE.test(q);
@@ -692,6 +743,7 @@
   // the reply for a routed message that the model doesn't answer
   function routed(r, question, data) {
     if (r.kind === "ack") return { kind: "ack", companies: [], text: "👍" };
+    if (r.kind === "help") return helpAnswer(r.topic, { ...data, platform: r.platform || data.platform, installed: r.platform ? false : data.installed });
     if (r.kind === "act") {
       const verb = (String(question).match(ACT_WORD) || ["do that"])[0].toLowerCase();
       const base = r.spec?.hits?.length ? answer(question, data, { ...r.spec, intents: ["deadline"] }).text.split("\n").slice(0, 3).join("\n") : "";
@@ -729,7 +781,7 @@
       : !(x.v <= 1 || nums.some((n) => (x.v >= 1e5 ? Math.abs(n - x.v) <= x.v * 0.005 : n === x.v)))).map((x) => x.raw);
   }
 
-  const api = { answer, route, routed, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  const api = { answer, route, routed, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

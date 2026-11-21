@@ -11,6 +11,7 @@ import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
+import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
 const Rules = (globalThis as any).PingRules;
 
@@ -264,6 +265,8 @@ Deno.serve(async (req) => {
       cv: rmarks.get(r.id)?.relevant ? rmarks.get(r.id)?.best_cv || null : null, jd_location: r.jd_summary?.location || null })),
     items: allItems.data || [],
     notices: allNotices.data || [],
+    // help answers ("how do I install?") give the steps for the asker's own device
+    platform: Rules.platformOf(req.headers.get("user-agent") || ""),
   };
   // the questions before this one, newest first (follow-ups resolve against them)
   const previous = [...kept].reverse().filter((m) => m.role === "me").map((m) => m.text);

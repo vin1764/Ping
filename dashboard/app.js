@@ -879,7 +879,7 @@
   }
 
   const QUICK = [{ label: "What's due tonight?" }, { label: "Anything for me?" }, { label: "Which CV for …?", insert: "Which CV should I use for " },
-                 { label: "My preferences", text: "What are my preferences?" }];
+                 { label: "My preferences", text: "What are my preferences?" }, { label: "Help", text: "help" }];
   const ICON_SEND = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", "M5 12h13M12 5l7 7-7 7");
@@ -1321,7 +1321,7 @@
     // the typing bubble shows at least briefly, even for an answer that comes back at once
     const typing = new Promise((r) => setTimeout(r, 600));
     let lost = false;
-    try { answer = await state.src.ask(q); } catch (e) { if (isNetErr(e)) lost = true; answer = e.message; } finally { state.sending -= 1; }
+    try { answer = helpHere(q) ?? await state.src.ask(q); } catch (e) { if (isNetErr(e)) lost = true; answer = e.message; } finally { state.sending -= 1; }
     if (lost) {                                   // the connection went while asking: this one waits too
       clearTimeout(slow); wait.remove(); state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND());
       state.chat = state.chat.filter((m) => m !== mine);
@@ -1916,6 +1916,15 @@
   // Used in the offline ?demo=1 copy and whenever the ask-ping function can't be reached. The same rules the
   // function uses when Gemini is busy (supabase/functions/_shared/answer_rules.js, loaded as window.PingRules):
   // a company in the question gets an answer about that company only; otherwise what was asked about.
+  const thisPlatform = () => window.PingRules?.platformOf(navigator.userAgent, navigator.maxTouchPoints) || "other";
+  // "how do I install?", "help": answered here from docs/HELP.md (help.js), for this device, with no server call
+  function helpHere(question) {
+    const R = window.PingRules;
+    if (!R?.helpTopic(question)) return null;
+    const data = state.data || {};
+    const r = R.route(question, [], { now: nowDate(), roles: data.roles || [], items: [], notices: [] });
+    return r.kind === "help" ? R.routed(r, question, { platform: thisPlatform(), installed: standalone() }).text : null;
+  }
   function answerLocally(question, data) {
     const R = window.PingRules;
     if (!R) return "I can't answer that right now. Try again in a minute.";
@@ -1933,6 +1942,7 @@
       items: (data.items || []).filter((i) => !i.dismissed).map((i) => ({ ...i, hidden_because: i.details?.hidden_because,
         subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time })),
       notices: data.notices || [],
+      platform: thisPlatform(), installed: standalone(),
     };
     const previous = state.chat.filter((m) => m.role === "me" && m.text !== question).map((m) => m.text).reverse().slice(0, 4);
     return R.routed(R.route(question, previous, facts), question, facts).text;

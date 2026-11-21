@@ -40,17 +40,29 @@ ROLE_LIST_COLUMNS = ("id", "yop", "com_id", "jnf_id", "company", "designation", 
 
 
 REAL = {"is_sample": "not.is.true"}  # demo rows (is_sample) are never mixed into your feed
-PAUSE_AFTER_FAILURES = 3
-PAUSE_HOURS = 3
+
+# Two kinds of failed run, handled differently:
+#  - credentials: the ERP refused who you are (wrong user id, password/answer refused, a security question
+#    none of your answers match). Trying again hourly can't fix it and could lock the account, so Ping
+#    alerts at once (email + chat message) and pauses scheduled runs until you start one by hand.
+#  - everything else (ERP unreachable, blank login page, Log In not accepted, no OTP mail, network errors):
+#    normal ERP behaviour. Never pause; try again at the next hourly run. After 3 in a row, one email and
+#    one chat message for that streak, and a "back online" message when a run works again.
+CREDENTIAL_KINDS = ("bad_user", "otp_refused", "unknown_question")
+STREAK_ALERT_AT = 3
+UNREACHABLE_MSG = "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly."
+BACK_ONLINE_MSG = "Back online: reached the ERP again after {n} failed runs."
 
 
-def login_paused(store) -> bool:
-    """After 3 failed logins in a row, scheduled runs stop trying for 3 hours."""
-    n = store.get_state("login_failures_in_a_row", 0) or 0
-    last = store.get_state("last_login_failure_at")
-    if n < PAUSE_AFTER_FAILURES or not last:
-        return False
-    return datetime.now(timezone.utc) - datetime.fromisoformat(last) < timedelta(hours=PAUSE_HOURS)
+def failure_kind(status: str) -> str | None:
+    if status == "ok":
+        return None
+    return "credentials" if status.removeprefix("failed: ") in CREDENTIAL_KINDS else "unreachable"
+
+
+def credentials_pause(store) -> dict | None:
+    """Set when the ERP refused the credentials; scheduled runs skip until a run started by hand."""
+    return store.get_state("paused_for_credentials") or None
 
 
 def now_ist() -> datetime:
@@ -444,29 +456,63 @@ class Runner:
             self.store.upsert("allowed_users", [{"email": self.secrets.mail_address.strip().lower()}], key="email")
         except Exception as e:
             self.problems.append(f"could not register the dashboard login ({e})")
-        n = self.store.get_state("login_failures_in_a_row", 0) or 0
-        n = 0 if status == "ok" else n + 1
-        self.store.set_state("login_failures_in_a_row", n)
-        if status != "ok":
-            self.store.set_state("last_login_failure_at", datetime.now(timezone.utc).isoformat())
-        self.counts["login_failures_in_a_row"] = n
+        kind = failure_kind(status)
+        n = self.store.get_state("erp_failures_in_a_row", 0) or 0
+        alerted = bool(self.store.get_state("erp_streak_alerted", False))
+        paused = credentials_pause(self.store)
+        last_error = self.problems[-1] if self.problems else status
+        if kind == "credentials":
+            # alert now, every time it happens (scheduled runs stop, so that's once, plus any run you start)
+            self.store.set_state("paused_for_credentials", {"kind": status.removeprefix("failed: "),
+                                                            "at": datetime.now(timezone.utc).isoformat(),
+                                                            "error": last_error[:500]})
+            self._tell(f"The ERP refused the login: {last_error.rstrip('.')}. I've paused the hourly checks. Fix it (GitHub "
+                       "secrets ERP_USER_ID / ERP_PASSWORD / ERP_SECQ_1-3), then start a run yourself: Menu > Check "
+                       "now, or Actions > Ping > Run workflow.",
+                       "Login refused: hourly checks paused",
+                       f"The ERP refused Ping's login ({status}).\n\n{last_error}\n\nHourly checks are paused so the "
+                       "account isn't locked. Fix the secret, then start a run by hand (dashboard Menu > Check now, "
+                       "or GitHub Actions > Ping > Run workflow); that run resumes the schedule.")
+        else:
+            if paused:  # a run you started got past the credentials check: the schedule is back on
+                self.store.set_state("paused_for_credentials", None)
+                if kind is None:
+                    self._tell("Logged in again; hourly checks are back on.")
+            if kind is None:
+                if alerted:
+                    self._tell(BACK_ONLINE_MSG.format(n=n))
+                n, alerted = 0, False
+            else:
+                n += 1
+                if n >= STREAK_ALERT_AT and not alerted:
+                    self._tell(UNREACHABLE_MSG, "Couldn't reach the ERP for 3 runs",
+                               f"Ping's last {n} runs couldn't get into the ERP. This happens when the ERP is down "
+                               f"or slow; Ping keeps trying every hour and will say when it's back.\n\n"
+                               f"Last error: {last_error}")
+                    alerted = True
+            self.store.set_state("erp_failures_in_a_row", n)
+            self.store.set_state("erp_streak_alerted", alerted)
+        self.counts["erp_failures_in_a_row"] = n
+
+    def _tell(self, chat_text: str, email_subject: str | None = None, email_body: str | None = None) -> None:
+        """One message from Ping in the dashboard chat, and optionally one email."""
+        try:
+            self.store.insert("chat_messages", [{"role": "ping", "text": chat_text}])
+        except Exception as e:
+            self.problems.append(f"could not post to the chat ({e})")
+        log(f"chat message: {chat_text}")
+        if email_subject:
+            ok = notify.send_self(self.secrets.mail_address, self.secrets.mail_app_password, email_subject,
+                                  email_body or chat_text)
+            log(f"alert '{email_subject}' emailed to you: {ok}")
 
     def _alerts(self, status: str) -> None:
-        sends = []
-        if not self.store_ok:
-            sends.append(("db", "Database not set up",
-                          "Ping ran but could not save anything: the Supabase tables don't exist yet.\n"
-                          "Open Supabase > SQL Editor, paste the file sql/schema.sql from the repo, press Run."))
-        if status == "failed: unknown_question":
-            sends.append(("question", "New security question", self.problems[-1]))
-        if status.startswith("failed") and (self.counts.get("login_failures_in_a_row", 0) >= 2
-                                            or status in ("failed: otp_refused", "failed: bad_user")):
-            sends.append(("login", "Login keeps failing", "Last error: " + (self.problems[-1] if self.problems
-                                                                             else status)))
-        for key, subject, body in sends:
-            if notify.should_alert(self.store, key, self.store_ok):
-                ok = notify.send_self(self.secrets.mail_address, self.secrets.mail_app_password, subject, body)
-                log(f"alert '{subject}' emailed to you: {ok}")
+        # login problems are handled in _login_failure_tracking (email + chat message, once per streak)
+        if not self.store_ok and notify.should_alert(self.store, "db", self.store_ok):
+            ok = notify.send_self(self.secrets.mail_address, self.secrets.mail_app_password, "Database not set up",
+                                  "Ping ran but could not save anything: the Supabase tables don't exist yet.\n"
+                                  "Run Actions > Admin > apply-sql (or paste sql/schema.sql in Supabase's SQL editor).")
+            log(f"alert 'Database not set up' emailed to you: {ok}")
 
     def _print_summary(self, rec: dict) -> None:
         c = rec["counts"]
@@ -566,18 +612,18 @@ def main(argv: list[str] | None = None) -> int:
                              "Open Supabase > SQL Editor > New query, paste sql/schema.sql from the repo, press Run.")
         log("Skipping this scheduled run: database not set up (see above).")
         return 2
-    if ok and trigger == "schedule" and login_paused(store):
-        log(f"Login failed {store.get_state('login_failures_in_a_row')} runs in a row: scheduled runs are paused "
-            f"for {PAUSE_HOURS}h so the ERP isn't hammered. A run you start yourself still tries.")
-        if notify.should_alert(store, "paused", True):
-            notify.send_self(secrets.mail_address, secrets.mail_app_password, "Paused after failed logins",
-                             f"Ping's last {store.get_state('login_failures_in_a_row')} logins failed, so hourly runs "
-                             f"are paused for {PAUSE_HOURS} hours. Check that you can log in to the ERP yourself, then "
-                             "start a run from GitHub (Actions > Ping > Run workflow).")
-        return 1
+    paused = credentials_pause(store) if ok else None
+    if paused and trigger == "schedule":
+        log(f"Skipping: the ERP refused the login ({paused.get('kind')}) at {paused.get('at')}. Hourly checks stay "
+            "paused until you start a run yourself (dashboard Menu > Check now, or Actions > Ping > Run workflow).")
+        return 0  # you were already told; a red run every hour would only add GitHub's own emails
     rec = Runner(secrets, store, store_ok=ok, trigger=trigger).run()
     store.save()
-    return 0 if rec["status"] == "ok" else 1
+    if rec["status"] == "ok":
+        return 0
+    # Scheduled runs: Ping already alerts on its own terms (above), so don't also make GitHub email a
+    # "run failed" notice every hour the ERP is down. Runs you start yourself still show red.
+    return 0 if trigger == "schedule" else 1
 
 
 if __name__ == "__main__":

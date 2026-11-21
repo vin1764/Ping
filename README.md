@@ -62,8 +62,9 @@ with `python evals/run_evals.py`).
   lists the workflow as active. See [What's left](#whats-left).
 - **Login refusals.** Between 05:26 and 05:37 IST the ERP refused 5 Log Ins in
   a row after a valid OTP, with no message; it worked again at 12:05. Cause
-  unknown (maybe too many OTPs in a short time while testing). Ping now retries
-  once, and after 3 failed runs pauses for 3 hours and emails you.
+  unknown (maybe too many OTPs in a short time while testing). This counts as
+  normal ERP behaviour: Ping retries Log In once, then tries again at the next
+  hourly run (see [When Ping needs you](#when-ping-needs-you)).
 - **Company names the rules can't place.** 2 of 15 held-out notices: "JPMC"
   (JP MorganChase) and "ACCENTURE AEH". Ping asks "which company is that?"
   instead of guessing. Deliberately not tuned to the held-out set.
@@ -316,9 +317,18 @@ account is now the key to your ERP. Keep two-factor login on for GitHub.
 
 ## When Ping needs you
 
-It emails you (from your institute mailbox to itself) at most once a day per
-problem: database not set up, a security question it doesn't recognise, login
-failing twice in a row, the ERP refusing the OTP.
+Two kinds of failed run are handled differently (`ping/run.py`):
+
+| what happened | what Ping does |
+|---|---|
+| **The ERP is down or flaky:** unreachable, blank login page, Log In not accepted, no OTP mail | Nothing visible at first, and the schedule never pauses: the next hourly run tries again. After **3 failed runs in a row**: one email and one chat message, "Couldn't reach the ERP for the last 3 runs; I'll keep trying hourly." Once per streak. When a run works again: one chat message, "Back online". |
+| **The ERP refused who you are:** wrong user id, password or security answer refused (no OTP sent), a security question none of your 3 answers match | **At once:** one email and one chat message saying what was refused, and the hourly runs **pause** (so the account isn't locked by repeated tries). Fix the secret, then start a run yourself (dashboard Menu > Check now, or Actions > Ping > Run workflow); a run you start resumes the schedule. |
+
+Ping sends these emails from your institute mailbox to itself. It also emails
+(at most once a day) if the database isn't set up. Scheduled runs that fail
+finish green on GitHub, so GitHub doesn't add its own "run failed" email every
+hour; runs you start yourself still show red when they fail. The dashboard has
+no "last run failed" banner; these chat messages replace it.
 
 ## AI for hard notices
 

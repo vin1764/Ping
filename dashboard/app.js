@@ -276,8 +276,9 @@
   function showLastRun() {
     const run = (state.data.runs || [])[0];
     if (!run) return;
-    $("#subtitle").textContent = `last checked ${when(run.finished_at)}${run.status === "ok" ? "" : " (problem)"}`;
-    if (run.status !== "ok") status(`Last run: ${run.status}${run.problems?.length ? ` (${run.problems[0]})` : ""}`);
+    $("#subtitle").textContent = `last checked ${when(run.finished_at)}`;
+    // No banner for a failed run: ERP hiccups are normal. Ping posts in the chat after 3 in a row, or at once if
+    // the ERP refuses the login (see ping/run.py).
   }
 
   function status(text) { const el = $("#status"); el.textContent = text; el.hidden = !text; }
@@ -349,7 +350,8 @@
     // first visit (or the demo): don't call two weeks of history "unread", only the last day
     const lastAt = entries.length ? dt(entries[entries.length - 1].at) : null;
     const readAt = state.readAt ? dt(state.readAt) : lastAt && new Date(lastAt - 86400000);
-    const unread = entries.filter((e) => e.kind === "item" && (!readAt || dt(e.at) > readAt));
+    // Ping's own messages (e.g. "couldn't reach the ERP") count as unread too, not your questions or its replies
+    const unread = entries.filter((e) => (e.kind === "item" || e.kind === "ping") && (!readAt || dt(e.at) > readAt));
     const inner = h("div", { class: "thread-inner" });
     let lastDay = null, divider = null;
     const snapshot = state.asOf && h("div", { class: "day snapshot" }, `${state.src.kind === "demo" ? "Demo" : "Reviewer view"}: ` +

@@ -121,13 +121,96 @@ def test_login_failure_after_otp_is_retried_once(monkeypatch):
     assert state["auth"] == 2
 
 
-def test_scheduled_runs_pause_after_three_failed_logins():
-    from datetime import datetime, timedelta, timezone
-    from ping.run import login_paused
+def _failing(fake, how):
+    """Make the fake ERP fail the way the real one does: 'blank' = login page without its form (ERP down),
+    'refused' = the ERP won't send an OTP (password or security answer wrong)."""
+    from ping.gate import Reply
+    real_send = fake.send
+
+    def send(method, url, data, headers):
+        if how == "blank" and "/SSOAdministration/login.htm" in url:
+            return Reply(200, url, {"content-type": "text/html"}, b"<html><body></body></html>")
+        if how == "refused" and url.endswith("/SSOAdministration/getEmilOTP.htm"):
+            return Reply(200, url, {"content-type": "application/json"}, b'{"msg": "Unable to send OTP"}')
+        return real_send(method, url, data, headers)
+    fake.send = send
+    return fake
+
+
+def _chat(store):
+    return [m["text"] for m in store.select("chat_messages")]
+
+
+@pytest.fixture()
+def emails(monkeypatch):
+    sent = []
+    import ping.notify as notify
+    monkeypatch.setattr(notify, "send_self", lambda addr, pw, subject, body: sent.append(subject) or True)
+    return sent
+
+
+def test_erp_unreachable_never_pauses_and_alerts_once_per_streak(emails):
+    from ping.run import BACK_ONLINE_MSG, UNREACHABLE_MSG, credentials_pause
     store = MemoryStore()
-    assert not login_paused(store)
-    store.set_state("login_failures_in_a_row", 3)
-    store.set_state("last_login_failure_at", datetime.now(timezone.utc).isoformat())
-    assert login_paused(store)
-    store.set_state("last_login_failure_at", (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat())
-    assert not login_paused(store)
+    for i in range(1, 6):  # five hourly runs where the ERP shows a blank login page
+        rec, store = run(_failing(FakeErp(NOW), "blank"), store)
+        assert rec["status"] == "failed: page_changed"
+        assert credentials_pause(store) is None  # never paused: the next hourly run tries again
+        expected = 1 if i >= 3 else 0
+        assert _chat(store).count(UNREACHABLE_MSG) == expected, (i, _chat(store))
+        assert len(emails) == expected, (i, emails)
+    assert store.get_state("erp_failures_in_a_row") == 5
+    # the ERP is back: one "back online" message, no email, and the streak starts over
+    rec, store = run(FakeErp(NOW), store)
+    assert rec["status"] == "ok", rec["problems"]
+    assert _chat(store)[-1] == BACK_ONLINE_MSG.format(n=5)
+    assert len(emails) == 1 and store.get_state("erp_failures_in_a_row") == 0
+    # a new streak alerts again after 3, once
+    for _ in range(4):
+        rec, store = run(_failing(FakeErp(NOW), "blank"), store)
+    assert _chat(store).count(UNREACHABLE_MSG) == 2 and len(emails) == 2
+
+
+def test_two_failures_then_success_says_nothing(emails):
+    store = MemoryStore()
+    for _ in range(2):
+        run(_failing(FakeErp(NOW), "blank"), store)
+    rec, store = run(FakeErp(NOW), store)
+    assert rec["status"] == "ok" and _chat(store) == [] and emails == []
+
+
+def test_refused_credentials_alert_at_once_and_pause_until_a_manual_run(emails, monkeypatch):
+    from ping import run as run_mod
+    store = MemoryStore()
+    rec, store = run(_failing(FakeErp(NOW), "refused"), store)
+    assert rec["status"] == "failed: otp_refused"
+    assert len(emails) == 1 and "Login refused" in emails[0]          # immediately, first failure
+    assert len(_chat(store)) == 1 and "refused the login" in _chat(store)[0]
+    assert run_mod.credentials_pause(store)["kind"] == "otp_refused"
+    assert store.get_state("erp_failures_in_a_row", 0) == 0           # not an "ERP down" streak
+
+    # scheduled runs now skip without touching the ERP; a run started by hand still goes ahead
+    started = []
+    monkeypatch.setattr(run_mod, "Runner", lambda *a, **k: started.append(k["trigger"]) or
+                        type("R", (), {"run": lambda self: {"status": "ok"}})())
+    monkeypatch.setattr(run_mod, "MemoryStore", lambda *a: store)
+    for key, val in {"ERP_USER_ID": ROLL, "ERP_PASSWORD": "pw", "ERP_SECQ_1": "q?::a", "ERP_SECQ_2": "q2?::b",
+                     "ERP_SECQ_3": "q3?::c", "MAIL_ADDRESS": "me@x.in", "MAIL_APP_PASSWORD": "app"}.items():
+        monkeypatch.setenv(key, val)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    assert run_mod.main(["--memory", "unused.json"]) == 0 and started == []
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    run_mod.main(["--memory", "unused.json"])
+    assert started == ["workflow_dispatch"]
+
+
+def test_a_manual_run_that_logs_in_resumes_the_schedule(emails):
+    from ping.run import credentials_pause
+    store = MemoryStore()
+    run(_failing(FakeErp(NOW), "refused"), store)
+    assert credentials_pause(store)
+    rec, store = run(FakeErp(NOW), store)  # you fixed the secret and pressed Check now
+    assert rec["status"] == "ok"
+    assert credentials_pause(store) is None
+    assert _chat(store)[-1] == "Logged in again; hourly checks are back on."
+    assert len(emails) == 1  # only the original alert

@@ -51,6 +51,14 @@ class MemoryStore:
                 t[k] = new
         return len(rows)
 
+    def insert(self, table: str, rows: list[dict]) -> int:
+        """Plain insert for tables whose id the database assigns (chat_messages)."""
+        t = self.tables.setdefault(table, {})
+        for r in rows:
+            k = str(len(t) + 1)
+            t[k] = {"id": len(t) + 1, "created_at": datetime.now(timezone.utc).isoformat(), **copy.deepcopy(r)}
+        return len(rows)
+
     def delete(self, table: str, filters: dict) -> None:
         keep = {}
         for k, r in self.tables.get(table, {}).items():
@@ -133,6 +141,11 @@ class SupabaseStore:
                 self._req("POST", table, params={"on_conflict": key, "columns": ",".join(cols)},
                           data=json.dumps(chunk, default=str),
                           headers={"Prefer": "resolution=merge-duplicates,return=minimal"})
+        return len(rows)
+
+    def insert(self, table: str, rows: list[dict]) -> int:
+        """Plain insert for tables whose id the database assigns (chat_messages)."""
+        self._req("POST", table, data=json.dumps(rows, default=str), headers={"Prefer": "return=minimal"})
         return len(rows)
 
     def delete(self, table: str, filters: dict) -> None:

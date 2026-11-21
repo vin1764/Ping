@@ -477,7 +477,10 @@
     }
     const listOthers = state.prefs?.list_other_roles !== false;
     for (const [prefix, rows] of sections) {
-      const mine = rows.filter((r) => marks.get(r.id)?.relevant).map((r) => ({ ...r, note: marks.get(r.id)?.reason || "" }));
+      const mine = rows.filter((r) => marks.get(r.id)?.relevant).map((r) => {
+        const m = marks.get(r.id);
+        return { ...r, note: [m.reason, m.best_cv ? `Apply with: ${m.best_cv}` : ""].filter(Boolean).join(" · ") };
+      });
       const others = rows.filter((r) => !marks.get(r.id)?.relevant).map((r) => ({ ...r, note: "" }));
       const h = (s) => (prefix ? `${prefix} · ${s}` : s);
       if (mine.length) out.unshift({ head: h("For you"), rows: mine });
@@ -717,8 +720,11 @@
         h("tr", {}, ["Role", "Applied", "Deadline", "Pay (CTC)", "Eligible", "Details"].map((x) => h("th", {}, x))),
         roles.map((r) => {
           const e = r.eligibility || {};
+          const mk = state.marks?.get(r.id);
           return h("tr", {},
-            h("td", {}, r.designation),
+            h("td", {}, r.designation,
+              mk ? h("div", { class: "small muted" }, mk.relevant ? `For you${mk.reason ? ` — ${mk.reason}` : ""}` : "Other role") : null,
+              mk?.relevant && mk.best_cv ? h("div", { class: "small" }, h("strong", {}, "Apply with: "), mk.best_cv) : null),
             h("td", {}, r.applied ? h("span", { class: "yes" }, "Yes") : "No"),
             h("td", {}, when(deadlineOf(r)) || "—", r.deadline_source && r.deadline_source !== "companies list"
               ? h("div", { class: "small muted" }, `from ${r.deadline_source}`) : null),
@@ -742,7 +748,7 @@
     state.data.roles.forEach((r) => (r.allowed || []).forEach((a) => { depts.add(a.department); degrees.add(a.degree); }));
     const field = (name, label, value, attrs = {}, hint) => h("label", {}, label, hint ? h("span", { class: "hint" }, hint) : null,
       h("input", { name, id: `pf-${name}`, value: value ?? "", ...attrs }));
-    const cv = p.cv_names || [];
+
     const lists = (v) => (v || []).join("\n");
     const form = h("form", { class: "profile card", onsubmit: save },
       h("div", { class: "row2" },
@@ -754,7 +760,7 @@
       h("div", { class: "row2" },
         field("cgpa", "CGPA", p.cgpa, { type: "number", step: "0.01", min: "0", max: "10" }),
         h("label", { class: "check" }, h("input", { type: "checkbox", name: "active_backlogs", id: "pf-backlogs", checked: !!p.active_backlogs }), "I have active backlogs")),
-      h("div", { class: "row3" }, [0, 1, 2].map((i) => field(`cv${i}`, `CV ${i + 1} name`, cv[i]))),
+      cvBlock(p),
       h("label", {}, "What I'm looking for", h("span", { class: "hint" },
         "In your own words. Ping marks each role \"For you\" or not (Gemini reads the role's title and job description once) and lists those first."),
         h("textarea", { name: "targets", id: "pf-targets", rows: 3,
@@ -783,7 +789,6 @@
         roll: String(f.get("roll") || "").trim() || null, name: String(f.get("name") || "").trim() || null,
         department: String(f.get("department") || "").trim() || null, degree: String(f.get("degree") || "").trim() || null,
         cgpa: cgpa ? Number(cgpa) : null, active_backlogs: f.get("active_backlogs") === "on",
-        cv_names: [0, 1, 2].map((i) => String(f.get(`cv${i}`) || "").trim()).filter(Boolean),
         interested_companies: split("interested_companies"), not_interested_companies: split("not_interested_companies"),
         reminder_hours: Number(f.get("reminder_hours")) > 0 ? Number(f.get("reminder_hours")) : 2,
         targets: String(f.get("targets") || "").trim() || null, list_other_roles: f.get("list_other_roles") === "on",
@@ -805,6 +810,45 @@
     }
     mount(h("h1", {}, "Profile"), h("p", { class: "muted small" },
       "Used to decide what you're eligible for. Whether you applied comes from the ERP's companies list, not from here."), form);
+  }
+
+  // "My CVs": up to 3 PDFs with labels, in the private "cvs" bucket (owner only; never in git; demo sessions can't
+  // reach it). The hourly run summarises a new or replaced file once; only the summary is kept in the profile.
+  function cvBlock(p) {
+    const cvs = (p.cvs || []).slice(0, 3);
+    const demo = !!state.src?.demo || state.src?.kind === "demo";
+    const status = h("span", { class: "muted small", id: "cv-status" });
+    const slot = (i) => {
+      const c = cvs[i] || {};
+      const label = h("input", { id: `cv-label-${i}`, value: c.label || "", placeholder: `CV ${i + 1} label`, disabled: demo });
+      const file = h("input", { type: "file", accept: "application/pdf", id: `cv-file-${i}`, disabled: demo });
+      const upload = h("button", { type: "button", class: "btn small", disabled: demo, onclick: async () => {
+        const f = file.files?.[0];
+        const name = label.value.trim();
+        if (!name) { status.textContent = " Give the CV a label first."; return; }
+        try {
+          const next = [...cvs];
+          if (f) {
+            if (f.type !== "application/pdf" || f.size > 5 * 1024 * 1024) { status.textContent = " A PDF up to 5 MB, please."; return; }
+            const path = `cv${i + 1}.pdf`;
+            const { error } = await state.src.sb.storage.from("cvs").upload(path, f, { upsert: true, contentType: "application/pdf" });
+            if (error) throw new Error(error.message);
+            next[i] = { label: name, path, uploaded_at: new Date().toISOString() };      // a new file: summarised again
+          } else if (c.path) {
+            next[i] = { ...c, label: name };                                            // only the label changed
+          } else { status.textContent = " Choose a PDF."; return; }
+          await state.src.saveProfile({ cvs: next.filter(Boolean), cv_names: next.filter(Boolean).map((x) => x.label) });
+          p.cvs = next.filter(Boolean);
+          status.textContent = " Saved. Ping reads it on the next run (Menu > Check now) and then says which CV to apply with.";
+        } catch (e) { status.textContent = ` ${e.message}`; }
+      } }, c.path ? "Replace" : "Upload");
+      return h("div", { class: "cv-slot" }, label, demo ? null : file, demo ? null : upload,
+        c.summary ? h("div", { class: "small muted" }, c.summary) : c.path ? h("div", { class: "small muted" }, "Not read yet") : null);
+    };
+    return h("div", { class: "cvs" }, h("strong", {}, "My CVs"),
+      h("span", { class: "hint" }, demo ? " Made-up CVs of the demo student (summaries only; the demo can't upload)."
+        : " Up to 3 PDFs. Private: only your login can read them; Ping keeps a short summary to pick the CV for each role."),
+      [0, 1, 2].map(slot), status);
   }
 
   // ------------------------------------------------------------ answers without AI

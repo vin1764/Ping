@@ -7,7 +7,7 @@
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
 import { caller, cors, json } from "../_shared/owner.ts";
 import { asksToAct, glance, roleLists, stripRefusal, todayNote } from "./wording.ts";
-import { markRoles, service } from "./marks.ts";
+import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 
 // Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
@@ -76,7 +76,10 @@ Deno.serve(async (req) => {
   // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
   // own changes on top (session_prefs: never the owner's profile, never another session's).
   const uid = role === "demo" ? (await sb.auth.getUser()).data.user?.id : null;
-  const base = await sb.from("profile").select("targets,reminder_hours,list_other_roles").limit(1);
+  const base = await sb.from("profile").select("targets,reminder_hours,list_other_roles,cvs").limit(1);
+  // CV summaries (never the files): the owner's, or the demo's made-up ones
+  const cvs = cvsText(base.data?.[0]?.cvs);
+  const cvLabels = (base.data?.[0]?.cvs || []).map((c: any) => c.label).filter(Boolean);
   let prefs: Prefs = { targets: base.data?.[0]?.targets ?? null, reminder_hours: base.data?.[0]?.reminder_hours ?? null,
                        list_other_roles: base.data?.[0]?.list_other_roles ?? null };
   if (role === "demo") {
@@ -91,7 +94,7 @@ Deno.serve(async (req) => {
   // The page asks for the "For you" marks of the caller's current targets (cache only, no Gemini) to split its lists.
   if (body?.marks === true) {
     const roles = prefs.targets ? await classifiable() : [];
-    const { marks } = prefs.targets ? await markRoles(roles, prefs.targets, [], "", 0) : { marks: new Map() };
+    const { marks } = prefs.targets ? await markRoles(roles, prefs.targets, [], "", 0, cvs) : { marks: new Map() };
     return json({ prefs, marks: Object.fromEntries(marks) });
   }
   const question = String(body?.question || "");
@@ -152,7 +155,7 @@ Deno.serve(async (req) => {
     saved = `Saved${role === "demo" ? " for this demo session" : ""}: ${describe(next, parsed.changes)}.`;
     if ("targets" in parsed.changes && next.targets) {
       const roles = await classifiable();
-      const m = await markRoles(roles, next.targets, MODELS, key, 60_000);
+      const m = await markRoles(roles, next.targets, MODELS, key, 60_000, cvs);
       const yes = [...m.marks.values()].filter((x) => x.relevant).length;
       saved += m.marks.size === roles.length
         ? ` ${yes} of ${roles.length} roles are now for you.`
@@ -233,10 +236,14 @@ Deno.serve(async (req) => {
   const prof = { ...(profile.data?.[0] || {}), ...prefs } as any;
   const hasTargets = !!prefs.targets;
   const rmarks = hasTargets
-    ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0)).marks
+    ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks
     : new Map();
   // reasons stay in the feed; the chat only needs yes / no
-  const forYou = (r: any) => !hasTargets || !rmarks.has(r.id) ? "not classified" : rmarks.get(r.id)!.relevant ? "yes" : "no";
+  const forYou = (r: any) => {
+    const m = rmarks.get(r.id);
+    if (!hasTargets || !m) return "not classified";
+    return m.relevant ? `yes${m.best_cv ? `; apply with ${m.best_cv}` : ""}` : "no";
+  };
   const blocks = roleLists((roles.data || []) as any[], rmarks, asOf, hasTargets, prefs.list_other_roles !== false);
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
@@ -293,6 +300,9 @@ those times, copy that time's block exactly: its heading (the deadline is said o
 "✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each. Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
+CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what
+should I apply to with my <label>", use "apply with" in the role lines and answer "Apply with: <label>" per role
+(if a role has none, say no CV fits it best). ${cvLabels.length ? "" : 'With no CVs uploaded, say "Add your CVs on the Profile page (My CVs)" instead.'}
 Roles marked eligible: no are never listed. If eligibility is "unknown" because the Profile has no department or
 degree, say once "Add your department and degree on the Profile page to check eligibility". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
 due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't

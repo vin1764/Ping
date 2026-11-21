@@ -453,9 +453,16 @@ class Runner:
         not_int = profile.get("not_interested_companies") or []
         open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False
                  and not any(n and n.lower() in (r.get("company") or "").lower() for n in not_int)]
+        from . import cvs
+        try:
+            self.counts["cvs"] = cvs.summarise_new(self.store, self.secrets.supabase_url, self.secrets.supabase_key,
+                                                   profile, self.secrets.ai)
+        except Exception as e:
+            self.problems.append(f"reading your CVs failed: {type(e).__name__}")
         try:
             self.counts["relevance"] = {"roles_checked": len(open_),
-                                        **relevance.mark_roles(self.store, open_, targets, self.secrets.ai)}
+                                        **relevance.mark_roles(self.store, open_, targets, self.secrets.ai,
+                                                               cvs.cvs_text(profile.get("cvs")))}
         except Exception as e:
             self.problems.append(f"marking roles 'for you' failed: {e}")
 

@@ -28,13 +28,15 @@ PROMPT = """A student at IIT Kharagpur describes the jobs they want:
 <<<
 {targets}
 >>>
-
+{cvs}
 For each role below, decide whether it is one of the jobs they want. Judge the work the role actually does (from
-the job description when there is one), not just the company. Reply with JSON only, one entry per role, in order:
-[{{"id": "<role id>", "relevant": true or false, "reason": "at most 8 words"}}]
+the job description when there is one), not just the company. If what they want and their CVs disagree, what they
+want wins. Reply with JSON only, one entry per role, in order:
+[{{"id": "<role id>", "relevant": true or false, "best_cv": "<label of the CV to apply with, or empty>", "reason": "at most 8 words"}}]
 
 Roles:
 {roles}"""
+CV_BLOCK = "Their CVs (label: summary):\n{lines}\n"
 
 BATCH = 250              # roles per call: normally all of them in one call
 JD_CHARS = 400           # enough to tell product from engineering; keeps one call for every role small
@@ -82,9 +84,10 @@ def _h(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:16].translate(LETTERS)
 
 
-def targets_hash(targets: str) -> str:
-    """Same in supabase/functions/ask-ping/marks.ts: lower-case, spaces squeezed, sha1, first 16, digits as letters."""
-    return _h(_clean(targets).lower())
+def targets_hash(targets: str, cvs: str = "") -> str:
+    """Same in supabase/functions/ask-ping/marks.ts: lower-case, spaces squeezed, sha1, first 16, digits as letters.
+    The CV summaries are part of it (they decide best_cv): new CVs, new marks."""
+    return _h(_clean(targets).lower() + (("\n" + _clean(cvs)) if _clean(cvs) else ""))
 
 
 def role_hash(r: dict) -> str:
@@ -92,21 +95,22 @@ def role_hash(r: dict) -> str:
     return _h("|".join(_clean(r.get(k)) for k in ("company", "designation", "job_description")))
 
 
-def cache_key(targets: str, r: dict) -> str:
-    return targets_hash(targets) + ":" + role_hash(r)
+def cache_key(targets: str, r: dict, cvs: str = "") -> str:
+    return targets_hash(targets, cvs) + ":" + role_hash(r)
 
 
-def needs(r: dict, targets: str) -> bool:
+def needs(r: dict, targets: str, cvs: str = "") -> bool:
     rel = r.get("relevance") or {}
-    return bool(_clean(targets)) and rel.get("key") != cache_key(targets, r)
+    return bool(_clean(targets)) and rel.get("key") != cache_key(targets, r, cvs)
 
 
-def classify(roles: list[dict], targets: str, cfg: dict) -> dict[str, dict]:
+def classify(roles: list[dict], targets: str, cfg: dict, cvs: str = "") -> dict[str, dict]:
     """{role id: {relevant, reason, jd_missing, key, model}} for the roles that need it. Roles Gemini didn't
     answer for (busy, out of time) are left out and tried again next run."""
     if not _clean(targets) or cfg.get("provider") != "openai_compatible" or not cfg.get("key"):
         return {}
-    todo = [r for r in roles if needs(r, targets)]
+    todo = [r for r in roles if needs(r, targets, cvs)]
+    labels = [line[2:].split(":", 1)[0] for line in cvs.splitlines() if line.startswith("- ")]
     out: dict[str, dict] = {}
     started = time.monotonic()
     for i in range(0, len(todo), BATCH):
@@ -115,7 +119,8 @@ def classify(roles: list[dict], targets: str, cfg: dict) -> dict[str, dict]:
         chunk = todo[i:i + BATCH]
         texts = {r["id"]: role_text(r) for r in chunk}
         listing = "\n\n".join(f"[id: {rid}]\n{t}" for rid, (t, _) in texts.items())
-        answer, model = _ask(PROMPT.format(targets=_clean(targets)[:600], roles=listing), cfg, started)
+        answer, model = _ask(PROMPT.format(targets=_clean(targets)[:600], roles=listing,
+                                           cvs=CV_BLOCK.format(lines=cvs) if cvs else ""), cfg, started)
         if not isinstance(answer, list):
             continue
         for a in answer:
@@ -123,9 +128,10 @@ def classify(roles: list[dict], targets: str, cfg: dict) -> dict[str, dict]:
                 continue
             words = _clean(a.get("reason")).split()
             missing = texts[a["id"]][1]
+            cv = _clean(a.get("best_cv"))
             out[a["id"]] = {"relevant": a["relevant"], "reason": " ".join(words[:8]).rstrip(".,;"),
-                            "jd_missing": missing, "key": cache_key(targets, next(r for r in chunk if r["id"] == a["id"])),
-                            "model": model}
+                            "best_cv": cv if cv in labels else "", "jd_missing": missing,
+                            "key": cache_key(targets, next(r for r in chunk if r["id"] == a["id"]), cvs), "model": model}
     stats["classified"] += len(out)
     stats["seconds"] += time.monotonic() - started
     return out
@@ -154,11 +160,11 @@ def _ask(prompt: str, cfg: dict, started: float):
     return None, None
 
 
-def tag(r: dict, targets: str) -> tuple[str | None, str]:
+def tag(r: dict, targets: str, cvs: str = "") -> tuple[str | None, str]:
     """('for_you' | 'other' | None, reason) for a role, from its cached answer (None: not classified yet, or no
     targets set)."""
     rel = r.get("relevance") or {}
-    if not _clean(targets) or rel.get("key") != cache_key(targets, r) or not isinstance(rel.get("relevant"), bool):
+    if not _clean(targets) or rel.get("key") != cache_key(targets, r, cvs) or not isinstance(rel.get("relevant"), bool):
         return None, ""
     reason = rel.get("reason") or ""
     if rel.get("jd_missing"):
@@ -166,12 +172,12 @@ def tag(r: dict, targets: str) -> tuple[str | None, str]:
     return ("for_you" if rel["relevant"] else "other"), reason
 
 
-def mark_roles(store, roles: list[dict], targets: str, cfg: dict) -> dict:
+def mark_roles(store, roles: list[dict], targets: str, cfg: dict, cvs: str = "") -> dict:
     """Attach r["relevance"] to every role from the role_marks cache, classifying the missing ones in one call and
     saving them. Returns counts for the run summary."""
     if not _clean(targets):
         return {"targets_set": False}
-    th = targets_hash(targets)
+    th = targets_hash(targets, cvs)
     try:
         cached = {c["role_hash"]: c for c in store.select("role_marks", {"targets_hash": f"eq.{th}"})}
     except Exception:
@@ -180,15 +186,16 @@ def mark_roles(store, roles: list[dict], targets: str, cfg: dict) -> dict:
         c = cached.get(role_hash(r))
         if c:
             r["relevance"] = {"relevant": c["relevant"], "reason": c.get("reason") or "", "jd_missing": c.get("jd_missing"),
-                              "key": cache_key(targets, r), "model": c.get("model")}
-    todo = [r for r in roles if needs(r, targets)]
-    found = classify(todo, targets, cfg) if todo else {}
+                              "best_cv": c.get("best_cv") or "", "key": cache_key(targets, r, cvs), "model": c.get("model")}
+    todo = [r for r in roles if needs(r, targets, cvs)]
+    found = classify(todo, targets, cfg, cvs) if todo else {}
     rows = []
     for r in roles:
         if r["id"] in found:
             r["relevance"] = found[r["id"]]
             rows.append({"targets_hash": th, "role_hash": role_hash(r), "relevant": found[r["id"]]["relevant"],
                          "reason": found[r["id"]]["reason"], "jd_missing": found[r["id"]]["jd_missing"],
+                         "best_cv": found[r["id"]]["best_cv"],
                          "model": found[r["id"]]["model"]})
     if rows:
         store.upsert("role_marks", list({(x["targets_hash"], x["role_hash"]): x for x in rows}.values()),

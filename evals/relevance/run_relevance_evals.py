@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 def main() -> int:
     from ping import relevance
+    from ping.cvs import cvs_text
     from ping.config import load_dotenv, load_secrets
     load_dotenv()
     cfg = load_secrets().ai
@@ -33,21 +34,24 @@ def main() -> int:
            "Each fixture persona's roles are marked by the classifier in one call with that persona's targets text "
            "(`personas.json`), and compared with labels that are correct for that text (`cases.json`). Re-run: "
            "Actions > Admin > `relevance-evals`.", "",
-           "| persona | targets | roles | precision of \"For you\" | recall of \"For you\" | not answered |", "|---|---|---|---|---|---|"]
+           "| persona | targets | roles | precision of \"For you\" | recall of \"For you\" | best CV right | not answered |",
+           "|---|---|---|---|---|---|---|"]
     details = []
     for p in spec["personas"]:
         if not p.get("labels_confirmed"):
             out.append(f"| {p['persona']} | | | not scored (labels not confirmed) | | |")
             continue
         targets = personas[p["persona"]]["targets"]
+        cvs = cvs_text(personas[p["persona"]].get("cvs"))
         rs = [dict(roles[c["role_id"]]) for c in p["cases"] if c["role_id"] in roles]
         for r in rs:
             r.pop("relevance", None)
         t0 = time.monotonic()
         before = relevance.stats["calls"]
-        got = relevance.classify(rs, targets, cfg)
+        got = relevance.classify(rs, targets, cfg, cvs)
         secs, calls = time.monotonic() - t0, relevance.stats["calls"] - before
         tp = fp = fn = 0
+        cv_ok = cv_n = 0
         wrong = []
         for c in p["cases"]:
             g = got.get(c["role_id"])
@@ -59,6 +63,12 @@ def main() -> int:
                 fp += 1
             elif c["for_you"]:
                 fn += 1
+            if c.get("best_cv") and g["relevant"]:
+                cv_n += 1
+                cv_ok += g.get("best_cv") == c["best_cv"]
+                if g.get("best_cv") != c["best_cv"]:
+                    wrong.append(f"| {p['persona']} | {c['company']} | {c['designation']} | CV: {c['best_cv']} | "
+                                 f"CV: {g.get('best_cv') or '(none)'} | {g['reason']} |")
             if g["relevant"] != c["for_you"]:
                 wrong.append(f"| {p['persona']} | {c['company']} | {c['designation']} | {'for you' if c['for_you'] else 'not'} | "
                              f"{'for you' if g['relevant'] else 'not'} | {g['reason']} |")
@@ -66,7 +76,8 @@ def main() -> int:
         rec = tp / (tp + fn) if tp + fn else 0.0
         missing = len(p["cases"]) - len(got)
         out.append(f"| {p['persona']} | {targets} | {len(p['cases'])} | **{prec:.0%}** ({tp} of {tp + fp}) | "
-                   f"**{rec:.0%}** ({tp} of {tp + fn}) | {missing} |")
+                   f"**{rec:.0%}** ({tp} of {tp + fn}) | "
+                   f"{f'**{cv_ok / cv_n:.0%}** ({cv_ok} of {cv_n})' if cv_n else 'n/a (no CVs)'} | {missing} |")
         details += wrong
         print(f"{p['persona']}: precision {prec:.0%}, recall {rec:.0%}, {missing} unanswered, {calls} call(s), {secs:.1f}s, "
               f"last error {relevance.stats['last_error']}")

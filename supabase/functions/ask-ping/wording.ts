@@ -107,7 +107,7 @@ export function dayWord(at: Date, now: Date): string {
   return WD.format(at);
 }
 
-export function roleLists(roles: ListRole[], marks: Map<string, { relevant: boolean }>, now: Date,
+export function roleLists(roles: ListRole[], marks: Map<string, { relevant: boolean; best_cv?: string }>, now: Date,
                           hasTargets: boolean, listOthers: boolean, days = 7): string {
   const until = now.getTime() + days * 86_400_000;
   const open = roles.filter((r) => r.eligible !== false && r.effective_deadline &&
@@ -126,7 +126,8 @@ export function roleLists(roles: ListRole[], marks: Map<string, { relevant: bool
     const applied = mine.filter((r) => r.applied).length;
     const head = hasTargets ? `${when} — ${mine.length} for you, ${applied} applied:` : `${when} — ${rs.length} roles, ${applied} applied:`;
     const body = hasTargets
-      ? ["For you:", ...(mine.length ? order(mine).map(line) : ["- none"]),
+      ? ["For you:", ...(mine.length ? order(mine).map((r) => line(r) + (marks.get(r.id)?.best_cv && !r.applied
+          ? ` (apply with ${marks.get(r.id)!.best_cv})` : "")) : ["- none"]),
          ...(others.length ? (listOthers ? ["Others:", ...order(others).map(line)] : [`Others: ${others.length} more (not listed)`]) : [])]
       : order(rs).map(line);
     blocks.push([head, ...body].join("\n"));

@@ -182,3 +182,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .msg .list .li.done { opacity: 0.65; }
 .msg .list .why, .msg .why { color: var(--muted, #777); }
 .msg .list .src { color: var(--muted, #777); font-size: 0.85em; margin-top: 6px; }
+.cvs { display: block; margin: 8px 0 14px; }
+.cvs .cv-slot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.cvs .cv-slot input:not([type=file]) { flex: 1 1 160px; min-width: 0; }
+.cvs .cv-slot input[type=file] { flex: 1 1 200px; min-width: 0; max-width: 100%; }
+.cvs .cv-slot > div { flex-basis: 100%; }
+.btn.small { padding: 4px 10px; font-size: 0.9em; }

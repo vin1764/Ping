@@ -126,6 +126,6 @@ def test_one_call_per_targets_and_shared_cache(monkeypatch):
     assert c3["classified"] == 3 and len(fake.prompts) == 2
     # the cache holds hashes only: no targets text, no role text, no user
     rows = list(store.tables["role_marks"].values())
-    assert rows and all(set(r) <= {"targets_hash", "role_hash", "relevant", "reason", "jd_missing", "model", "first_seen"}
+    assert rows and all(set(r) <= {"targets_hash", "role_hash", "relevant", "reason", "jd_missing", "best_cv", "model", "first_seen"}
                         for r in rows)
     assert relevance.targets_hash("  Backend   and Infrastructure roles ") == relevance.targets_hash("backend and infrastructure roles")

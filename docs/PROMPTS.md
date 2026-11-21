@@ -2,7 +2,7 @@
 
 _Generated from the source by `python setup/export_prompts.py`; do not edit by hand. `tests/test_prompts_doc.py` fails when this file is out of date._
 
-Ping sends text to a model in exactly three places. Everything else (reading the ERP, notices, PDFs, eligibility, the feed) is rules, with no model involved.
+Ping sends text to a model in exactly four places. Everything else (reading the ERP, notices, PDFs, eligibility, the feed) is rules, with no model involved.
 
 ## 1. Notice reader fallback (deadlines and companies the rules couldn't find)
 
@@ -38,7 +38,7 @@ Use [] when there is nothing. Do not invent dates.
 
 - **Where it runs:** `ping/relevance.py` (`PROMPT`, used by `classify`), called from the hourly run on GitHub Actions
 - **When:** Once per role, for roles you're not ruled out of (eligibility is applied first), and again only when the role's text or your "What I'm looking for" text changes (the answer is cached on the role).
-- **Input:** `{targets}`: your "What I'm looking for" text (first 600 characters); `{roles}`: up to 250 roles, each with its id, company, title, a few role fields and the first 400 characters of its job description (or "none given; judge on the title"). Never your name, roll number, CGPA or mail.
+- **Input:** `{targets}`: your "What I'm looking for" text (first 600 characters); `{cvs}`: one summary line per CV you uploaded (prompt 3), or nothing; `{{roles}}`: up to 250 roles, each with its id, company, title, a few role fields and the first 400 characters of its job description (or "none given; judge on the title"). Never your name, roll number, CGPA or mail.
 - **Expected output:** JSON list only: `id`, `relevant` (true/false), `reason` (cut to 8 words). Entries with an unknown id or a non-boolean answer are dropped; roles without an answer are tried again next run.
 - **Models, in fallback order:** `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemma-4-31b-it`
 - endpoint: the same OpenAI-compatible `/chat/completions` as the notice reader
@@ -52,16 +52,44 @@ A student at IIT Kharagpur describes the jobs they want:
 <<<
 {targets}
 >>>
-
+{cvs}
 For each role below, decide whether it is one of the jobs they want. Judge the work the role actually does (from
-the job description when there is one), not just the company. Reply with JSON only, one entry per role, in order:
-[{{"id": "<role id>", "relevant": true or false, "reason": "at most 8 words"}}]
+the job description when there is one), not just the company. If what they want and their CVs disagree, what they
+want wins. Reply with JSON only, one entry per role, in order:
+[{{"id": "<role id>", "relevant": true or false, "best_cv": "<label of the CV to apply with, or empty>", "reason": "at most 8 words"}}]
 
 Roles:
 {roles}
 ````
 
-## 3. Ask Ping (the chat on the dashboard)
+## 3. CV summary (for "Apply with")
+
+- **Where it runs:** `ping/cvs.py` (`SUMMARY_PROMPT`, used by `summarise_new`), called from the hourly run on GitHub Actions
+- **When:** Once per CV you upload on the Profile page (up to 3), and again only when you replace that file.
+- **Input:** `{text}`: the text of that one PDF, first 12000 characters, read on the server from the private `cvs` bucket. The text is never logged or stored.
+- **Expected output:** JSON only: `focus`, `skills`, `experience`, `education`; kept as one line in the profile, with any email or phone number removed. The classifier gets these lines (prompt 2).
+- **Models, in fallback order:** `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemma-4-31b-it`
+- endpoint: the same OpenAI-compatible `/chat/completions` as the notice reader
+- temperature: 0
+- timeout per model: 60 s
+
+**Prompt, verbatim:**
+
+````text
+Summarise this CV so it can be matched to job roles. Reply with JSON only, at most 300 tokens:
+{{"focus": "the kind of roles this CV is written for, in a few words",
+  "skills": ["at most 8 skills or tools"],
+  "experience": ["at most 4 internships, projects or positions, a few words each"],
+  "education": "degree and field, in a few words"}}
+Never include the person's name, email, phone number, address, roll number or any other ID.
+
+CV text:
+<<<
+{text}
+>>>
+````
+
+## 4. Ask Ping (the chat on the dashboard)
 
 - **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini key is a Supabase function secret and never reaches the browser
 - **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If it fails, the page answers with simple rules instead and says so. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
@@ -98,6 +126,9 @@ those times, copy that time's block exactly: its heading (the deadline is said o
 "✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each. Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
+CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what
+should I apply to with my <label>", use "apply with" in the role lines and answer "Apply with: <label>" per role
+(if a role has none, say no CV fits it best). ${cvLabels.length ? "" : 'With no CVs uploaded, say "Add your CVs on the Profile page (My CVs)" instead.'}
 Roles marked eligible: no are never listed. If eligibility is "unknown" because the Profile has no department or
 degree, say once "Add your department and degree on the Profile page to check eligibility". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
 due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't

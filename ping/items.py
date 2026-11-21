@@ -311,7 +311,9 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
     # fewer, fuller messages: deadline digests, one "new roles" message per run, same-run list collapses
     from . import digests
     from .relevance import tag
+    from .cvs import cvs_text
     targets = profile.get("targets") or ""
+    cvtext = cvs_text(profile.get("cvs"))
     members = {}
     for r in roles:
         e = elig[r["id"]]
@@ -322,7 +324,9 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                             "source": dl["source"], "applied": bool(r.get("applied")), "eligible": e["eligible"],
                             "flags": e["flags"],
                             "first_seen": r.get("first_seen")}
-        members[r["id"]]["tag"], members[r["id"]]["note"] = tag(r, targets)
+        members[r["id"]]["tag"], members[r["id"]]["note"] = tag(r, targets, cvtext)
+        if members[r["id"]]["tag"] == "for_you" and (r.get("relevance") or {}).get("best_cv"):
+            members[r["id"]]["cv"] = r["relevance"]["best_cv"]
     items = digests.build(items, members, previous or {}, profile, now)
     if stats is not None:
         stats.update(dstats)

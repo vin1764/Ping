@@ -628,6 +628,21 @@
     ]
    },
    "why": "any list of roles closing tonight uses the same format"
+  },
+  {
+   "id": "CV1",
+   "category": "cvs",
+   "question": "which cv should I use for groww",
+   "checks": {
+    "must_contain": [
+     "Product CV"
+    ],
+    "must_not_contain": [
+     "Consulting CV",
+     "Analytics & Finance CV"
+    ]
+   },
+   "why": "Groww Associate Product Manager: the demo student's Product CV (made-up CVs in evals/relevance/personas.json)"
   }
  ],
  "check_changes": [

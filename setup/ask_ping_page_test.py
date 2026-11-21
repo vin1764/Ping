@@ -105,6 +105,15 @@ def main(argv: list[str]) -> int:
         failures += not zero or not demo_rows
         print(f"demo session in the database: {len(demo_rows)} demo items readable; real rows per table: {real}"
               f"{'' if zero else '  <-- PROBLEM'}")
+        # the CV bucket: a demo session can neither list nor download anything in it
+        lst = requests.post(f"{cfg['supabaseUrl']}/storage/v1/object/list/cvs", headers=hdr, timeout=30,
+                            json={"prefix": "", "limit": 100})
+        listed = lst.json() if lst.status_code == 200 else []
+        dl = requests.get(f"{cfg['supabaseUrl']}/storage/v1/object/cvs/cv1.pdf", headers=hdr, timeout=30)
+        bucket_ok = not listed and dl.status_code >= 400
+        failures += not bucket_ok
+        print(f"CV bucket from the demo session: list HTTP {lst.status_code}, {len(listed)} objects; download cv1.pdf "
+              f"HTTP {dl.status_code}{'' if bucket_ok else '  <-- PROBLEM'}")
         for q in questions:
             before = page.locator(".msg.ping:not(.typing)").count()
             page.fill("#ask-input", q)

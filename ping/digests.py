@@ -78,8 +78,11 @@ def _source(check_at: datetime, sources: list[str]) -> str:
 
 def role_row(m: dict) -> dict:
     """One line of a list. Part B adds 'for you' / 'others' and the reason; until then every role is plain."""
-    return {"text": f"{m['company']} — {m['label']}", "note": m.get("note") or "", "tag": m.get("tag") or "role",
-            "id": m["id"]}
+    note = m.get("note") or ""
+    if m.get("cv"):
+        note = f"{note} · Apply with: {m['cv']}" if note else f"Apply with: {m['cv']}"
+    return {"text": f"{m['company']} — {m['label']}", "note": note, "tag": m.get("tag") or "role", "id": m["id"],
+            **({"cv": m["cv"]} if m.get("cv") else {})}
 
 
 def split_rows(members: list[dict], list_others: bool = True) -> list[dict]:

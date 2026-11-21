@@ -26,6 +26,8 @@ alter table profile add column if not exists reminder_hours numeric default 2;
 -- what you're looking for, in your own words, and whether to still list the other roles (Profile page)
 alter table profile add column if not exists targets text;
 alter table profile add column if not exists list_other_roles boolean default true;
+-- your CVs: [{label, path (in the private "cvs" bucket), uploaded_at, summary, summarised_for}] (ping/cvs.py)
+alter table profile add column if not exists cvs jsonb default '[]';
 
 create table if not exists roles (
   id text primary key,             -- yop:com_id:jnf_id
@@ -182,7 +184,7 @@ create policy owner_fix_notices on corrections for all to authenticated
 -- The dashboard may only change these columns:
 revoke update on profile, items from authenticated;
 grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, interested_companies,
-              not_interested_companies, notice_types, reminder_hours, targets, list_other_roles, updated_at) on profile to authenticated;
+              not_interested_companies, notice_types, reminder_hours, targets, list_other_roles, cvs, updated_at) on profile to authenticated;
 grant update (dismissed, done) on items to authenticated;
 grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
 grant insert, update, delete on corrections to authenticated;
@@ -340,6 +342,7 @@ create table if not exists role_marks (
   created_at timestamptz default now(),
   primary key (targets_hash, role_hash)
 );
+alter table role_marks add column if not exists best_cv text;   -- the label of the CV to apply with
 alter table role_marks enable row level security;
 revoke all on role_marks from anon, authenticated;
 grant select, insert, update, delete on role_marks to service_role;
@@ -361,3 +364,30 @@ grant select, insert, update, delete on session_prefs to service_role;
 drop policy if exists demo_own_prefs on session_prefs;
 create policy demo_own_prefs on session_prefs for all to authenticated
   using (is_ping_demo() and owner_id = auth.uid()) with check (is_ping_demo() and owner_id = auth.uid());
+
+-- ------------------------------------------------------------------ CVs: a private Storage bucket
+-- Only the owner's login can upload, list, download, replace or delete; demo sessions and everyone else see
+-- nothing (no policy for them). The hourly run reads new CVs with the service key to summarise them.
+do $cvs$
+begin
+  -- a real Supabase project always has Storage; a bare Postgres (the local test replica) doesn't
+  if to_regclass('storage.buckets') is null then
+    raise notice 'no Storage here: the cvs bucket is skipped';
+    return;
+  end if;
+  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('cvs', 'cvs', false, 5242880, array['application/pdf'])
+  on conflict (id) do update set public = false, file_size_limit = 5242880, allowed_mime_types = array['application/pdf'];
+  drop policy if exists ping_cvs_owner_read on storage.objects;
+  drop policy if exists ping_cvs_owner_write on storage.objects;
+  drop policy if exists ping_cvs_owner_update on storage.objects;
+  drop policy if exists ping_cvs_owner_delete on storage.objects;
+  create policy ping_cvs_owner_read on storage.objects for select to authenticated
+    using (bucket_id = 'cvs' and public.is_ping_owner());
+  create policy ping_cvs_owner_write on storage.objects for insert to authenticated
+    with check (bucket_id = 'cvs' and public.is_ping_owner());
+  create policy ping_cvs_owner_update on storage.objects for update to authenticated
+    using (bucket_id = 'cvs' and public.is_ping_owner()) with check (bucket_id = 'cvs' and public.is_ping_owner());
+  create policy ping_cvs_owner_delete on storage.objects for delete to authenticated
+    using (bucket_id = 'cvs' and public.is_ping_owner());
+end $cvs$;

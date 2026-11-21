@@ -8,14 +8,16 @@ export const RELEVANCE_PROMPT = `A student at IIT Kharagpur describes the jobs t
 <<<
 {targets}
 >>>
-
+{cvs}
 For each role below, decide whether it is one of the jobs they want. Judge the work the role actually does (from
-the job description when there is one), not just the company. Reply with JSON only, one entry per role, in order:
-[{"id": "<role id>", "relevant": true or false, "reason": "at most 8 words"}]
+the job description when there is one), not just the company. If what they want and their CVs disagree, what they
+want wins. Reply with JSON only, one entry per role, in order:
+[{"id": "<role id>", "relevant": true or false, "best_cv": "<label of the CV to apply with, or empty>", "reason": "at most 8 words"}]
 
 Roles:
 {roles}`;
 
+export const CV_BLOCK = "Their CVs (label: summary):\n{lines}\n";
 const JD_CHARS = 400;
 const FIELDS = ["Job Profile", "Job Designation", "Profile", "Role", "Domain", "Job Type"];
 const PLACEHOLDER = new RegExp(String.raw`^(?:none|null|n/?a|-+|\.+|tbd|attached|find attached|pfa(?: the)? jd|as mentioned in .{0,40}|` +
@@ -29,7 +31,10 @@ async function h(s: string): Promise<string> {
   const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return hex.slice(0, 16).replace(/[0-9]/g, (d) => LETTERS[d]);
 }
-export const targetsHash = (targets: string) => h(clean(targets).toLowerCase());
+// the CV summaries are part of the key (they decide best_cv); same as ping/relevance.py targets_hash
+export const targetsHash = (targets: string, cvs = "") => h(clean(targets).toLowerCase() + (clean(cvs) ? "\n" + clean(cvs) : ""));
+export const cvsText = (cvs: any[] | null | undefined) =>
+  (cvs || []).filter((c) => c?.label && c?.summary).map((c) => `- ${c.label}: ${c.summary}`).join("\n");
 export const roleHash = (r: any) => h(["company", "designation", "job_description"].map((k) => clean(r[k])).join("|"));
 
 export function noJd(jd: unknown): boolean {
@@ -50,28 +55,30 @@ export function service() {
   return k ? createClient(Deno.env.get("SUPABASE_URL")!, k) : null;
 }
 
-export type Mark = { relevant: boolean; reason: string; jd_missing: boolean };
+export type Mark = { relevant: boolean; reason: string; jd_missing: boolean; best_cv: string };
 
 // Marks for these roles and targets: from the cache, and the missing ones in ONE Gemini call (then cached).
-export async function markRoles(roles: any[], targets: string, models: string[], key: string, budgetMs: number):
+export async function markRoles(roles: any[], targets: string, models: string[], key: string, budgetMs: number, cvs = ""):
   Promise<{ marks: Map<string, Mark>; classified: number; cached: number; error?: string }> {
   const marks = new Map<string, Mark>();
   const svc = service();
   if (!clean(targets) || !svc) return { marks, classified: 0, cached: 0, error: svc ? undefined : "no service key" };
-  const th = await targetsHash(targets);
+  const th = await targetsHash(targets, cvs);
+  const labels = cvs.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2).split(":")[0]);
   const hashes = new Map<string, string>();
   for (const r of roles) hashes.set(r.id, await roleHash(r));
-  const { data: rows } = await svc.from("role_marks").select("role_hash,relevant,reason,jd_missing").eq("targets_hash", th).limit(5000);
+  const { data: rows } = await svc.from("role_marks").select("role_hash,relevant,reason,jd_missing,best_cv").eq("targets_hash", th).limit(5000);
   const byHash = new Map((rows || []).map((x: any) => [x.role_hash, x]));
   const todo = roles.filter((r) => !byHash.has(hashes.get(r.id)!));
   for (const r of roles) {
     const c: any = byHash.get(hashes.get(r.id)!);
-    if (c) marks.set(r.id, { relevant: c.relevant, reason: c.reason || "", jd_missing: !!c.jd_missing });
+    if (c) marks.set(r.id, { relevant: c.relevant, reason: c.reason || "", jd_missing: !!c.jd_missing, best_cv: c.best_cv || "" });
   }
   const cached = marks.size;
   if (!todo.length) return { marks, classified: 0, cached };
   const listing = todo.map((r) => `[id: ${r.id}]\n${roleText(r)}`).join("\n\n");
-  const prompt = RELEVANCE_PROMPT.replace("{targets}", clean(targets).slice(0, 600)).replace("{roles}", listing);
+  const prompt = RELEVANCE_PROMPT.replace("{targets}", clean(targets).slice(0, 600))
+    .replace("{cvs}", cvs ? CV_BLOCK.replace("{lines}", cvs) : "").replace("{roles}", listing);
   const t0 = Date.now();
   let error = "";
   for (const model of models) {
@@ -94,8 +101,9 @@ export async function markRoles(roles: any[], targets: string, models: string[],
       for (const a of answer) {
         const r = todo.find((x) => x.id === a?.id);
         if (!r || typeof a.relevant !== "boolean") continue;
+        const cv = clean(a.best_cv);
         const mark = { relevant: a.relevant, reason: clean(a.reason).split(" ").slice(0, 8).join(" ").replace(/[.,;]+$/, ""),
-                       jd_missing: noJd(r.job_description) };
+                       jd_missing: noJd(r.job_description), best_cv: labels.includes(cv) ? cv : "" };
         marks.set(r.id, mark);
         save.push({ targets_hash: th, role_hash: hashes.get(r.id), ...mark, model });
       }

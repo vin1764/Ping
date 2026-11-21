@@ -125,12 +125,15 @@ def demo_refeed(secrets) -> int:
     persona = demo_persona()
     DEMO_TARGETS = persona["targets"]
     profile = {**data["profile"], "targets": DEMO_TARGETS, "list_other_roles": persona["list_other_roles"],
-               "reminder_hours": persona["reminder_hours"], "updated_at": data["generated_at"]}
+               "reminder_hours": persona["reminder_hours"], "updated_at": data["generated_at"],
+               # made-up CVs (summaries only; the demo has no files and can't reach the CV bucket)
+               "cvs": persona.get("cvs", []), "cv_names": [c["label"] for c in persona.get("cvs", [])]}
+    from .cvs import cvs_text
     roles = data["roles"]
     open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False]
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     for attempt in range(3):            # the free tier is sometimes busy; whatever is left goes next round
-        counts = relevance.mark_roles(store, open_, DEMO_TARGETS, secrets.ai)
+        counts = relevance.mark_roles(store, open_, DEMO_TARGETS, secrets.ai, cvs_text(profile["cvs"]))
         say(f"round {attempt + 1}: {counts}")
         if not counts.get("unanswered"):
             break
@@ -324,7 +327,7 @@ def ask_ping_page(secrets) -> int:
                            # follow-ups in the same demo session: the answers must use the conversation
                            "any tests today?", "anything else?", "nothing else?",
                            # the demo profile says what it's looking for: the answer splits For you / Others
-                           "what's due tonight that's relevant to me"]).returncode
+                           "what's due tonight that's relevant to me", "which cv for groww"]).returncode
 
 
 def auth_config(secrets) -> int:

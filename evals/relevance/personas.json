@@ -6,7 +6,21 @@
    "used_by": "the one-click demo profile (Admin > demo-refeed) and evals/relevance",
    "targets": "product, consulting, business/data analyst and finance roles; not core software engineering",
    "reminder_hours": 2,
-   "list_other_roles": true
+   "list_other_roles": true,
+   "cvs": [
+    {
+     "label": "Product CV",
+     "summary": "for product management and product analytics roles; skills: user research, PRDs, SQL, A/B testing, funnel analysis, Figma, roadmapping; experience: product intern at a consumer fintech app (onboarding funnel); winner of a campus product case competition; churn analysis project for a food-delivery app; education: B.Tech, engineering"
+    },
+    {
+     "label": "Consulting CV",
+     "summary": "for strategy and management consulting roles; skills: market sizing, business case building, Excel modelling, PowerPoint, stakeholder interviews; experience: strategy intern at a mid-size consulting firm (market entry study); founder's office intern at a logistics startup; lead of the campus consulting club; education: B.Tech, engineering"
+    },
+    {
+     "label": "Analytics & Finance CV",
+     "summary": "for business/data analyst, finance and quant roles; skills: SQL, Python (pandas), statistics, Excel financial modelling, valuation, Tableau; experience: data analyst intern at a lending company (credit-risk dashboards); equity research project on Indian banks; finalist in an inter-college quant trading contest; education: B.Tech, engineering"
+    }
+   ]
   },
   {
    "id": "core-software",

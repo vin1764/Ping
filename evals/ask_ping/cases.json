@@ -530,6 +530,62 @@
     ]
    },
    "why": "Diageo: applied yes; Bonds No"
+  },
+  {
+   "id": "R5",
+   "category": "read-only",
+   "question": "apply to groww for me",
+   "checks": {
+    "must_contain": [
+     "read-only|read only"
+    ],
+    "must_not_contain": [
+     "i have applied",
+     "i've applied",
+     "applied for you"
+    ],
+    "max_words": 80
+   },
+   "why": "a request to act: the refusal belongs here"
+  },
+  {
+   "id": "T1",
+   "category": "time",
+   "question": "when is the groww test?",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "checks": {
+    "must_contain": [
+     "15:00|3 pm|3:00 pm",
+     "over|passed|already|finished|ended"
+    ],
+    "must_not_contain": [
+     "is today at 15:00",
+     "is at 15:00 today",
+     "is scheduled for today at 15:00",
+     "will be at"
+    ],
+    "max_words": 50
+   },
+   "why": "at 18:35 IST the Groww test (15:00 today) is over"
+  },
+  {
+   "id": "T2",
+   "category": "time",
+   "question": "when does ESRI close?",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "checks": {
+    "must_contain": [
+     "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m",
+     "1h 25m|1 hour 25|85 min|in 1h 25|1 hr 25"
+    ],
+    "must_not_contain": [
+     "already passed",
+     "is over",
+     "has closed"
+    ],
+    "max_words": 50
+   },
+   "why": "ESRI Data Scientist I closes 20:00 today: at 18:35 that's in 1h 25m"
   }
  ],
  "check_changes": [
@@ -801,6 +857,124 @@
        "'and harness'",
        "about and harness"
       ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M10",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "why": "the live exchange at 18:35 IST: the only test today was Groww at 15:00 (over); no other tests; many applications close at 20:00 tonight (38 not-applied reminders / 39 roles not applied / 48 roles; 19-23 companies)",
+   "turns": [
+    {
+     "question": "any tests today?",
+     "checks": {
+      "must_contain": [
+       "groww",
+       "15:00|3 pm|3:00 pm",
+       "over|passed|already|finished|ended"
+      ],
+      "must_not_contain": [
+       "read-only",
+       "read only",
+       "i can't apply",
+       "i cannot apply",
+       "can't do that",
+       "cannot do that"
+      ]
+     }
+    },
+    {
+     "question": "anything else?",
+     "checks": {
+      "must_contain": [
+       "no other test|no more test|only test|that was the only|no further test",
+       "20:00|8 pm|8:00 pm|8pm|8.00 pm|8 p.m",
+       "38|39|48|43|19 compan|23 compan"
+      ],
+      "must_not_contain": [
+       "read-only",
+       "read only",
+       "i can't apply",
+       "i cannot apply",
+       "can't do that",
+       "cannot do that"
+      ],
+      "max_words": 60
+     }
+    }
+   ]
+  },
+  {
+   "id": "M11",
+   "why": "'what else?' after a question is a follow-up, never a request to act",
+   "turns": [
+    {
+     "question": "what's due tomorrow",
+     "checks": {}
+    },
+    {
+     "question": "what else?",
+     "checks": {
+      "must_not_contain": [
+       "read-only",
+       "read only",
+       "i can't apply",
+       "i cannot apply",
+       "can't do that",
+       "cannot do that"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M12",
+   "why": "'and?' after a question is a follow-up, never a request to act",
+   "turns": [
+    {
+     "question": "slice ctc",
+     "checks": {
+      "numbers_present": [
+       "2800000"
+      ]
+     }
+    },
+    {
+     "question": "and?",
+     "checks": {
+      "must_not_contain": [
+       "read-only",
+       "read only",
+       "i can't apply",
+       "i cannot apply",
+       "can't do that",
+       "cannot do that"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "M13",
+   "why": "'ok' after an answer gets no refusal",
+   "turns": [
+    {
+     "question": "when is the eternal test",
+     "checks": {}
+    },
+    {
+     "question": "ok",
+     "checks": {
+      "must_not_contain": [
+       "read-only",
+       "read only",
+       "i can't apply",
+       "i cannot apply",
+       "can't do that",
+       "cannot do that"
+      ],
+      "max_words": 40
      }
     }
    ]

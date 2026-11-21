@@ -156,7 +156,8 @@ def main() -> int:
     sessions = DemoSessions(url, key)
     results = []
     for c in spec["cases"]:
-        status, answer, model, secs = ask(url, key, sessions.next_token(), c["question"], spec["snapshot_as_of"])
+        status, answer, model, secs = ask(url, key, sessions.next_token(), c["question"],
+                                          c.get("as_of") or spec["snapshot_as_of"])
         failed = score(answer, c["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
         results.append({**c, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
                         "failed": failed})
@@ -170,7 +171,7 @@ def main() -> int:
         for t in conv["turns"]:
             # exactly like the dashboard: your message goes into the thread, then Ping answers, then its reply goes in
             post_chat(url, key, token, "me", t["question"])
-            status, answer, model, secs = ask(url, key, token, t["question"], spec["snapshot_as_of"])
+            status, answer, model, secs = ask(url, key, token, t["question"], conv.get("as_of") or spec["snapshot_as_of"])
             post_chat(url, key, token, "ping", answer)
             failed = score(answer, t["checks"]) if status == 200 else [f"no answer (HTTP {status})"]
             turns.append({**t, "status": status, "answer": answer, "model": model, "seconds": round(secs, 1),
@@ -209,7 +210,7 @@ def write_report(spec: dict, results: list[dict], demo_ok: bool, convs: list[dic
     lines = [
         "# Ask Ping evals", "",
         f"_Run on {datetime.now().astimezone().strftime('%d %b %Y, %H:%M %Z')} against the deployed `ask-ping` function, "
-        f"from one-click demo sessions (anonymised demo data), snapshot time fixed at {spec['snapshot_as_of']}. "
+        f"from one-click demo sessions (anonymised demo data), snapshot time fixed at {spec['snapshot_as_of']} (cases marked 'as_of' use their own). "
         "Re-run with Actions > Admin > ask-ping-evals, or `python evals/ask_ping/run_ask_ping_evals.py`._", "",
         "## In short", "",
         f"- **Single questions: {passed} of {len(results)} passed all their checks ({pct([not r['failed'] for r in results])}).**",

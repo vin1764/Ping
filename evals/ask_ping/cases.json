@@ -1,7 +1,7 @@
 {
  "about": "Ask Ping evals: questions against the anonymised demo data (what the reviewer login sees), each with deterministic checks. Expected values were written by reading dashboard/demo-data.json, not by running the model.",
  "snapshot_as_of": "2026-11-21T17:32:18+05:30",
- "demo_data_sha256": "56d6cf92fcb0937e0514a0bf8c1a2b61647fbd32fafbdc4208e5bc9b3847a24b",
+ "demo_data_sha256": "2d75c6c11017228331bf38b273c69307f9e38f15b358f98af3c75c745742fe05",
  "check_rules": {
   "must_contain": "every entry must appear in the answer (case-insensitive); an entry 'a|b|c' passes if any alternative appears",
   "must_not_contain": "no entry may appear (case-insensitive)",

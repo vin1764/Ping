@@ -312,14 +312,17 @@ class Runner:
 
     def _jds(self, roles: list[dict], stored: dict) -> None:
         """Find each role's JD once, again only when the role's own JD information changes (jd_key)."""
-        from .jd import jd_key, resolve, usable
+        from .jd import jd_key, links_in, resolve, usable
         ups, fetched, tally = [], 0, Counter()
-        for r in roles:
+        # open roles first (latest application end first): with more to fetch than one run allows, those matter now
+        for r in sorted(roles, key=lambda r: str(r.get("apply_end") or ""), reverse=True):
             old = stored.get(r["id"]) or {}
             key = jd_key(r)
             if old.get("jd_key") == key and old.get("jd_source"):
                 continue
-            needs_net = not usable(r.get("job_description") or "")
+            inline = r.get("job_description") or ""
+            # a request to the ERP or a link only when there is a file or a link to read
+            needs_net = not usable(inline) and bool(r.get("has_form_doc") or r.get("has_company_doc") or links_in(inline))
             if needs_net and fetched >= JD_FETCH_PER_RUN:
                 continue                                  # the rest next run (each file is a request to the ERP)
             fetched += needs_net
@@ -338,14 +341,17 @@ class Runner:
         """A short summary per JD (role & team, what you'd do, must-haves, location, eligibility, anything unusual),
         made once per JD text: by Gemini when it answers, else from the JD's own labelled lines."""
         from .jd import detail_text, rules_summary, summarise, text_key, usable
-        todo = []
+        todo, retry = [], []
         for r in roles:
             text = (r.get("jd_text") or "") + ("\n\n" + detail_text(r) if r.get("jd_source") == "inline" else "")
             if not usable(text):
                 continue
             key = text_key(text)
-            if (r.get("jd_summary") or {}).get("key") != key:
+            old = r.get("jd_summary") or {}
+            if old.get("key") != key:
                 todo.append((r, text, key))
+            elif old.get("model") == "rules":
+                retry.append((r, text, key))        # made by rules while Gemini was busy: Gemini gets another go
         # open roles first: those are the ones you might apply to
         todo.sort(key=lambda x: str(x[0].get("effective_deadline") or x[0].get("apply_end") or ""), reverse=True)
         ups, made = [], Counter()
@@ -356,6 +362,17 @@ class Runner:
                 s = rules_summary(text, r.get("designation") or "")
             s["key"] = key
             made[s.get("model") == "rules" and "rules" or "ai"] += 1
+            ups.append({"id": r["id"], "jd_summary": s})
+            r["jd_summary"] = s
+        for r, text, key in retry[:max(0, JD_SUMMARIES_PER_RUN - len(ups))]:
+            if made["ai_failed"] >= 3:
+                break
+            s = summarise(text, self.secrets.ai)
+            if s is None:
+                made["ai_failed"] += 1
+                continue                              # the rules summary stays
+            s["key"] = key
+            made["ai_retried"] += 1
             ups.append({"id": r["id"], "jd_summary": s})
             r["jd_summary"] = s
         if ups:

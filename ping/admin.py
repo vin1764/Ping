@@ -15,6 +15,10 @@
   relevance-evals  score "For you" per fixture persona (evals/relevance) and commit its report
   demo-refeed      rebuild the demo's feed with the current code (digests, "For you"), from the same snapshot:
                    example targets on the demo profile, Gemini marks the demo roles, loads and commits it
+  jd-report        job descriptions on your real roles: how many have a usable JD before (the ERP's own text
+                   field) and now (inline, JD file, public link, details), by source; the roles that had none; JPMC
+  demo-jd          copy the JD fields (text, source, link, summary) of your real roles onto the demo's roles,
+                   scrubbed and checked like the rest of the demo; saves dashboard/demo-data.json and loads it
   demo-clock       set the demo's "now" (the demo profile's updated_at) to the snapshot time in
                    dashboard/demo-data.json, without rebuilding the demo
   cleanup-demo     delete one-click demo sessions (anonymous users) older than 7 days and their chat messages
@@ -179,6 +183,75 @@ def demo_refeed(secrets) -> int:
     left_db = final_check(live)
     say("demo rows read back: " + ("clean" if not left_db else "NOT CLEAN: " + "; ".join(left_db)))
     return 0 if not left_db else 1
+
+
+JD_FIELDS = ("jd_text", "jd_source", "jd_url", "jd_note", "jd_key", "jd_summary")
+
+
+def jd_report(secrets) -> int:
+    from .jd import usable
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    roles = store.select("roles", REAL)
+    before = [r for r in roles if usable(r.get("job_description") or "")]
+    now = [r for r in roles if usable(r.get("jd_text") or "")]
+    src = {}
+    for r in roles:
+        src[r.get("jd_source") or "not looked up yet"] = src.get(r.get("jd_source") or "not looked up yet", 0) + 1
+    say(f"roles: {len(roles)}")
+    say(f"usable JD before (the ERP's own JD field, >= 200 characters of real text): {len(before)} of {len(roles)}")
+    say(f"usable JD now (inline, JD file, public link or details): {len(now)} of {len(roles)}")
+    say("by source: " + ", ".join(f"{k} {v}" for k, v in sorted(src.items(), key=lambda kv: -kv[1])))
+    summ = [r for r in roles if r.get("jd_summary")]
+    say(f"summaries: {len(summ)} ({sum((r['jd_summary'] or {}).get('model') == 'rules' for r in summ)} by rules)")
+    missing = [r for r in roles if (r.get("relevance") or {}).get("jd_missing")]
+    say(f"\nroles marked 'JD missing' by the last classification ({len(missing)}), and what was found:")
+    for r in sorted(missing, key=lambda r: r["company"]):
+        how = r.get("jd_source") or "not looked up yet"
+        extra = (f"{len(r.get('jd_text') or '')} chars" if r.get("jd_text") else
+                 (r.get("jd_url") or r.get("jd_note") or ""))
+        say(f"  {r['company'][:28]:28} | {(r.get('designation') or '')[:34]:34} | {how}: {str(extra)[:90]}")
+    say("\nJPMC:")
+    for r in roles:
+        if re.search(r"(?i)\bj\.?\s*p\.?\s*morgan|jpmc", r["company"]):
+            s = r.get("jd_summary") or {}
+            say(f"  {r['company']} | {r.get('designation')} | source {r.get('jd_source')} | "
+                f"{len(r.get('jd_text') or '')} chars | marked jd_missing={bool((r.get('relevance') or {}).get('jd_missing'))}")
+            say("  summary: " + json.dumps({k: v for k, v in s.items() if k != "key"}, ensure_ascii=False))
+    return 0
+
+
+def demo_jd(secrets) -> int:
+    from .demo_from_real import Scrubber
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    real = {r["id"]: r for r in store.select("roles", REAL)}
+    real_name = (store.select("profile", {"id": "eq.1"}) or [{}])[0].get("name")
+    scrub = Scrubber(secrets.erp_user_id, real_name, secrets.mail_address)
+    out = ROOT / "dashboard" / "demo-data.json"
+    data = json.loads(out.read_text(encoding="utf-8"))
+    copied, dropped = {}, 0
+    for r in data["roles"]:
+        src = real.get(str(r["id"]).replace("sample:", ""))
+        if not src or not src.get("jd_source"):
+            continue
+        fields = scrub.walk({k: src.get(k) for k in JD_FIELDS})
+        if final_check(fields):
+            # something in this JD fails the demo's check (a phone number, an email): the demo gets no text for it
+            fields = {**{k: None for k in JD_FIELDS}, "jd_source": "none", "jd_note": "not in the demo"}
+            dropped += 1
+        r.update(fields)
+        copied[fields["jd_source"]] = copied.get(fields["jd_source"], 0) + 1
+    problems = final_check(data)
+    if problems:
+        say("NOT written, the check found: " + "; ".join(problems))
+        return 1
+    out.write_text(json.dumps(data, default=str, ensure_ascii=False), encoding="utf-8")
+    counts = load_to_db(store, data)
+    say(f"JD fields copied onto {sum(copied.values())} demo roles: {copied}; {dropped} left out by the check; "
+        f"loaded {counts}")
+    live = {t: store.select(t, {"is_sample": "is.true"}) for t in ("roles", "items")}
+    left = final_check(live)
+    say("demo rows read back: " + ("clean" if not left else "NOT CLEAN: " + "; ".join(left)))
+    return 0 if not left else 1
 
 
 def gemini_check(secrets) -> int:
@@ -602,7 +675,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

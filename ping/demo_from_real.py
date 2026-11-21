@@ -94,6 +94,26 @@ def deny_hits(text: str, hashes=DENY_HASHES) -> list[tuple[int, int]]:
     return out
 
 
+# Words the owner asked to keep out of everything Ping publishes, stored hex-encoded so they don't appear in
+# the code either. Replaced with a word of the same meaning, keeping the case of the first letter.
+BANNED_WORDS = {bytes.fromhex("696e7374696e6374").decode(): ("intuition", "intuit")}
+
+
+def _replace_banned(s: str) -> str:
+    for word, (noun, stem) in BANNED_WORDS.items():
+        def sub(m, noun=noun, stem=stem):
+            tail = m.group(1)
+            out = stem + tail if tail.startswith(("iv", "ual")) else noun + tail
+            out = out.replace("intuitual", "intuitive")
+            return out[0].upper() + out[1:] if m.group(0)[0].isupper() else out
+        s = re.sub(rf"(?i)\b{word}(\w*)", sub, s)
+    return s
+
+
+def _banned_left(text: str) -> int:
+    return sum(len(re.findall(rf"(?i){w}", text)) for w in BANNED_WORDS)
+
+
 def _ten_digit_numbers(text: str) -> list[str]:
     return [m.group(0) for m in TEN_DIGITS_RE.finditer(text) if not DATEISH.search(m.group(0))
             and not DATEISH.search(text[max(0, m.start() - 6):m.end() + 6])]
@@ -111,8 +131,8 @@ class Scrubber:
         if not s:
             return s
         parts = URL_RE.split(s)
-        return "".join(("[meeting link removed]" if MEETING_URL.search(p) else p) if i % 2 else self._plain(p)
-                       for i, p in enumerate(parts))
+        return _replace_banned("".join(("[meeting link removed]" if MEETING_URL.search(p) else p) if i % 2
+                                       else self._plain(p) for i, p in enumerate(parts)))
 
     def _plain(self, s: str) -> str:
         me = "\u0000ME\u0000"
@@ -303,6 +323,8 @@ def final_check(data) -> list[str]:
     emails = {e for e in EMAIL_RE.findall(text) if not e.lower().endswith("example.com")}
     if emails:
         problems.append(f"{len(emails)} email addresses left")
+    if _banned_left(text):
+        problems.append(f"{_banned_left(text)} words from the banned list left")
     if MEETING_URL.search(text):
         problems.append("a meeting link is left")
     if re.search(r"(?i)pass ?code\s*[:\-]\s*(?!\[removed\])\S", text):

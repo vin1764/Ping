@@ -91,3 +91,11 @@ def test_denylist_matches_hashed_names_in_any_case():
     mine = {hashlib.sha256(n.encode()).hexdigest() for n in ("testpoc", "dummy person")}
     text = "Ask TESTPOC or Dummy Person, not Dummy  Personnel"
     assert [text[a:b] for a, b in deny_hits(text, mine)] == ["TESTPOC", "Dummy Person"]
+
+
+def test_banned_word_is_replaced_and_fails_the_build():
+    from ping.demo_from_real import final_check
+    w = bytes.fromhex("696e7374696e6374").decode()  # the word itself stays out of the repo
+    out = scrub(f"gut {w}, {w.capitalize()}s and {w}ive calls")
+    assert w not in out.lower() and out == "gut intuition, Intuitions and intuitive calls"
+    assert final_check({"x": f"an automation {w}"}) and not final_check({"x": out})

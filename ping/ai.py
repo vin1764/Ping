@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 
 import requests
@@ -41,6 +42,7 @@ Use [] when there is nothing. Do not invent dates."""
 
 
 MAX_CALLS = 20
+BUDGET_SECONDS = 300  # all AI calls in one run together
 stats = {"calls": 0, "answers": 0, "errors": 0, "last_error": None, "attempts": []}
 
 
@@ -57,15 +59,16 @@ def _msg(r) -> str:
 def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> dict | None:
     if cfg.get("provider") != "openai_compatible" or not cfg.get("base_url") or not cfg.get("key"):
         return None
-    if stats["calls"] >= MAX_CALLS:
-        return None
+    if stats["calls"] >= MAX_CALLS or stats.setdefault("seconds", 0.0) > BUDGET_SECONDS:
+        return None  # the free tier can be slow; never let it hold up a run
     stats["calls"] += 1
     prompt = PROMPT.format(ref=ref.isoformat(), companies=", ".join(companies[:300]), text=text[:6000])
     data = None
+    started = time.monotonic()
     for model in [cfg.get("model") or ""] + list(cfg.get("fallback_models", [])):
         body = {"model": model, "temperature": 0, "messages": [{"role": "user", "content": prompt}]}
         try:
-            r = requests.post(cfg["base_url"].rstrip("/") + "/chat/completions", json=body, timeout=40,
+            r = requests.post(cfg["base_url"].rstrip("/") + "/chat/completions", json=body, timeout=60,
                               headers={"Authorization": f"Bearer {cfg['key']}"})
             if r.status_code >= 400:
                 stats["last_error"] = f"{model}: HTTP {r.status_code} {_msg(r)}"
@@ -75,12 +78,17 @@ def refine_notice(text: str, ref: datetime, companies: list[str], cfg: dict) -> 
             r.raise_for_status()
             content = r.json()["choices"][0]["message"]["content"]
             m = re.search(r"\{.*\}", content, re.S)
-            data = json.loads(m.group(0)) if m else None
+            if not m:
+                raise ValueError(f"no JSON in the reply: {content[:80]!r}")
+            data = json.loads(m.group(0))
             break
-        except Exception as e:
+        except Exception as e:  # timeout or a reply that isn't JSON: try the next model
             stats["last_error"] = f"{model}: {type(e).__name__}: {str(e)[:160]}"
+            stats["attempts"] = (stats["attempts"] + [stats["last_error"]])[-10:]
             data = None
-            break
+            if time.monotonic() - started > BUDGET_SECONDS:
+                break
+    stats["seconds"] = stats.get("seconds", 0.0) + time.monotonic() - started
     if data is None:
         stats["errors"] += 1
         return None

@@ -677,7 +677,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if ok else 2
     if args.mode == "probe":
         from .probe import probe
-        return probe(secrets)
+        return probe(secrets, store if ok else None)
     if not ok and trigger == "schedule":
         # Without a database every hourly run would be a full first run (~7 min of free
         # GitHub minutes and an OTP mail each). Remind instead; manual runs still go ahead.

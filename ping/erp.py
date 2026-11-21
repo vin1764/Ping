@@ -192,8 +192,9 @@ class ErpClient:
         m = re.search(r"elements\['ssoToken'\]\.value\s*=\s*'([^']+)'", r.text)
         if not m:
             raise LoginError("could not open the CDC section (menu page changed?)", "page_changed")
-        self.gate.post("/TrainingPlacementSSO/TPStudent.jsp",
-                       {"ssoToken": m.group(1), "module_id": "26", "menu_id": "11"})
+        page = self.gate.post("/TrainingPlacementSSO/TPStudent.jsp",
+                              {"ssoToken": m.group(1), "module_id": "26", "menu_id": "11"})
+        self.placement_html = page.text      # the companies page's own scripts say where its links lead
         self.tp_open = True
 
     def _grid(self, qid: str) -> str:

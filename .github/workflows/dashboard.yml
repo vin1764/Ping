@@ -60,12 +60,15 @@ jobs:
           api="https://api.github.com/repos/${PUBLIC_REPO}/pages"
           h=(-H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
           code=$(curl -s -o pages.json -w "%{http_code}" "${h[@]}" "$api")
+          how="Turn it on once: https://github.com/${PUBLIC_REPO}/settings/pages > Source: Deploy from a branch > Branch: main, / (root) > Save. (Doing it through the API needs Administration: write on the token, which this deploy doesn't ask for.)"
           if [ "$code" = "404" ]; then
             code=$(curl -s -o out.json -w "%{http_code}" -X POST "${h[@]}" "$api" -d '{"source":{"branch":"main","path":"/"}}')
-            echo "Pages switched on: HTTP $code"; [ "$code" = "201" ] || { cat out.json; exit 1; }
+            if [ "$code" = "201" ]; then echo "Pages switched on (main, root)"
+            else echo "::error::GitHub Pages is off on ${PUBLIC_REPO} and the token can't switch it on (HTTP $code). $how"; exit 1; fi
+          elif python3 -c "import json,sys; s=json.load(open('pages.json')).get('source') or {}; sys.exit(0 if (s.get('branch'), s.get('path')) == ('main', '/') else 1)"; then
+            echo "Pages is on, serving main / (root)"
           else
-            code=$(curl -s -o out.json -w "%{http_code}" -X PUT "${h[@]}" "$api" -d '{"source":{"branch":"main","path":"/"}}')
-            echo "Pages source set to main /: HTTP $code"; [ "$code" = "204" ] || { cat out.json; exit 1; }
+            echo "::error::Pages on ${PUBLIC_REPO} serves $(python3 -c "import json; print(json.load(open('pages.json')).get('source'))"), not main / (root). $how"; exit 1
           fi
           short=${GITHUB_SHA::7}
           for i in $(seq 1 40); do

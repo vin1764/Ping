@@ -154,3 +154,24 @@ def test_eligibility_note_counts_only_roles_without_criteria():
     items2 = run(roles[:2], DUE - timedelta(hours=20), profile={"department": None, "degree": None})
     d2 = [v for v in visible(items2).values() if v["category"] == "digest"][0]
     assert d2["details"]["note"] == "Add your degree and department on the Profile page to check eligibility."
+
+
+def test_messages_saved_under_the_old_key_format_are_kept_not_repeated():
+    """The 13:41 run of 21 Nov saved digests as digest:application:202611212000; later runs use 20261121T2000."""
+    roles = [role(1, "Alpha"), role(2, "Beta")]
+    prev, _ = hourly(roles, DUE - timedelta(hours=23), DUE - timedelta(hours=22))
+    old = {}
+    for k, v in prev.items():
+        ok = k.replace("20261121T2000", "202611212000")
+        d = dict(v.get("details") or {})
+        if d.get("batch"):
+            d["batch"] = d["batch"].replace("T", "")
+        old[ok] = {**v, "id": ok, "details": d}
+    final, sent = hourly(roles, DUE - timedelta(hours=21), DUE - timedelta(hours=1), previous=old)
+    # no crash; the digest lives on under the new key with its original time and text (not sent again); the old
+    # row is hidden; then exactly one reminder
+    new, oldrow = final["digest:application:20261121T2000"], old["digest:application:202611212000"]
+    assert (new["first_seen"], new["title"]) == (oldrow["first_seen"], oldrow["title"]) and new["level"] != "hidden"
+    assert final["digest:application:202611212000"]["level"] == "hidden"
+    assert [i for ids in (ids for _, ids in sent) for i in ids if i != "digest:application:20261121T2000"] == \
+        ["digest:application:20261121T2000:reminder"]

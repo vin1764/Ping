@@ -21,6 +21,7 @@ Every list message ends with its source: the ERP check time and the notices the 
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime, timedelta
 
 from .config import IST
@@ -142,6 +143,20 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
     """
     reminder_h = float(profile.get("reminder_hours") or REMINDER_HOURS)
     list_others = profile.get("list_other_roles", True) is not False
+    # messages written before the keys got their "T" (202611212000 -> 20261121T2000) count as the same messages;
+    # their old rows are hidden below so nothing shows twice
+    renamed = {}
+    fixed_prev = {}
+    for pid, pit in previous.items():
+        nid = _new_key(pid)
+        if nid != pid and pit.get("category") in OWN:
+            renamed[pid] = pit
+            d = dict(pit.get("details") or {})
+            if d.get("batch"):
+                d["batch"] = _new_key(d["batch"])
+            pit = {**pit, "id": nid, "details": d}
+        fixed_prev[_new_key(pid) if pid in renamed else pid] = pit
+    previous = fixed_prev
     out = [it for it in items]
     made: dict[str, dict] = {}
     by_id = {it["id"]: it for it in out}
@@ -410,10 +425,18 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
     for pid, p in previous.items():
         if p.get("category") in OWN and pid not in made:
             made[pid] = dict(p)
+    # the rows under the old keys: hidden (their messages live on under the new keys)
+    for pid, p in renamed.items():
+        by_id[pid] = {**p, "level": "hidden", "details": {**(p.get("details") or {}), "hidden_because": "renamed"}}
     for it in made.values():
         _expire(it, now)
         by_id[it["id"]] = it
     return list(by_id.values())
+
+
+def _new_key(s: str) -> str:
+    """202611212000 -> 20261121T2000 and 2026112100 -> 20261121T00 inside an id or a batch key."""
+    return re.sub(r"(?<![0-9T])(\d{8})(\d{2}|\d{4})(?![0-9])", r"\1T\2", s)
 
 
 def _known_members(previous: dict[str, dict], kind: str) -> dict[str, set[str]]:

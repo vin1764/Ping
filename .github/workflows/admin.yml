@@ -32,6 +32,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Hide the typed password from the logs
+        # GitHub prints a step's environment before the step runs, so mask it in an earlier step,
+        # reading it from the event file (never echoed)
+        run: |
+          pw=$(jq -r '.inputs.reviewer_password // ""' "$GITHUB_EVENT_PATH")
+          [ -n "$pw" ] && echo "::add-mask::$pw" || true
       - run: pip install -q -r requirements.txt
       - name: Install a browser (ask-ping-page only)
         if: inputs.task == 'ask-ping-page'
@@ -49,7 +55,6 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          [ -n "$REVIEWER_PASSWORD" ] && echo "::add-mask::$REVIEWER_PASSWORD"
           python -m ping.admin "$TASK"
       - name: Save the demo data
         if: inputs.task == 'build-demo'

@@ -147,7 +147,7 @@ API = "https://api.supabase.com"
 def _logs(ref: str, token: str, sql: str, hours: int = 24) -> list:
     from datetime import timedelta, timezone
     end = datetime.now(timezone.utc)
-    r = requests.get(f"{API}/v1/projects/{ref}/analytics/endpoints/logs.all", timeout=60,
+    r = requests.get(f"{API}/v1/projects/{ref}/analytics/endpoints/logs", timeout=60,
                      headers={"Authorization": f"Bearer {token}"},
                      params={"sql": sql, "iso_timestamp_start": (end - timedelta(hours=hours)).isoformat(),
                              "iso_timestamp_end": end.isoformat()})

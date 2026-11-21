@@ -119,6 +119,8 @@ Actions > **Admin** > Run workflow, pick a task:
 | `create-reviewer` | creates (or resets) the read-only demo login with the email and password you type, then signs in as it to prove it sees only demo rows and can't change them |
 | `build-demo` | builds the anonymised demo from your real data, checks it for your roll number, email, name and any other roll or phone number (writes nothing if it finds one), loads it for the reviewer and commits `dashboard/demo-data.json` |
 | `gemini-check` | one test call to Gemini, then retries the notices the rules couldn't read, printing every model's answer |
+| `functions-check` | the Ask Ping / Check now functions on Supabase: deployed version, which secrets they have (names only), every request and crash from the last 23 hours, and two test questions as the reviewer |
+| `ask-ping-page` | opens the dashboard in a real browser, signs in as the reviewer, types "slice ctc breakdown" and "what's due tomorrow" into the chat and prints the replies |
 
 ---
 
@@ -206,9 +208,12 @@ summary reports its own counts.
   which company a notice means; tap to answer). Tap a message to see the details (deadline, venue, your row from the
   PDF, eligibility, contacts) and links to the notice, the PDF and any form.
 - Type at the bottom: "what's due tomorrow", "did I apply to Accenture",
-  "which room for the Eternal test", "what's the CTC at Airbus". Gemini answers
-  on the server (the key never reaches the browser); if that's not reachable,
-  simple rules answer instead and the reply says so.
+  "which room for the Eternal test", "slice ctc breakdown". Gemini answers on
+  the server (the key is a Supabase function secret and never reaches the
+  browser), from your feed, your roles and, for companies you name, the pay and
+  bond details from the ERP's "more details". If Gemini is slow or busy, simple
+  rules answer instead and the reply says so. Supabase stops a function after
+  150 s; Ask Ping gives Gemini at most 100 s (45 s per model).
 - The thread is saved (the `chat_messages` table), so you see the whole
   history when you come back. New messages since your last visit get an
   "unread" marker (on a first visit, only the last day counts as unread).

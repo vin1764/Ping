@@ -46,9 +46,12 @@ create role service_role nologin noinherit bypassrls;
 grant usage on schema public to anon, authenticated, service_role;
 create schema auth;
 create table auth.users (id uuid primary key default gen_random_uuid(), email text unique,
-  pw text, email_confirmed_at timestamptz, created_at timestamptz default now(), last_sign_in_at timestamptz);
+  pw text, email_confirmed_at timestamptz, created_at timestamptz default now(), last_sign_in_at timestamptz,
+  is_anonymous boolean not null default false);
 create function auth.jwt() returns jsonb language sql stable as
   $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
+create function auth.uid() returns uuid language sql stable as
+  $$ select nullif(auth.jwt() ->> 'sub', '')::uuid $$;
 grant usage on schema auth to anon, authenticated, service_role;
 """
 
@@ -59,6 +62,7 @@ def available() -> bool:
 
 class FakeSupabase:
     def __init__(self):
+        self.anonymous_enabled = True
         self.dir = tempfile.mkdtemp(prefix="fake-supabase-")
         os.chmod(self.dir, 0o777)
         self.data = os.path.join(self.dir, "data")
@@ -102,8 +106,8 @@ class FakeSupabase:
                 return cur.fetchall() if cur.description else []
 
 
-def _token_for(email: str) -> str:
-    claims = {"email": email, "role": "authenticated"}
+def _token_for(email: str, uid: str = "", anonymous: bool = False) -> str:
+    claims = {"email": email, "role": "authenticated", "sub": uid, "is_anonymous": anonymous}
     return "fakejwt." + base64.urlsafe_b64encode(json.dumps(claims).encode()).decode()
 
 
@@ -229,8 +233,19 @@ def _handler(fake: FakeSupabase):
                     ok = row and row[0] == hashlib.sha256(b["password"].encode()).hexdigest() and row[1]
                     if not ok:
                         return self._send(400, {"error": "invalid_grant", "error_description": "Invalid login credentials"})
-                    c.execute("update auth.users set last_sign_in_at=now() where email=%s", (b["email"].lower(),))
-                return self._send(200, {"access_token": _token_for(b["email"].lower()), "token_type": "bearer"})
+                    uid = c.execute("update auth.users set last_sign_in_at=now() where email=%s returning id",
+                                    (b["email"].lower(),)).fetchone()[0]
+                return self._send(200, {"access_token": _token_for(b["email"].lower(), str(uid)), "token_type": "bearer"})
+            if path == "/auth/v1/signup" and method == "POST" and not (self._body() or {}).get("email"):
+                # supabase-js signInAnonymously(): a new user with no email, is_anonymous = true
+                if role != "anon":
+                    return self._send(401, {"message": "Invalid API key"})
+                if not fake.anonymous_enabled:
+                    return self._send(422, {"code": "anonymous_provider_disabled", "msg": "Anonymous sign-ins are disabled"})
+                with fake.conn() as c:
+                    uid = c.execute("insert into auth.users (is_anonymous) values (true) returning id").fetchone()[0]
+                return self._send(200, {"access_token": _token_for("", str(uid), True), "token_type": "bearer",
+                                        "user": {"id": str(uid), "is_anonymous": True}})
             self._send(404, {"message": "not found"})
 
         # ------------------------------------------------------ data API (tiny PostgREST)
@@ -241,7 +256,9 @@ def _handler(fake: FakeSupabase):
             name = path[len("/rest/v1/"):]
             if name.startswith("rpc/"):
                 fn = re.sub(r"[^a-z_]", "", name[4:])
-                rows = fake.as_role(role, claims, f"select to_jsonb({fn}())")
+                args = self._body() if method == "POST" else None
+                named = ", ".join(f"{re.sub(r'[^a-z_]', '', k)} => %s" for k in (args or {}))
+                rows = fake.as_role(role, claims, f"select to_jsonb({fn}({named}))", list((args or {}).values()))
                 return self._send(200, rows[0][0])
             table = re.sub(r"[^a-z_]", "", name)
             exists = fake.as_role("postgres", {}, "select to_regclass(%s) is not null", (f"public.{table}",))[0][0]

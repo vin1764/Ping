@@ -124,12 +124,19 @@ def test_wrong_access_token_stops_with_a_clear_message(project):
     assert "STOPPED" in out.stdout and "token" in out.stdout.lower()
 
 
-def test_reviewer_sees_only_the_anonymised_demo_and_cannot_change_it(project):
+def _anonymous(fake):
+    """What the dashboard's "View demo" button does: supabase.auth.signInAnonymously()."""
+    r = requests.post(f"{fake.url}/auth/v1/signup", headers={"apikey": fs.PUBLISHABLE}, json={})
+    assert r.status_code == 200, r.text
+    tok = r.json()["access_token"]
+    return {"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {tok}"}, r.json()["user"]["id"]
+
+
+def test_demo_session_reads_only_demo_rows_and_writes_only_its_own_chat(project):
     fake, env, _ = project
     assert setup(env).returncode == 0
     from fake_erp import FakeErp
     import ping.erp as erp_mod
-    from ping import admin
     from ping.config import IST, Secrets, SecurityAnswer
     from ping.demo_from_real import build_from_store, load_to_db, verify
     from ping.gate import Gate
@@ -142,25 +149,56 @@ def test_reviewer_sees_only_the_anonymised_demo_and_cannot_change_it(project):
                       "student@example.com", "x", fake.url, fs.SECRET, {})
     assert Runner(secrets, store, store_ok=True, gate=Gate(erp), mailbox=erp.mail,
                   now=datetime(2026, 11, 21, 9, 0, tzinfo=IST), pause=0).run()["status"] == "ok"
-    real_items = len(store.select("items"))
-    # build the demo from the real rows, check it, load it as demo rows
     data = build_from_store(store, "22AB99999", "student@example.com")
     assert verify(data, "22AB99999", "student@example.com", None) == []
     load_to_db(store, data)
-    # create the reviewer exactly like Actions > Admin > create-reviewer
-    os.environ.update({"REVIEWER_EMAIL": "reviewer@ping-demo.example", "REVIEWER_PASSWORD": "review-me-123",
-                       "SUPABASE_PUBLISHABLE_KEY": fs.PUBLISHABLE})
-    assert admin.create_reviewer(secrets) == 0
-    rev = sign_in(fake, "reviewer@ping-demo.example", "review-me-123").json()["access_token"]
+    real = {t: len(store.select(t, {"is_sample": "not.is.true"})) for t in ("items", "roles", "notices", "runs")}
+    assert all(real.values()), real
+
+    demo, demo_uid = _anonymous(fake)
+    get = lambda h, t, **q: requests.get(f"{fake.url}/rest/v1/{t}", headers=h, params={"select": "*", **q})
+    # reads: demo rows only in the five demo tables, nothing at all elsewhere
+    for t in ("profile", "roles", "notices", "pdf_checks", "items"):
+        rows = get(demo, t).json()
+        assert rows and all(r["is_sample"] for r in rows), t
+    assert [r["id"] for r in get(demo, "profile").json()] == [2]
+    for t in ("runs", "state", "contacts", "emails", "allowed_users", "corrections", "demo_questions"):
+        r = get(demo, t)
+        assert r.status_code == 403 or r.json() == [], (t, r.status_code, r.text[:100])
+    assert requests.post(f"{fake.url}/rest/v1/rpc/is_ping_owner", headers=demo, json={}).json() is False
+
+    # writes: nothing except its own chat
+    some_item = store.select("items", {"is_sample": "is.true"})[0]
+    requests.patch(f"{fake.url}/rest/v1/items", headers=demo, params={"id": f"eq.{some_item['id']}"}, json={"done": True})
+    requests.patch(f"{fake.url}/rest/v1/profile", headers=demo, params={"id": "eq.2"}, json={"cgpa": 9.9})
+    requests.delete(f"{fake.url}/rest/v1/items", headers=demo, params={"id": f"eq.{some_item['id']}"})
+    assert store.select("items", {"id": f"eq.{some_item['id']}"})[0]["done"] is not True
+    assert store.select("profile", {"id": "eq.2"})[0]["cgpa"] != 9.9
+    for t, row in (("items", {"id": "x", "title": "x", "is_sample": True}), ("corrections", {"notice_id": "x"}),
+                   ("runs", {"id": "x", "is_sample": True}), ("allowed_users", {"email": "me@x.in"})):
+        assert requests.post(f"{fake.url}/rest/v1/{t}", headers=demo, json=[row]).status_code == 403, t
+    chat = lambda h, row: requests.post(f"{fake.url}/rest/v1/chat_messages", headers=h, json=[row]).status_code
+    assert chat(demo, {"role": "me", "text": "slice ctc?", "is_sample": True}) == 201
+    assert chat(demo, {"role": "me", "text": "not a demo row"}) == 403            # demo chat must be a demo row
+    other, other_uid = _anonymous(fake)
+    assert chat(demo, {"role": "me", "text": "x", "is_sample": True, "owner_id": other_uid}) == 403  # not someone else's
+    assert [m["text"] for m in get(demo, "chat_messages").json()] == ["slice ctc?"]
+    assert get(other, "chat_messages").json() == []                                # sessions don't see each other
     me = sign_in(fake, "student@example.com", "correct horse battery").json()["access_token"]
-    see = lambda tok: requests.get(f"{fake.url}/rest/v1/items", params={"select": "id,is_sample"},
-                                   headers={"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {tok}"}).json()
-    assert see(rev) and all(i["is_sample"] for i in see(rev))
-    assert len(see(me)) == real_items and not any(i["is_sample"] for i in see(me))
-    hdr = {"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {rev}"}
-    assert requests.post(f"{fake.url}/rest/v1/chat_messages", headers=hdr, json=[{"role": "me", "text": "x"}]).status_code == 403
-    # a later Ping run never mixes the demo rows into the real feed
-    erp2 = FakeErp(datetime(2026, 11, 21, 10, 0, tzinfo=IST))
-    Runner(secrets, store, store_ok=True, gate=Gate(erp2), mailbox=erp2.mail,
-           now=datetime(2026, 11, 21, 10, 0, tzinfo=IST), pause=0).run()
-    assert not any(i["id"].startswith("sample:") and not i.get("is_sample") for i in store.select("items"))
+    owner = {"apikey": fs.PUBLISHABLE, "Authorization": f"Bearer {me}"}
+    assert not any(m["text"] == "slice ctc?" for m in get(owner, "chat_messages").json())  # nor does the owner
+    assert len(get(owner, "items").json()) == real["items"]                       # owner: real rows, as before
+
+    # Ask Ping's demo limit: 15 per session per hour, counted without the question text
+    take = lambda h: requests.post(f"{fake.url}/rest/v1/rpc/demo_take_question", headers=h, json={}).json()
+    assert all(take(demo)["ok"] for _ in range(15)) and take(demo) == {"ok": False, "why": "session", "session": 15, "all": 15}
+    assert take(other)["ok"] and take(owner) == {"ok": True}
+
+    # daily cleanup: only the service key may run it; it removes week-old anonymous users and their chat
+    assert requests.post(f"{fake.url}/rest/v1/rpc/cleanup_demo_sessions", headers=demo, json={"days": 7}).status_code == 403
+    with fake.conn() as c:
+        c.execute("update auth.users set created_at = now() - interval '8 days' where id = %s", (demo_uid,))
+    done = requests.post(f"{fake.url}/rest/v1/rpc/cleanup_demo_sessions", headers={"apikey": fs.SECRET}, json={"days": 7}).json()
+    assert done["anonymous_users"] == 1 and done["chat_messages"] == 1
+    with fake.conn() as c:
+        assert c.execute("select count(*) from auth.users where is_anonymous").fetchone()[0] == 1   # the newer one

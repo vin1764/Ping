@@ -16,6 +16,8 @@ const PER_MODEL_MS = 45_000;
 const FMT = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit",
   month: "short", hour: "2-digit", minute: "2-digit" });
 const ist = (iso?: string | number | null) => (iso ? FMT.format(new Date(iso)) : "");
+// "now" with the year and the date of tomorrow spelled out, so the model can't guess a wrong year
+const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 // Pay and bond lines from a role's "more details" (CTC breakup, take home, bonuses, ESOPs, bond...)
 const PAY = /ctc|salary|gross|take ?home|bonus|bond|stipend|esop|stock|perk|benefit|variable|incentive|retention|relocation|joining|allowance|compensation|cost to company/i;
@@ -89,7 +91,8 @@ Deno.serve(async (req) => {
 Be short and concrete: dates in IST, money in rupees as written (e.g. 22,00,000 or 22 LPA). For pay questions, list
 every component the data gives (fixed / take-home, bonuses, ESOPs, bond) per role.
 If the answer isn't in the data, say so in one sentence and mention what the data does show.
-Now: ${ist(asOf.getTime())} IST.
+Now: ${DAY.format(asOf)}, ${ist(asOf.getTime()).split(", ").pop()} IST. Today is ${DAY.format(asOf)}; tomorrow is ${DAY.format(new Date(asOf.getTime() + 86_400_000))}.
+All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric" }).format(asOf)} unless they say otherwise.
 
 Profile: ${JSON.stringify(profile.data?.[0] || {})}
 

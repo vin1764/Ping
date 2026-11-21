@@ -6,7 +6,9 @@
 // within 150 s. So dates are formatted with one shared formatter (making a new one per date was the
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
 import { caller, cors, json } from "../_shared/owner.ts";
-import { asksToAct, glance, stripRefusal, todayNote } from "./wording.ts";
+import { asksToAct, glance, roleLists, stripRefusal, todayNote } from "./wording.ts";
+import { markRoles, service } from "./marks.ts";
+import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 
 // Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
 // free tier is sometimes overloaded (503) or slow, so try a few names in turn.
@@ -70,6 +72,28 @@ Deno.serve(async (req) => {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) return json({ error: "GEMINI_API_KEY is not set for this function" }, 500);
   const body = await req.json().catch(() => ({}));
+
+  // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
+  // own changes on top (session_prefs: never the owner's profile, never another session's).
+  const uid = role === "demo" ? (await sb.auth.getUser()).data.user?.id : null;
+  const base = await sb.from("profile").select("targets,reminder_hours,list_other_roles").limit(1);
+  let prefs: Prefs = { targets: base.data?.[0]?.targets ?? null, reminder_hours: base.data?.[0]?.reminder_hours ?? null,
+                       list_other_roles: base.data?.[0]?.list_other_roles ?? null };
+  if (role === "demo") {
+    const own = await sb.from("session_prefs").select("targets,reminder_hours,list_other_roles").limit(1);
+    const o = own.data?.[0];
+    if (o) prefs = { targets: o.targets ?? null, reminder_hours: o.reminder_hours ?? prefs.reminder_hours,
+                     list_other_roles: o.list_other_roles ?? prefs.list_other_roles };
+  }
+  const classifiable = async () => (await sb.from("roles")
+    .select("id,company,designation,job_description,more_details,eligible").limit(400)).data?.filter((r: any) => r.eligible !== false) || [];
+
+  // The page asks for the "For you" marks of the caller's current targets (cache only, no Gemini) to split its lists.
+  if (body?.marks === true) {
+    const roles = prefs.targets ? await classifiable() : [];
+    const { marks } = prefs.targets ? await markRoles(roles, prefs.targets, [], "", 0) : { marks: new Map() };
+    return json({ prefs, marks: Object.fromEntries(marks) });
+  }
   const question = String(body?.question || "");
   if (!question || question.length > 500) return json({ error: "ask a question (max 500 characters)" }, 400);
   // The demo is a snapshot; "tomorrow" means the day after the snapshot, like on the page.
@@ -90,6 +114,58 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ event: "demo_question", session: take.session, all: take.all }));
     }
   }
+
+  // Preferences said in the chat: saved, the roles re-marked, then any question in the same message is answered.
+  const parsed = parsePrefs(question, prefs);
+  let saved = "";
+  if (parsed.kind === "show") {
+    const line = `Your preferences${role === "demo" ? " (this demo session only)" : ""}: ${describe(prefs)}.`;
+    if (!parsed.rest) return json({ answer: line, model: "rules", prefs });
+    saved = line;
+  } else if (parsed.kind !== "none") {
+    const next: Prefs = { ...prefs, ...parsed.changes };
+    let err = "";
+    if (role === "owner") {
+      const up = await sb.from("profile").update(parsed.changes).eq("id", 1).select("id");
+      if (up.error || !up.data?.length) {
+        // a brand-new setup may have no profile row yet: the first message can be the preferences
+        const svc = service();
+        const ins = svc ? await svc.from("profile").upsert({ id: 1, ...parsed.changes }) : { error: { message: "no service key" } };
+        if (ins.error) err = up.error?.message || ins.error.message;
+      }
+    } else {
+      // counts against the demo's limit like a question (it may cost a Gemini call)
+      await sb.rpc("demo_take_question");
+      const up = parsed.kind === "reset"
+        ? await sb.from("session_prefs").delete().eq("owner_id", uid)
+        : await sb.from("session_prefs").upsert({ owner_id: uid, ...next, updated_at: new Date().toISOString() });
+      if (up.error) err = up.error.message;
+    }
+    if (err) {
+      console.error(JSON.stringify({ event: "prefs_save_failed", role, error: err }));
+      return json({ error: `couldn't save that preference (${err})` }, 500);
+    }
+    if (role === "demo" && parsed.kind === "reset") {
+      const b: any = base.data?.[0] || {};
+      Object.assign(next, { targets: b.targets ?? null, reminder_hours: b.reminder_hours ?? null, list_other_roles: b.list_other_roles ?? null });
+    }
+    saved = `Saved${role === "demo" ? " for this demo session" : ""}: ${describe(next, parsed.changes)}.`;
+    if ("targets" in parsed.changes && next.targets) {
+      const roles = await classifiable();
+      const m = await markRoles(roles, next.targets, MODELS, key, 60_000);
+      const yes = [...m.marks.values()].filter((x) => x.relevant).length;
+      saved += m.marks.size === roles.length
+        ? ` ${yes} of ${roles.length} roles are now for you.`
+        : " The roles will be re-marked at the next check (Gemini didn't answer in time).";
+      console.log(JSON.stringify({ event: "prefs_saved", role, fields: Object.keys(parsed.changes), cached: m.cached,
+                                   classified: m.classified, error: m.error }));
+    } else {
+      console.log(JSON.stringify({ event: "prefs_saved", role, fields: Object.keys(parsed.changes) }));
+    }
+    prefs = next;
+    if (!parsed.rest) return json({ answer: saved, model: "rules", prefs, prefs_changed: true });
+  }
+  const ask = parsed.kind === "none" ? question : parsed.rest;
 
   // The thread so far, from the database (never from the page): this login's last messages, oldest first.
   // The owner reads its own thread; a demo session only its own messages (database rules). The page saves the
@@ -113,7 +189,7 @@ Deno.serve(async (req) => {
   const [items, roles, profile] = await Promise.all([
     sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
-    sb.from("roles").select("company,designation,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,relevance").limit(400),
+    sb.from("roles").select("id,company,designation,job_description,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff").limit(400),
     sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1),
   ]);
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
@@ -121,7 +197,7 @@ Deno.serve(async (req) => {
   }
   const companies = [...new Set((roles.data || []).map((r) => r.company as string))];
   // a follow-up that names no company ("same for analyst role?") is about the previous question's companies
-  let names = mentioned(question, companies).slice(0, 6);
+  let names = mentioned(ask, companies).slice(0, 6);
   if (!names.length && lastQuestion) names = mentioned(lastQuestion, companies).slice(0, 6);
   const since = new Date(asOf.getTime() - 21 * 86_400_000).toISOString();
   const [detail, lists, notices] = await Promise.all([
@@ -154,13 +230,14 @@ Deno.serve(async (req) => {
     `${i.details?.venue ? ` (venue ${i.details.venue})` : ""}${myRow(i.details)}`);
   // "For you" or not: the same answer the feed uses (cached on the role by the hourly run, ping/relevance.py),
   // valid only for the targets the student has now
-  const prof = (profile.data?.[0] || {}) as any;
-  const targets = String(prof.targets || "").replace(/\s+/g, " ").trim().toLowerCase();
-  const forYou = (r: any) => {
-    const rel = r.relevance;
-    if (!targets || !rel || typeof rel.relevant !== "boolean" || rel.targets !== targets) return "not classified";
-    return rel.relevant ? `yes (${rel.reason}${rel.jd_missing ? ", JD missing" : ""})` : "no";
-  };
+  const prof = { ...(profile.data?.[0] || {}), ...prefs } as any;
+  const hasTargets = !!prefs.targets;
+  const rmarks = hasTargets
+    ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0)).marks
+    : new Map();
+  // reasons stay in the feed; the chat only needs yes / no
+  const forYou = (r: any) => !hasTargets || !rmarks.has(r.id) ? "not classified" : rmarks.get(r.id)!.relevant ? "yes" : "no";
+  const blocks = roleLists((roles.data || []) as any[], rmarks, asOf, hasTargets, prefs.list_other_roles !== false);
   const roleLines = (roles.data || []).map((r) =>
     `- ${r.company} | ${r.designation} | applied: ${r.applied ? "yes" : "no"} | deadline: ${ist(r.effective_deadline)}` +
     `${todayNote(r.effective_deadline, asOf)} | eligible: ${r.eligible === true ? "yes" : r.eligible === false ? "no" : "unknown"}` +
@@ -192,7 +269,7 @@ Deno.serve(async (req) => {
     .map((r: any) => ({ ...r, for_you: forYou(r).startsWith("yes") })) as any[], asOf);
 
   // decided here, not by the model: only a request to act may get the read-only refusal
-  const act = asksToAct(question);
+  const act = asksToAct(ask);
   const prompt = `You are Ping, a placement assistant for one IIT Kharagpur student. Answer ONLY from the data below.
 Be short and concrete: dates in IST, times as HH:MM in 24-hour form (e.g. 20:00), money in rupees as written
 (e.g. 22,00,000 or 22 LPA). For pay questions, list every component the data gives (fixed / take-home, bonuses,
@@ -211,9 +288,11 @@ test today" or "Two more: ...", then add one line with the most urgent other thi
 below, with its count and time: "No other tests. 48 applications close at 20:00 today (in 1h 25m), 39 of them not
 applied." "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
-Lists of roles: when the student has said what they're looking for (Profile "targets" below), every list of roles
-is split: first "For you" (roles marked "for you: yes", each with its reason in brackets), then "Others" with one
-short line per role (company and title only)${prof.list_other_roles === false ? "; leave the others out and only say how many there are" : ""}.
+Lists of roles: "Role lists by closing time" below is ready-made. When an answer lists roles that close at one of
+those times, copy that time's block exactly: its heading (the deadline is said once, there), "For you" with
+"✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each. Don't add
+reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
+("only product ones"), drop lines but keep the format.
 Roles marked eligible: no are never listed. If eligibility is "unknown", add one line "Eligibility not verified for
 <n> of these". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
 due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't
@@ -236,7 +315,10 @@ All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asi
 Today and this week (counted from the data below):
 ${atAGlance}
 
-Profile: ${JSON.stringify(profile.data?.[0] || {})}
+Profile: ${JSON.stringify(prof)}
+
+Role lists by closing time (next 7 days):
+${blocks || "(no open deadlines)"}
 
 Feed (things for this student):
 ${feed.join("\n") || "(empty)"}
@@ -250,7 +332,7 @@ ${noticeLines.length ? `\nLatest notices for the companies in the question, newe
 Conversation so far, oldest first:
 ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
 
-Question: ${question}`;
+Question: ${ask}`;
 
   const tried: string[] = [];
   let last = 0;
@@ -280,7 +362,7 @@ Question: ${question}`;
       console.log(JSON.stringify({ event: "answered", role, model, tried, history: kept.length, act,
         refusal_removed: answer !== raw, items: items.data?.length ?? 0,
         roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0, prompt_chars: prompt.length, ms: Date.now() - t0 }));
-      return json({ answer, model });
+      return json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, ...(saved ? { prefs, prefs_changed: true } : {}) });
     } catch (e) {
       tried.push(`${model}:${(e as Error).name}:${Date.now() - t}ms`);
     }

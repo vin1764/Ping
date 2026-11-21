@@ -92,3 +92,44 @@ export function glance(events: Ev[], roles: Role[], now: Date): string {
     : "none"));
   return lines.join("\n");
 }
+
+// 4. Ready-made role lists, one per closing time, so every answer lists roles the same way: the deadline once in the
+// heading, "For you" first (not applied, then "✓ applied"), then "Others" one "Company — Role" line each.
+// No reasons (those are in the feed).
+type ListRole = { id: string; company: string; designation: string; applied: boolean | null;
+                  effective_deadline: string | null | undefined; eligible: boolean | null };
+
+export function dayWord(at: Date, now: Date): string {
+  const d = DAY.format(at), n = DAY.format(now), tm = DAY.format(new Date(now.getTime() + 86_400_000));
+  const hour = Number(HM.format(at).slice(0, 2));
+  if (d === n) return hour >= 17 ? "tonight" : "today";
+  if (d === tm) return "tomorrow";
+  return WD.format(at);
+}
+
+export function roleLists(roles: ListRole[], marks: Map<string, { relevant: boolean }>, now: Date,
+                          hasTargets: boolean, listOthers: boolean, days = 7): string {
+  const until = now.getTime() + days * 86_400_000;
+  const open = roles.filter((r) => r.eligible !== false && r.effective_deadline &&
+    new Date(r.effective_deadline).getTime() > now.getTime() && new Date(r.effective_deadline).getTime() <= until);
+  const byTime = new Map<string, ListRole[]>();
+  for (const r of open) byTime.set(r.effective_deadline!, [...(byTime.get(r.effective_deadline!) || []), r]);
+  const line = (r: ListRole) => `- ${r.company} — ${r.designation}${r.applied ? " ✓ applied" : ""}`;
+  const order = (rs: ListRole[]) => [...rs].sort((a, b) => Number(!!a.applied) - Number(!!b.applied) ||
+    a.company.localeCompare(b.company) || a.designation.localeCompare(b.designation));
+  const blocks: string[] = [];
+  for (const [iso, rs] of [...byTime.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const at = new Date(iso);
+    const when = `Close ${dayWord(at, now)} ${HM.format(at)}${todayNote(iso, now).replace(" (later today, in ", " (in ")}`;
+    const mine = hasTargets ? rs.filter((r) => marks.get(r.id)?.relevant === true) : rs;
+    const others = hasTargets ? rs.filter((r) => marks.get(r.id)?.relevant !== true) : [];
+    const applied = mine.filter((r) => r.applied).length;
+    const head = hasTargets ? `${when} — ${mine.length} for you, ${applied} applied:` : `${when} — ${rs.length} roles, ${applied} applied:`;
+    const body = hasTargets
+      ? ["For you:", ...(mine.length ? order(mine).map(line) : ["- none"]),
+         ...(others.length ? (listOthers ? ["Others:", ...order(others).map(line)] : [`Others: ${others.length} more (not listed)`]) : [])]
+      : order(rs).map(line);
+    blocks.push([head, ...body].join("\n"));
+  }
+  return blocks.join("\n\n");
+}

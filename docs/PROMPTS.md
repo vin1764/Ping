@@ -38,7 +38,7 @@ Use [] when there is nothing. Do not invent dates.
 
 - **Where it runs:** `ping/relevance.py` (`PROMPT`, used by `classify`), called from the hourly run on GitHub Actions
 - **When:** Once per role, for roles you're not ruled out of (eligibility is applied first), and again only when the role's text or your "What I'm looking for" text changes (the answer is cached on the role).
-- **Input:** `{targets}`: your "What I'm looking for" text (first 600 characters); `{roles}`: up to 20 roles, each with its id, company, title, a few role fields and the first 900 characters of its job description (or "none given; judge on the title"). Never your name, roll number, CGPA or mail.
+- **Input:** `{targets}`: your "What I'm looking for" text (first 600 characters); `{roles}`: up to 250 roles, each with its id, company, title, a few role fields and the first 400 characters of its job description (or "none given; judge on the title"). Never your name, roll number, CGPA or mail.
 - **Expected output:** JSON list only: `id`, `relevant` (true/false), `reason` (cut to 8 words). Entries with an unknown id or a non-boolean answer are dropped; roles without an answer are tried again next run.
 - **Models, in fallback order:** `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemma-4-31b-it`
 - endpoint: the same OpenAI-compatible `/chat/completions` as the notice reader
@@ -93,9 +93,11 @@ test today" or "Two more: ...", then add one line with the most urgent other thi
 below, with its count and time: "No other tests. 48 applications close at 20:00 today (in 1h 25m), 39 of them not
 applied." "Today and this week" is counted from the data: use its numbers for questions about today, tonight or this
 week (a deadline later today IS this week).
-Lists of roles: when the student has said what they're looking for (Profile "targets" below), every list of roles
-is split: first "For you" (roles marked "for you: yes", each with its reason in brackets), then "Others" with one
-short line per role (company and title only)${prof.list_other_roles === false ? "; leave the others out and only say how many there are" : ""}.
+Lists of roles: "Role lists by closing time" below is ready-made. When an answer lists roles that close at one of
+those times, copy that time's block exactly: its heading (the deadline is said once, there), "For you" with
+"✓ applied" after the ones already applied to, then "Others", one "Company — Role" line each. Don't add
+reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
+("only product ones"), drop lines but keep the format.
 Roles marked eligible: no are never listed. If eligibility is "unknown", add one line "Eligibility not verified for
 <n> of these". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
 due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't
@@ -118,7 +120,10 @@ All dates in the data are in ${new Intl.DateTimeFormat("en-GB", { timeZone: "Asi
 Today and this week (counted from the data below):
 ${atAGlance}
 
-Profile: ${JSON.stringify(profile.data?.[0] || {})}
+Profile: ${JSON.stringify(prof)}
+
+Role lists by closing time (next 7 days):
+${blocks || "(no open deadlines)"}
 
 Feed (things for this student):
 ${feed.join("\n") || "(empty)"}
@@ -132,5 +137,5 @@ ${noticeLines.length ? `\nLatest notices for the companies in the question, newe
 Conversation so far, oldest first:
 ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
 
-Question: ${question}
+Question: ${ask}
 ````

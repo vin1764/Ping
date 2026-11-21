@@ -107,3 +107,25 @@ def test_ineligible_roles_are_never_classified_or_listed(monkeypatch):
     assert "Alpha" not in fake.prompts[0]
     items = build_items(rs, [], {}, {**PROFILE, "targets": TARGETS}, DUE - timedelta(hours=20))
     assert not any("Alpha" in json.dumps(it["details"].get("list", [])) for it in items if it["category"] == "digest")
+
+
+def test_one_call_per_targets_and_shared_cache(monkeypatch):
+    """Identical targets reuse the cached marks (whoever set them); other targets cost exactly one call."""
+    from ping.store import MemoryStore
+    fake = FakeGemini()
+    monkeypatch.setattr(relevance.requests, "post", fake)
+    store = MemoryStore()
+    a = roles_with_text()
+    c1 = relevance.mark_roles(store, a, TARGETS, CFG)
+    assert c1["classified"] == 3 and len(fake.prompts) == 1            # all roles in ONE call
+    b = roles_with_text()                                               # another profile, same targets
+    c2 = relevance.mark_roles(store, b, TARGETS, CFG)
+    assert c2["from_cache"] == 3 and c2["classified"] == 0 and len(fake.prompts) == 1
+    assert [relevance.tag(r, TARGETS)[0] for r in b] == ["for_you", "other", "for_you"]
+    c3 = relevance.mark_roles(store, roles_with_text(), "backend and infrastructure roles", CFG)
+    assert c3["classified"] == 3 and len(fake.prompts) == 2
+    # the cache holds hashes only: no targets text, no role text, no user
+    rows = list(store.tables["role_marks"].values())
+    assert rows and all(set(r) <= {"targets_hash", "role_hash", "relevant", "reason", "jd_missing", "model", "first_seen"}
+                        for r in rows)
+    assert relevance.targets_hash("  Backend   and Infrastructure roles ") == relevance.targets_hash("backend and infrastructure roles")

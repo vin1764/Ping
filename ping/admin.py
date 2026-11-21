@@ -127,18 +127,13 @@ def demo_refeed(secrets) -> int:
                "reminder_hours": persona["reminder_hours"], "updated_at": data["generated_at"]}
     roles = data["roles"]
     open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False]
-    for attempt in range(3):            # the free tier allows a few calls a minute; whatever is left goes next round
-        todo = [r for r in open_ if relevance.needs(r, DEMO_TARGETS)]
-        if not todo:
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    for attempt in range(3):            # the free tier is sometimes busy; whatever is left goes next round
+        counts = relevance.mark_roles(store, open_, DEMO_TARGETS, secrets.ai)
+        say(f"round {attempt + 1}: {counts}")
+        if not counts.get("unanswered"):
             break
-        found = relevance.classify(todo, DEMO_TARGETS, secrets.ai)
-        for r in roles:
-            if r["id"] in found:
-                r["relevance"] = found[r["id"]]
-        say(f"round {attempt + 1}: classified {len(found)} of {len(todo)} roles "
-            f"({sum(v['relevant'] for v in found.values())} for you); last error: {relevance.stats['last_error']}")
-        if len(found) < len(todo):
-            time.sleep(30)
+        time.sleep(30)
     left = [r for r in open_ if relevance.needs(r, DEMO_TARGETS)]
     if left:
         say(f"{len(left)} roles still unclassified; not written (run demo-refeed again)")
@@ -164,7 +159,6 @@ def demo_refeed(secrets) -> int:
         say("NOT written, the check found: " + "; ".join(problems))
         return 1
     out.write_text(json.dumps(data, default=str, ensure_ascii=False), encoding="utf-8")
-    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     counts = load_to_db(store, data)
     marked = [r for r in roles if (r.get("relevance") or {}).get("relevant") is not None]
     say(f"demo feed rebuilt at {now:%d %b %H:%M} IST: {len(items)} items; roles marked {len(marked)} "

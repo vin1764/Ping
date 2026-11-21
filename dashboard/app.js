@@ -120,10 +120,23 @@
       return { notice: n, check: checks[0] };
     }
     async saveProfile(p) {
-      if (this.demo) throw new Error(READ_ONLY);
+      if (this.demo) {
+        // a demo visitor may set what they're looking for: their own session only (session_prefs), never the
+        // owner's profile; the rest of the demo profile is read-only
+        const { data: { user } } = await this.sb.auth.getUser();
+        const own = { targets: p.targets ?? null, reminder_hours: p.reminder_hours ?? null, list_other_roles: p.list_other_roles ?? null };
+        const { error } = await this.sb.from("session_prefs").upsert({ owner_id: user.id, ...own, updated_at: new Date().toISOString() });
+        if (error) throw new Error(error.message);
+        return "Saved for this demo session (the rest of the demo profile is read-only).";
+      }
       const { error } = await this.sb.from("profile").update({ ...p, updated_at: new Date().toISOString() })
         .eq("id", state.data.profile?.id ?? 1);
       if (error) throw new Error(error.message);
+    }
+    // "For you" marks for the current targets, from the server's cache (the page never sees the cache itself)
+    async marks() {
+      const out = await this.fn("ask-ping", { marks: true });
+      return { prefs: out.prefs || {}, marks: new Map(Object.entries(out.marks || {})) };
     }
     async markItem(id, patch) {
       if (this.demo) throw new Error(READ_ONLY);
@@ -154,7 +167,11 @@
     async ask(q) {
       // the demo is a snapshot: "tomorrow" is the day after it, as everywhere else on the page
       const asOf = this.demo && state.asOf ? new Date(state.asOf).toISOString() : undefined;
-      try { return (await this.fn("ask-ping", { question: q, as_of: asOf })).answer; }
+      try {
+        const out = await this.fn("ask-ping", { question: q, as_of: asOf });
+        if (out.prefs_changed) state.prefsChanged = true;
+        return out.answer;
+      }
       catch (e) {
         if (e.status === 429) return `${e.message}\n\nMeanwhile, with simple rules: ${answerLocally(q, state.data)}`;
         const why = e.status === 404 || /fetch/i.test(e.message) ? "the ask-ping server function isn't deployed or reachable"
@@ -244,6 +261,7 @@
     out.hidden = false;
     out.onclick = async () => { await sb.auth.signOut(); location.reload(); };
     await afterStart();
+    loadMarks().then(() => { if (state.marks?.size && (location.hash || "#chat") === "#chat") route(); });
   }
 
   async function afterStart() {
@@ -420,7 +438,7 @@
     const bubble = h("div", { class: `msg ping item ${cls}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
       tabindex: "0", "aria-expanded": String(open) },
       h("div", { class: `kicker ${past ? "hidden" : cls}` }, kicker),
-      h("span", { class: "text" }, it.title),
+      h("span", { class: "text" }, retitle(it)),
       listBlock(it),
       h("span", { class: "time" }, clock(at)));
     const toggle = (ev) => {
@@ -434,10 +452,44 @@
     return bubble;
   }
 
+  // "... — 11 for you" in a heading follows the current marks too
+  function retitle(it) {
+    const marks = state.marks, d = it.details || {};
+    if (!marks?.size || !state.prefs?.targets || !/ — \d+ for you$/.test(it.title || "")) return it.title;
+    const ids = (d.list || []).flatMap((g) => /^Applied/.test(g.head || "") ? [] : (g.rows || []).map((r) => r.id));
+    return it.title.replace(/ — \d+ for you$/, ` — ${ids.filter((id) => marks.get(id)?.relevant).length} for you`);
+  }
+
   // A digest / "new roles" / "3 shortlists out" message: its list, grouped (for you first, others collapsed),
   // then any note and the source of the dates
+  // the lists were split by the targets of the last run; if the targets changed since (said in the chat), split them
+  // again by the current marks
+  function resplit(d) {
+    const marks = state.marks, targets = state.prefs?.targets;
+    if (!marks || !marks.size || !targets || !["application", "listing"].includes(d.kind)) return d.list || [];
+    const out = [];
+    const sections = new Map();
+    for (const g of d.list || []) {
+      const [prefix] = String(g.head || "").split(" · ");
+      const key = /^(For you|Others|$)/.test(prefix) ? "" : prefix;
+      if (/^Applied/.test(prefix)) { out.push(g); continue; }
+      sections.set(key, [...(sections.get(key) || []), ...(g.rows || [])]);
+    }
+    const listOthers = state.prefs?.list_other_roles !== false;
+    for (const [prefix, rows] of sections) {
+      const mine = rows.filter((r) => marks.get(r.id)?.relevant).map((r) => ({ ...r, note: marks.get(r.id)?.reason || "" }));
+      const others = rows.filter((r) => !marks.get(r.id)?.relevant).map((r) => ({ ...r, note: "" }));
+      const h = (s) => (prefix ? `${prefix} · ${s}` : s);
+      if (mine.length) out.unshift({ head: h("For you"), rows: mine });
+      if (others.length) out.push(listOthers ? { head: h(`Others (${others.length})`), collapsed: true, rows: others }
+                                             : { head: h(`${others.length} other roles not shown`), rows: [] });
+    }
+    return out;
+  }
+
   function listBlock(it) {
-    const d = it.details || {};
+    const d0 = it.details || {};
+    const d = { ...d0, list: resplit(d0) };
     if (!(d.list || []).length && !d.source) return null;
     const row = (r) => h("div", { class: `li ${r.tag || ""}` }, h("span", {}, r.text),
       r.note ? h("span", { class: "why" }, ` — ${r.note}`) : null);
@@ -506,6 +558,19 @@
     state.src.addChat(reply).catch(() => {});
     state.readAt = reply.created_at;
     state.src.setReadAt(state.readAt).catch(() => {});
+    // a preference was saved: fetch the new marks and show the lists split the new way
+    if (state.prefsChanged) { state.prefsChanged = false; await loadMarks(); route(); }
+  }
+
+  async function loadMarks() {
+    if (!state.src?.marks) return;
+    try {
+      const { prefs, marks } = await state.src.marks();
+      state.marks = marks;
+      state.prefs = prefs;
+      Object.assign(state.data.profile, { targets: prefs.targets, reminder_hours: prefs.reminder_hours,
+                                          list_other_roles: prefs.list_other_roles });
+    } catch { /* keep the lists as the last run built them */ }
   }
 
   // ------------------------------------------------------------ all updates (list with the three level filters)
@@ -724,9 +789,18 @@
         targets: String(f.get("targets") || "").trim() || null, list_other_roles: f.get("list_other_roles") === "on",
       };
       try {
-        await state.src.saveProfile(patch);
-        Object.assign(state.data.profile, patch);
-        $("#saved").textContent = state.src.kind === "demo" ? "  Saved for this visit (demo)." : "  Saved. Applies on the next run.";
+        const before = state.data.profile.targets || "";
+        const note = await state.src.saveProfile(patch);
+        const prefsOnly = { targets: patch.targets, reminder_hours: patch.reminder_hours, list_other_roles: patch.list_other_roles };
+        Object.assign(state.data.profile, state.src.demo ? prefsOnly : patch);
+        $("#saved").textContent = "  " + (note || (state.src.kind === "demo" ? "Saved for this visit (demo)." : "Saved. Applies on the next run."));
+        // new targets: have the roles marked now (the same path as saying it in the chat), then split the lists
+        if (state.src.fn && (patch.targets || "") !== before && patch.targets) {
+          $("#saved").textContent += " Marking roles…";
+          const out = await state.src.fn("ask-ping", { question: `my targets are ${patch.targets}` }).catch((e) => ({ answer: e.message }));
+          $("#saved").textContent = "  " + (out.answer || "Saved.");
+          await loadMarks();
+        }
       } catch (err) { $("#saved").textContent = `  ${err.message}`; }
     }
     mount(h("h1", {}, "Profile"), h("p", { class: "muted small" },

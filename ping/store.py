@@ -42,7 +42,7 @@ class MemoryStore:
     def upsert(self, table: str, rows: list[dict], key: str = "id") -> int:
         t = self.tables.setdefault(table, {})
         for r in rows:
-            k = str(r[key])
+            k = "|".join(str(r[part]) for part in key.split(","))   # a composite key: "a,b"
             if k in t:
                 t[k].update(copy.deepcopy(r))
             else:

@@ -586,6 +586,48 @@
     "max_words": 50
    },
    "why": "ESRI Data Scientist I closes 20:00 today: at 18:35 that's in 1h 25m"
+  },
+  {
+   "id": "L1",
+   "category": "lists",
+   "question": "what's due tonight that's relevant to me",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "checks": {
+    "must_contain": [
+     "Close tonight 20:00",
+     "for you",
+     "✓ applied",
+     "Others"
+    ],
+    "must_not_contain": [
+     "(due ",
+     "(3 roles)",
+     "(2 roles)",
+     "(4 roles)",
+     "matches",
+     "aligns",
+     "preference"
+    ]
+   },
+   "why": "the ready-made list: deadline once in the heading, For you (unapplied, then ✓ applied), Others one 'Company — Role' line each, no reasons in chat"
+  },
+  {
+   "id": "L2",
+   "category": "lists",
+   "question": "what closes tonight?",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "checks": {
+    "must_contain": [
+     "Close tonight 20:00",
+     "✓ applied"
+    ],
+    "must_not_contain": [
+     "(due ",
+     "(3 roles)",
+     "(4 roles)"
+    ]
+   },
+   "why": "any list of roles closing tonight uses the same format"
   }
  ],
  "check_changes": [
@@ -975,6 +1017,177 @@
        "cannot do that"
       ],
       "max_words": 40
+     }
+    }
+   ]
+  },
+  {
+   "id": "P1",
+   "why": "set targets by chat, then read them back",
+   "turns": [
+    {
+     "question": "only show me product, consulting and analyst roles",
+     "checks": {
+      "must_contain": [
+       "Saved",
+       "product, consulting and analyst roles"
+      ],
+      "max_words": 40
+     }
+    },
+    {
+     "question": "what are my preferences?",
+     "checks": {
+      "must_contain": [
+       "product, consulting and analyst roles"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "P2",
+   "why": "'also include X' appends to the targets, it doesn't replace them",
+   "turns": [
+    {
+     "question": "only show me product roles",
+     "checks": {
+      "must_contain": [
+       "Saved"
+      ]
+     }
+    },
+    {
+     "question": "also include data scientist roles",
+     "checks": {
+      "must_contain": [
+       "Saved",
+       "product roles",
+       "also data scientist roles"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "P3",
+   "why": "'don't count X' adds an exclusion",
+   "turns": [
+    {
+     "question": "only show me product and analyst roles",
+     "checks": {
+      "must_contain": [
+       "Saved"
+      ]
+     }
+    },
+    {
+     "question": "don't count SDE as relevant",
+     "checks": {
+      "must_contain": [
+       "Saved",
+       "product and analyst roles",
+       "not SDE"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "P4",
+   "why": "reminder hours by chat; only that field is confirmed",
+   "turns": [
+    {
+     "question": "remind me 3 hours before deadlines",
+     "checks": {
+      "must_contain": [
+       "reminders 3 h before"
+      ],
+      "must_not_contain": [
+       "targets ="
+      ],
+      "max_words": 20
+     }
+    }
+   ]
+  },
+  {
+   "id": "P5",
+   "why": "stop listing other roles separately",
+   "turns": [
+    {
+     "question": "stop listing other roles separately",
+     "checks": {
+      "must_contain": [
+       "other roles listed separately: off"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "P6",
+   "why": "reset goes back to the profile's own settings (the demo persona for a demo session)",
+   "turns": [
+    {
+     "question": "only show me finance roles",
+     "checks": {
+      "must_contain": [
+       "Saved",
+       "finance roles"
+      ]
+     }
+    },
+    {
+     "question": "reset my preferences",
+     "checks": {
+      "must_contain": [
+       "Saved",
+       "reminders 2 h before"
+      ],
+      "must_not_contain": [
+       "\"finance roles\""
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "P7",
+   "why": "wrong-detection check: a question that mentions product roles changes nothing",
+   "turns": [
+    {
+     "question": "any product roles tonight?",
+     "checks": {
+      "must_not_contain": [
+       "Saved",
+       "Saved for this demo session"
+      ]
+     }
+    },
+    {
+     "question": "what are my preferences?",
+     "checks": {
+      "must_contain": [
+       "product, consulting, business/data analyst and finance roles; not core software engineering"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "P8",
+   "why": "a preference and a question in one message: saved, then answered",
+   "as_of": "2026-11-21T18:35:00+05:30",
+   "turns": [
+    {
+     "question": "only show me product roles. what's due tonight?",
+     "checks": {
+      "must_contain": [
+       "Saved",
+       "product roles",
+       "Close tonight 20:00"
+      ]
      }
     }
    ]

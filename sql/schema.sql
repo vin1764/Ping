@@ -325,3 +325,39 @@ begin
 end $$;
 revoke all on function cleanup_demo_sessions(int) from public, anon, authenticated;
 grant execute on function cleanup_demo_sessions(int) to service_role;
+
+-- ------------------------------------------------------------------ "For you" marks, shared by every profile
+-- One row per (what someone is looking for, a role's text): identical targets reuse the answer, whoever asked.
+-- Keys are hashes (ping/relevance.py: targets_hash, role_hash); no text, no user id. Only the server reads or
+-- writes it (the hourly run and the ask-ping function, with the service key): no policy for signed-in users.
+create table if not exists role_marks (
+  targets_hash text not null,
+  role_hash text not null,
+  relevant boolean not null,
+  reason text,
+  jd_missing boolean default false,
+  model text,
+  created_at timestamptz default now(),
+  primary key (targets_hash, role_hash)
+);
+alter table role_marks enable row level security;
+revoke all on role_marks from anon, authenticated;
+grant select, insert, update, delete on role_marks to service_role;
+
+-- ------------------------------------------------------------------ a demo session's own preferences
+-- A one-click demo visitor may say what they're looking for too. It applies to their session only (never the
+-- owner's profile, never another session) and goes when the session is cleaned up.
+create table if not exists session_prefs (
+  owner_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  targets text,
+  reminder_hours numeric,
+  list_other_roles boolean,
+  updated_at timestamptz default now()
+);
+alter table session_prefs enable row level security;
+revoke all on session_prefs from anon, authenticated;
+grant select, insert, update, delete on session_prefs to authenticated;
+grant select, insert, update, delete on session_prefs to service_role;
+drop policy if exists demo_own_prefs on session_prefs;
+create policy demo_own_prefs on session_prefs for all to authenticated
+  using (is_ping_demo() and owner_id = auth.uid()) with check (is_ping_demo() and owner_id = auth.uid());

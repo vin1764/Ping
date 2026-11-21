@@ -108,6 +108,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PING_GITHUB_TOKEN: ${{ secrets.PING_GITHUB_TOKEN }}
           PUBLISHABLE: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           REPO: ${{ github.repository }}
           REF: ${{ github.event.repository.default_branch }}
         run: |
@@ -118,6 +119,8 @@ jobs:
           [ -n "$GEMINI_API_KEY" ] && ARGS+=("GEMINI_API_KEY=$GEMINI_API_KEY")
           [ -n "$PING_GITHUB_TOKEN" ] && ARGS+=("PING_GITHUB_TOKEN=$PING_GITHUB_TOKEN")
           [ -n "$PUBLISHABLE" ] && ARGS+=("PING_PUBLISHABLE_KEY=$PUBLISHABLE")
+          # server-side only: ask-ping reads/writes the "For you" cache (role_marks) and a first-run profile row
+          [ -n "$SERVICE_KEY" ] && ARGS+=("PING_SERVICE_KEY=$SERVICE_KEY")
           supabase secrets set --project-ref "$PROJECT" --yes "${ARGS[@]}" > /dev/null
           # prove it: the function must answer (403 "not allowed" without a login is the right answer)
           code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$SUPABASE_URL/functions/v1/ask-ping")

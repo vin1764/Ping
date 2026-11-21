@@ -29,3 +29,10 @@ def test_every_prompt_is_in_the_doc_verbatim():
     ts = (ROOT / "supabase" / "functions" / "ask-ping" / "index.ts").read_text(encoding="utf-8")
     template = ts.split("const prompt = `", 1)[1].split("`;\n", 1)[0]
     assert template in doc
+
+
+def test_the_chat_classifies_with_the_same_prompt_as_the_hourly_run():
+    from ping.relevance import PROMPT
+    ts = (ROOT / "supabase" / "functions" / "ask-ping" / "marks.ts").read_text(encoding="utf-8")
+    copy = ts.split("export const RELEVANCE_PROMPT = `", 1)[1].split("`;", 1)[0]
+    assert copy == PROMPT.replace("{{", "{").replace("}}", "}")

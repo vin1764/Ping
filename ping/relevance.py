@@ -36,8 +36,8 @@ the job description when there is one), not just the company. Reply with JSON on
 Roles:
 {roles}"""
 
-BATCH = 20               # roles per call (the free tier allows few calls a minute)
-JD_CHARS = 900           # enough to tell product from engineering; keeps a batch small
+BATCH = 250              # roles per call: normally all of them in one call
+JD_CHARS = 400           # enough to tell product from engineering; keeps one call for every role small
 BUDGET_SECONDS = 240     # all classification calls in one run together
 FIELDS = ("Job Profile", "Job Designation", "Profile", "Role", "Domain", "Job Type")
 LETTERS = str.maketrans("0123456789", "ghijklmnop")
@@ -77,10 +77,23 @@ def role_text(r: dict) -> tuple[str, bool]:
     return text, not jd
 
 
-def cache_key(targets: str, r: dict) -> str:
-    text, _ = role_text(r)
+def _h(s: str) -> str:
     # letters only: a run of digits in a stored key would look like a phone number to the demo's privacy check
-    return hashlib.sha1((_clean(targets).lower() + "\n" + text).encode()).hexdigest()[:16].translate(LETTERS)
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()[:16].translate(LETTERS)
+
+
+def targets_hash(targets: str) -> str:
+    """Same in supabase/functions/ask-ping/marks.ts: lower-case, spaces squeezed, sha1, first 16, digits as letters."""
+    return _h(_clean(targets).lower())
+
+
+def role_hash(r: dict) -> str:
+    """Same in marks.ts: company | title | job description, spaces squeezed (the ERP's own text)."""
+    return _h("|".join(_clean(r.get(k)) for k in ("company", "designation", "job_description")))
+
+
+def cache_key(targets: str, r: dict) -> str:
+    return targets_hash(targets) + ":" + role_hash(r)
 
 
 def needs(r: dict, targets: str) -> bool:
@@ -112,7 +125,7 @@ def classify(roles: list[dict], targets: str, cfg: dict) -> dict[str, dict]:
             missing = texts[a["id"]][1]
             out[a["id"]] = {"relevant": a["relevant"], "reason": " ".join(words[:8]).rstrip(".,;"),
                             "jd_missing": missing, "key": cache_key(targets, next(r for r in chunk if r["id"] == a["id"])),
-                            "targets": _clean(targets).lower(), "model": model}
+                            "model": model}
     stats["classified"] += len(out)
     stats["seconds"] += time.monotonic() - started
     return out
@@ -151,3 +164,34 @@ def tag(r: dict, targets: str) -> tuple[str | None, str]:
     if rel.get("jd_missing"):
         reason = (reason + " (JD missing)").strip()
     return ("for_you" if rel["relevant"] else "other"), reason
+
+
+def mark_roles(store, roles: list[dict], targets: str, cfg: dict) -> dict:
+    """Attach r["relevance"] to every role from the role_marks cache, classifying the missing ones in one call and
+    saving them. Returns counts for the run summary."""
+    if not _clean(targets):
+        return {"targets_set": False}
+    th = targets_hash(targets)
+    try:
+        cached = {c["role_hash"]: c for c in store.select("role_marks", {"targets_hash": f"eq.{th}"})}
+    except Exception:
+        cached = {}
+    for r in roles:
+        c = cached.get(role_hash(r))
+        if c:
+            r["relevance"] = {"relevant": c["relevant"], "reason": c.get("reason") or "", "jd_missing": c.get("jd_missing"),
+                              "key": cache_key(targets, r), "model": c.get("model")}
+    todo = [r for r in roles if needs(r, targets)]
+    found = classify(todo, targets, cfg) if todo else {}
+    rows = []
+    for r in roles:
+        if r["id"] in found:
+            r["relevance"] = found[r["id"]]
+            rows.append({"targets_hash": th, "role_hash": role_hash(r), "relevant": found[r["id"]]["relevant"],
+                         "reason": found[r["id"]]["reason"], "jd_missing": found[r["id"]]["jd_missing"],
+                         "model": found[r["id"]]["model"]})
+    if rows:
+        store.upsert("role_marks", list({(x["targets_hash"], x["role_hash"]): x for x in rows}.values()),
+                     key="targets_hash,role_hash")
+    return {"targets_set": True, "from_cache": len(roles) - len(todo), "classified": len(found),
+            "unanswered": len(todo) - len(found), "calls": stats["calls"], "last_error": stats["last_error"]}

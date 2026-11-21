@@ -453,21 +453,11 @@ class Runner:
         not_int = profile.get("not_interested_companies") or []
         open_ = [r for r in roles if evaluate(r, profile)["eligible"] is not False
                  and not any(n and n.lower() in (r.get("company") or "").lower() for n in not_int)]
-        todo = [r for r in open_ if relevance.needs(r, targets)]
-        self.counts["relevance"] = {"targets_set": bool(targets.strip()), "roles_checked": len(open_), "to_classify": len(todo)}
-        if not todo:
-            return
-        found = relevance.classify(todo, targets, self.secrets.ai)
-        for r in roles:
-            if r["id"] in found:
-                r["relevance"] = found[r["id"]]
-        self.counts["relevance"].update({"classified": len(found), "for_you": sum(v["relevant"] for v in found.values()),
-                                         "calls": relevance.stats["calls"], "last_error": relevance.stats["last_error"]})
-        if found:
-            try:
-                self.store.upsert("roles", [{"id": k, "relevance": v} for k, v in found.items()])
-            except Exception as e:
-                self.problems.append(f"saving role relevance failed: {e}")
+        try:
+            self.counts["relevance"] = {"roles_checked": len(open_),
+                                        **relevance.mark_roles(self.store, open_, targets, self.secrets.ai)}
+        except Exception as e:
+            self.problems.append(f"marking roles 'for you' failed: {e}")
 
     @staticmethod
     def _item_counts(items) -> dict:

@@ -68,7 +68,7 @@ def notice_prompt() -> dict:
 
 def ask_ping_prompt() -> dict:
     src = ASK_TS.read_text(encoding="utf-8")
-    models_src = _one(r"const MODELS = \[(.*?)\];", src, "MODELS")
+    models_src = _one(r"const MODELS = \[(.*?)\];", src, "MODELS", re.S)
     models = re.findall(r'"([^"]+)"', models_src)
     budget = int(_one(r"const BUDGET_MS = ([\d_]+);", src, "BUDGET_MS").replace("_", ""))
     per = int(_one(r"const PER_MODEL_MS = ([\d_]+);", src, "PER_MODEL_MS").replace("_", ""))

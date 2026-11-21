@@ -9,7 +9,9 @@ import { caller, cors, json } from "../_shared/owner.ts";
 
 // Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
 // free tier is sometimes overloaded (503) or slow, so try a few names in turn.
-const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.0-flash"];
+// gemini-2.0-flash answered 404 in the evals (retired); the first model often answers 429 on the free tier.
+const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash-lite",
+                "gemma-3-27b-it"];
 const BUDGET_MS = 100_000;
 const HISTORY_TURNS = 10;      // messages of the thread sent along (both sides)
 const HISTORY_CHARS = 8_000;   // about 2,000 tokens; the oldest messages go first

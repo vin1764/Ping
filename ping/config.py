@@ -99,7 +99,8 @@ def load_secrets(require_erp: bool = True, require_store: bool = True) -> Secret
               "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
               "model": ai["model"] or "gemini-flash-latest", "key": gemini,
               # gemini-2.5-flash was retired for new keys (Nov 2026); the free tier is sometimes busy (503)
-              "fallback_models": ["gemini-flash-lite-latest", "gemini-2.0-flash"]}
+              # gemini-2.0-flash: 404 (retired) in the Nov 2026 evals
+              "fallback_models": ["gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemma-3-27b-it"]}
     return Secrets(user, pw, answers, mail, mail_pw.replace(" ", ""), sb_url, sb_key, ai)
 
 

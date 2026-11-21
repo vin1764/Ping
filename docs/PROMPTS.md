@@ -10,7 +10,7 @@ Ping sends text to a model in exactly two places. Everything else (reading the E
 - **When:** Only when the rules find no deadline in a CV / extension / form notice, or no companies in a "Multiple Companies" notice. Rules always go first.
 - **Input:** `{ref}`: the notice's own time (IST, ISO format); `{companies}`: up to 300 company names from your companies list; `{text}`: that one notice's text, first 6,000 characters. Never PDFs, never your data.
 - **Expected output:** JSON only: `deadlines` (list of `at` ISO time + `text` quoted from the notice) and `companies` (list of `name` + `profiles`). Replies without JSON, or with dates that don't parse, are dropped.
-- **Models, in fallback order:** `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-2.0-flash`
+- **Models, in fallback order:** `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-2.5-flash-lite` → `gemma-3-27b-it`
 - endpoint: Gemini's OpenAI-compatible `/chat/completions` (`GEMINI_API_KEY`), or any provider set with `PING_AI_PROVIDER` / `PING_AI_BASE_URL` / `PING_AI_MODEL` / `PING_AI_KEY`
 - temperature: 0
 - timeout per model: 60 s; a timeout, an error (400/404/429/5xx) or a reply without JSON moves on to the next model
@@ -40,7 +40,7 @@ Use [] when there is nothing. Do not invent dates.
 - **When:** Every question typed in the dashboard chat by the signed-in owner or a one-click demo session. If it fails, the page answers with simple rules instead and says so. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
 - **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part.
 - **Expected output:** Plain text, shown as Ping's chat reply. No JSON.
-- **Models, in fallback order:** `PING_AI_MODEL` → `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-2.0-flash`
+- **Models, in fallback order:** `PING_AI_MODEL` → `gemini-flash-latest` → `gemini-flash-lite-latest` → `gemini-2.5-flash-lite` → `gemma-3-27b-it`
 - endpoint: Gemini `generateContent` (`GEMINI_API_KEY`); `PING_AI_MODEL` replaces the first model
 - generation: `{ temperature: 0.2, maxOutputTokens: 4096 }`
 - timeout per model: 45 s; whole answer: 100 s (Supabase stops a function at 150 s); an error, a timeout or an empty reply moves on to the next model

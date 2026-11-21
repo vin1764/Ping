@@ -184,29 +184,43 @@ yours", that's a no.
 If a notice gives a later deadline than the companies list, the notice wins
 (the item says where the deadline came from).
 
+**Only what's really new.** The same news often arrives two or three times.
+Same company + same kind (apply / form / test / shortlist / extension / talk)
++ same deadline (or same date and venue) within 4 days is one message; later
+copies are kept hidden with a note. An email that repeats a notice merges into
+that notice's message (its links are kept). A real change (deadline moved,
+time or venue changed, you're now on the list) becomes one **Update** message
+that says what changed. Notices naming different profiles stay separate. When
+unsure, Ping treats them as the same and keeps a note. On the last 14 days of
+real notices this merged 15 repeats and sent 39 changes as updates; each run's
+summary reports its own counts.
+
 ## The dashboard
 
-`dashboard/` is a plain web page (HTML + JavaScript, no build step):
+`dashboard/` is a plain web page (HTML + JavaScript, no build step). It opens on
+**a chat with Ping**, like WhatsApp:
 
-- **For you:** your items, newest first, with the one-line summary, the
-  deadline, links to the notice and the PDF, and a filter for the three levels.
-  "Is it about X?" questions get one-click answers that the next run uses.
-- **Companies:** a page per company with its roles, whether you applied, the
-  deadline, the pay and your eligibility (with the reasons).
-- **Profile:** roll, department, degree, CGPA, backlogs, CV names,
-  interested / not-interested companies.
-- **Check now:** starts a run.
-- **Ask Ping:** "what's due tomorrow?", "did I apply to Accenture?". Answered
-  by Gemini on the server (the key never reaches the browser). In demo mode,
-  or if the server function isn't set up, it answers with simple rules.
-- **Demo mode** (`?demo=1`): made-up data, no login, nothing saved.
+- Every "for you" item is a message from Ping with its time, newest at the
+  bottom. Tap a message to see the details (deadline, venue, your row from the
+  PDF, eligibility, contacts) and links to the notice, the PDF and any form.
+- Type at the bottom: "what's due tomorrow", "did I apply to Accenture",
+  "which room for the Eternal test", "what's the CTC at Airbus". Gemini answers
+  on the server (the key never reaches the browser); if that's not reachable,
+  simple rules answer instead and the reply says so.
+- The thread is saved (the `chat_messages` table), so you see the whole
+  history when you come back. New messages since your last visit get an
+  "unread" marker.
+- When a deadline moves or a venue changes, Ping posts one **Update** message
+  saying what changed; the earlier message stays, marked "Updated below".
+- **Menu:** All updates (with the three level filters), Companies (a page per
+  company: roles, applied, deadline, pay, eligibility), Profile, Check now.
+- **Demo mode** (`?demo=1`): demo data, no login; the thread is kept in that browser.
 
 Real data needs a login. The page reads your Supabase directly with the
 publishable key (that key is meant to be public), and database rules only let
-emails in the `allowed_users` table see anything. Ping adds your
-`MAIL_ADDRESS` there on every run. "Check now" and "Ask Ping" run as two small
-Supabase functions (`supabase/functions/`) that hold the GitHub token and the
-Gemini key, and check that the caller is you.
+emails in the `allowed_users` table see anything. Check now and the AI answers
+run as two small Supabase functions (`supabase/functions/`) that hold the
+GitHub token and the Gemini key, and check that the caller is you.
 
 PDF links open the file on the ERP itself, so they work when you're logged in
 to the ERP in the same browser. Ping never stores whole PDFs.
@@ -241,6 +255,33 @@ apply/upload/accept/save/submit in any address, and a test fails if the code
 ever mentions an action page. The mailbox is opened read-only (Ping can't
 even mark a mail as read). Login steps are never retried automatically; reads
 are retried on network errors.
+
+**Every ERP address Ping may contact** (everything else is refused before it leaves):
+
+| when | address (on erp.iitkgp.ac.in) | what it is |
+|---|---|---|
+| logging in | `GET /IIT_ERP3/` | open the ERP (also its redirect back after login) |
+| | `GET /SSOAdministration/login.htm` | the login page |
+| | `POST /SSOAdministration/getSecurityQues.htm` | send your roll number, get the security question |
+| | `POST /SSOAdministration/getEmilOTP.htm` | press Get OTP (sends user id, password, answer) |
+| | `POST /SSOAdministration/auth.htm` | press Log In with the OTP |
+| | `GET /SSOAdministration/success.htm` | the ERP's own redirect after Log In |
+| | `GET /IIT_ERP3/home.htm` | ERP home page |
+| opening placement | `POST /IIT_ERP3/showmenu.htm` | CDC > Application of Placement/Internship only (module 26, menu 11, that one link) |
+| | `POST /TrainingPlacementSSO/TPStudent.jsp` | the companies page (module 26, menu 11 only) |
+| reading | `GET /TrainingPlacementSSO/ERPMonitoring.htm` | the data behind the companies list (37) and notice board (54); only `action=fetchData` |
+| | `GET /TrainingPlacementSSO/TPJNFView.jsp` | a role's details popup (`user_type=SU` only) |
+| | `GET /TrainingPlacementSSO/JnfMoreDet.jsp` | a role's "more details" (`mode=jnfMoreDet` only) |
+| | `GET /TrainingPlacementSSO/Notice.jsp` | the notice board page (no parameters allowed) |
+| | `GET /TrainingPlacementSSO/ShowContent.jsp` | the full text of one notice |
+| | `GET /TrainingPlacementSSO/AdmFilePDF.htm` | a notice's attachment (`type=NOTICE` only) |
+| leaving | `GET /IIT_ERP3/logout.htm` | log out |
+
+The only things Ping ever sends are the login steps (pressing Get OTP makes the
+ERP email you an OTP) and logging out. Refused by name, among others:
+`TPJNFViewAction.jsp` (applying, accepting/cancelling offers), `TPFile.jsp`
+(uploads), `Notice.jsp?mode=deactive`, CV pages, NOC, feedback. Each run's log
+ends with every address it actually visited and how many times.
 
 **Secrets.** Passwords and keys live only in GitHub Secrets (encrypted, hidden
 in logs, not copied when someone copies the repo), in Supabase function
@@ -279,16 +320,31 @@ happened. To use another provider, set the variables `PING_AI_PROVIDER`,
 
 ## Another student setting it up
 
-1. Make your own **private** copy of this repo.
-2. Create a free Supabase project and run `sql/schema.sql` in its SQL Editor.
-3. Get a Google app password for your institute mailbox
-   (`myaccount.google.com/apppasswords`; 2-step verification has to be on).
-4. On your laptop: `python -m pip install --user -r requirements.txt`, then
-   `python setup/new_student_setup.py`. It asks for everything one by one,
-   saves it to `.env` (readable only by you), does one test login, and tells
-   you what to paste where on GitHub and how to set up the mail filter.
-5. Follow steps 2-6 of [What's left for you](#whats-left-for-you).
-6. Actions > Ping > Run workflow.
+One command, about 5 minutes, and you never open Supabase's SQL editor or login screens.
+
+Before you start (all free): your ERP login and its 3 security questions, a
+Google app password for the mailbox the ERP sends OTPs to
+(`myaccount.google.com/apppasswords`, needs 2-step verification), a new
+Supabase project plus a personal access token (supabase.com > avatar >
+Account > Access Tokens), and your own **private** copy of this repo.
+
+```bash
+python -m pip install --user -r requirements.txt
+```
+```bash
+python setup/new_student_setup.py
+```
+
+It asks for each value one at a time, saves them in `.env` (only you can
+read it; git ignores it), creates all tables and permissions, creates your
+dashboard login (confirmed) and puts it on the allowed list, signs in as that
+login to prove it works, does one test ERP login, sets the GitHub secrets
+(with the GitHub CLI if you have it, otherwise it prints each name and value
+to paste), and ends with "Done. Open <link> and sign in with <email>".
+Running it again is safe (it keeps what you typed and can reset the password).
+
+It was tested against an empty Supabase-like database (real Postgres with
+Supabase's roles and rules), not yet against a brand-new real Supabase project.
 
 ## Demo data
 

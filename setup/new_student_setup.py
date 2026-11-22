@@ -55,11 +55,12 @@ FIELDS = [
     ("SUPABASE_URL", "Supabase project URL, like https://abcd1234.supabase.co", False, True),
     ("SUPABASE_ACCESS_TOKEN", "Supabase personal access token (starts with sbp_)", True, True),
     ("GEMINI_API_KEY", "Gemini API key for AI answers (optional, Enter to skip)", True, False),
+    ("GROQ_API_KEY", "Groq API key for faster chat answers (optional, Enter to skip)", True, False),
     ("PING_GITHUB_TOKEN", "GitHub token for the dashboard's Check now button (optional, Enter to skip)", True, False),
 ]
 GITHUB_SECRETS = ["ERP_USER_ID", "ERP_PASSWORD", "ERP_SECQ_1", "ERP_SECQ_2", "ERP_SECQ_3", "MAIL_ADDRESS",
                   "MAIL_APP_PASSWORD", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_PUBLISHABLE_KEY",
-                  "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY", "PING_GITHUB_TOKEN"]
+                  "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY", "GROQ_API_KEY", "PING_GITHUB_TOKEN"]
 
 
 def say(msg: str = "") -> None:

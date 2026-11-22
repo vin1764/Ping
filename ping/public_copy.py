@@ -244,8 +244,14 @@ def main() -> int:
         main_branch = run("git", "symbolic-ref", "--short", "HEAD", cwd=target).strip()
         head = run("git", "rev-parse", "--short", main_branch, cwd=target).strip()
         # the public repository holds only this generated copy: a rebuild replaces it (--force)
-        subprocess.run(["git", "push", "--quiet", "--force", push, f"{main_branch}:main"], cwd=target, check=True,
-                       capture_output=True)
+        res = subprocess.run(["git", "push", "--quiet", "--force", push, f"{main_branch}:main"], cwd=target,
+                             capture_output=True, text=True)
+        if res.returncode:
+            err = (res.stderr or res.stdout).replace(token, "***")
+            say(f"the push was refused:\n{err.strip()[:800]}")
+            if "workflow" in err.lower():
+                say("the token needs Workflows: read and write too (the copy includes .github/workflows)")
+            return 1
         m = re.match(r"https://github\.com/([^/]+)/([^/.]+)", url)
         where = f"{m.group(1)} / {m.group(2)}" if m else "(not a github.com address)"
         say(f"pushed {main_branch} (rewritten head {head}) to the public repository {where} as main")

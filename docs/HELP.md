@@ -64,6 +64,7 @@ Your preferences change what I show you, never anything on the ERP:
 - Profile → Targets: the kinds of roles you want ("product, consulting"); or tell me "only show me product and consulting roles", "also include data roles", "don't count SDE".
 - Profile → Interested / Not interested companies, Feed (only what fits me first, or everything), Other roles (listed separately or not).
 - Profile → About you: CGPA, department, degree, backlogs (used for eligibility). Profile → CVs: the CVs I pick from.
+- Or just say it: "Groww isn't relevant", "hide the SDE role at X" (it stops showing as For you; tap Undo to take it back), "show Groww again".
 Ask "what are my preferences?" to see them, or "reset my preferences" to start over.
 
 ## data

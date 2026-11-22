@@ -39,21 +39,24 @@ def test_sections_in_order_and_steps_numbered():
     assert heads == ["Reviewing Ping?", "What you get", "What it never does", "What you need", "Steps", "How long it takes",
                      "If something goes wrong", "Privacy"]
     steps = re.search(r'<h2 id="steps">.*?<ol>(.*?)</ol>', h, re.S).group(1)
-    assert 7 <= steps.count("<li>") <= 9
+    assert 7 <= steps.count("<li>") <= 10
+    assert "Use this template" in h and "Private" in h and "Sign in once inside the installed app" in h
     for cmd in ("python setup/new_student_setup.py", "gh workflow run admin.yml -f task=schedule-setup", "git clone"):
         assert cmd in html.unescape(h), cmd
     for secret in ("ERP_USER_ID", "ERP_PASSWORD", "ERP_SECQ_1", "MAIL_APP_PASSWORD", "SUPABASE_URL", "SUPABASE_SERVICE_KEY",
-                   "GEMINI_API_KEY", "PING_GITHUB_TOKEN", "DASHBOARD_DEPLOY_TOKEN"):
+                   "GEMINI_API_KEY", "GROQ_API_KEY", "PING_GITHUB_TOKEN", "DASHBOARD_DEPLOY_TOKEN", "DASHBOARD_PASSWORD"):
         assert secret in h, secret
     assert len(re.findall(r"<li>", re.search(r'<h2 id="if-something-goes-wrong">.*?<ul>(.*?)</ul>', h, re.S).group(1))) == 3
 
 
 def test_source_repo_is_one_placeholder_and_no_dead_link():
-    assert DOC.count(page.PLACEHOLDER) == 1
+    assert 1 <= DOC.count(page.PLACEHOLDER) <= 3          # the Source line and step 1
     h = page.render()
     assert page.PLACEHOLDER not in h
     if not page.SOURCE_REPO_URL:
         assert "Source repo: available on request" in text_of(h)
+    else:
+        assert "on request" not in text_of(h) and page.SOURCE_REPO_URL in h
     for href in re.findall(r'href="([^"]*)"', h):
         assert href and href != "#" and "SOURCE" not in href, href
 

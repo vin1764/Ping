@@ -22,17 +22,17 @@ Sign in on the [dashboard](https://vin1764.github.io/ping-dashboard/) with the c
 
 - A GitHub account.
 - A free Supabase project (supabase.com).
-- A free Gemini API key (aistudio.google.com). Optional, but Ask Ping and the "For you" marks need it.
+- A free Gemini API key (aistudio.google.com) and a free Groq key (console.groq.com). Both optional: the "For you" marks need Gemini; Ask Ping uses Groq first, then Gemini, then answers from your data by rules.
 - Your ERP login: user id, password, the 3 security questions with their answers, and the mailbox the ERP sends your OTP to (with a Google app password for it).
 - Python 3.11 or newer on your computer, for the one setup script.
 
-Everything above is on a free tier. Ping fits in it: about 20 short runs a day on GitHub Actions, a small database, and a few hundred Gemini calls a day. When Gemini's free quota runs out, Ping answers from your data without it.
+Everything above is on a free tier. Ping fits in it: about 20 short runs a day on GitHub Actions, a small database, and a few dozen model calls a day (most questions are answered from your data with no model at all). When a free quota runs out, Ping answers from your data without it.
 
 ## Steps
 
 Source repo: SOURCE_REPO_URL
 
-1. **Copy the source repo** as a **private** repository under your account (GitHub > New repository > Import a repository), then clone it:
+1. **Make your own private copy** of the source repo: on SOURCE_REPO_URL click **Use this template** > Create a new repository, or GitHub > New repository > **Import a repository** with that address. Choose **Private**: your Actions logs (every hourly run) and everything Ping reads stay yours, and your secrets live in that repo. Then clone it:
 
    ```
    git clone https://github.com/<you>/<your-copy>.git ping
@@ -41,18 +41,22 @@ Source repo: SOURCE_REPO_URL
 
 2. **Create a Supabase project** (free plan). Note its URL (`https://<id>.supabase.co`) and create a personal access token: avatar > Account > Access Tokens.
 
-3. **Have your secrets ready.** The setup script asks for each one and stores it; only the last one you add by hand.
+3. **Have your secrets ready.** The setup script asks for most of them and stores them; the rest you add by hand (your copy > Settings > Secrets and variables > Actions) or an Admin task makes for you.
 
-   | name | what it is | where it goes |
-   |---|---|---|
-   | `ERP_USER_ID`, `ERP_PASSWORD` | your ERP login | GitHub repo secrets (the script) |
-   | `ERP_SECQ_1`, `ERP_SECQ_2`, `ERP_SECQ_3` | each security question and answer, as `question::answer` | GitHub repo secrets (the script) |
-   | `MAIL_ADDRESS`, `MAIL_APP_PASSWORD` | the OTP mailbox and its Google app password | GitHub repo secrets (the script) |
-   | `SUPABASE_URL`, `SUPABASE_ACCESS_TOKEN` | from step 2 | GitHub repo secrets (the script) |
-   | `SUPABASE_SERVICE_KEY`, `SUPABASE_PUBLISHABLE_KEY` | read from your project by the script | GitHub repo secrets (the script) |
-   | `GEMINI_API_KEY` | your Gemini key (optional) | GitHub repo secrets (the script), then Supabase function secrets (the deploy) |
-   | `PING_GITHUB_TOKEN` | a fine-grained token for your copy, Actions: read and write (optional: Check now and the hourly start) | GitHub repo secrets (the script), then Supabase function secrets (the deploy) |
-   | `DASHBOARD_DEPLOY_TOKEN` | a fine-grained token for a new, empty public repo `<you>/ping-dashboard`, Contents and Pages: read and write | add it yourself: your copy > Settings > Secrets and variables > Actions |
+   | name | needed? | what it is | who sets it |
+   |---|---|---|---|
+   | `ERP_USER_ID`, `ERP_PASSWORD` | required | your ERP login | the setup script |
+   | `ERP_SECQ_1`, `ERP_SECQ_2`, `ERP_SECQ_3` | required | each security question and answer, as `question::answer` | the setup script |
+   | `MAIL_ADDRESS`, `MAIL_APP_PASSWORD` | required | the OTP mailbox and its Google app password | the setup script |
+   | `SUPABASE_URL`, `SUPABASE_ACCESS_TOKEN` | required | from step 2 | the setup script |
+   | `SUPABASE_SERVICE_KEY`, `SUPABASE_PUBLISHABLE_KEY` | required | read from your project | the setup script |
+   | `DASHBOARD_DEPLOY_TOKEN` | required | a fine-grained token for a new, empty public repo `<you>/ping-dashboard`, Contents and Pages: read and write | you, by hand |
+   | `GEMINI_API_KEY` | optional | a free Gemini key (aistudio.google.com): the "For you" marks, CV summaries, and Ask Ping when Groq doesn't answer | the setup script (then the deploy copies it to Supabase) |
+   | `GROQ_API_KEY` | optional | a free Groq key (console.groq.com > API Keys): Ask Ping's first model, fast | the setup script (then the deploy copies it to Supabase) |
+   | `PING_GITHUB_TOKEN` | optional | a fine-grained token for your copy, Actions: read and write: the Check now button and the hourly start | the setup script (then the deploy copies it to Supabase) |
+   | `DASHBOARD_PASSWORD` | optional | a new password for your dashboard login, set with Admin > `set-dashboard-password` | you, by hand |
+   | `GEMINI_API_KEY_EVALS`, `GROQ_API_KEY_EVALS` | optional | second keys, only for running the evals (they never touch your live quota) | you, by hand |
+   | push keys (VAPID) | optional | notifications on your phone | made for you by Admin > `push-setup` (straight into Supabase, never in GitHub) |
 
 4. **Run the setup script once.** It saves your answers in `.env` on your computer (git ignores it), creates the tables, rules and the private CV bucket in your Supabase project with an empty profile, creates your dashboard login, does one test login to the ERP and puts the secrets into your repo. Running it again is safe.
 
@@ -75,9 +79,11 @@ Source repo: SOURCE_REPO_URL
 
 6. **Open your dashboard.** On `<you>/ping-dashboard` > Settings > Pages, choose Deploy from a branch, `main`, `/ (root)`, and leave Custom domain empty. Then Actions > Dashboard > Run workflow, and open `https://<you>.github.io/ping-dashboard/`.
 
-7. **Answer Ping's first questions in the chat:** your feed, degree and department, what you're looking for, a CV, how often to check, when to remind you. Every answer can be changed later by just telling Ping ("check every 30 minutes").
+7. **Install it on your phone.** Android (Chrome): tap Install when Ping offers it, or ⋮ > Install app. iPhone: open the dashboard in Safari > Share > Add to Home Screen. Ask Ping "how do I install Ping?" for your exact device.
 
-8. **Done.** Ping runs your first check while you answer, then posts as things happen.
+8. **Sign in once inside the installed app.** On iPhone the installed app doesn't share Safari's login: open Ping from the Home Screen and sign in there; you then stay signed in, and notifications work only from the installed app. On Android you're usually signed in already.
+
+9. **Answer Ping's first questions in the chat:** your feed, degree and department, what you're looking for, a CV, how often to check, when to remind you. Ping runs your first check while you answer, then posts as things happen. Every answer can be changed later by just telling Ping ("check every 30 minutes", "Groww isn't relevant").
 
 ## How long it takes
 
@@ -105,5 +111,5 @@ So the first messages land within the hour, and every check after that takes und
 - Your feed, roles, notices, chat and preferences live in your own Supabase project, readable only with your login. From a PDF only your own row and the table heading are kept, never other students' rows.
 - Your CVs sit in a private storage bucket in that project; Ping keeps a short summary of each to suggest which one to apply with.
 - Your passwords and keys live only in your repo's secrets, your Supabase function secrets and the `.env` file on your computer.
-- Gemini sees only your own feed, roles and profile when you ask something, never a PDF.
+- Groq and Gemini see only your own feed, roles and profile when you ask something open-ended, never a PDF, a password or another student's row (details: `docs/SECURITY.md`, "What each AI provider receives").
 - The public `ping-dashboard` repo holds only the built page. Its demo is an anonymised snapshot: real companies, a made-up student, no other students, and four made-up mails instead of real ones.

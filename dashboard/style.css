@@ -470,7 +470,7 @@ body { grid-template-columns: minmax(0, 1fr); }
 .k-you .kicker .k { color: var(--applied); } .k-review .kicker .k { color: var(--accent); }
 .msg.run .kicker .k { color: var(--applied); } .msg.run .kicker .k2 { color: var(--muted); }
 .msg.run.r-failed .kicker .k { color: var(--danger); }
-.msg .expand { opacity: .8; }
+.msg .expand { opacity: 1; }   /* full --muted: 4.5:1 or more on white (it was .8: 4.2:1) */
 /* digests: rows as a quiet list; "Show 30 more ▸" opens the rest in place */
 .msg .li { border-left-width: 2px; padding: 4px 0 4px 10px; }
 .msg details.more-rows > summary { min-height: 36px; text-transform: none; letter-spacing: 0; font-size: var(--t-sm); font-weight: 600; color: var(--accent); }

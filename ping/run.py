@@ -533,6 +533,10 @@ class Runner:
             self.counts["mail_dropped"] = stats.dropped
             self.counts["mail_kept_because"] = stats.kept_because
             if st:
+                if str(version) != str(mail_source.RULES_VERSION):
+                    # rows the old, looser scan stored (no rules version): gone; this scan stored the placement ones
+                    # of the last 14 days again under today's filter
+                    st.delete("emails", {"rules_version": "is.null", "is_sample": "is.false"})
                 st.set_state("last_mail_scan", self.now.isoformat())
                 st.set_state("mail_rules_version", mail_source.RULES_VERSION)
         except Exception as e:
@@ -765,7 +769,8 @@ class Runner:
             f"yes {c.get('pdf_yes', 0)} / no {c.get('pdf_no', 0)} / unknown {c.get('pdf_unknown', 0)}, "
             f"scanned {c.get('pdf_scanned', 0)}, skipped (not yours) {c.get('pdfs_skipped_not_relevant', 0)}",
             f"mailbox           : {c.get('mails_scanned', 0)} mails (headers only), {c.get('mails_kept', 0)} placement mails "
-            f"kept and read, {c.get('mail_otp_skipped', 0)} OTP mails skipped",
+            f"kept and read, {c.get('mail_otp_skipped', 0)} OTP mails skipped; in the feed: "
+            f"{c.get('dedupe', {}).get('mail_twins', 0)} also on the ERP, {c.get('dedupe', {}).get('mail_only', 0)} mail-only",
             f"job descriptions  : {c.get('jd_found') or 'none looked up (no role changed)'}; summaries "
             f"{c.get('jd_summaries') or 'none needed'}",
             f"AI fallback       : {c.get('ai', {}).get('calls', 0)} calls, {c.get('ai', {}).get('answers', 0)} answers, "

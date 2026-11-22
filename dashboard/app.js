@@ -1216,14 +1216,25 @@
     const label = past ? pastLabel : kind === "review" ? "Question"
       : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" || it.category === "digest" ? "Reminder" : "Deadline")
       : kind === "test" ? ({ shortlist: "Shortlist", result: "Result" }[it.category] || "Test")
-      : kind === "new" ? "New" : "Update";
+      : kind === "new" ? "New" : d.todo?.action === "fill_form" ? "Form" : d.todo?.action === "take_test" ? "Test"
+      : it.category === "offer" ? "Offer" : it.category === "ppt" ? "Talk" : "Update";
     const open = state.open.has(it.id);
+    // placement mail: "via email" on a message only the mail has; "also mailed" on an ERP message the mail repeated;
+    // a form / test / meeting link from the mail right on the message
+    const viaMail = d.via === "email", mailed = !viaMail && d.mail?.note;
+    const mlink = viaMail ? d.mail?.link || d.todo?.link : mailed ? d.mail?.link : null;
+    const linkText = (u) => /forms\.gle|docs\.google\.com\/forms|forms\.office|typeform|jotform/i.test(u) ? "Open form ↗"
+      : /meet\.google|zoom\.us|teams\.microsoft|webex/i.test(u) ? "Join ↗" : /hackerrank|hackerearth|mettl|codility|test|assess/i.test(u) ? "Open test ↗" : "Open link ↗";
     const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
       tabindex: "0", "aria-expanded": String(open), "data-kind": kind, "data-key": `item:${it.id}`, "data-sig": itemSig(it) },
       h("div", { class: "kicker" }, h("span", { class: "k" }, label),
-        !past && due && (kind === "soon" || kind === "test") ? countPill(due) : null),
+        !past && due && (kind === "soon" || kind === "test" || d.todo) ? countPill(due) : null,
+        viaMail ? h("span", { class: "pill via", title: `From your mail: ${d.mail?.from || ""}` }, "via email") : null,
+        mailed ? h("span", { class: "pill via", title: d.mail.subject || "" }, "also mailed to you") : null),
       h("span", { class: "text title" }, retitle(it)),
       listBlock(it),
+      mlink && !past ? h("div", { class: "mail-link" }, h("a", { href: mlink, target: "_blank", rel: "noopener",
+        onclick: (ev) => ev.stopPropagation() }, linkText(mlink))) : null,
       h("div", { class: "foot" }, h("span", { class: "expand" }, open ? "Less ▴" : "Details ▾"), h("span", { class: "time" }, clock(at))));
     const toggle = (ev) => {
       if (ev.target.closest("a, button, .more, summary, details")) return;
@@ -1322,6 +1333,10 @@
     if ((d.merged || []).length) lines.push(h("div", { class: "muted" },
       `Also posted ${d.merged.length} more time${d.merged.length > 1 ? "s" : ""} (merged here, not sent again)`));
     if (d.hidden_because) lines.push(h("div", { class: "muted" }, `Not shown any more: ${d.hidden_because}`));
+    if (d.mail) lines.push(h("div", {}, h("strong", {}, d.via === "email" ? "From your mail: " : "Also mailed to you: "),
+      [d.mail.subject, d.mail.from ? `from ${String(d.mail.from).replace(/<[^>]*>/g, "").trim()}` : "", d.mail.received_at ? when(d.mail.received_at) : ""]
+        .filter(Boolean).join(" · ")));
+    if (d.when_text && d.via === "email") lines.push(h("div", { class: "muted" }, `The mail says: ${d.when_text}`));
     const links = [
       it.notice_id ? h("button", { type: "button", onclick: () => openNotice(it.notice_id) }, "Open notice") : null,
       it.notice_id && it.pdf_status ? pdfLink(it) : null,
@@ -1528,6 +1543,7 @@
     const cls = it.needs_review ? "review" : it.level;
     const meta = [
       h("span", { class: `tag ${cls}` }, it.needs_review ? "Question" : LEVELS[it.level]),
+      it.details?.via === "email" ? h("span", { class: "pill via" }, "via email") : it.details?.mail?.note ? h("span", { class: "pill via" }, "also mailed to you") : null,
       due ? h("span", { class: "due" + (soon ? " soon" : "") }, (it.due_at ? "Due " : "On ") + when(due)) : null,
       it.company ? h("a", { href: companyHref(it.company) }, it.company) : null,
       it.notice_id ? h("button", { onclick: () => openNotice(it.notice_id) }, "Open notice") : null,
@@ -1547,8 +1563,8 @@
 
   function mailLinks(it) {
     const d = it.details || {};
-    const links = d.mail_links?.length ? d.mail_links : it.category === "email" ? d.links || [] : [];
-    return links.slice(0, 2);
+    const links = d.mail_links?.length ? d.mail_links : it.category === "email" || d.via === "email" ? d.links || [] : [];
+    return links.filter((u) => u !== d.todo?.link).slice(0, 2);
   }
 
   function pdfLink(it) {

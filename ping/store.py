@@ -61,8 +61,13 @@ class MemoryStore:
 
     def delete(self, table: str, filters: dict) -> None:
         keep = {}
+        def hit(r, f, v):
+            op, _, val = v.partition(".")
+            if op == "is":
+                return r.get(f) is None if val == "null" else bool(r.get(f)) == (val == "true")
+            return str(r.get(f)).lower() == val.lower()
         for k, r in self.tables.get(table, {}).items():
-            if all(str(r.get(f)).lower() == v.partition(".")[2].lower() for f, v in filters.items()):
+            if all(hit(r, f, v) for f, v in filters.items()):
                 continue
             keep[k] = r
         self.tables[table] = keep

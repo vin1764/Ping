@@ -82,3 +82,68 @@ def test_extraction(scanned):
                 assert r.get(k) == want, (m["label"], k, r.get(k))
     shortlist = rows[0]["pdf"]
     assert shortlist["my_row"] and ROLL in " ".join(shortlist["my_row"]) and shortlist["header"]
+
+
+# ---------------------------------------------------------------- the feed: ERP twins and mail-only messages
+@pytest.fixture(scope="module")
+def feed(scanned):
+    from fixture import NOTICES, PROFILE
+    from ping.items import build_items
+    from ping.notices import analyze
+    _, _, rows, _ = scanned
+    index = CompanyIndex(ROLES)
+    notices = [dict(n) for n in NOTICES]
+    for n in notices:
+        n["analysis"] = analyze(n, n["text"], index, ROLL, NAME)
+    roles = [dict(r) for r in ROLES]
+    stats = {}
+    items = build_items(roles, notices, {}, PROFILE, NOW, rows, {}, stats=stats)
+    return {it["id"]: it for it in items}, stats, roles
+
+
+def test_the_erp_duplicate_only_adds_also_mailed(feed, scanned):
+    items, stats, _ = feed
+    assert stats["mail_twins"] == 1 and stats["mail_only"] == 9
+    groww = next(it for it in items.values() if it["id"].startswith("notice:2026-2027:901"))
+    assert groww["details"]["mail"]["note"] == "also mailed to you"
+    assert groww["details"]["mail"]["link"] == "https://www.hackerrank.com/tests/groww-pa-2026"
+    dup = next(r for r in scanned[2] if r["subject"].startswith("Groww online test"))
+    assert f"mail:{dup['id']}" not in items                     # no second message for it
+
+
+def test_mail_only_items_are_feed_items_via_email(feed):
+    items, _, _ = feed
+    mail = [it for it in items.values() if it["id"].startswith("mail:")]
+    assert len(mail) == 9 and all(it["details"]["via"] == "email" for it in mail)
+    form = next(it for it in mail if "Pine Labs" in it["title"])
+    assert form["category"] == "todo" and form["details"]["todo"]["action"] == "fill_form"
+    assert form["due_at"] == "2026-11-22T17:00:00+05:30" and form["details"]["todo"]["link"] == "https://forms.gle/PineLabsPre2026"
+    gs = next(it for it in mail if "Goldman" in it["title"])
+    assert gs["level"] == "always" and gs["pdf_status"] == "yes" and "You're on it" in gs["title"]
+    navi = next(it for it in mail if "Navi" in it["title"])
+    assert navi["category"] == "test" and navi["event_at"] == "2026-11-24T11:00:00+05:30"
+
+
+def test_mail_never_changes_applied(feed):
+    _, _, roles = feed
+    assert [r["applied"] for r in roles] == [r["applied"] for r in ROLES]      # the offer mail and "thanks for applying"
+
+
+def test_eligibility_and_interests_apply_to_mail_items(scanned):
+    from fixture import PROFILE
+    from ping.items import build_items
+    _, _, rows, _ = scanned
+    prof = {**PROFILE, "not_interested_companies": ["Pine Labs Private Limited"]}
+    items = {it["id"]: it for it in build_items(ROLES, [], {}, prof, NOW, rows, {})}
+    pine = next(it for it in items.values() if it["id"].startswith("mail:") and "Pine Labs" in it["title"])
+    assert pine["level"] == "hidden" and pine["details"]["hidden_because"] == "marked not interested"
+
+
+def test_old_mail_rows_are_deleted_when_the_rules_change():
+    from ping.store import MemoryStore
+    st = MemoryStore()
+    st.upsert("emails", [{"id": "old", "subject": "Mess menu", "rules_version": None, "is_sample": False},
+                         {"id": "demo", "subject": "x", "rules_version": None, "is_sample": True},
+                         {"id": "new", "subject": "Groww test", "rules_version": 1, "is_sample": False}])
+    st.delete("emails", {"rules_version": "is.null", "is_sample": "is.false"})
+    assert sorted(r["id"] for r in st.select("emails")) == ["demo", "new"]

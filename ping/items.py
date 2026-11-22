@@ -295,18 +295,31 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                           "title": clip(f"You're named in a {n.get('subject')} notice ({n.get('company')})."),
                           "details": ndetails, "sort_at": n.get("notice_time")})
 
-    # --------------------------------------------------------- email items
-    applied_companies = {r["company"] for r in roles if r.get("applied")}
+    # --------------------------------------------------------- placement mail (ping/mail_source.py)
+    # A mail that says what an ERP notice says adds "also mailed to you" and its link to that notice's messages;
+    # a mail the ERP doesn't have becomes a message of its own, "via email". Mail never changes "applied".
+    from .mail_source import erp_twin
+    mstats = {"mail_twins": 0, "mail_only": 0}
+    by_notice: dict[str, list[dict]] = {}
+    for it in items:
+        if it["id"].startswith("notice:"):
+            by_notice.setdefault(it["id"].split(":")[1] + ":" + it["id"].split(":")[2], []).append(it)
     for m in emails:
-        c = m.get("company")
-        if c and c in applied_companies:
-            items.append({"id": f"mail:{m['id']}", "level": "always", "category": "email", "company": c,
-                          "role_ids": [], "notice_id": None, "due_at": None, "event_at": None,
-                          "pdf_status": None, "needs_review": False,
-                          "title": clip(f"{c} emailed you: {m.get('subject', '')}"),
-                          "details": {"from": m.get("sender"), "links": m.get("links", [])[:10],
-                                      "received_at": m.get("received_at")},
-                          "sort_at": m.get("received_at")})
+        if m.get("rules_version") is None:
+            continue                     # stored by the old mail scan: replaced by the next scan's rows
+        twin = erp_twin(m, notices)
+        if twin is not None:
+            link = m.get("main_link") or (m.get("links") or [None])[0]
+            for it in by_notice.get(twin["id"], []):
+                d = it.setdefault("details", {})
+                d["mail"] = {"note": "also mailed to you", "received_at": m.get("received_at"), "subject": m.get("subject"),
+                             "link": link, "id": m["id"]}
+                if link:
+                    d["mail_links"] = list(dict.fromkeys((d.get("mail_links") or []) + [link]))[:5]
+            mstats["mail_twins"] += 1
+            continue
+        items.append(_mail_item(m, roles, elig, profile, now, index, open_for_me))
+        mstats["mail_only"] += 1
     for it in items:
         it.setdefault("details", {})
         it["title"] = clip(it["title"])
@@ -341,7 +354,79 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
     items = digests.build(items, members, previous or {}, profile, now)
     if stats is not None:
         stats.update(dstats)
+        stats.update(mstats)
     return items
+
+
+MAIL_CATEGORY = {"shortlist": "shortlist", "ppt": "ppt", "offer": "offer", "announcement": "info"}
+
+
+def _mail_item(m: dict, roles: list[dict], elig: dict, profile: dict, now: datetime, index: CompanyIndex,
+               open_for_me) -> dict:
+    """A placement mail the ERP doesn't have, as a feed message like a notice's (eligibility and interests apply)."""
+    kind = m.get("kind") or "announcement"
+    company = index.canonical(m["company"]) if m.get("company") else None
+    who = company or _sender_name(m.get("sender") or "") or "Placement office"
+    picked = index.by_company.get(company, []) if company else []
+    applied = [r for r in picked if r.get("applied")]
+    due, event = m.get("due_at"), m.get("event_at")
+    pdf = m.get("pdf") or None
+    pst = (pdf or {}).get("status")
+    link = m.get("main_link")
+    subject = re.sub(r"\s+", " ", m.get("subject") or "").strip()
+    row = (pdf or {}).get("details") or {}
+    where = ", ".join(x for x in (f"room {row['room']}" if row.get("room") else "", f"slot {row['slot']}" if row.get("slot") else "",
+                                  str(row.get("time")) if row.get("time") else "") if x)
+    category, todo = MAIL_CATEGORY.get(kind, "info"), None
+    if kind == "form":
+        category, todo = "todo", {"action": "fill_form", "due": due, "link": link}
+        title = f"{who}: fill the form by {fmt_when(_dt(due), now)}." if due else f"{who}: fill the form (link in the mail)."
+    elif kind in ("test", "interview") and event:
+        category = "test"
+        title = f"{who} {'interview' if kind == 'interview' else 'test'}: {fmt_when(_dt(event), now)}."
+    elif kind in ("test", "interview"):
+        category, todo = ("todo", {"action": "take_test", "due": due, "link": link}) if due else ("info", None)
+        what = "interview" if kind == "interview" else "online test"
+        title = f"{who}: take the {what} by {fmt_when(_dt(due), now)}." if due else f"{who} {what}: {subject}"
+    elif kind == "shortlist" and pst == "yes":
+        title = f"{who} shortlist is out. You're on it" + (f" ({where})" if where else "") + "."
+    elif kind == "shortlist" and pst == "no":
+        title = f"{who} shortlist is out. You're not on it."
+    elif kind == "ppt":
+        title = f"{who} pre-placement talk: {fmt_when(_dt(event), now)}." if event else f"{who} pre-placement talk: {subject}"
+    elif kind == "offer":
+        title = f"{who}: {subject}"
+    else:
+        title = f"{who}: {subject}"
+    # the same rules as a notice: not interested, not eligible, not on the list -> hidden (unless you applied)
+    why = None
+    if company and _in(company, profile.get("not_interested_companies") or []):
+        why = "marked not interested"
+    elif pst == "no" and not applied:
+        why = "not on the list"
+    elif picked and not applied and all(elig[r["id"]]["eligible"] is False for r in picked):
+        why = "not eligible: " + "; ".join(elig[picked[0]["id"]]["reasons"])
+    level = "hidden" if why else "always" if (pst == "yes" or kind == "offer" or applied) else "show"
+    details = {"via": "email", "kind": kind if kind != "form" else "form", "subject": subject,
+               "mail": {"from": m.get("sender"), "subject": subject, "received_at": m.get("received_at"), "link": link,
+                        "id": m["id"]},
+               "links": (m.get("links") or [])[:10], "when_text": m.get("when_text"), "applied": bool(applied)}
+    if todo:
+        details["todo"] = todo
+    if pdf:
+        details["pdf"] = {k: pdf.get(k) for k in ("status", "matched_by", "details", "error", "header", "my_row", "file")}
+    if why:
+        details["hidden_because"] = why
+    return {"id": f"mail:{m['id']}", "level": level, "category": category, "company": company or who,
+            "role_ids": [r["id"] for r in (applied or picked)], "notice_id": None,
+            "due_at": due if category in ("todo", "offer") else None,
+            "event_at": event if category == "test" or kind == "ppt" else None, "pdf_status": pst, "needs_review": False,
+            "title": clip(title), "details": details, "sort_at": m.get("received_at")}
+
+
+def _sender_name(sender: str) -> str:
+    name = re.sub(r"<[^>]*>", "", sender).strip().strip('"').strip()
+    return name if name and "@" not in name else ""
 
 
 def _expire(it: dict, now: datetime) -> None:

@@ -577,3 +577,10 @@ body:has(form.login) main { background-color: var(--wall); background-image: var
 .msg .ios-steps, .pcard .ios-steps { display: block; width: 100%; max-width: 340px; height: auto; margin: var(--s2) 0 0; border-radius: var(--r-ctl); background: #fff; }
 .msg.queued { opacity: .75; }
 .msg.queued .time::before { content: "⏳ "; }
+
+/* placement mail (docs/SECURITY.md, Mailbox): "via email" / "also mailed to you", and the mail's link on the message */
+.pill.via { background: var(--bg); color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+.msg .mail-link { margin-top: var(--s2); }
+.msg .mail-link a { display: inline-block; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 12px;
+  border: 1px solid var(--line-strong); border-radius: 999px; }
+.msg .mail-link a:hover { background: var(--bg); }

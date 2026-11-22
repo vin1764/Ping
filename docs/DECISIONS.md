@@ -126,3 +126,15 @@ Judgement calls made while working unattended, one line each.
   ("Not eligible" and a failed check are no longer red). Every text pair ≥ 5.3:1 (tests/test_design_contrast.py).
 - **iPhone keeps the old icon** until Ping is removed from the Home Screen and added again (iOS copies the icon when you
   add it); Android picks up the new manifest icons by itself within about a day.
+
+## 22 Nov: first-run UX sweep (every message carries its control)
+
+- **Theme**: kept in the nav, labelled "Theme" with the mode underneath (Auto / Light / Dark), rather than moved into
+  Profile: one tap from anywhere, and Profile already has the same setting.
+- **Place names become links by pattern** ("Profile › My CVs", "the Forms tab", "Check now"), in the page, not in the
+  text: Ping's rules, help and model answers keep plain words and every one of them gets the control.
+- **Onboarding answers one at a time**: while an answer is saved (targets go through Ask Ping) the step's buttons are
+  replaced by Ping typing; Ask Ping gets 15 s, then the walk goes on with a pointer to Profile › What I'm looking for.
+- **Demo corrections and Mark done** change the page only ("Noted for this demo session"); nothing is sent, so the
+  demo still can't write a row.
+- **Today**: a notice about a deadline already on Today joins that row instead of a second row.

@@ -30,7 +30,7 @@ const RETRY_PAUSE_MS = 500;
 const LITE_MS = 5_000;
 const busy = (status: number) => status === 429 || status >= 500;
 
-const HISTORY_TURNS = 10;      // messages of the thread sent along (both sides)
+const HISTORY_TURNS = 12;      // messages of the thread sent along (both sides): the last 6 turns
 const HISTORY_CHARS = 8_000;   // about 2,000 tokens; the oldest messages go first
 
 const FMT = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit",

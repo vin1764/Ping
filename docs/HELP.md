@@ -15,6 +15,7 @@ I'm Ping: I read the placement ERP for you every hour or so and tell you what ma
 - how often I check: ask "how often do you check?"
 - your preferences: ask "how do I change my preferences?"
 - what I can and can't do, and where your data lives: ask "what can you do?" or "where is my data?"
+- your own copy of Ping: ask "how do I set this up?"
 
 ## install
 
@@ -70,3 +71,10 @@ Ask "what are my preferences?" to see them, or "reset my preferences" to start o
 ## data
 
 Your data lives in your own copy of Ping: a private database that only your login can read (the demo can't see it), the ERP and mail passwords only as encrypted secrets of your own GitHub repository (never in the code, never in this page), and your CVs in a private storage bucket. Ping keeps placement mail only; other mail is never read beyond its sender and subject, and login OTP mails are never stored.
+
+## setup
+
+Ping runs under your own accounts, nothing shared: no central server, no shared database. To run your own copy:
+- Make a private copy of the source: https://github.com/vin1764/Ping (Use this template, or Import a repository). Private, so your Actions logs and data stay yours.
+- Follow the setup page: https://vin1764.github.io/ping-dashboard/setup.html (a free Supabase project, your ERP login and the OTP mailbox's app password; Gemini and Groq keys are optional).
+- Then install me on your phone and sign in once inside the installed app. About 45 minutes in all, most of it yours.

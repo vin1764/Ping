@@ -29,7 +29,7 @@ def test_every_line_of_the_doc_is_on_the_page():
         s = re.sub(r"^(#+|-|\d+\.)\s+", "", s)
         for cell in (c for c in s.strip("|").split("|") if c.strip()):
             words = re.sub(r"\s+", " ", re.sub(r"\*\*|`|\[([^\]]+)\]\([^)]+\)", r"\1", cell)).strip()
-            words = words.replace(page.PLACEHOLDER, "available on request")
+            words = words.replace(page.PLACEHOLDER, page.SOURCE_REPO_URL or "the public copy (see README)")
             assert words in out, f"on the doc but not the page: {words[:80]}"
 
 
@@ -54,7 +54,7 @@ def test_source_repo_is_one_placeholder_and_no_dead_link():
     h = page.render()
     assert page.PLACEHOLDER not in h
     if not page.SOURCE_REPO_URL:
-        assert "Source repo: available on request" in text_of(h)
+        assert "Source repo: the public copy" in text_of(h)
     else:
         assert "on request" not in text_of(h) and page.SOURCE_REPO_URL in h
     for href in re.findall(r'href="([^"]*)"', h):

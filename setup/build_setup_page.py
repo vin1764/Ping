@@ -17,9 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "docs" / "SETUP.md"
 
-# The public source repo: the one place it's set. Empty until there is one; then the page says
-# "Source repo: available on request" and links nowhere.
-SOURCE_REPO_URL = ""
+# The public source repo: the one place it's set (the cleaned public copy, Actions > Admin > public-copy).
+SOURCE_REPO_URL = "https://github.com/vin1764/Ping"
 PLACEHOLDER = "SOURCE_REPO_URL"
 
 
@@ -43,7 +42,7 @@ def _source_line(line: str) -> str:
         return line
     if SOURCE_REPO_URL:
         return line.replace(PLACEHOLDER, f"[{SOURCE_REPO_URL}]({SOURCE_REPO_URL})")
-    return line.replace(PLACEHOLDER, "available on request")
+    return line.replace(PLACEHOLDER, "the public copy (see README)")
 
 
 def _table(rows: list[str]) -> str:

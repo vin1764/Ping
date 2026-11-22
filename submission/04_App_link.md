@@ -29,4 +29,4 @@ It opens like an app, keeps you signed in, and can send notifications when somet
 
 ## Source
 
-Source available on request.
+Source: https://github.com/vin1764/Ping (a public copy; every real value replaced). Your own copy: https://vin1764.github.io/ping-dashboard/setup.html

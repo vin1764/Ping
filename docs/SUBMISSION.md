@@ -66,4 +66,4 @@ reminders) is put back after judging.
 | [docs/BUILD_PROMPTS.md](BUILD_PROMPTS.md) | every prompt given to the coding agent while building Ping, in order, with times |
 | [docs/REVIEWER_RUN.md](REVIEWER_RUN.md) | a stranger's run of the live demo, answers verbatim |
 
-Source: a public copy of this repository's full history, with every real value replaced and checked blob by blob, is built by Actions > Admin > `public-copy` (`ping/public_copy.py`); its public address goes here once the owner has created the repository. Until then: available on request.
+Source: [https://github.com/vin1764/Ping](https://github.com/vin1764/Ping), a public copy of this repository's full history with every real value replaced and checked blob by blob (Actions > Admin > `public-copy`, `ping/public_copy.py`). To run your own: make a private copy of it and follow [setup.html](https://vin1764.github.io/ping-dashboard/setup.html).

@@ -26,7 +26,7 @@ STUDENT = {
     "ERP_SECQ_1": "What is the name of your first pet?::Bruno", "ERP_SECQ_2": "In which city were you born?::Patna",
     "ERP_SECQ_3": "What is your favourite food?::Dosa",
     "MAIL_ADDRESS": "Student@Example.com", "MAIL_APP_PASSWORD": "abcd efgh ijkl mnop",
-    "SUPABASE_ACCESS_TOKEN": fs.TOKEN, "GEMINI_API_KEY": "", "PING_GITHUB_TOKEN": "",
+    "SUPABASE_ACCESS_TOKEN": fs.TOKEN, "GEMINI_API_KEY": "", "GROQ_API_KEY": "", "PING_GITHUB_TOKEN": "",
     "DASHBOARD_PASSWORD": "correct horse battery", "GITHUB_REPO": "student/ping",
 }
 

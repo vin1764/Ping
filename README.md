@@ -8,7 +8,7 @@ chat, like WhatsApp:
 - "Accordion opened, eligible for Data & AI Analyst (CG 7+, all depts). Apply by Fri 27 Nov 16:00."
 - "You're on the Eternal test room list (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121."
 - "Update - Ather Energy deadline: deadline moved from Fri 20 Nov 18:00 to Sat 21 Nov 20:00."
-- "Reminder: 38 applications you haven't applied to close tonight, Sat 21 Nov 20:00 — 11 for you" (then the list: For you first, with the CV to apply with; Others collapsed)
+- "Reminder: 11 for you to apply by tonight, Sat 21 Nov 20:00 (Auro Group, Axis Bank, BlackBuck +8 more); 27 others not applied" (then the list: For you first, with the CV to apply with; Others collapsed)
 
 It **only reads**. It cannot apply, submit, upload or accept anything (see [Safety](#safety)).
 
@@ -35,6 +35,9 @@ The exact prompts Ping sends to a model: [`docs/PROMPTS.md`](docs/PROMPTS.md), g
 ---
 
 ## First 5 minutes (a new student)
+
+Source: [https://github.com/vin1764/Ping](https://github.com/vin1764/Ping) (a public copy of this repository, every real value replaced). Make your own **private**
+copy of it (Use this template, or Import a repository), then follow the [setup page](https://vin1764.github.io/ping-dashboard/setup.html).
 
 1. **Run the setup** on your own copy of this repo: `python -m pip install --user -r requirements.txt`, then
    `python setup/new_student_setup.py`. It asks for your ERP login, mailbox app password and Supabase project,

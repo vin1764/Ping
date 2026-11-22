@@ -131,6 +131,8 @@ def dedupe(items: list[dict], now: datetime) -> tuple[list[dict], dict]:
         for v in current.get((company, kind), []):
             if abs(t - (_when(v) or t)) > window:
                 continue
+            if kind == "todo:fill_form" and _other_form(v, it):
+                continue                      # two different forms from one company: both stay
             ok, why = _roles_compatible(v, it)
             if not ok:
                 continue
@@ -167,6 +169,15 @@ def dedupe(items: list[dict], now: datetime) -> tuple[list[dict], dict]:
             stats["unsure_merges"] += 1
             _example(stats, it, match, "probably the same")
             continue
+        if kind == "todo:fill_form" and changes and all(c.startswith("deadline moved") for c in changes):
+            # a form posted again with a later (or earlier) deadline: no new message. The form's message gets one
+            # "deadline extended" line and the new deadline; the repost is folded into it (the Forms tab keeps the
+            # history and every posting)
+            _extend(match, it, now)
+            _hide(it, f"repost of {match['id']} (deadline moved)")
+            stats["form_extensions"] = stats.get("form_extensions", 0) + 1
+            _example(stats, it, match, "form reposted: " + "; ".join(changes))
+            continue
         # a real change: one Update message, the earlier one stays (marked as updated)
         what = _what(match)
         upd = {**it, "id": f"{match['id']}:update:{it['id']}", "category": match["category"],
@@ -202,6 +213,37 @@ def changes_since_last_run(previous: dict[str, dict], items: list[dict], now: da
                     "title": _clip(f"Update - {it.get('company')}: {change}."), "first_seen": now.isoformat(),
                     "details": {**(it.get("details") or {}), "update_of": it["id"], "changes": [change]}})
     return out
+
+
+def _form_key(it) -> str | None:
+    from .forms import key_of
+    d = it.get("details") or {}
+    link = (d.get("todo") or {}).get("link") or next(iter(d.get("forms") or []), None)
+    return key_of(link) if link else None
+
+
+def _other_form(a, b) -> bool:
+    """Two form to-dos whose links are two different forms (a form site's own ids that differ)."""
+    ka, kb = _form_key(a), _form_key(b)
+    known = ("gform:", "msform:", "zoho:", "typeform:", "jotform:")
+    return bool(ka and kb and ka != kb and ka.startswith(known) and kb.startswith(known))
+
+
+def _extend(match: dict, it: dict, now: datetime) -> None:
+    """The form's message takes the repost's deadline and says so in one line."""
+    d = match.setdefault("details", {})
+    old_due, new_due = match.get("due_at"), it.get("due_at")
+    if old_due and new_due:
+        match["title"] = _clip(match["title"].replace(fmt_when(_dt(old_due), now), fmt_when(_dt(new_due), now)))
+    d.setdefault("extended", []).append({"from": old_due, "to": new_due, "id": it["id"],
+                                         "notice_id": it.get("notice_id"), "at": (it.get("details") or {}).get("notice_time")})
+    d.setdefault("merged", []).append({"id": it["id"], "notice_id": it.get("notice_id"), "note": "the same form posted again"})
+    for key in ("mail_links", "forms", "links"):
+        if (it.get("details") or {}).get(key):
+            d[key] = list(dict.fromkeys((d.get(key) or []) + it["details"][key]))[:8]
+    match["due_at"] = new_due
+    if d.get("todo"):
+        d["todo"] = {**d["todo"], "due": new_due}
 
 
 def _what(it) -> str:

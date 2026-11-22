@@ -288,7 +288,8 @@ def test_the_run_builds_the_forms_list_and_a_tick_carries_to_the_next_run():
     fs = store.select("forms")
     assert len(fs) == 1 and fs[0]["company"] == "Accordion" and fs[0]["link"] == "https://forms.gle/abc123"
     item = next(i for i in store.select("items") if (i.get("details") or {}).get("form"))
-    assert item["details"]["form"] == {"key": fs[0]["key"], "filled": False, "sources": 1, "extended": False, "closed": False}
+    assert item["details"]["form"] == {"key": fs[0]["key"], "filled": False, "sources": 1, "extended": False, "moved": None,
+                                       "closed": False, "signin_required": False}
     # you tick it; the next run knows (only your own ticks count, never a demo session's)
     store.upsert("form_status", [{"owner_id": "me", "form_key": fs[0]["key"], "filled": True, "is_demo": False}],
                  key="owner_id,form_key")

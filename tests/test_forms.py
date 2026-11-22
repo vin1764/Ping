@@ -94,3 +94,38 @@ def test_purposes():
     assert forms.purpose_of("CV Submission", "submit your CV") == "CV submission"
     assert forms.purpose_of("Test slot booking") == "test slot"
     assert forms.purpose_of("Fill the form") == "form"
+
+
+def test_form_pages_closed_signin_and_short_links():
+    from ping import form_pages
+    closed = form_pages.parse("<html><title>Kite reg</title><body>This form is no longer accepting responses.</body></html>",
+                              "https://docs.google.com/forms/d/e/x/closedform")
+    assert closed["closed"] and closed["title"] == "Kite reg"
+    signin = form_pages.parse("<html>Sign in</html>", "https://accounts.google.com/v3/signin/identifier?continue=x")
+    assert signin["signin_required"] and not signin["closed"]
+    # a short link is followed to the form and stops there (never on to a sign-in page), cached by its own key
+    calls = []
+
+    def get(url, stop=None):
+        calls.append(url)
+        return G + "?usp=send_form", ""
+    r = form_pages.Reader({}, get=get, now=NOW)
+    assert forms.key_of(r.follow("https://forms.gle/Zz9")) == forms.key_of(G)
+    r.follow("https://forms.gle/Zz9")
+    assert len(calls) == 1 and r.stats["cached"] == 1
+    # only public web addresses
+    assert not form_pages._allowed("http://127.0.0.1/x") and not form_pages._allowed("http://localhost/x")
+
+
+def test_a_repost_in_the_chat_is_one_line_on_the_first_message():
+    from ping.dedupe import dedupe
+    first = todo("notice:1791:0:todo0", "Groww", G, "2026-11-21T20:00:00+05:30", notice=("1791", "2026-11-20T10:00:00+05:30"))
+    again = todo("notice:1796:0:todo0", "Groww", G + "?usp=sf_link", "2026-11-22T20:00:00+05:30", notice=("1796", "2026-11-21T09:00:00+05:30"))
+    other = todo("notice:1797:0:todo0", "Groww", "https://docs.google.com/forms/d/e/1FAIpQLSdOtherForm987654321/viewform",
+                 "2026-11-23T20:00:00+05:30", notice=("1797", "2026-11-21T10:00:00+05:30"), subject="Test slot form")
+    out, stats = dedupe([first, again, other], NOW)
+    assert again["level"] == "hidden" and first["level"] != "hidden" and first["due_at"] == "2026-11-22T20:00:00+05:30"
+    assert first["details"]["extended"][0]["to"] == "2026-11-22T20:00:00+05:30"
+    assert not any(":update:" in i["id"] for i in out)                     # no new "Update" message
+    assert other["level"] != "hidden"                                      # a different form from Groww stays
+    assert stats["form_extensions"] == 1

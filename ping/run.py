@@ -98,8 +98,12 @@ def log(msg: str) -> None:
 class Runner:
     def __init__(self, secrets, store, store_ok: bool, gate: Gate | None = None, mailbox=None,
                  now: datetime | None = None, otp_wait: float | None = None, pause: float | None = None,
-                 trigger: str = "manual"):
+                 trigger: str = "manual", read_form_pages: bool = False, form_get=None):
         self.secrets = secrets
+        # reading form pages (ping/form_pages.py: plain GETs, never a sign-in or a submit): on in the real run,
+        # off in tests unless they hand in a fake page source
+        self.read_form_pages = read_form_pages or form_get is not None
+        self.form_get = form_get
         self.store = store
         self.store_ok = store_ok
         self.gate = gate or Gate()
@@ -644,10 +648,26 @@ class Runner:
         self.counts["dedupe"] = {k: v for k, v in dstats.items() if k != "examples"}
         self.counts["dedupe"]["deadline_moves_between_runs"] = len(moved)
         self.counts["dedupe_examples"] = dstats.get("examples", [])[:5]
-        # the forms list: one row per form (ping/forms.py), and each form item learns its form and your tick
+        # the forms list: one row per form (ping/forms.py), and each form item learns its form and your tick.
+        # Short links are followed and form pages read (closed? sign-in only? title, questions) within the run's
+        # limits (ping/form_pages.py); what was read is kept in form_pages.
         try:
-            frows = forms_mod.build(items, forms_prev, self._rows("form_merges", {"is_demo": "is.false"}),
-                                    {p["key"]: p for p in self._rows("form_pages")}, fetch=self._form_fetch(), now=self.now)
+            merges = self._rows("form_merges", {"is_demo": "is.false"})
+            pages = {p["key"]: p for p in self._rows("form_pages")}
+            reader = None
+            if self.read_form_pages:
+                from .form_pages import Reader
+                reader = Reader(pages, get=self.form_get, now=self.now)
+            frows = forms_mod.build(items, forms_prev, merges, pages, fetch=reader.follow if reader else None, now=self.now)
+            if reader:
+                pages = reader.read_rows(frows)
+                frows = forms_mod.build(items, forms_prev, merges, pages, fetch=reader.follow, now=self.now)
+                if reader.saved:
+                    try:
+                        self.store.upsert("form_pages", reader.saved, key="key")
+                    except Exception as e:
+                        self.problems.append(f"saving form pages failed: {type(e).__name__}: {str(e)[:120]}")
+                self.counts["form_pages"] = reader.stats
             forms_mod.mark_items(items, frows, filled)
             if frows:
                 self.store.upsert("forms", [forms_mod.stored(r) for r in frows], key="key")
@@ -689,10 +709,6 @@ class Runner:
             return self.store.select(table, query or {})
         except Exception:
             return []
-
-    def _form_fetch(self):
-        """Following short form links (forms.gle, bit.ly…) to the form: ping/form_pages.py (none in tests)."""
-        return getattr(self, "form_fetch", None)
 
     def _classify(self, roles: list[dict], profile: dict) -> None:
         """'For you' or not, for every role you could apply to (cached on the role; see ping/relevance.py)."""
@@ -926,7 +942,7 @@ def main(argv: list[str] | None = None) -> int:
         log(f"Skipping: the ERP refused the login ({paused.get('kind')}) at {paused.get('at')}. Hourly checks stay "
             "paused until you start a run yourself (dashboard Menu > Check now, or Actions > Ping > Run workflow).")
         return 0  # you were already told; a red run every hour would only add GitHub's own emails
-    rec = Runner(secrets, store, store_ok=ok, trigger=trigger).run()
+    rec = Runner(secrets, store, store_ok=ok, trigger=trigger, read_form_pages=True).run()
     store.save()
     if rec["status"] == "ok":
         return 0

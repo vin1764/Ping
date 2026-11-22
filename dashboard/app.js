@@ -1599,6 +1599,7 @@
       block("today", "Due today", sec.today, "Nothing due today."),
       block("upcoming", "Upcoming", sec.upcoming, "Nothing coming up."),
       block("past", "Past due (not filled)", sec.past, "None."),
+      ...(sec.closed.length ? [block("closed", "Closed", sec.closed, "")] : []),
       block("filled", "Filled", sec.filled, "Tick a form when you've filled it."));
     formsBadge();
   }
@@ -1620,6 +1621,8 @@
           f.due_at && !filled ? (past ? h("span", { class: "pill cd c-over" }, "over") : countPill(f.due_at)) : null,
           filled && moved ? h("span", { class: "pill plain" }, "deadline extended") : null),
         f.title ? h("div", { class: "fr-line" }, f.title) : null,
+        f.signin_required ? h("div", { class: "fr-line muted small" }, "This form needs an institute sign-in: Ping can't read it, so open it in your browser. The notice says what it's for.") : null,
+        f.closed ? h("div", { class: "fr-line muted small" }, "The form page says it's no longer accepting responses.") : null,
         moved || posted ? h("div", { class: "fr-line muted small" }, [moved, posted].filter(Boolean).join(" · ")) : null,
         ...(f.looks_like || []).map((x) => looksLike(f, x)),
         h("div", { class: "ac-links" },
@@ -1686,6 +1689,8 @@
         viaMail ? h("span", { class: "pill via", title: `From your mail: ${d.mail?.from || ""}` }, "via email") : null,
         mailed ? h("span", { class: "pill via", title: d.mail.subject || "" }, "also mailed to you") : null),
       h("span", { class: "text title" }, retitle(it)),
+      // a form posted again: one line on the message, not a new message
+      d.extended?.length ? h("div", { class: "ext-line" }, `Deadline extended: ${when(d.extended[0].from)} → ${when(d.extended[d.extended.length - 1].to)}${d.extended.at(-1).notice_id ? ` (notice ${d.extended.at(-1).notice_id})` : ""}`) : null,
       listBlock(it),
       mlink && !past ? h("div", { class: "mail-link" }, h("a", { href: mlink, target: "_blank", rel: "noopener",
         onclick: (ev) => ev.stopPropagation() }, linkText(mlink))) : null,

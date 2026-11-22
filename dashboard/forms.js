@@ -9,19 +9,20 @@
   const label = (purpose) => (!purpose || purpose === "form" ? "Form" : purpose[0].toUpperCase() + purpose.slice(1));
   const names = (f) => (f.companies && f.companies.length > 1 ? f.companies : [f.company]).filter(Boolean);
 
-  // Due today · Upcoming · Past due (not filled) · Filled. query: words in company / purpose / title; only: "foryou" |
+  // Due today · Upcoming · Past due (not filled) · Closed (the form page says so) · Filled. query: words in company / purpose / title; only: "foryou" |
   // null; at: one deadline (Today's "7 forms due 20:00" opens the list at that time)
   function sections(forms, status, { now, query = "", only = null, mineOf = () => true, at = null } = {}) {
     const q = String(query || "").trim().toLowerCase();
     const day = T.dayOf(now);
-    const out = { today: [], upcoming: [], past: [], filled: [] };
+    const out = { today: [], upcoming: [], past: [], closed: [], filled: [] };
     for (const f of forms || []) {
       if (q && ![...names(f), f.purpose, f.title].join(" ").toLowerCase().includes(q)) continue;
       if (only === "foryou" && !mineOf(f)) continue;
       if (at != null && ms(f.due_at) !== at) continue;
       const t = ms(f.due_at);
       if (isFilled(status, f.key)) out.filled.push(f);
-      else if (f.closed || (t > 0 && t <= now)) out.past.push(f);
+      else if (f.closed) out.closed.push(f);
+      else if (t > 0 && t <= now) out.past.push(f);
       else if (t > 0 && T.dayOf(t) === day) out.today.push(f);
       else out.upcoming.push(f);
     }

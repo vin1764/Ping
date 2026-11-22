@@ -172,6 +172,7 @@ def similarity(a: dict, b: dict) -> float:
 
 
 HIGH, MEDIUM = 0.85, 0.6
+KNOWN = ("gform", "msform", "zoho", "typeform", "jotform")
 
 
 def build(items: list[dict], previous: dict[str, dict] | None = None, merges: list[dict] | None = None,
@@ -204,7 +205,10 @@ def build(items: list[dict], previous: dict[str, dict] | None = None, merges: li
                 continue
             choice = decided.get(tuple(sorted((a, b))))
             s = similarity(rows[a], rows[b])
-            if choice == "merge" or (choice != "keep" and s >= HIGH and a.split(":")[0] == "url"):
+            # two different ids on a form site are two forms as far as Ping can tell: never merged on its own,
+            # at most offered ("Looks like the same form as …"); addresses Ping can't identify merge when sure
+            both_known = a.split(":")[0] in KNOWN and b.split(":")[0] in KNOWN
+            if choice == "merge" or (choice != "keep" and s >= HIGH and not both_known):
                 groups[a]["posts"] += groups[b]["posts"]
                 rows[a] = _row(groups[a], previous.get(a), pages.get(a), now)
                 rows[a]["merged_keys"] = sorted(set(rows[a].get("merged_keys", [])) | {b})
@@ -295,5 +299,7 @@ def mark_items(items: list[dict], rows: list[dict], filled: set[str]) -> None:
         if not r:
             continue
         d = it.setdefault("details", {})
+        h = r["deadline_history"]
         d["form"] = {"key": r["key"], "filled": r["key"] in filled, "sources": len(r["sources"]),
-                     "extended": bool(r["deadline_history"]), "closed": r["closed"]}
+                     "extended": bool(h), "moved": ({"from": h[0]["from"], "to": h[-1]["to"]} if h else None),
+                     "closed": r["closed"], "signin_required": r.get("signin_required", False)}

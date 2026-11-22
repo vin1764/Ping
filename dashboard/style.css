@@ -696,3 +696,4 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .reply-preview .rp-body { display: flex; flex-direction: column; min-width: 0; flex: 1; justify-content: center; }
 .reply-preview .rp-x { flex: none; width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; }
 .msg.flash { animation: hl 1.6s ease-out; }
+.msg .ext-line { margin-top: 4px; font-size: var(--t-sm); color: var(--soon); font-weight: 600; }

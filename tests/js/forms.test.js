@@ -13,12 +13,13 @@ const forms = [
   { key: "s1", company: "Soon Co", purpose: "form", due_at: "2026-11-22T10:00:00+05:30", sources: [] },
 ];
 
-test("sections: due today, upcoming, past due (not filled, or closed), filled", () => {
+test("sections: due today, upcoming, past due (not filled), closed, filled", () => {
   const status = new Map([["o1", { filled: true, filled_at: "2026-11-19T10:00:00+05:30" }]]);
   const s = F.sections(forms, status, { now });
   assert.deepEqual(s.today.map((f) => f.key), ["g1"]);
   assert.deepEqual(s.upcoming.map((f) => f.key), ["s1", "p1"]);
-  assert.deepEqual(s.past.map((f) => f.key), ["c1"]);
+  assert.deepEqual(s.past.map((f) => f.key), []);
+  assert.deepEqual(s.closed.map((f) => f.key), ["c1"]);
   assert.deepEqual(s.filled.map((f) => f.key), ["o1"]);
   // search, For you, one deadline
   assert.deepEqual(F.sections(forms, status, { now, query: "piramal" }).upcoming.map((f) => f.key), ["p1"]);

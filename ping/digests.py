@@ -339,6 +339,28 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
             hide(it, "in the deadline digest" if rid in members_by_role else "in a list message")
 
     # ------------------------------------------------------------------ forms and tests at the same time
+    def _form_reminder(rid: str, its: list[dict], at: datetime, base: dict | None) -> None:
+        """Reminder: the forms of one deadline still not done (filled = your tick), `reminder_h` before it closes.
+        Posted once; not when the digest itself came out inside that window."""
+        pending = [it for it in its if not (previous.get(it["id"]) or {}).get("done")]
+        sent = _dt((base or {}).get("first_seen")) or (now if base else at - timedelta(days=1))
+        if previous.get(rid):
+            emit(dict(previous[rid]))
+        elif pending and at - timedelta(hours=reminder_h) <= now < at and sent < at - timedelta(hours=reminder_h):
+            ticked = len(its) - len(pending)          # filled (your tick) or marked done: no reminder for them
+            rows = [{"text": it["title"], "note": "", "tag": "role", "id": it["id"]} for it in pending]
+            emit({"id": rid, "level": "always" if any(it["level"] == "always" for it in its) else "show",
+                  "category": "digest", "company": None, "role_ids": [], "notice_id": None,
+                  "due_at": at.isoformat(), "event_at": None, "pdf_status": None, "needs_review": False,
+                  "title": _named(lambda names: f"Reminder: {_plural(len(pending), 'form')} due {when(at, now)}: {names}"
+                                  + (f" ({ticked} filled)" if ticked else ""), [p.get("company") or "" for p in pending])[:160],
+                  "first_seen": now.isoformat(), "sort_at": at.isoformat(),
+                  "details": {**((base or {}).get("details") or {"kind": "form", "batch": rid.split(":")[2],
+                                                                   "members": sorted(it["id"] for it in its),
+                                                                   "source": _source(now, [f"notice {it['notice_id']}" for it in its if it.get("notice_id")]),
+                                                                   "sent_at": now.isoformat()}),
+                              "role": "reminder", "list": [{"head": "", "rows": rows}]}})
+
     for kind, pick, label in (("form", lambda it: it["category"] == "todo" and
                                ((it.get("details") or {}).get("todo") or {}).get("action") == "fill_form",
                                ("form", "forms due")),
@@ -351,9 +373,21 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
             at = _dt(it.get("due_at") if kind == "form" else it.get("event_at"))
             if at and at > now:
                 groups.setdefault(_key(at), []).append(it)
-        for bk, its in groups.items():
+        for bk, all_its in groups.items():
             did = f"digest:{kind}:{bk}"
+            # a form already in the chat whose deadline a repost moved here: it keeps its place (its own message,
+            # or the digest it was in, with one "deadline extended" line) and isn't announced again. It still
+            # counts for the reminder below.
+            moved_here = [it for it in all_its if kind == "form" and (it.get("details") or {}).get("extended")
+                          and it["id"] in previous and it["id"] not in ((previous.get(did) or {}).get("details") or {}).get("members", [])]
+            for it in moved_here:
+                was = ((previous.get(it["id"]) or {}).get("details") or {}).get("hidden_because") or ""
+                if was.startswith("in the form digest"):
+                    hide(it, was)
+            its = [it for it in all_its if it not in moved_here]
             if len(its) < 2 and not previous.get(did):
+                if kind == "form" and moved_here and len(all_its) >= 2:
+                    _form_reminder(f"{did}:reminder", all_its, at=_dt(all_its[0].get("due_at")), base=None)
                 continue
             at = _dt(its[0].get("due_at") if kind == "form" else its[0].get("event_at"))
             rows = [{"text": it["title"], "note": "", "tag": "role", "id": it["id"]} for it in its]
@@ -372,19 +406,7 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                               "source": _source(now, [f"notice {it['notice_id']}" for it in its if it.get("notice_id")]),
                               "sent_at": now.isoformat()}})
             if kind == "form":
-                rid = f"{did}:reminder"
-                pending = [it for it in its if not (previous.get(it["id"]) or {}).get("done")]
-                sent = _dt((made.get(did) or {}).get("first_seen")) or now
-                if previous.get(rid):
-                    emit(dict(previous[rid]))
-                elif pending and at - timedelta(hours=reminder_h) <= now < at and sent < at - timedelta(hours=reminder_h):
-                    ticked = len(its) - len(pending)          # filled (your tick) or marked done: no reminder for them
-                    emit({**made[did], "id": rid, "title": _named(lambda names: f"Reminder: {_plural(len(pending), 'form')} due {when(at, now)}: {names}"
-                                                                  + (f" ({ticked} filled)" if ticked else ""),
-                                                                  [p.get("company") or "" for p in pending]),
-                          "first_seen": now.isoformat(),
-                          "details": {**made[did]["details"], "role": "reminder",
-                                      "list": [{"head": "", "rows": [r for r in rows if r["id"] in {p['id'] for p in pending}]}]}})
+                _form_reminder(f"{did}:reminder", all_its, at=at, base=made[did])
 
     # ------------------------------------------------------------------ one notice extends several deadlines
     ext: dict[str, list[dict]] = {}
@@ -451,6 +473,15 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
     for pid, p in previous.items():
         if p.get("category") in OWN and pid not in made:
             made[pid] = dict(p)
+    # a form digest whose form a repost extended stays up until the new deadline (its row says "deadline extended")
+    for did, dg in made.items():
+        d = dg.get("details") or {}
+        if dg.get("category") != "digest" or d.get("kind") != "form" or d.get("role") == "reminder":
+            continue
+        dues = [_dt(by_id[m]["due_at"]) for m in d.get("members") or [] if m in by_id and by_id[m].get("due_at")
+                and (by_id[m].get("details") or {}).get("extended")]
+        if dues and _dt(dg.get("due_at")) and max(dues) > _dt(dg["due_at"]):
+            made[did] = {**dg, "due_at": max(dues).isoformat()}
     # the rows under the old keys: hidden (their messages live on under the new keys)
     for pid, p in renamed.items():
         by_id[pid] = {**p, "level": "hidden", "details": {**(p.get("details") or {}), "hidden_because": "renamed"}}

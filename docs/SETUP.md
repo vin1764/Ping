@@ -77,7 +77,18 @@ Source repo: SOURCE_REPO_URL
 
 ## How long it takes
 
-About 30 minutes from start to dashboard, most of it creating accounts and tokens. The first check reads two weeks of notices and takes about 12 minutes, so your first messages land within the hour.
+**Time to first feed: about 45 minutes**, most of it yours:
+
+| step | time | how it was measured |
+|---|---|---|
+| accounts, the Supabase project, keys and GitHub secrets (steps 1-4) | about 30 min | by hand, the first time |
+| the setup script on an empty project | 0.2 s | `setup/replica_walkthrough.py` on the local replica (22 Nov) |
+| first open, sign-in, onboarding in the chat (10 answers) | 9 s of page time, plus your reading | same |
+| the first real check: two weeks of notices, roles and PDFs | 12.1 min | Ping's first real run (`evals/real_run.json`) |
+| every check after that | under 1 min | runs #13 and #15 |
+| first digest on the page, and a question answered | 0.2 s, 4 ms | the replica walkthrough |
+
+So the first messages land within the hour, and every check after that takes under a minute.
 
 ## If something goes wrong
 
@@ -91,4 +102,4 @@ About 30 minutes from start to dashboard, most of it creating accounts and token
 - Your CVs sit in a private storage bucket in that project; Ping keeps a short summary of each to suggest which one to apply with.
 - Your passwords and keys live only in your repo's secrets, your Supabase function secrets and the `.env` file on your computer.
 - Gemini sees only your own feed, roles and profile when you ask something, never a PDF.
-- The public `ping-dashboard` repo holds only the built page. Its demo is an anonymised snapshot: real companies, a made-up student, no other students and no mail.
+- The public `ping-dashboard` repo holds only the built page. Its demo is an anonymised snapshot: real companies, a made-up student, no other students, and four made-up mails instead of real ones.

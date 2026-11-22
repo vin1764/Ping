@@ -1,5 +1,5 @@
 {
- "about": "15 form postings (made up, shaped like real CDC notices and placement mail). Each posting must land in the right form; each form must have the right deadline (with its history), sources, closed / sign-in state and 'looks like' offer. Pages are served by a fake web (no network): the reader follows short links and reads form pages exactly as the hourly run does. Merge rules (22 Nov): the same notice or mail, a form link in common, or the same companies (as a set) + purpose with the same or a later deadline: merged silently. Ping never asks.",
+ "about": "15 form postings (made up, shaped like real CDC notices and placement mail). Each posting must land in the right form; each form must have the right deadline (with its history), sources, closed / sign-in state and 'looks like' offer. Pages are served by a fake web (no network): the reader follows short links and reads form pages exactly as the hourly run does. Merge rules (23 Nov): the same form (one canonical id), or no link at all and the same notice or mail, or no link and the same companies + purpose with the same or a later deadline (an extension). Two different links are never one form. Ping never asks.",
  "pages": {
   "https://forms.gle/grw1": {
    "redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform?usp=send_form"
@@ -41,6 +41,14 @@
   },
   "https://careers.groww.example/apply/form": {
    "title": "Groww Campus Registration"
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdLatticeAddl26x/viewform": {
+   "title": "LTM | Additional Details Form",
+   "questions": 5
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdKestrelOwn26x/viewform": {
+   "title": "Kestrel Labs - Additional Details",
+   "questions": 5
   }
  },
  "postings": [
@@ -228,7 +236,7 @@
   },
   {
    "id": "P15",
-   "form": "A",
+   "form": "I",
    "company": "Groww",
    "subject": "Registration form",
    "link": "https://careers.groww.example/apply/form",
@@ -237,14 +245,48 @@
     "2080",
     "2026-11-20T13:00:00+05:30"
    ],
-   "case": "the same companies + purpose + deadline from another site: merged silently (no prompt)"
+   "case": "the same companies + purpose + deadline but a different link: its own form (two links are never one form)"
+  },
+  {
+   "id": "P16",
+   "form": "J",
+   "company": "Lattice Co",
+   "subject": "LTM | Additional Details Form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdLatticeAddl26x/viewform",
+   "notice_forms": [
+    "https://docs.google.com/forms/d/e/1FAIpQLSdLatticeAddl26x/viewform",
+    "https://docs.google.com/forms/d/e/1FAIpQLSdKestrelOwn26x/viewform"
+   ],
+   "due": "2026-11-23T20:00:00+05:30",
+   "notice": [
+    "2090",
+    "2026-11-21T11:30:00+05:30"
+   ],
+   "case": "one notice, several companies with their own forms: this company's form"
+  },
+  {
+   "id": "P17",
+   "form": "K",
+   "company": "Kestrel Labs",
+   "subject": "LTM | Additional Details Form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdKestrelOwn26x/viewform",
+   "notice_forms": [
+    "https://docs.google.com/forms/d/e/1FAIpQLSdLatticeAddl26x/viewform",
+    "https://docs.google.com/forms/d/e/1FAIpQLSdKestrelOwn26x/viewform"
+   ],
+   "due": "2026-11-23T20:00:00+05:30",
+   "notice": [
+    "2090",
+    "2026-11-21T11:30:00+05:30"
+   ],
+   "case": "the same notice, another company's own form (the 23 Nov over-merge): its own row and its own link"
   }
  ],
  "forms": {
   "A": {
    "due": "2026-11-22T20:00:00+05:30",
    "moves": 1,
-   "sources": 4
+   "sources": 3
   },
   "B": {
    "looks_like": false
@@ -267,6 +309,15 @@
   },
   "H": {
    "sources": 2
+  },
+  "I": {
+   "sources": 1
+  },
+  "J": {
+   "sources": 1
+  },
+  "K": {
+   "sources": 1
   }
  }
 }

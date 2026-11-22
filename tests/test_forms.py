@@ -137,12 +137,18 @@ CO = ["Lattice Co", "ICOR LOMBARD", "AMARIX PRIVATE LIMITED", "Teal General Insu
 LINKS = [f"https://forms.gle/Form{i:02d}abcdEFGH" for i in range(9)]
 
 
-def notice_1815():
-    """One notice: 'Additional requirement' for 11 companies, 9 form links; the notice reader makes a to-do per
-    company per link, each carrying all the links. The same notice by mail, with the links."""
+OWN = {t: min(t, 8) for t in range(len(CO))}       # companies 0-7 a form each; 8, 9 and 10 share the 9th
+
+
+def notice_1815(own=True):
+    """One notice: 'Additional requirement' for 11 companies with their own forms (9 links; the last three companies
+    share one). The notice reader gives each company its own form (ping/notices.py link_owners). own=False: what it
+    did before, every company a to-do per link. The same notice by mail, with the first company's link."""
     out = []
     for t, co in enumerate(CO):
         for k, link in enumerate(LINKS):
+            if own and OWN[t] != k:
+                continue
             it = todo(f"notice:1815:{t}:todo{k}", co, link, "2026-11-22T20:00:00+05:30", notice=("1815", "2026-11-22T10:35:00+05:30"),
                       subject="Additional requirement")
             it["details"]["forms"] = list(LINKS)
@@ -153,29 +159,60 @@ def notice_1815():
     return out + [mail]
 
 
-def test_one_notice_for_eleven_companies_is_one_row_and_no_prompt():
+def test_a_notice_with_a_form_per_company_is_one_row_per_form():
     rows = forms.build(notice_1815(), fetch=lambda u: u, now=NOW)
-    assert len(rows) == 1
-    r = rows[0]
-    assert len(r["companies"]) == 11 and r["purpose"] == "additional requirement"
-    assert [(s["type"], s["id"]) for s in r["sources"]] == [("notice", "1815"), ("mail", "m1815")]
-    assert forms.stored(r)["looks_like"] == []
-    # and the same companies in another order, by another notice the next day, extending it: still one row
+    assert len(rows) == 9 and all(forms.stored(r)["looks_like"] == [] for r in rows)
+    by_link = {r["link"]: r for r in rows}
+    assert by_link[LINKS[0]]["companies"] == [CO[0]]
+    assert [(s["type"], s["id"]) for s in by_link[LINKS[0]]["sources"]] == [("notice", "1815"), ("mail", "m1815")]
+    assert sorted(by_link[LINKS[8]]["companies"]) == sorted(CO[8:])
+    # the same notice the next day with a later deadline, companies in another order: the same 9 rows, moved
     again = [dict(i, id=i["id"].replace("1815", "1820"), details={**i["details"], "notice_time": "2026-11-23T09:00:00+05:30",
              "todo": {**i["details"]["todo"], "due": "2026-11-23T20:00:00+05:30"}}, notice_id="1820", due_at="2026-11-23T20:00:00+05:30")
              for i in reversed(notice_1815()[:-1])]
-    rows2 = forms.build(notice_1815() + again, previous={r["key"]: r}, fetch=lambda u: u, now=NOW)
-    assert len(rows2) == 1 and rows2[0]["key"] == r["key"] and rows2[0]["due_at"] == "2026-11-23T20:00:00+05:30"
-    assert len(rows2[0]["deadline_history"]) == 1
+    rows2 = forms.build(notice_1815() + again, previous={r["key"]: r for r in rows}, fetch=lambda u: u, now=NOW)
+    assert sorted(r["key"] for r in rows2) == sorted(r["key"] for r in rows)
+    assert all(r["due_at"] == "2026-11-23T20:00:00+05:30" and len(r["deadline_history"]) == 1 for r in rows2)
 
 
-def test_old_duplicate_rows_collapse_and_keep_your_tick():
+def test_two_different_links_are_never_one_form():
+    a = todo("notice:1:todo0", "Groww", "https://forms.gle/AAAA1111", "2026-11-22T20:00:00+05:30", notice=("1", "2026-11-21T10:00:00+05:30"),
+             subject="LTM | Additional Details Form")
+    b = todo("notice:2:todo0", "Groww", "https://forms.gle/BBBB2222", "2026-11-22T20:00:00+05:30", notice=("2", "2026-11-21T11:00:00+05:30"),
+             subject="LTM | Additional Details Form")
+    pages = {"short:forms.gle/AAAA1111": {"title": "LTM | Additional Details Form"}, "short:forms.gle/BBBB2222": {"title": "LTM | Additional Details Form"}}
+    rows = forms.build([a, b], pages=pages, fetch=lambda u: u, now=NOW)
+    assert len(rows) == 2
+    # the old reading, every company a to-do per link, can't chain them either: still one row per link
+    rows = forms.build(notice_1815(own=False), fetch=lambda u: u, now=NOW)
+    assert len(rows) == 9 and all(len(r["form_keys"]) == 1 for r in rows)
+
+
+def test_an_over_merged_row_splits_and_the_tick_stays_with_the_form_it_showed():
     items = notice_1815()
-    # what the old code stored: one row per link, the same companies in different orders, each asking "merge?"
-    old = {f"short:forms.gle/Form{k:02d}abcdEFGH": {"key": f"short:forms.gle/Form{k:02d}abcdEFGH", "first_seen": f"2026-11-22T10:3{k}:00+05:30",
-           "item_ids": [f"notice:1815:{t}:todo{k}" for t in range(11)], "looks_like": [{"key": "x"}]} for k in range(9)}
-    rows = forms.build(items, previous=old, fetch=lambda u: u, now=NOW)
-    assert len(rows) == 1 and rows[0]["key"] == "short:forms.gle/Form00abcdEFGH"       # the earliest old row's key
-    ticks = [{"owner_id": "me", "form_key": "short:forms.gle/Form04abcdEFGH", "filled": True, "filled_at": "x", "is_demo": False}]
-    moved = forms.carry_ticks(ticks, old, rows)
-    assert moved == [{"owner_id": "me", "form_key": rows[0]["key"], "filled": True, "filled_at": "x", "is_demo": False}]
+    keys = [forms.key_of(l) for l in LINKS]
+    old_key = "notice:1815"
+    old = {old_key: {"key": old_key, "first_seen": "2026-11-22T10:35:00+05:30", "title": "LTM | Additional Details Form",
+                     "link": LINKS[0], "item_ids": [i["id"] for i in items], "merged_keys": keys,
+                     "deadline_history": [{"from": "x", "to": "y"}]}}
+    pages = {k: {"title": f"Form {n}"} for n, k in enumerate(keys)}
+    pages[keys[3]] = {"title": "LTM | Additional Details Form"}          # the form that was shown on the merged row
+    rows = forms.build(items, previous=old, pages=pages, fetch=lambda u: u, now=NOW)
+    assert len(rows) == 9 and len({r["key"] for r in rows}) == 9
+    kept = [r for r in rows if r["key"] == old_key]
+    assert len(kept) == 1 and kept[0]["companies"] == [CO[3]]            # by its page title
+    assert all(r["deadline_history"] == [] for r in rows)                # the old row's mixed history isn't copied
+    ticks = [{"owner_id": "me", "form_key": old_key, "filled": True, "filled_at": "x", "is_demo": False}]
+    assert forms.carry_ticks(ticks, old, rows) == []                     # the tick stays on that one row only
+    assert forms.filled_keys(ticks) & {r["key"] for r in rows} == {old_key}
+
+
+def test_link_owners_reads_a_form_per_company():
+    from ping.notices import link_owners
+    text = ("Additional requirement. 1. RISA Labs: https://forms.gle/RisaA1 2. Diageo and Finaro: https://forms.gle/DiagB2 "
+            "3. Pira Finance https://forms.gle/PiraC3")
+    t = [{"name": "RISA Labs"}, {"name": "Diageo"}, {"name": "Finaro"}, {"name": "Pira Finance"}]
+    own = link_owners(text, ["https://forms.gle/RisaA1", "https://forms.gle/DiagB2", "https://forms.gle/PiraC3"], t)
+    assert own == {"https://forms.gle/RisaA1": [0], "https://forms.gle/DiagB2": [1, 2], "https://forms.gle/PiraC3": [3]}
+    # one form for everyone: every company gets it
+    assert link_owners("Fill https://forms.gle/One1 RISA Labs Diageo", ["https://forms.gle/One1"], t[:2]) == {"https://forms.gle/One1": None}

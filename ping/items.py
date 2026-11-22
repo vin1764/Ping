@@ -261,6 +261,9 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             for k, todo in enumerate(a.get("todos", [])):
                 if todo["action"] == "apply":
                     continue  # the role item already says "apply by", with this notice's deadline if later
+                # a notice with a form per company: this company's own form only
+                if todo.get("for") is not None and not fix.get("company") and ti not in todo["for"]:
+                    continue
                 due = todo.get("due")
                 if todo["action"] == "fill_form":
                     title = (f"{company}{label_s}: fill the form by {fmt_when(_dt(due), now)}." if due

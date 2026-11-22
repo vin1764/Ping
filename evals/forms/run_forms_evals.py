@@ -60,14 +60,15 @@ def fake_get(spec):
 def item(p):
     d = {"todo": {"action": "fill_form", "link": p["link"], "due": p["due"]}, "subject": p["subject"]}
     if p["link"]:
-        d["forms"] = [p["link"]]
+        d["forms"] = p.get("notice_forms") or [p["link"]]      # a notice with several forms: every link on each to-do
     nid = None
     if p.get("notice"):
         nid, d["notice_time"] = p["notice"]
     if p.get("mail"):
         d["mail"] = {"id": p["mail"][0], "received_at": p["mail"][1], "link": p["link"]}
         d["via"] = "email"
-    iid = f"notice:{nid}:0:todo0" if nid else f"mail:{p['mail'][0]}"
+    k = (p.get("notice_forms") or [p["link"]]).index(p["link"]) if p.get("notice_forms") else 0
+    iid = f"notice:{nid}:{k}:todo{k}" if nid else f"mail:{p['mail'][0]}"
     return {"id": iid, "category": "todo", "company": p["company"], "title": f"{p['company']}: fill the form by {p['due']}.",
             "due_at": p["due"], "level": "show", "notice_id": nid, "role_ids": [], "details": d, "first_seen": d.get("notice_time")}
 

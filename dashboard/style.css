@@ -727,3 +727,6 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .msg .text .inline-link, .msg .text button.inline-link { font: inherit; }
 .nav .nav-btn .theme-mode { font-size: var(--t-xs); font-weight: 400; color: var(--muted); line-height: 1; }
 .nav .nav-btn#theme-btn { gap: 1px; }
+/* Forms: one notice with a form per company: its rows under the notice's heading */
+.forms-group { display: grid; gap: var(--s2); padding-left: var(--s3); border-left: 2px solid var(--line); }
+.forms-group .fg-head { margin-top: var(--s2); }

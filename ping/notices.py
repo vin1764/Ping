@@ -126,6 +126,45 @@ def role_phrases(text: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+def link_owners(text: str, forms: list[str], targets: list[dict]) -> dict[str, list[int] | None]:
+    """Which companies each form link belongs to, when a notice lists several companies with their own forms
+    ("RISA Labs: <link>", "<link> for Diageo"): {link: [target index, ...]}. A notice with one form, or a layout where
+    the links can't be told apart, gives None for every link (each company gets every form, as before)."""
+    out: dict[str, list[int] | None] = {f: None for f in forms}
+    if len(forms) < 2 or len(targets) < 2:
+        return out
+    low = (text or "").lower()
+    lpos = [low.find(f.lower()) for f in forms]
+    if any(p < 0 for p in lpos):
+        return out
+    npos = []
+    for i, t in enumerate(targets):
+        names = [t.get("name") or "", t.get("company") or ""]
+        hits = [low.find(n.lower()) for n in names if n and len(n) >= 2]
+        hits = [h for h in hits if h >= 0]
+        if hits:
+            npos.append((min(hits), i))
+    if not npos:
+        return out
+    order = sorted(range(len(forms)), key=lambda k: lpos[k])
+
+    def assign(before: bool) -> dict[str, list[int]] | None:
+        got: dict[str, list[int]] = {}
+        for j, k in enumerate(order):
+            if before:     # "Company: link": the names between the previous link and this one
+                lo = lpos[order[j - 1]] if j else -1
+                hi = lpos[k]
+            else:          # "link (Company)": the names between this link and the next one
+                lo = lpos[k]
+                hi = lpos[order[j + 1]] if j + 1 < len(order) else len(low) + 1
+            got[forms[k]] = [i for p, i in npos if lo < p < hi]
+        if all(got.values()) and sum(len(v) for v in got.values()) == len(npos):
+            return got
+        return None
+    best = assign(True) or assign(False)
+    return best if best else out
+
+
 def analyze(notice: dict, text: str, index: CompanyIndex, roll: str = "", name: str = "",
             ai_cfg: dict | None = None) -> dict:
     # invisible characters the ERP sprinkles into lists ("2. \u2060GROWW")
@@ -194,12 +233,13 @@ def analyze(notice: dict, text: str, index: CompanyIndex, roll: str = "", name: 
                                 "score": m.score})
 
     todos = []
+    owners = link_owners(text, forms, targets)
     first_deadline = min(deadlines, key=lambda m: m.at) if deadlines else None
     if kind in ("apply_open", "deadline_extended") or re.search(r"apply on the portal", text or "", re.I):
         todos.append({"action": "apply", "due": first_deadline.at.isoformat() if first_deadline else None,
                       "due_text": first_deadline.text if first_deadline else None})
     for f in forms:
-        todos.append({"action": "fill_form", "link": f,
+        todos.append({"action": "fill_form", "link": f, "for": owners.get(f),
                       "due": first_deadline.at.isoformat() if first_deadline else None,
                       "due_text": first_deadline.text if first_deadline else None})
     if kind == "ppo" and re.search(r"acceptance|accept", text or "", re.I) and mentions_me:

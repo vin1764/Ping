@@ -7,9 +7,8 @@ One form = one canonical key, whatever the notice or mail around it says:
     address; Google Forms by their id (/forms/d/e/<id>/..., /forms/d/<id>/...; viewform, formResponse, edit and
     usp=... all the same form); Microsoft Forms by the id parameter; Zoho by the form's perma id; Typeform by the
     /to/<id>; Jotform by the form number; anything else by host and path without the query
-  - postings without a link, or with different keys, are matched on company + form title + purpose (+ the questions
-    when the form page could be read): a high-confidence match is merged, a medium one is kept apart and offered as
-    "Looks like the same form as …" (your choice is remembered in form_merges)
+  - two different links are never one form; a posting with no link joins its notice's (or mail's) other linkless
+    postings, or an extension of the one form with the same companies and purpose
 A repost never makes a new row: it moves the deadline (with the history), adds its notice or mail to the row's
 sources, and keeps your tick.
 """
@@ -128,8 +127,11 @@ def postings(items: list[dict]) -> list[dict]:
         if it.get("category") != "todo" or todo.get("action") != "fill_form":
             continue
         own = todo.get("link") if str(todo.get("link") or "").startswith(("http://", "https://")) else None
-        links = list(dict.fromkeys(l for l in [own, *(x for x in [*(d.get("forms") or []), (d.get("mail") or {}).get("link")]
-                                                     if x and is_form_link(x))] if l))
+        # a posting is one form: its own link. Only without one: the mail's link, or the notice's form when it has
+        # exactly one (a notice with several forms never hands all of them to every company)
+        mail_link = (d.get("mail") or {}).get("link")
+        notice_forms = [x for x in (d.get("forms") or []) if x and is_form_link(x)]
+        links = [own] if own else [mail_link] if mail_link and is_form_link(mail_link) else notice_forms if len(notice_forms) == 1 else []
         sources = []
         if it.get("notice_id"):
             sources.append({"type": "notice", "id": str(it["notice_id"]), "at": d.get("notice_time") or it.get("first_seen")})
@@ -176,14 +178,18 @@ def _dtv(v):
 
 def build(items: list[dict], previous: dict[str, dict] | None = None, merges: list[dict] | None = None,
           pages: dict[str, dict] | None = None, fetch=None, now: datetime | None = None) -> list[dict]:
-    """Forms rows from this run's items: one row per form posting, merged silently when it's the same thing:
-      - the same notice (a notice for 11 companies is ONE row with the 11 companies), or the same mail
-      - any form link in common (after short links are followed: forms.gle / bit.ly / … and usp / prefill ignored)
-      - the same companies (as a set, names normalised) + the same purpose, posted again with the same or a later
-        deadline (an extension)
-    A merged row keeps the earliest first-seen, the latest deadline with its history and every source. Ping never
-    asks "is this the same form?": a genuinely different posting stays its own row. previous: the stored rows by key
-    (first_seen, history); pages: what was read from each form page, by key; merges: ignored (no prompts any more)."""
+    """Forms rows from this run's items, one row per form. Two postings are the same form only when:
+      - they have the same form (one canonical id: short links followed, usp / prefill / viewform vs formResponse
+        ignored), or
+      - neither has a link and they come from the same notice or mail, or
+      - one has no link at all and it names the same companies + purpose as one other form, posted again with the
+        same or a later deadline (an extension notice that repeats no link).
+    Two different links are never the same form, whatever the title, purpose, deadline or companies: a notice that
+    gives several companies their own forms is one row per form (the page groups them under the notice). A merged
+    row keeps the earliest first-seen, the latest deadline with its history and every source. Ping never asks.
+    previous: the stored rows by key (keys, ticks and history stay with the right row; an old row that held several
+    forms is split, and its key, so its tick, stays with the form that was shown on it); pages: what was read from
+    each form page, by key; merges: ignored."""
     previous, pages = previous or {}, pages or {}
     now = now or datetime.now(timezone.utc)
     posts = sorted(postings(items), key=lambda x: (str(x.get("at") or ""), x["item_id"]))
@@ -210,57 +216,87 @@ def build(items: list[dict], previous: dict[str, dict] | None = None, merges: li
             parent[max(ra, rb)] = min(ra, rb)       # the earliest posting stays the root
     first_by: dict[tuple, int] = {}
     for i, p in enumerate(posts):
-        for k in [("src", s["type"], s["id"]) for s in p["sources"]] + [("link", k) for k in p["keys"]]:
+        marks = [("link", k) for k in p["keys"]] or [("src", s["type"], s["id"]) for s in p["sources"]]
+        for k in marks:
             if k in first_by:
                 union(first_by[k], i)
             else:
                 first_by[k] = i
-    # groups so far; then the same companies + purpose, the same or a later deadline, merge (repeat until stable)
+
     def groups():
         g: dict[int, list[int]] = {}
         for i in range(len(posts)):
             g.setdefault(find(i), []).append(i)
         return g
+
+    def linked(members):
+        return any(posts[i]["keys"] for i in members)
+    # a posting with no link joins the one form with the same companies + purpose, posted with the same or an earlier
+    # deadline (an extension); never two forms with links
     changed = True
     while changed:
         changed = False
         gs = groups()
-        sig = {}
+        sig: dict[tuple, list] = {}
         for root, members in sorted(gs.items()):
             comps = frozenset(_company_key(posts[i]["company"]) for i in members if _company_key(posts[i]["company"]))
             purposes = {posts[i]["purpose"] for i in members}
             purpose = next(iter(purposes - {"form"}), "form") if len(purposes - {"form"}) <= 1 else None
-            if not comps or purpose is None:
-                continue
-            due = max((_dtv(posts[i]["due"]) for i in members), default=None)
-            key = (comps, purpose)
-            if key in sig:
-                other_root, other_first = sig[key]
-                if due >= other_first:            # the same deadline as one it had, or a later one (an extension)
-                    union(other_root, root)
-                    changed = True
-                    break
-            else:
-                sig[key] = (root, min((_dtv(posts[i]["due"]) for i in members), default=None))
+            if comps and purpose is not None:
+                sig.setdefault((comps, purpose), []).append(root)
+        for roots in sig.values():
+            bare = [r for r in roots if not linked(gs[r])]
+            withlink = [r for r in roots if linked(gs[r])]
+            for b in bare:
+                first = lambda r: min((_dtv(posts[i]["due"]) for i in gs[r]), default=None)
+                due_b = max((_dtv(posts[i]["due"]) for i in gs[b]), default=None)
+                cands = [r for r in (withlink if len(withlink) == 1 else []) + [x for x in bare if x != b]
+                         if first(r) <= due_b]
+                if len(withlink) == 1 and withlink[0] in cands:
+                    union(withlink[0], b)
+                elif not withlink and cands:
+                    union(cands[0], b)
+                else:
+                    continue
+                changed = True
+                break
+            if changed:
+                break
+
+    gs = sorted(groups().items())
+    # which stored row each group continues: a stored row matched by one group goes to it; one that several groups
+    # now share (an old over-merged row) goes to the group with the form it showed (its page title, then its link)
+    gkeys = {root: list(dict.fromkeys(k for i in members for k in posts[i]["keys"])) for root, members in gs}
+    gids = {root: {posts[i]["item_id"] for i in members} for root, members in gs}
+    owner: dict[str, int] = {}
+    split: set[str] = set()
+    for pk, pr in sorted(previous.items(), key=lambda kv: (str(kv[1].get("first_seen") or ""), str(kv[0]))):
+        pkeys = {pr.get("key")} | set(pr.get("merged_keys") or [])
+        match = [root for root, _ in gs if gids[root] & set(pr.get("item_ids") or []) or set(gkeys[root]) & pkeys]
+        if not match:
+            continue
+        if len(match) > 1:
+            split.add(pk)
+            title = (pr.get("title") or "").strip().lower()
+            shown = {key_of(x) for x in (pr.get("final_url"), pr.get("link")) if x}
+            by_title = [r for r in match if title and any((pages.get(k) or {}).get("title", "").strip().lower() == title for k in gkeys[r])]
+            by_link = [r for r in match if shown & set(gkeys[r])]
+            match = by_title[:1] or by_link[:1] or match[:1]
+        owner[pk] = match[0]
     rows, used = [], set()
-    for root, members in sorted(groups().items()):
+    for root, members in gs:
         ps = [posts[i] for i in members]
         notice_ids = sorted({int(s["id"]) if str(s["id"]).isdigit() else s["id"] for p in ps for s in p["sources"] if s["type"] == "notice"},
                             key=lambda v: (str(type(v)), v))
-        keys = list(dict.fromkeys(k for p in ps for k in p["keys"]))
-        # the row it was before (a stored row with any of these postings or links): its key stays, so your tick,
-        # its first-seen and its deadline history stay with it
-        ids = {p["item_id"] for p in ps}
-        before = sorted((pr for pr in previous.values() if ids & set(pr.get("item_ids") or [])
-                         or set(keys) & ({pr.get("key")} | set(pr.get("merged_keys") or []))),
-                        key=lambda pr: (str(pr.get("first_seen") or ""), str(pr.get("key"))))
-        before = [pr for pr in before if pr.get("key") not in used]
+        keys = gkeys[root]
+        before = [previous[pk] for pk, r in owner.items() if r == root and pk not in used]
+        before.sort(key=lambda pr: (str(pr.get("first_seen") or ""), str(pr.get("key"))))
         if before:
             key = before[0]["key"]
-        elif notice_ids:
-            key = f"notice:{notice_ids[0]}"
         elif keys:
             key = keys[0]
+        elif notice_ids:
+            key = f"notice:{notice_ids[0]}"
         else:
             key = f"item:{ps[0]['item_id']}"
         page = next((pages[k] for k in keys if k in pages), None)
@@ -270,8 +306,11 @@ def build(items: list[dict], previous: dict[str, dict] | None = None, merges: li
         if prev and len(before) > 1:              # several old rows collapse into this one: all their history and sources
             prev["deadline_history"] = list({(h.get("from"), h.get("to")): h for b in before for h in (b.get("deadline_history") or [])}.values())
             prev["sources"] = [x for b in before for x in (b.get("sources") or [])]
+        if prev and any(b["key"] in split for b in before):
+            # a split row: its history and sources come from its own postings only (the old row mixed several forms)
+            prev = {"first_seen": prev.get("first_seen")}
         if key in used:                           # never two rows with one key
-            key = g["key"] = f"item:{ps[0]['item_id']}"
+            key = g["key"] = (keys[0] if keys and keys[0] not in used else f"item:{ps[0]['item_id']}")
         used.add(key)
         r = _row(g, prev, page, now)
         r["form_keys"] = keys

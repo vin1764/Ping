@@ -1656,7 +1656,7 @@
         `Due ${when(new Date(state.formsAt).toISOString())} ×`) : null].filter(Boolean));
     const sec = FORMS.sections(all, state.formStatus, { now, query: state.formsQuery || "", only: state.formsOnly, mineOf: formMine, at: state.formsAt ?? null });
     const block = (id, title, rows, empty) => h("section", { class: "forms-sec", id: `forms-${id}`, "aria-label": title },
-      h("h2", {}, title, h("span", { class: "n" }, rows.length)), rows.length ? h("div", { class: "forms-rows" }, rows.map(formRow)) : h("p", { class: "muted small" }, empty));
+      h("h2", {}, title, h("span", { class: "n" }, rows.length)), rows.length ? h("div", { class: "forms-rows" }, groupedRows(rows)) : h("p", { class: "muted small" }, empty));
     if (!all.length) { list.replaceChildren(h("p", { class: "muted" }, "No forms yet. Forms from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
     list.replaceChildren(
       block("today", "Due today", sec.today, "Nothing due today."),
@@ -1665,6 +1665,26 @@
       ...(sec.closed.length ? [block("closed", "Closed", sec.closed, "")] : []),
       block("filled", "Filled", sec.filled, "Tick a form when you've filled it."));
     formsBadge();
+  }
+  // one notice that gives several companies their own forms: one row per form, under that notice's heading
+  function groupedRows(rows) {
+    const noticeOf = (f) => (f.sources || []).find((x) => x.type === "notice")?.id;
+    const count = new Map();
+    for (const f of rows) { const n = noticeOf(f); if (n) count.set(n, (count.get(n) || 0) + 1); }
+    const out = [], done = new Set();
+    for (const f of rows) {
+      const n = noticeOf(f);
+      if (!n || count.get(n) < 2) { out.push(formRow(f)); continue; }
+      if (done.has(n)) continue;
+      done.add(n);
+      const members = rows.filter((x) => noticeOf(x) === n);
+      const subject = (state.data.notices || []).find((x) => String(x.notice_id) === String(n))?.subject;
+      out.push(h("div", { class: "forms-group", role: "group", "aria-label": `Notice ${n}` },
+        h("div", { class: "fg-head" }, h("strong", {}, subject || FORMS.label(members[0].purpose)),
+          h("span", { class: "muted small" }, ` · notice ${n} · ${members.length} forms`)),
+        members.map(formRow)));
+    }
+    return out;
   }
   function formRow(f) {
     const filled = FORMS.isFilled(state.formStatus, f.key);

@@ -1,0 +1,25 @@
+# Publishes submission/ (the PDFs and their .md copies) as ping-submission.zip on the GitHub Release "submission",
+# replacing an earlier one, and as a workflow artifact. Nothing is built or run here: the files are in the repo.
+name: Submission bundle
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: cd submission && zip -q ../ping-submission.zip 02_Prompts.pdf 03_Evals.pdf 04_App_link.pdf 02_Prompts.md 03_Evals.md 04_App_link.md README.md && cd .. && unzip -l ping-submission.zip
+      - name: Release "submission"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete submission --yes --cleanup-tag 2>/dev/null || true
+          gh release create submission ping-submission.zip --target "$GITHUB_SHA" --title "submission" \
+            --notes "Ping submission bundle: 02_Prompts.pdf, 03_Evals.pdf, 04_App_link.pdf (and .md copies). Built from commit $GITHUB_SHA."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ping-submission
+          path: ping-submission.zip
+          retention-days: 90

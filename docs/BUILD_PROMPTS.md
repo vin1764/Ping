@@ -6,9 +6,9 @@ messages. Messages marked *sent while the agent was working* were typed while a 
 mid-task.
 
 One change from verbatim: a word that must not appear in this repository is written as `[banned word]`
-(5 places, all of them instructions not to use it). Everything else is exactly as sent.
+(6 places, all of them instructions not to use it). Everything else is exactly as sent.
 
-32 prompts, 20 Nov 2026 22:06 UTC to 21 Nov 2026 17:38 UTC.
+64 prompts, 20 Nov 2026 22:06 UTC to 22 Nov 2026 17:22 UTC.
 
 ## 1. Sat 21 Nov 2026, 03:36 IST (22:06 UTC)
 
@@ -777,4 +777,188 @@ Public source copy: YES . Final unattended round, ~6 hours. Rules: commit per fi
 9. DOCS. Everything from the consolidation list (README/architecture, SECURITY, SETUP, PUSH, PROMPTS regenerated, evals index, ONE_PAGER_FACTS with all new numbers, SUBMISSION "what to try", BUILD_PROMPTS appended with times). SUBMISSION.md must be enough for a judge who has 10 minutes.
 
 HANDOFF (last message, by 11:30 IST): status table 1–9, every eval score, Lighthouse numbers, live URL + build hash, the "Needs Vinayak" list (tag v1.1, phone push check, anything else), and the diff summary.
+`````
+
+## 50. Sun 22 Nov 2026, 12:47 IST (07:17 UTC)
+
+`````text
+Bug: on the installed phone app (iPhone Home Screen and Android Chrome install), every time I open Ping I have to sign in again. Goal: sign in once, stay signed in for weeks on both platforms, like any chat app. Do NOT store the password anywhere; persist the session instead.
+
+1. Diagnose: check how the Supabase client is created (persistSession, autoRefreshToken, storage = localStorage not sessionStorage, a stable storageKey), whether anything on load (service worker, cache clear, the demo path, an error handler) calls signOut or clears storage, and whether start_url and scope in the manifest match the page exactly, so the installed app, the browser tab and the service worker share one origin and one storage. Report what you find before changing anything.
+2. Fix: persistSession true, autoRefreshToken true, localStorage with a fixed key; on app open, restore the session and refresh the token before deciding to show the sign-in screen (skeleton while it checks, never flash the login form). Refresh again when the app comes back to the foreground (visibilitychange), since both iOS and Android suspend installed apps. Set the Supabase refresh-token lifetime to cover a placement season (30+ days of inactivity) and say what you set. The demo sign-out and anonymous cleanup must never touch the owner's session.
+3. Painless re-login if it ever happens: the sign-in form is a real <form> with autocomplete="username" and autocomplete="current-password" on proper input types, so iCloud Keychain (iPhone) and Google Password Manager (Android) offer to save it once and fill it with Face ID / fingerprint afterwards. A short "You'll stay signed in" note under the button.
+4. HELP.md and the install steps, per platform: iPhone: "Sign in once inside the installed app; it doesn't share Safari's login." Android: "If you signed in in Chrome before installing, you're already signed in in the app."
+5. Test both engines: Playwright WebKit (iPhone) and Chromium with an Android mobile profile. For each: sign in, close the context, reopen with the same storage state, assert no sign-in screen and a valid session; force a token expiry and assert a silent refresh; simulate background → foreground and assert the session survives. Deploy, then tell me exactly what to do on each phone to confirm.
+`````
+
+## 51. Sun 22 Nov 2026, 13:25 IST (07:55 UTC)
+
+`````text
+Today panel: every row must open something useful, on phone and PC. Commit per part.
+
+1. Detail sheet. Tapping any Today row opens a sheet (full-screen with a back arrow on phones; a side panel on PC, chat stays visible) that lists everything in that row, one card per company/role:
+   - company (bold) and role, deadline with live countdown, kind (application / form / CV submission / test / shortlist), status: ✓ applied / not applied / on the list / not on the list
+   - For you or Other, the one-line reason, "Apply with: <CV>"
+   - buttons: "Open on ERP" (direct link to that company's application or form page on the ERP; if the ERP has no direct URL, the companies-list URL plus the company name to search), "Form link" when a notice or mail carries one, "Notice" (opens the source notice/PDF), "Show in chat" (jumps to and flashes the message)
+   - order: For you and not applied first, then the rest; Others collapsed under a count
+   - sheet header: "55 applications close today 20:00 · 3 for you · 9 applied", with filter chips [Not applied] [For you] [All]
+   The same sheet opens from the "Show 33 more" link in chat digests and from Ask Ping answers that list roles, so there is one place to act from.
+2. Tests, shortlists and notices in Today open the same sheet with their own fields (time, room/slot, your row, the PDF link).
+3. Links never dead-end: if a link is unknown, the button is hidden, not disabled. Never open the ERP inside the app; open it in the browser/system browser. Ping stays read-only: these are links only.
+4. Clean-ups seen on the live page: (a) the "Add your CGPA and degree and department…" line must appear once (a single Ping note plus a dot on Profile), not under every digest, and disappear when filled; (b) the "Latest ↓" pill must sit above the composer, not over message text; (c) "Apply with" shows "Consult CV" for every role. If I have only one CV uploaded that's expected, say so; if I have more, find why best_cv never varies and fix it.
+5. Test at 390×844 and 1280×800: tap each Today row type and check the sheet opens with working links, back works on phone, keyboard/scroll don't trap. Screenshots, deploy, live-page check.
+`````
+
+## 52. Sun 22 Nov 2026, 13:26 IST (07:56 UTC) — sent while the agent was working
+
+`````text
+New "Forms" section: a checklist of every form that has come in, which I tick off as I fill them. Commit per part.
+
+1. Data: a forms list built from ERP notices, notice PDFs and placement mail: each form has company (or "several companies" with the names), what it is for (registration, CV submission, additional requirement, test slot, PPT RSVP…), deadline, link, source (notice / mail) and first seen. Dedupe the same form arriving by notice and mail. A new table form_status (owner-only RLS): filled true/false, filled_at, set by me. Never written to the ERP; the tick is my own record.
+2. UI: a Forms tab (phone bottom bar: Chat · Today · Forms · Companies · Profile; PC left rail). Sections: Due today · Upcoming · Past due (not filled) · Filled. Each row: checkbox, company (bold), what the form is for, deadline with countdown, "Open form" link, "Notice" link. Ticking moves it to Filled with a short undo toast; unticking moves it back. Badge on the tab = unfilled forms due in the next 24 h. Search box and [For you] [All] filter (For you = forms for companies I'm eligible for or that match my targets).
+3. Ticks drive everything else: a ticked form drops out of reminders, push notifications, digests' "not filled" counts and the Today panel's counts ("7 forms due 20:00 · 3 filled"); Today's forms row opens this list filtered to that deadline. Ask Ping: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the last one ticks it and confirms in one line).
+4. In chat digests and the Today sheet, every form line gets the same checkbox, synced live with the Forms tab.
+5. Demo/test data: the anonymised snapshot gets the forms list too. Tests: dedupe, tick → reminder suppressed, undo, realtime sync between two open devices, phone 390×844 and PC 1280×800 screenshots. Update HELP.md ("tick forms as you fill them") and SUBMISSION.md's "what to try". Deploy, live-page check.
+`````
+
+## 53. Sun 22 Nov 2026, 13:27 IST (07:57 UTC) — sent while the agent was working
+
+`````text
+Remove the "View demo" button from the sign-in screen. Reviewers will sign in with my own credentials.
+
+1. UI: delete the button and any "View demo" mention on the sign-in screen, setup page, HELP.md (Ask Ping help answers), install prompts and README. Keep the anonymous demo path in the code, reachable only by a hidden URL parameter that is not linked anywhere, because the Admin live-page, ask-ping-page and eval runners depend on it. Confirm those still pass.
+2. Before judging: snapshot my profile (targets, reminder hours, list-others, check window, CV labels and files, notification settings) into a new Admin task, profile-snapshot, and add profile-restore that puts it back exactly. Run the snapshot now and confirm it reads back.
+3. Password: tell me the exact steps to set a new password for my dashboard login (Supabase Auth, through an Admin task so it never appears in logs), so I can give reviewers a password I use nowhere else and change it after judging.
+4. Owner session safety: signing in on a reviewer's device must not sign me out on my phone (sign-out is device-only now; verify with two sessions).
+5. Update SUBMISSION.md and the setup page: "Sign in with the credentials in the submission note." Rebuild, deploy, run live-page and the PWA check, report.
+`````
+
+## 54. Sun 22 Nov 2026, 13:32 IST (08:02 UTC) — sent while the agent was working
+
+`````text
+Make the Forms list smart about duplicates and extensions. Read-only: open form pages to read them, never submit, prefill, or sign in.
+
+1. Canonical identity: resolve every form link to a canonical form key before storing. Follow short links (forms.gle, bit.ly, tinyurl, lnkd.in) to the final URL; for Google Forms extract the form id (docs.google.com/forms/d/e/<id>/… and /d/<id>/…, viewform / formResponse / edit variants, strip usp= and other query params); same for Microsoft Forms (id param), Zoho, Typeform, Jotform. Same key = same form, whatever the notice or mail around it says.
+2. Read the form: fetch the public form page (cached, time-limited, size-capped) and store its title, description's first lines, the question count, and whether it says "no longer accepting responses". If the form needs an institute sign-in, store "sign-in required" and fall back to the link and notice text; don't try to log in.
+3. Matching when keys differ or a notice has no link: fuzzy-match on company + form title + purpose + similar question set. High-confidence match → merge; medium → keep separate but show "Looks like the same form as <X>, merge?" with [Merge] [Keep both] that I can tap; the choice is remembered.
+4. Reposts and extensions: a repost of a known form never creates a new row. It updates the deadline (keep the history: "deadline moved 21 Nov 20:00 → 22 Nov 20:00"), adds the new notice/mail to the row's sources ("posted 3 times: notice 1791, mail, notice 1796"), and keeps my tick. If a form I ticked as filled is reposted with a new deadline, it stays filled; show a small "deadline extended" note, no reminder. If the form page now says it's closed, mark the row Closed.
+5. Chat follows the same rule: a repost or extension produces one "deadline extended" line on the existing form, not a new form message.
+6. Evals: a fixture of 15 form postings: same Google Form via forms.gle and full URL, same form with different usp params, a deadline extension repost, the same form in a notice and in a mail, two different forms from one company with similar titles, a closed form, a sign-in-required form, a notice with no link. Expected: the right number of distinct rows, extensions merged with history, ticks kept, the two similar-but-different forms kept apart, the closed one marked. Report the score and add it to evals/REPORT.md.
+`````
+
+## 55. Sun 22 Nov 2026, 13:35 IST (08:05 UTC) — sent while the agent was working
+
+`````text
+Light visual polish. Do NOT change layout, navigation, components, or behaviour; only the logo, colour and small finishing details. Commit per part.
+
+1. Logo: design 3 original marks for Ping (simple, works at 16 px favicon and 512 px app icon, readable on light and dark, no resemblance to any existing app's logo). Ideas to explore: a speech bubble with a small signal dot, a "P" built from a notification ring, a soft radar ping. Render all 3 as app icon + favicon + header avatar on a phone home screen mock and in the header, save to docs/screenshots/logo/. Apply the strongest one everywhere (manifest icons incl. maskable and iOS, favicon, header avatar, sign-in screen, setup page, push notification icon/badge) and tell me which and why in two lines; keep the other two in docs/design/ so I can say "use option 2".
+2. Colour: keep the current scheme but refine it: one accent that matches the new logo (a little richer than the current teal, still calm), consistent use of amber for "closing soon" and red only for "under 1 h / past due", slightly warmer neutrals in dark mode so it doesn't feel flat. Contrast ≥ 4.5:1 in both themes; run the contrast test.
+3. Small finishing details only: consistent corner radius across bubbles, sheets, chips and cards; one icon set weight; slightly more breathing room in the header and the Today rail; date pills and labels aligned; the active tab state clearer. Nothing moves.
+4. Before/after screenshots of chat, Today, Forms, Companies and sign-in at 390×844 and 1280×800 in light and dark. Deploy, run live-page and the PWA check (icons must validate). Installed apps pick up the new icon on next launch on Android; on iPhone tell me if it needs re-adding to the Home Screen.
+`````
+
+## 56. Sun 22 Nov 2026, 14:10 IST (08:40 UTC) — sent while the agent was working
+
+`````text
+P0 CORRECTNESS BUG. Ping told me "FirstClub shortlist is out (Product Management). You're not on it." I am on the new shortlist (I got a call). Then "check firstclub again" and "I think I might be there, I received a call" returned the identical answer. Nothing else until this is fixed and verified.
+
+1. Diagnose on real data (read-only), report before fixing: list every FirstClub notice and attachment on the ERP now (ids, times, file types); which ones the pipeline fetched, parsed and matched, and what it found for my roll. Was there a newer list after 12:43? Was the 11:45 list a name-only list, XLSX, image or scanned PDF, a different roll format, or a second page/file that wasn't read? Also: why was the 13:41 run skipped ("next 14:41" after "checked 12:43")?
+2. Fix the root cause in the parser/fetcher, add the real FirstClub case (anonymised) as a regression test, then re-scan ALL shortlist/test-list notices of the last 14 days with the fixed code and report any other changed results (each change: company, old verdict, new verdict).
+3. Never assert absence. Wording rules everywhere (feed, Today, Forms, Ask Ping, push):
+   - roll (or exact name) found → "You're on the FirstClub shortlist (Product Management)" + slot/room if present.
+   - not found in a file Ping fully read → "I couldn't find your roll number in the FirstClub shortlist (posted 11:45). Please check the list yourself: [Open list]". Never "You're not on it."
+   - file unreadable/partly read/name-only/scanned with low OCR confidence → "I couldn't read the FirstClub shortlist reliably. Check it here: [Open list]".
+   - every verdict shows which notice/file and when it was read.
+4. Re-check on demand: "check X again", "recheck", "I think I'm on it", "I got a call from X", "are you sure?" → fetch that company's latest notices and attachments live from the ERP now (one targeted, read-only fetch through the gate, rate-limited to once per company per 5 min), re-parse, then answer with the fresh result and its time; if the result changed, also update the feed message. Show "Checking the ERP for FirstClub now…" while it runs. If the ERP is unreachable, say so and give the list link; never repeat the old verdict as if fresh.
+5. Staleness guard: any answer about shortlists, tests or deadlines says how old the data is when older than 30 min, and offers [Check now].
+6. Evals: add cases for found / not-found-in-readable-file / unreadable file / "check again" triggers a live fetch / user disputes the answer → recheck, not repeat. No eval may expect the phrase "You're not on it".
+7. Also fix: the "Latest ↓" pill still covers message text; dock it above the composer.
+Report: the root cause, what changed, the re-scan diff, and the live answer to "check firstclub again".
+`````
+
+## 57. Sun 22 Nov 2026, 14:10 IST (08:40 UTC) — sent while the agent was working
+
+`````text
+P0 continued: the chat must follow the conversation. Live example: after the FirstClub answer I wrote "Check erp bruh for latest updates, dont answer on old data". Ping answered with every deadline closing today. It should have re-checked FirstClub on the ERP now and answered about FirstClub.
+
+1. Conversation state: keep an active topic per thread (company, role, kind: shortlist / deadline / test / form / CV / preferences) from the last 3 turns. A message that names no new company or topic inherits the active topic. Corrections and meta-instructions ("check again", "latest", "don't use old data", "are you sure", "that's wrong", "I think I'm on it", "I got a call") apply to the previous question: re-run it with a live targeted re-check (as in P0 point 4), never a new broad query. Only a message that clearly starts a new topic ("what's due tonight", a different company) resets it.
+2. Router order: (a) resolve topic and follow-ups from state, (b) then pick FACT vs OPEN. If the router's keyword match conflicts with the active topic, the topic wins. If still unsure, send it as OPEN to the model with the last 6 turns and the facts block, rather than guessing a broad intent. When the model is unreachable, the rules answer must still use the resolved topic.
+3. Evals (multi-turn, must pass with the model on AND off): ["check firstclub", "check again"], ["check firstclub", "check erp for latest updates, don't answer on old data"], ["firstclub shortlist?", "I got a call, I think I'm there"], ["what's due tonight", "and groww?"], ["groww ctc", "ok what's due tonight"] (topic reset). Expected: the first four stay on the first topic and the re-check ones show a live fetch time; the last one switches.
+4. Rendering: Ask Ping answers render markdown properly (bold, lists) or are produced without markdown; no literal ** or "- " in bubbles. Company display names cleaned in chat answers too ("Auro Group", not "Auro Group([www.AuroIM.com](https://www.AuroIM.com))"). Replace "Apply with: no CV fits it best" with nothing (omit the line) when no CV fits.
+5. Relevance check: today's "For you" list includes AiPrise Software Engineer and Astera Labs SQA Engineer with no CV fit. Show me my currently saved preferences (targets text, exclusions) and when they last changed and by which message; if they were changed by a test or eval run, restore them and make sure evals never write to the owner's profile. If preferences are correct, find why these roles were classified For you and fix it.
+6. "Latest ↓" pill: dock it above the composer; it must never overlap message text at any width. Screenshot proof at 390 and 1280.
+Report together with the P0 FirstClub report.
+`````
+
+## 58. Sun 22 Nov 2026, 14:11 IST (08:41 UTC) — sent while the agent was working
+
+`````text
+Add WhatsApp-style "reply to a message". Commit per part.
+
+1. Interaction: phone: swipe a bubble right (or long-press → Reply); PC: hover shows a reply arrow on the bubble, plus long-press/right-click → Reply. A quoted preview (sender, first line, coloured bar) appears above the composer with an ✕ to cancel; Esc cancels on PC. Works on Ping's messages (digests, reminders, test alerts, answers) and on my own.
+2. Sent message shows the quoted snippet inside my bubble; tapping it scrolls to and flashes the original (loads earlier messages if it's outside the window). Store reply_to (message id) in chat_messages.
+3. Meaning: the quoted message is the topic anchor and overrides the active-topic guess. Ask Ping receives the quoted message's structured content (its companies, roles, deadline, notice ids) along with my text. Examples that must work:
+   - reply to the FirstClub answer: "check again" → live re-check of FirstClub only
+   - reply to a 20:00 digest: "which of these haven't I applied to?" → only that digest's roles
+   - reply to a digest: "which cv for the second one?" → the second role in that message
+   - reply to a test alert: "where is it?" → that test's room/slot
+   - reply to a form line: "done" → ticks that form as filled (confirm in one line)
+4. Ping's answer to a reply also quotes what it answered, so the thread reads clearly.
+5. Accessibility and polish: the swipe has a small reply icon reveal and haptic tap on phones that support it, doesn't conflict with horizontal scrolling in digests, keyboard-reachable on PC, works in light/dark, 390 and 1280 screenshots.
+6. Evals: add the five reply cases above (model on and off) to the multi-turn set. Deploy, live-page check.
+`````
+
+## 59. Sun 22 Nov 2026, 17:05 IST (11:35 UTC)
+
+`````text
+Yes, GEMINI_API_KEY_EVALS is set. I added it at 06:10 today, and your overnight handoff confirmed eval answers already used it (15 calls on the evals key, 0 on the live key). Go ahead: redeploy, ask-ping-evals, functions-check, record both scores. Then reply-to-message, then Forms smart, then visual polish. Code freeze at [TIME]: stop at a clean commit with live build = HEAD and write the handoff, even if polish isn't done.
+`````
+
+## 60. Sun 22 Nov 2026, 17:05 IST (11:35 UTC) — sent while the agent was working
+
+`````text
+do it quickly
+`````
+
+## 61. Sun 22 Nov 2026, 17:37 IST (12:07 UTC) — sent while the agent was working
+
+`````text
+Forms dedupe is producing garbage (live screenshot): notice 1815 "Additional requirement" for ~11 companies became many rows, each the same company set in a different order, each asking "Looks like the same form as …, merge?". Fix now, before anything else.
+
+1. One posting = one row. A notice (or mail) that asks several companies' applicants to fill a form is ONE form row with a company list, not one row per company or per ordering. Company sets are compared as sets (order-insensitive, names normalised).
+2. Auto-merge silently, never ask, when any of these match: same notice id; same canonical form link; same normalised company set + same purpose + same deadline (or a later one = extension). Merging keeps the earliest first-seen, the latest deadline with history, all sources ("posted 2 times: notice 1815, mail"), and my tick.
+3. Ask only when it is genuinely ambiguous (different links AND different notices, similar title, overlapping but not identical companies), at most ONE merge prompt per form, never a prompt that compares a form with itself or a reordered copy of itself. If you can't make the ambiguous case reliable today, remove merge prompts entirely and keep such rows separate; showing no prompt is better than showing a wrong one.
+4. Clean up existing data: collapse all current duplicate rows with the rules above, preserving any ticks; clear all pending merge prompts.
+5. Display: a multi-company form shows "Additional requirement · 11 companies" with the first 3 cleaned names + "+8 more" (expand to see all); never a two-line wall of names. Clean names ("Auro Group", "AIRAMATRIX", title case where the ERP shouts) here and in prompts.
+6. Test with the real case (anonymised): notice 1815 + the matching mail must give exactly 1 row, 0 prompts. Re-run the 15-posting forms fixture. Deploy, screenshot the Forms tab at 390 and 1280, live-page check.
+`````
+
+## 62. Sun 22 Nov 2026, 17:58 IST (12:28 UTC) — sent while the agent was working
+
+`````text
+Restore the "View demo" button on the sign-in screen, under the normal sign-in, as before. Keep owner sign-in unchanged.
+1. Re-link it everywhere it was removed (sign-in screen, setup page, HELP.md install/what-can-you-do answers, SUBMISSION.md, README); keep the hidden URL parameter working too.
+2. Verify the demo is healthy after today's fixes: it uses its own session key and the demo profile only, can never read or change my profile (the FirstClub bug was the reverse of this; prove both directions), demo data passes the anonymiser check, Today/Forms/Companies all render in the demo, Forms in the demo shows no duplicate rows or merge prompts.
+3. If the demo snapshot predates today's Forms and relevance fixes, rebuild it (demo-refeed) so it shows the current product.
+4. Live checks: open the live URL in a fresh browser at 390 and 1280, tap View demo, ask "what's due tonight", "any tests today?" then "anything else?", "which cv for blackbuck", open Today, Forms, Companies. Run live-page and the PWA check. Also confirm the anonymous-sign-in hourly limit fallback still opens the snapshot.
+Report in one short table, then go back to the Forms fix if it isn't finished.
+`````
+
+## 63. Sun 22 Nov 2026, 22:46 IST (17:16 UTC)
+
+`````text
+whats built and whats left?
+`````
+
+## 64. Sun 22 Nov 2026, 22:52 IST (17:22 UTC)
+
+`````text
+Build the submission bundle. No code changes. Output folder submission/ in the repo, plus a zip attached to a GitHub Release "submission" (or a workflow artifact if you can't create releases), and tell me exactly how to download it.
+
+1. 02_Prompts.pdf: a cover page "Prompts used to build Ping" with a 3-line intro, then docs/BUILD_PROMPTS.md (every prompt I gave you, in order, with IST times, through today's last prompt; real names/numbers scrubbed; banned word as [banned word]), then docs/PROMPTS.md (Ping's runtime prompts, generated from source).
+2. 03_Evals.pdf: evals/REPORT.md with today's final scores: Ask Ping 70/70 single and 21/21 conversations (state plainly that the main Gemini model was rate-limited during the final runs, so answers came from the rules and the lighter model), multi-turn and re-check cases 14/14, reply-to 5/5, relevance per persona, parser 56/58 held-out and 143/143 dev, attachments 31/31, mail 9/9, forms 15/15, fallback 8/8; each with what it checks and how to re-run. Add a short "What the evals caught" section with 3 real bugs: the demo-profile roll bug behind the FirstClub false negative, the model miscounting for-you roles (17 vs 8), and duplicate form rows. Plain language, no hype.
+3. 04_App_link.pdf: one page: the live URL; two ways in ("tap View demo for a quick look, no login" and "sign in with the credentials in the submission note for my live data"); 6 things to try; how to install on a phone; source repo URL if public, else "source available on request".
+4. The same three as .md files for copy-paste.
+5. Before finishing: no secrets, no real third-party names/phones/rolls, no banned word, numbers match evals/REPORT.md and ONE_PAGER_FACTS.md, every link opens, each PDF renders cleanly (check one page of each as an image).
+Report the download link and one line per file.
 `````

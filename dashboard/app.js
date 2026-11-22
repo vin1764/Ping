@@ -102,6 +102,17 @@
     async checkNow() { throw new Error("You're offline: Check now works once you're back online."); }
   }
   const isNetErr = (e) => e && (e.offline || e instanceof TypeError || /Failed to fetch|NetworkError|Load failed/i.test(e.message || ""));
+  // an error in plain words for the person reading it (DESIGN.md, Tone); the raw one goes to the console
+  function plainly(e) {
+    const m = String(e?.message || "");
+    if (e) console.warn(e);
+    if (isNetErr(e) || !navigator.onLine) return "No connection. Try again when you're back online.";
+    if (e?.status === 401 || /jwt|expired|not authenticated|invalid claim/i.test(m)) return "Your sign-in has expired. Sign in again, then try once more.";
+    if (/exceed|too large|payload/i.test(m)) return "That file is too big (5 MB at most).";
+    if (/mime|content.?type/i.test(m)) return "Only PDF files can be uploaded.";
+    if (e?.status === 429) return m;                     // the demo's question limit: already in plain words
+    return "Something went wrong on Ping's side. Try again in a minute.";
+  }
 
   // ------------------------------------------------------------ data sources
   class DemoSource {
@@ -347,7 +358,7 @@
         h("h1", {}, "Not allowed"),
         h("p", {}, "This login isn't on Ping's list of allowed users. Ping adds the MAIL_ADDRESS from your " +
           "GitHub secrets on every run; to use another email, add it to the allowed_users table in Supabase."),
-        error ? h("p", { class: "muted small" }, error.message) : null,
+        error ? h("p", { class: "muted small" }, plainly(error)) : null,
         h("button", { class: "btn", onclick: async () => { await sb.auth.signOut(); location.reload(); } }, "Sign out")));
       return;
     }
@@ -379,7 +390,7 @@
         state.openedAt = Date.now();
         holdBackLastCheck(snap);
       }
-    } catch (e) { mountPage(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, e.message))); return; }
+    } catch (e) { mountPage(h("div", { class: "card" }, h("h1", {}, "Couldn't load your data"), h("p", {}, plainly(e)))); return; }
     if (!state.offline) store.set("ping-visits", Number(store.get("ping-visits", 0)) + 1);   // the install offer comes on the 2nd
     setupNav();
     showLastRun();
@@ -616,7 +627,7 @@
                      requested_at: new Date().toISOString() }]);
       } else if (!out?.run_row) status("Started a check. Its messages appear here as it goes.");
     } catch (e) {
-      status(e.status === 404 ? "Check now isn't set up yet (see README)." : `Couldn't start a check: ${e.message}`);
+      status(e.status === 404 ? "Check now isn't set up yet (see README)." : `Couldn't start a check. ${plainly(e)}`);
     } finally {
       state.starting = false;
       applyLive();
@@ -806,7 +817,7 @@
           await state.src.saveOnboarding({ cvs, cv_names: cvs.map((c) => c.label) });
           state.data.profile.cvs = cvs;
           onbAnswer({ value: "uploaded" }, `Uploaded ${f.name}`);
-        } catch (e) { onbSay(`Couldn't upload: ${e.message}`); }
+        } catch (e) { onbSay(`Couldn't upload it. ${plainly(e)}`); }
       } });
     return h("label", { class: "btn upload", for: "onb-cv" }, "Upload a CV (PDF)", file);
   }
@@ -1102,7 +1113,7 @@
     const j = sub.toJSON();
     const { error } = await state.src.sb.from("push_subscriptions").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh,
       auth: j.keys.auth, user_agent: navigator.userAgent.slice(0, 200) });
-    if (error) { await sub.unsubscribe().catch(() => {}); return { ok: false, why: error.message }; }
+    if (error) { await sub.unsubscribe().catch(() => {}); return { ok: false, why: plainly(error) }; }
     return { ok: true };
   }
   async function disablePush() {
@@ -1120,10 +1131,11 @@
       h("button", { type: "button", class: "chip primary", onclick: async () => {
         store.set("ping-push-ask", "yes");
         chips.replaceChildren();
-        const r = await enablePush().catch((e) => ({ ok: false, why: e.message }));
+        const r = await enablePush().catch((e) => ({ ok: false, why: plainly(e) }));
         text.textContent = r.ok ? "Done: this phone gets a notification when something's for you. Profile > Notifications to send a test or turn it off."
           : r.why === "blocked" ? "Your browser blocked notifications for Ping. You can allow them in its site settings, then turn them on in Profile."
-          : `Notifications didn't turn on (${r.why}). You can try again in Profile > Notifications.`;
+          : r.why === "not now" ? "Notifications stay off for now. You can turn them on any time in Profile > Notifications."
+          : `Notifications didn't turn on. ${r.why} You can try again in Profile > Notifications.`;
       } }, "Yes"),
       h("button", { type: "button", class: "chip", onclick: () => { store.set("ping-push-ask", "not now"); bubble.remove(); } }, "Not now"));
     const bubble = h("div", { class: "msg ping sys push-ask enter", role: "group", "aria-label": "Notifications" },
@@ -1149,15 +1161,15 @@
             : perm !== "denied" ? h("button", { type: "button", class: "btn", onclick: async () => { await enablePush().catch(() => {}); draw(); } }, "Turn on") : null,
         sub ? h("button", { type: "button", class: "btn ghost", onclick: async (ev) => {
           ev.target.disabled = true;
-          const r = await state.src.fn("send-push", { mode: "test" }).catch((e) => ({ error: e.message }));
-          line.textContent = r?.error ? `The test didn't go out: ${r.error}` : `Test sent to ${r.ok} of ${r.devices} device${r.devices === 1 ? "" : "s"}.`;
+          const r = await state.src.fn("send-push", { mode: "test" }).catch((e) => ({ error: plainly(e) }));
+          line.textContent = r?.error ? `The test didn't go out. ${r.error}` : `Test sent to ${r.ok} of ${r.devices} device${r.devices === 1 ? "" : "s"}.`;
           ev.target.disabled = false;
         } }, "Send a test") : null);
     };
     draw();
     const mail = h("input", { type: "checkbox", id: "pf-email-digests", checked: !!p.email_digests, disabled: demo, onchange: async (ev) => {
       try { await state.src.saveProfile({ email_digests: ev.target.checked }); state.data.profile.email_digests = ev.target.checked; }
-      catch (e) { ev.target.checked = !ev.target.checked; line.textContent = `Couldn't save: ${e.message}`; }
+      catch (e) { ev.target.checked = !ev.target.checked; line.textContent = `Couldn't save. ${plainly(e)}`; }
     } });
     return h("section", { class: "card pcard", id: "pc-push", "aria-labelledby": "pc-push-h" },
       h("div", { class: "pcard-head" }, h("h2", { id: "pc-push-h" }, "Notifications")), line, actions,
@@ -1460,7 +1472,7 @@
     // the typing bubble shows at least briefly, even for an answer that comes back at once
     const typing = new Promise((r) => setTimeout(r, 600));
     let lost = false, answeredBy = "page";
-    try { answer = helpHere(q) ?? await state.src.ask(q); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = e.message; } finally { state.sending -= 1; }
+    try { answer = helpHere(q) ?? await state.src.ask(q); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = plainly(e); } finally { state.sending -= 1; }
     if (lost) {                                   // the connection went while asking: this one waits too
       clearTimeout(slow); wait.remove(); state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND());
       state.chat = state.chat.filter((m) => m !== mine);
@@ -1650,7 +1662,7 @@
 
   async function toggleDone(it) {
     it.done = !it.done;
-    try { await state.src.markItem(it.id, { done: it.done }); } catch (e) { status(e.message); }
+    try { await state.src.markItem(it.id, { done: it.done }); } catch (e) { status(`Couldn't save that. ${plainly(e)}`); }
     route();
   }
 
@@ -1659,7 +1671,7 @@
       await state.src.correct(it.details?.notice_key, f);
       status(state.src.kind === "demo" ? "Saved (demo only)." : "Saved. The next run will use your answer.");
       if (state.src.kind !== "demo") it.level = "hidden";
-    } catch (e) { status(e.message); }
+    } catch (e) { status(`Couldn't save that. ${plainly(e)}`); }
     route();
   }
 
@@ -1668,7 +1680,7 @@
     body.replaceChildren(h("p", { class: "muted" }, "Loading…"));
     $("#modal").showModal();
     let res;
-    try { res = await state.src.notice(noticeId); } catch (e) { body.replaceChildren(h("p", {}, e.message)); return; }
+    try { res = await state.src.notice(noticeId); } catch (e) { body.replaceChildren(h("p", {}, `Couldn't open the notice. ${plainly(e)}`)); return; }
     const n = res.notice;
     if (!n) { body.replaceChildren(h("p", {}, "This notice isn't stored.")); return; }
     const c = res.check;
@@ -1941,7 +1953,7 @@
             // new targets: have the roles marked now (the same path as saying it in the chat), then split the lists
             if ("targets" in patch && state.src.fn && (patch.targets || "") !== before && patch.targets) {
               msg.textContent = "Saved. Marking roles…";
-              const out = await state.src.fn("ask-ping", { question: `my targets are ${patch.targets}` }).catch((e) => ({ answer: e.message }));
+              const out = await state.src.fn("ask-ping", { question: `my targets are ${patch.targets}` }).catch((e) => ({ answer: `Saved. Marking the roles didn't work just now (${plainly(e).replace(/\.$/, "").toLowerCase()}); the next check marks them.` }));
               said = out.answer || said;
             }
             if (state.src.fn) await loadMarks();
@@ -2065,7 +2077,7 @@
           await state.src.saveProfile({ cvs: next.filter(Boolean), cv_names: next.filter(Boolean).map((x) => x.label) });
           p.cvs = next.filter(Boolean);
           status.textContent = " Saved. Ping reads it on the next check (Account > Check now) and then says which CV to apply with.";
-        } catch (e) { status.textContent = ` ${e.message}`; }
+        } catch (e) { status.textContent = ` Couldn't upload it. ${plainly(e)}`; }
       } }, c.path ? "Replace" : "Upload");
       return h("div", { class: "cv-slot" }, label, demo ? null : file, demo ? null : upload,
         c.summary ? h("div", { class: "small muted" }, c.summary) : c.path ? h("div", { class: "small muted" }, "Not read yet") : null);
@@ -2133,5 +2145,5 @@
     return { text: R.routed(r, question, facts).text, kind: r.kind };
   }
 
-  boot().catch((e) => mountPage(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, e.message))));
+  boot().catch((e) => mountPage(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, `${plainly(e)} Reloading the page usually fixes it.`))));
 })();

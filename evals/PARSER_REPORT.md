@@ -1,6 +1,6 @@
 # Parser evals: notices and PDFs
 
-_Run on 21 Nov 2026, 12:59 IST. Re-run with `python evals/run_evals.py`._
+_Run on 22 Nov 2026, 07:26 IST. Re-run with `python evals/run_evals.py`._
 
 ## In short
 

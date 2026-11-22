@@ -1,7 +1,7 @@
 """Ask Ping's single-question evals, asked through the page the way a person asks them (Admin > ask-ping-page).
 
-Each case gets a fresh one-click demo session ("View demo", "Use the demo profile", the "For you" marks loaded), so
-no earlier question in the thread changes how a short question is read. The question is typed into the chat and
+Seven cases share a one-click demo session ("View demo", "Use the demo profile", the "For you" marks loaded), as in the
+API evals: Supabase allows about 30 new anonymous sign-ins an hour from one address. The question is typed into the chat and
 the reply read off the screen. Per case it records who answered (the page itself, or the ask-ping function), how
 long from Enter to the reply on screen, whether the typing bubble showed, and the same checks as the API evals.
 
@@ -34,6 +34,9 @@ def median(xs):
     return round(statistics.median(xs)) if xs else None
 
 
+PER_SESSION = 7    # Supabase allows about 30 new anonymous sign-ins an hour from one address; 7 a session, as the API evals
+
+
 def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
     from playwright.sync_api import sync_playwright
     from run_ask_ping_evals import score
@@ -41,20 +44,19 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
     with sync_playwright() as p:
         # PING_CHROMIUM: a Chromium binary to use instead of Playwright's own download (a machine with its own)
         browser = p.chromium.launch(executable_path=os.environ.get("PING_CHROMIUM") or None)
-        for c in cases:
+        for k in range(0, len(cases), PER_SESSION):
             ctx = browser.new_context(viewport={"width": 1280, "height": 800})
             page = ctx.new_page()
             calls = []
 
             def on_route(route):
                 req = route.request
-                body = req.post_data or ""
                 hdr = dict(req.headers)
                 if proof:
                     hdr.update(proof)
                     return route.continue_(headers=hdr)
                 try:
-                    data = json.loads(body) if body else {}
+                    data = json.loads(req.post_data or "{}")
                 except ValueError:
                     data = {}
                 if data.get("question"):
@@ -66,7 +68,7 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
                 {"status": r.status, "marks": "marks" in (r.request.post_data or "")}))
             page.goto(url)
             page.click("#view-demo")
-            page.wait_for_selector("[data-onboarding], #ask-input", timeout=30000)
+            page.wait_for_selector("[data-onboarding], #ask-input", timeout=60000)
             if page.locator(".chips .chip:has-text('Use the demo profile')").count():
                 page.click(".chips .chip:has-text('Use the demo profile')")
             page.wait_for_selector("#ask-input", timeout=30000)
@@ -77,27 +79,30 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
                 page.wait_for_timeout(100)
             page.wait_for_timeout(400)
             page.evaluate(WATCH)
-            before = page.locator(".msg.ping:not(.typing)").count()
-            n_calls = len(calls)
-            page.fill("#ask-input", c["question"])
-            t0 = time.perf_counter()
-            page.press("#ask-input", "Enter")
-            page.wait_for_function("n => !document.querySelector('.msg.typing') && "
-                                   "document.querySelectorAll('.msg.ping:not(.typing)').length > n", arg=before, timeout=60000)
-            wall = (time.perf_counter() - t0) * 1000
-            last = page.locator(".msg.ping:not(.typing)").last
-            answer = last.locator(".text").inner_text()
-            by = last.get_attribute("data-answered-by") or "?"
-            page_ms = int(last.get_attribute("data-ms") or 0)
-            typing = page.evaluate("window.__typing")
-            server = [x for x in calls[n_calls:] if not x["marks"]]
-            status = server[-1]["status"] if server else None
-            failed = score(answer, c["checks"])
-            out.append({"id": c["id"], "question": c["question"], "answered_by": by, "ms_on_screen": round(wall),
-                        "ms_in_page": page_ms, "typing_bubble": typing, "server_status": status, "failed": failed,
-                        "answer": answer})
-            print(f"{c['id']:5} {'PASS' if not failed else 'FAIL'} {by:6} {wall:7.0f} ms  typing={'yes' if typing else 'no '}  "
-                  f"{c['question'][:60]}" + (f"  -> {'; '.join(failed)}" if failed else ""), flush=True)
+            for c in cases[k:k + PER_SESSION]:
+                page.evaluate("() => { window.__typing = false; }")
+                before = page.locator(".msg.ping:not(.typing)").count()
+                n_calls = len(calls)
+                page.fill("#ask-input", c["question"])
+                t0 = time.perf_counter()
+                page.press("#ask-input", "Enter")
+                page.wait_for_function("n => !document.querySelector('.msg.typing') && "
+                                       "document.querySelectorAll('.msg.ping:not(.typing)').length > n", arg=before, timeout=60000)
+                wall = (time.perf_counter() - t0) * 1000
+                last = page.locator(".msg.ping:not(.typing)").last
+                answer = last.locator(".text").inner_text()
+                by = last.get_attribute("data-answered-by") or "?"
+                page_ms = int(last.get_attribute("data-ms") or 0)
+                typing = page.evaluate("window.__typing")
+                server = [x for x in calls[n_calls:] if not x["marks"]]
+                status = server[-1]["status"] if server else None
+                failed = score(answer, c["checks"])
+                out.append({"id": c["id"], "question": c["question"], "answered_by": by, "ms_on_screen": round(wall),
+                            "ms_in_page": page_ms, "typing_bubble": typing, "server_status": status, "failed": failed,
+                            "answer": answer})
+                print(f"{c['id']:5} {'PASS' if not failed else 'FAIL'} {by:6} {wall:7.0f} ms  typing={'yes' if typing else 'no '}  "
+                      f"{c['question'][:60]}" + (f"  -> {'; '.join(failed)}" if failed else ""), flush=True)
+                page.wait_for_timeout(300)
             ctx.close()
         browser.close()
     return out
@@ -109,7 +114,7 @@ def report(rows: list[dict], url: str, mode: str, build: str) -> str:
     fact_fast = sum(1 for r in page_rows if r["ms_on_screen"] < 300)
     lines = ["# Ask Ping through the page: single-question evals", "",
              f"{len(rows)} single-question cases from `evals/ask_ping/cases.json`, each typed into the live page "
-             f"({url}, build `{build}`) in a fresh one-click demo session, by `setup/ask_ping_page_evals.py` "
+             f"({url}, build `{build}`), 7 to a one-click demo session, by `setup/ask_ping_page_evals.py` "
              f"(Actions > Admin > ask-ping-page). Time = from Enter to the reply on screen.", "",
              f"OPEN questions: {mode}.", "",
              "| | cases | median on screen | slowest | typing bubble | pass |", "|---|---|---|---|---|---|",

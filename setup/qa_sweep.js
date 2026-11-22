@@ -36,10 +36,13 @@ async function measure(p, where, phone) {
         if (fs < 12) out.tiny.push(`${fs}px "${el.innerText.trim().slice(0, 30)}"`);
       }
     }
-    // things wider than the screen
+    // things wider than the screen; inside a row that scrolls sideways (chips) they can be reached, so they don't count
+    const inScroller = (el) => { for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const o = getComputedStyle(a).overflowX; if ((o === "auto" || o === "scroll") && a.scrollWidth > a.clientWidth) return true; } return false; };
     for (const el of document.querySelectorAll("body *")) {
       const b = el.getBoundingClientRect();
-      if (b.width > 0 && b.right > innerWidth + 1 && getComputedStyle(el).position !== "fixed" && !el.closest("pre, .thread, [style*=overflow]"))
+      if (b.width > 0 && b.right > innerWidth + 1 && getComputedStyle(el).position !== "fixed" && !el.closest("pre, .thread, [style*=overflow]")
+          && !inScroller(el))
         out.hidden.push(`${el.tagName.toLowerCase()}.${String(el.className).split(" ")[0]} right=${Math.round(b.right)}`);
     }
     return out;

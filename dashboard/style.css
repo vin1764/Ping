@@ -337,7 +337,7 @@ th { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .03em; c
 .btn.upload { margin-top: var(--s2); cursor: pointer; }
 .snapshot { max-width: 520px; }
 
-@media (max-width: 420px) { .badge .long { display: none; } .top .sub { max-width: 46vw; } }
+@media (max-width: 420px) { .badge .long { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -410,7 +410,6 @@ body { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 480px) {
   .check-top { padding: 0 10px; }
   .check-top .check-label { max-width: 96px; }
-  .top .sub { max-width: 40vw; }
 }
 @media (min-width: 900px) { body { grid-template-columns: var(--rail) minmax(0, 1fr); } }
 .top .badge { flex: none; }
@@ -587,3 +586,5 @@ body:has(form.login) main { background-color: var(--wall); background-image: var
 
 /* "Show N earlier messages" at the top of the thread */
 .thread .earlier { position: static; left: auto; transform: none; align-self: center; margin: var(--s2) auto var(--s3); display: flex; }
+/* the smallest phones: the status line one size down so "checked 13:24 · next 18:23" still fits next to Demo */
+@media (max-width: 380px) { .top .sub { font-size: var(--t-xs); line-height: 16px; } .top { gap: var(--s2); } }

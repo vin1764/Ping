@@ -667,3 +667,9 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .toast[hidden] { display: none; }
 .toast .linklike { color: var(--surface); font-weight: 600; text-decoration: underline; min-height: 44px; }
 @media (min-width: 900px) { .toast { bottom: 24px; } }
+
+/* Ping's answers: lists and links (richText) */
+.msg .text .md-list { margin: 4px 0; padding-left: 1.2em; white-space: normal; }
+.msg .text .md-list li { margin: 2px 0; white-space: pre-wrap; }
+.msg .text .inline-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.msg .text .stale-note { color: var(--muted); font-size: .9em; }

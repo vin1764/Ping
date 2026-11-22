@@ -895,6 +895,14 @@ def main(argv: list[str] | None = None) -> int:
                   + (f" | {c['why']}" if c.get('why') else ""))
         store.save()
         return 0
+    if args.mode == "recheck":
+        from .recheck import recheck
+        if not args.company:
+            print("recheck needs --company")
+            return 2
+        recheck(Runner(secrets, store, store_ok=ok, trigger="manual"), args.company, os.environ.get("PING_RUN_ROW") or None)
+        store.save()
+        return 0
     if args.mode == "diagnose":
         from .recheck import diagnose
         if not args.company:

@@ -141,7 +141,8 @@ reasons, deadlines or groupings per line, and don't merge roles of one company i
 ("only product ones"), drop lines but keep the format.
 CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what
 should I apply to with my <label>", use "apply with" in the role lines and answer "Apply with: <label>" per role
-(if a role has none, say no CV fits it best). ${cvLabels.length ? "" : 'With no CVs uploaded, say "Add your CVs on the Profile page (My CVs)" instead.'}
+(if no CV fits a role, leave its Apply with line out; never write "no CV fits it best"). Write plain text: no
+**bold** or other markdown except "- " list lines, and company names without their bracketed website. ${cvLabels.length ? "" : 'With no CVs uploaded, say "Add your CVs on the Profile page (My CVs)" instead.'}
 Roles marked eligible: no are never listed. If eligibility is "unknown" because the Profile has no department or
 degree, say once "Add your department and degree on the Profile page to check eligibility". Questions like "which of these are relevant to me", "anything for product roles tonight", "what's
 due that's relevant" use the "for you" marks (and the targets text for a narrower ask like "product"); don't

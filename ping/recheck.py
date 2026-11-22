@@ -177,5 +177,60 @@ def rescan(runner, days: int = 14, company: str | None = None, log=print) -> lis
                             key="notice_id")
     runner.now = datetime.now(timezone.utc).astimezone(runner.now.tzinfo) if getattr(runner, "now", None) else runner.now
     runner.items = runner._rebuild(profile)
-    runner.rechecked = {"notices": len(todo), "files": len(new_checks), "new_notices": len(new_notices), "changes": changes}
+    runner.rechecked = {"notices": len(todo), "files": len(new_checks), "new_notices": len(new_notices), "changes": changes,
+                        "board": [{k: n.get(k) for k in ("id", "year", "notice_id", "subject", "company", "notice_time", "has_attachment")}
+                                  | {"kind": ((stored.get(n["id"]) or n).get("analysis") or {}).get("kind")} for n in todo],
+                        "checks": new_checks}
     return changes
+
+
+def recheck(runner, company: str, row_id: str | None = None, log=print) -> dict:
+    """The chat's "check X again": X's notices and files read again from the ERP now; the answer goes to the
+    rechecks row the page is waiting on. ERP unreachable -> status 'unreachable' (the page says so and gives the
+    list's link; it never repeats an old verdict as if it were fresh)."""
+    from .erp import LoginError
+
+    def save(**row):
+        if not row_id or not runner.store_ok:
+            return
+        try:
+            runner.store.upsert("rechecks", [{"id": row_id, "company": company, **row}])
+        except Exception as e:
+            log(f"rechecks row not saved ({type(e).__name__})")
+
+    started = datetime.now(timezone.utc)
+    save(status="running", started_at=started.isoformat())
+    try:
+        changes = rescan(runner, company=company, log=log)
+    except LoginError as e:
+        save(status="unreachable", finished_at=datetime.now(timezone.utc).isoformat(), note=f"the ERP login didn't go through ({e.kind})")
+        return {"status": "unreachable"}
+    except Exception as e:
+        kind = type(e).__name__
+        net = any(w in kind for w in ("Connection", "Timeout", "SSL", "HTTP"))
+        save(status="unreachable" if net else "failed", finished_at=datetime.now(timezone.utc).isoformat(),
+             note=("the ERP didn't answer" if net else f"the re-check stopped ({kind})"))
+        return {"status": "failed"}
+    read_at = datetime.now(timezone.utc).isoformat()
+    items = {}
+    for it in getattr(runner, "items", None) or []:
+        if it.get("notice_id") and it.get("level") != "hidden" or it.get("pdf_status"):
+            items.setdefault(str(it.get("notice_id")), []).append(it)
+    notices = []
+    for n in sorted(runner.rechecked["board"], key=lambda x: x.get("notice_time") or "", reverse=True):
+        c = runner.rechecked["checks"].get(n["id"]) or {}
+        its = items.get(str(n["notice_id"])) or []
+        it = next((i for i in its if i.get("pdf_status")), its[0] if its else None)
+        notices.append({**n, "file": ({"status": c.get("status"), "format": c.get("format"), "pages": c.get("pages"),
+                                       "reliability": c.get("reliability"), "matched_by": c.get("matched_by"),
+                                       "details": {k: v for k, v in (c.get("details") or {}).items() if k != "section"},
+                                       "read_at": c.get("checked_at")} if c else None),
+                        "title": (it or {}).get("title"), "item_id": (it or {}).get("id"),
+                        "link": (f"https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year={n['year']}&id={n['notice_id']}"
+                                 if n.get("has_attachment") else None)})
+    result = {"company": company, "read_at": read_at, "notices": notices[:12], "changes": changes,
+              "new_notices": runner.rechecked["new_notices"]}
+    save(status="done", finished_at=read_at, result=result)
+    log(f"re-check {company}: {len(notices)} notices, {runner.rechecked['files']} files read, {len(changes)} changed")
+    return result
+

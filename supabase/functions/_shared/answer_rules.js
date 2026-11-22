@@ -37,6 +37,10 @@
     if (s === s.toUpperCase() && /[A-Z]{4,}/.test(s)) s = s.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
     return s;
   }
+  // "Auro Group([www.AuroIM.com](https://www.AuroIM.com))" -> "Auro Group", in any answer text (the model's too)
+  function cleanNames(text) {
+    return String(text || "").replace(/\s*\((?:\s*\[[^\]]*\]\([^)]*\)\s*|[^()]*?(?:https?:\/\/|www\.)[^()]*)\)/g, "");
+  }
   const LEGAL = new Set(("private pvt limited ltd inc llp llc plc the and of co company corp corporation technologies technology " +
     "services solutions group global labs systems software india").split(" "));
   const norm = (s) => String(s || "").toLowerCase().replace(/\s*\(([^()]*)\)/g, (m, inner) => (URLISH.test(inner) ? " " : m))
@@ -704,6 +708,20 @@
     if (!ACT_WORD.test(t)) return false;
     return /\b(?:for me|on my behalf)\b/i.test(t) || ASKS_YOU.test(t) || STARTS_WITH_ACT.test(t);
   }
+  // "check again", "recheck", "are you sure?", "that's wrong", "I think I'm on it", "I got a call", "check the ERP for
+  // the latest, don't answer on old data": about the previous question, read again from the ERP now (never a new,
+  // broader question). A company named in the message wins; else the active topic (the last 3 questions).
+  const RECHECK = new RegExp([
+    "\\bre-?check", "\\bcheck (?:it |that |this |them |again |once more )*(?:again|once more)\\b", "\\bdouble[- ]?check",
+    "\\blook (?:again|once more)\\b", "\\b(?:check|look|search|see) (?:on |in |at )?(?:the )?erp\\b", "\\bverify\\b",
+    "\\b(?:don'?t|do not|dont|never) (?:answer|reply|use|go)\\b.{0,30}\\bold\\b", "\\bold data\\b", "\\bstale\\b",
+    "\\blatest (?:update|updates|data|info|list|news)\\b", "\\bfresh (?:data|check|look)\\b",
+    "\\bare you sure\\b", "\\b(?:that'?s|thats|you'?re|youre|ur|it'?s|its) (?:wrong|not right|incorrect|mistaken|not correct)\\b",
+    "\\bi (?:think|believe|guess|feel) i(?:'?m| am| might| may| could| should)\\b", "\\bi (?:got|received|had|have got|get) (?:a |the )?(?:call|mail|email|message)\\b",
+    "\\bi(?:'?m| am) (?:on|in) (?:it|the list|there|that list)\\b", "\\bi(?:'?m| am) there\\b", "\\bcheck (?:it |that )?now\\b",
+  ].join("|"), "i");
+  function isRecheck(message) { return RECHECK.test(String(message || "")); }
+
   function parse(text, data, ents) {
     const { hits, used } = matchCompanies(text, data, ents);
     const intents = intentsOf(text);
@@ -774,7 +792,19 @@
     let spec = { ents, intents: [...cur.intents], hits: cur.hits, range: cur.range, unknown: cur.unknown };
     let resolved = text, why = "";
     const isElse = ELSE.test(q);
-    const prevQs = (previous || []).filter(Boolean);
+    // the active topic: the last 3 questions, newest first
+    const prevQs = (previous || []).filter(Boolean).slice(0, 3);
+    if (isRecheck(raw)) {
+      const prev = prevQs.map((p) => parse(String(p), data, ents)).find((p) => p.hits.length || p.intents.size || p.range) || null;
+      const hits = cur.hits.length ? cur.hits : prev ? prev.hits : [];
+      const intents = new Set([...(prev ? prev.intents : []), ...cur.intents]);
+      const companies = hits.map((e) => e.name);
+      const topic = { ents, intents: [...intents].filter((i) => i !== "count"), hits, range: prev?.range || cur.range, unknown: [] };
+      const prevIdx = prevQs.findIndex((p) => { const x = parse(String(p), data, ents); return x.hits.length || x.intents.size || x.range; });
+      return { kind: "recheck", companies, spec: topic, previous: prevIdx >= 0 ? prevQs[prevIdx] : null,
+               why: companies.length ? `re-check: ${companies.join(", ")}` : "re-check: no company in the topic",
+               resolved: `${text} [re-check${companies.length ? `: ${companies.join(", ")}` : ""}]` };
+    }
     const follow = prevQs.length && (FOLLOW.test(q) || isElse || PRONOUN.test(q) || cur.toks.length <= 2 ||
       (!cur.intents.size && !cur.hits.length && !cur.unknown.length));
     if (follow) {
@@ -808,6 +838,10 @@
   // the reply for a routed message that the model doesn't answer
   function routed(r, question, data) {
     if (r.kind === "ack") return { kind: "ack", companies: [], text: "👍" };
+    // a re-check is done by the page (a live, read-only ERP fetch for that company); here only what it's doing,
+    // never the old answer again as if it were fresh
+    if (r.kind === "recheck") return { kind: "recheck", companies: r.companies, recheck: r.companies[0] || null,
+      text: r.companies.length ? `Checking the ERP for ${r.companies.map(shortName).join(", ")} now…` : "Checking the ERP now…" };
     if (r.kind === "help") return helpAnswer(r.topic, { ...data, platform: r.platform || data.platform, installed: r.platform ? false : data.installed });
     if (r.kind === "act") {
       const verb = (String(question).match(ACT_WORD) || ["do that"])[0].toLowerCase();
@@ -815,6 +849,61 @@
       return { kind: "act", companies: [], text: `Ping is read-only, so I can't ${verb} for you: it only reads the ERP.${base ? `\n${base}` : ""}` };
     }
     return answer(question, data, r.spec);
+  }
+
+  // ---------------------------------------------------------------- a re-check's answer
+  // rc: a rechecks row { status, company, note, result: { read_at, notices: [{ notice_id, subject, kind, notice_time,
+  // file: { status, reliability, read_at, details }, title, link }], changes } }. Never "you're not on it".
+  const HMs = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const LISTWORD = { shortlist: "shortlist", test: "test list", test_rooms: "test room list", result: "result" };
+  function recheckAnswer(rc, now, fallbackLink) {
+    const name = shortName(rc.company || rc.result?.company || "");
+    const at = (iso) => (iso ? HMs.format(new Date(iso)) : "");
+    if (!rc || rc.status === "unreachable" || rc.status === "failed") {
+      const link = fallbackLink ? ` Check it yourself: [Open list](${fallbackLink})` : " Check the notice on the ERP yourself.";
+      return { kind: "recheck", text: `I couldn't reach the ERP just now${rc?.note ? ` (${rc.note})` : ""}, so I can't confirm anything new for ${name}.${link}` };
+    }
+    const res = rc.result || {};
+    const lists = (res.notices || []).filter((n) => LISTWORD[n.kind] || n.file);
+    const lines = [`I checked the ERP for ${name} just now (${at(res.read_at)}).`];
+    for (const n of lists.slice(0, 3)) {
+      const f = n.file || {};
+      const what = LISTWORD[n.kind] || "list";
+      const open = n.link ? ` [Open list](${n.link})` : "";
+      const src = ` (notice ${n.notice_id}, posted ${when(n.notice_time)}${f.read_at ? `; file read ${at(f.read_at)}` : ""})`;
+      let line;
+      if (f.status === "yes") {
+        const d = f.details || {};
+        const extra = [d.room ? `room ${d.room}` : d.room_or_venue_from_heading ? `room ${d.room_or_venue_from_heading}` : "",
+                       d.slot || d.slot_from_heading ? `slot ${d.slot || d.slot_from_heading}` : "", d.time || d.time_from_heading || d.reporting_time || ""].filter(Boolean);
+        line = `You're on the ${name} ${what}${extra.length ? `: ${extra.join(", ")}` : ""}.`;
+      } else if (f.status === "no") {
+        line = `I couldn't find your roll number in the ${name} ${what} (posted ${when(n.notice_time)}). Please check the list yourself:`;
+      } else if (n.has_attachment) {
+        line = `I couldn't read the ${name} ${what} reliably${f.reliability ? ` (${f.reliability})` : ""}. Check it here:`;
+      } else {
+        line = `${name} ${what}: "${n.subject}", posted ${when(n.notice_time)} (no file attached).`;
+      }
+      lines.push(`- ${line}${open}${src}`);
+    }
+    if (!lists.length) {
+      const last = (res.notices || [])[0];
+      lines.push(last ? `No shortlist or test list for ${name} on the ERP yet. Latest notice: "${last.subject}", ${when(last.notice_time)}.`
+        : `The ERP has no notices for ${name}.`);
+    }
+    for (const c of (res.changes || []).slice(0, 3)) {
+      const w = (v) => (v === "yes" ? "on the list" : v === "no" ? "roll not found" : v === "unknown" ? "couldn't read" : "not checked");
+      lines.push(`Changed since my last reading: ${w(c.old)} → ${w(c.new)}. I've updated the message in the chat.`);
+    }
+    return { kind: "recheck", text: lines.join("\n") };
+  }
+  // how old the ERP data is, when that matters (over 30 min): "ERP data from 12:41 (1 h 20 min ago)."
+  function staleNote(lastChecked, now) {
+    if (!lastChecked) return null;
+    const mins = Math.round((new Date(now) - new Date(lastChecked)) / 60000);
+    if (mins <= 30) return null;
+    const ago = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h${mins % 60 ? ` ${mins % 60} min` : ""}`;
+    return `ERP data from ${HMs.format(new Date(lastChecked))} (${ago} ago).`;
   }
 
   // ---------------------------------------------------------------- numbers in a model's reply
@@ -846,7 +935,7 @@
       : !(x.v <= 1 || nums.some((n) => (x.v >= 1e5 ? Math.abs(n - x.v) <= x.v * 0.005 : n === x.v)))).map((x) => x.raw);
   }
 
-  const api = { answer, route, routed, prefsLike, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  const api = { answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -98,6 +98,7 @@
     async setReadAt() {}
     async addChat() {}
     async ask() { const e = new TypeError("offline"); e.offline = true; throw e; }
+    async recheck() { const e = new TypeError("offline"); e.offline = true; throw e; }
     async notice() { return { notice: null }; }
     async checkNow() { throw new Error("You're offline: Check now works once you're back online."); }
   }
@@ -129,6 +130,7 @@
       if (it) { it.level = "hidden"; it.title = fix.ignore ? "Marked not relevant." : `Noted: it's about ${fix.company}.`; }
     }
     async checkNow() { return "Demo mode: this would start a real run on GitHub. Nothing was started."; }
+    async recheck() { return { demo: true }; }
     // form ticks: this browser's own (the static demo has no login)
     async formStatus() { return Object.entries(store.get("ping-demo-forms", {})).map(([form_key, v]) => ({ form_key, ...v })); }
     async setFormStatus(key, filled) {
@@ -170,7 +172,7 @@
         this.q("profile"),
         this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
         // the latest notices, one line each on Today (the full text is read when one is opened)
-        this.sb.from("notices").select("notice_id,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(1000)
+        this.sb.from("notices").select("notice_id,year,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(1000)
           .then((r) => r.data || [], () => []),
       ]);
       const forms = await this.forms();
@@ -268,6 +270,9 @@
     }
     // starts the Ping workflow; the function creates the run's row ("queued") and returns its id
     async checkNow() { return this.fn("check-now"); }
+    // "check FirstClub again": one company read again from the ERP (read-only); a demo session gets the snapshot's reading
+    async recheck(company, question) { return this.demo ? { demo: true } : this.fn("check-now", { task: "recheck", company, question }); }
+    async recheckRow(id) { const { data } = await this.sb.from("rechecks").select("*").eq("id", id).limit(1); return data?.[0] || null; }
     async ask(q) {
       // the demo is a snapshot: "tomorrow" is the day after it, as everywhere else on the page
       const asOf = this.demo && state.asOf ? new Date(state.asOf).toISOString() : undefined;
@@ -318,7 +323,18 @@
 
   async function boot() {
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-      navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {});
+      // a new deploy takes over at once: the new worker installs, claims this page, and the page reloads onto the
+      // new build (not while you're typing). Without this an installed app showed the previous build until it had
+      // been opened twice (cache first). Checked again whenever the app comes back to the front.
+      const hadWorker = !!navigator.serviceWorker.controller;
+      let reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!hadWorker || reloading || document.querySelector("#ask-input")?.value) return;
+        reloading = true; location.reload();
+      });
+      navigator.serviceWorker.register("sw.js", { scope: "./" }).then((reg) => {
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}); });
+      }).catch(() => {});
       // a tapped notification: the worker asks this window to open the message
       navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.type === "open" && e.data.url) location.href = e.data.url; });
     }
@@ -603,6 +619,8 @@
       .on("postgres_changes", { event: "*", schema: "public", table: "runs" }, (p) => onRun(p.new))
       // a tick on another device (your own rows only: the row rules hold on the channel)
       .on("postgres_changes", { event: "*", schema: "public", table: "form_status" }, (p) => onTick(p.new))
+      // a re-check the chat is waiting for
+      .on("postgres_changes", { event: "*", schema: "public", table: "rechecks" }, (p) => onRecheck(p.new))
       .subscribe((st) => {
         const was = live.ok;
         live.ok = st === "SUBSCRIBED";
@@ -655,6 +673,13 @@
     if (ended && row.stage === "done") { state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems(); }
     if (ended && row.stage === "done" && Number(row.new_items) > 0) flash(`found ${row.new_items} new`);
     applyLive();
+    // "check the ERP for the latest" with no company in the conversation: the last question again, on the new data
+    if (ended && state.reask) {
+      const q = state.reask; state.reask = null;
+      const text = row.stage === "done" ? `Checked the ERP just now. ${answerLocally(q, state.data)}` : "The check didn't finish, so I can't give you anything newer. Try Check now in a minute.";
+      const reply = { role: "ping", text, created_at: new Date().toISOString() };
+      if (addChatRow(reply)) { state.src.addChat(reply).catch(() => {}); applyLive(); }
+    }
   }
 
   // runs, newest first; full=true replaces the list (keeping the demo's played-out checks)
@@ -1374,9 +1399,46 @@
   function navUnread(n) { const d = $("#nav-unread"); if (!d) return; d.textContent = n > 99 ? "99+" : String(n); d.hidden = !n;
     d.parentElement.setAttribute("aria-label", n ? `Chat, ${n} new` : "Chat"); }
 
+  // Ping's answers as rich text: "- " lines become a list, **bold** bold, [Open list](https://…) a link (opens in the
+  // browser), and an "ERP data from 12:41 (…)" line gets a Check now button. Never literal ** or "- " in a bubble.
+  function richText(text) {
+    const inline = (str) => {
+      const parts = [], re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*/g;
+      let last = 0, m;
+      while ((m = re.exec(str))) {
+        if (m.index > last) parts.push(str.slice(last, m.index));
+        parts.push(m[1] ? h("a", { href: m[2], target: "_blank", rel: "noopener", class: "inline-link" }, m[1]) : h("strong", {}, m[3]));
+        last = re.lastIndex;
+      }
+      if (last < str.length) parts.push(str.slice(last));
+      return parts;
+    };
+    const out = [];
+    let ul = null;
+    const R = window.PingRules;
+    const clean = R?.cleanNames ? R.cleanNames(text) : String(text || "");
+    for (const line of clean.split("\n")) {
+      const li = line.match(/^\s*[-•*]\s+(.*)$/);
+      if (li) {
+        if (!ul) { ul = h("ul", { class: "md-list" }); out.push(ul); }
+        ul.append(h("li", {}, inline(li[1])));
+        continue;
+      }
+      ul = null;
+      if (/^ERP data from \d/.test(line)) {
+        out.push(h("span", { class: "stale-note" }, line, " ",
+          h("button", { type: "button", class: "linklike", "data-check-now": true, onclick: () => checkNow() }, "Check now")), "\n");
+        continue;
+      }
+      out.push(...inline(line), "\n");
+    }
+    if (out[out.length - 1] === "\n") out.pop();
+    return out;
+  }
+
   function textBubble(role, text, at, enter) {
     return h("div", { class: `msg ${role === "me" ? "me" : "ping"}${enter ? " enter" : ""}`, "data-key": msgKey(role, at), "data-sig": "1" },
-      h("span", { class: "text" }, text), role === "me" ? null : rolesButton(text),
+      h("span", { class: "text" }, role === "me" ? text : richText(text)), role === "me" ? null : rolesButton(text),
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
   }
 
@@ -1795,11 +1857,16 @@
     // a FACT question: answered at once from the page's own data, no typing bubble (in the demo, once the roles'
     // details are in: they arrive within a second of opening)
     if (state.details) { state.startDetails?.(); await state.details; }
+    // "check again", "are you sure?", "I got a call": the previous question, read again from the ERP now
+    const RR = window.PingRules;
+    const rr = RR && state.data ? RR.route(q, previousQuestions(q), factsOf(state.data)) : null;
+    if (rr?.kind === "recheck") return recheckFlow(q, rr, mine, { input, inner, thread, btn });
     // forms: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the
     // last ticks it: your own record, never the ERP or the form)
     const fq = FORMS && state.data?.forms?.length ? FORMS.ask(q, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
     if (fq?.tick) setTick(fq.tick, true, { quiet: true });
     const local = fq ? { text: fq.text } : localFact(q);
+    if (local.text) local.text = withStale(local.text, rr);
     if (local.text) {
       state.chat.push(mine);
       appendToday(inner, textBubble("me", q, mine.created_at, true));
@@ -1845,7 +1912,7 @@
     }
     await typing;
     clearTimeout(slow);
-    const reply = { role: "ping", text: answer || "I couldn't come up with an answer.", created_at: new Date().toISOString() };
+    const reply = { role: "ping", text: withStale(answer || "I couldn't come up with an answer.", rr), created_at: new Date().toISOString() };
     state.chat.push(reply);
     state.waiting = false;
     btn.removeAttribute("aria-busy");
@@ -1865,6 +1932,98 @@
     state.src.setReadAt(state.readAt).catch(() => {});
     // a preference was saved: fetch the new marks and show the lists split the new way
     if (state.prefsChanged) { state.prefsChanged = false; await loadMarks(); route(); }
+  }
+
+  // an answer about deadlines, tests, shortlists or a company says how old the ERP data is when that's over 30 min
+  // (richText turns the line into "ERP data from 12:41 (1 h 20 min ago). [Check now]")
+  function withStale(text, rr) {
+    const R = window.PingRules;
+    if (!R?.staleNote || !rr || state.src?.demo || /ERP data from \d/.test(text)) return text;
+    const about = (rr.spec?.intents || []).some((i) => ["deadline", "test", "shortlist", "applied", "notice", "foryou"].includes(i)) || rr.spec?.hits?.length;
+    if (!about || !["fact", "open"].includes(rr.kind)) return text;
+    const note = R.staleNote(factsOf(state.data).lastChecked, liveNow());
+    return note ? `${text}\n${note}` : text;
+  }
+
+  // ---------------------------------------------------------------- re-check on demand
+  const recheckWaiters = new Map();
+  function onRecheck(row) {
+    const w = row?.id && recheckWaiters.get(row.id);
+    if (w && ["done", "unreachable", "failed"].includes(row.status)) { recheckWaiters.delete(row.id); w(row); }
+  }
+  // the row once it's finished (Realtime, with a poll every 4 s in case the socket is down); 4 min at most
+  function waitRecheck(id) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (row) => { if (!done) { done = true; clearInterval(poll); clearTimeout(cap); resolve(row); } };
+      recheckWaiters.set(id, finish);
+      const poll = setInterval(async () => {
+        const row = await state.src.recheckRow?.(id).catch(() => null);
+        if (row && ["done", "unreachable", "failed"].includes(row.status)) finish(row);
+      }, 4000);
+      const cap = setTimeout(() => finish({ id, status: "unreachable", note: "the ERP didn't answer within 4 minutes" }), 240000);
+    });
+  }
+  // the newest list notice we know for a company: its file on the ERP (opens in the browser; a link only)
+  function listLinkFor(company) {
+    const R = window.PingRules, key = (s) => R.shortName(s || "").toLowerCase();
+    const n = (state.data?.notices || []).filter((x) => key(x.company) === key(company) && ["shortlist", "test", "test_rooms", "result"].includes(x.kind))
+      .sort((a, b) => String(b.notice_time).localeCompare(String(a.notice_time)))[0];
+    const it = n ? null : (state.data?.items || []).filter((i) => key(i.company) === key(company) && i.notice_id && i.details?.pdf)
+      .sort((a, b) => String(b.details?.notice_time).localeCompare(String(a.details?.notice_time)))[0];
+    const id = n?.notice_id || it?.notice_id, year = n?.year || (it?.details?.notice_key || "").split(":")[0];
+    return id && year ? `https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=${encodeURIComponent(year)}&id=${id}` : null;
+  }
+  // the demo can't log in to the ERP: it answers from the snapshot, and says so
+  function demoRecheck(company) {
+    const R = window.PingRules, key = (s) => R.shortName(s || "").toLowerCase();
+    const items = (state.data?.items || []).filter((i) => key(i.company) === key(company) && i.notice_id);
+    const notices = items.filter((i) => i.details?.pdf || ["shortlist", "test", "test_rooms", "result"].includes(i.details?.kind))
+      .map((i) => ({ notice_id: i.notice_id, subject: i.details?.subject, kind: i.details?.kind || i.category, notice_time: i.details?.notice_time,
+                     has_attachment: !!i.details?.pdf, file: i.details?.pdf ? { status: i.details.pdf.status, read_at: i.details.pdf.checked_at, details: i.details.pdf.details } : null }));
+    return { status: "done", demo: true, company, result: { company, read_at: factsOf(state.data).lastChecked, notices, changes: [] } };
+  }
+  async function recheckFlow(q, rr, mine, { input, inner, thread, btn }) {
+    const R = window.PingRules;
+    const release = () => { state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND()); btn.disabled = !input.value.trim(); };
+    state.chat.push(mine);
+    appendToday(inner, textBubble("me", q, mine.created_at, true));
+    await state.src.addChat(mine).catch(() => {});
+    const company = rr.companies[0] || null;
+    const name = company ? R.shortName(company) : "";
+    const status = h("div", { class: "msg ping run r-active enter", role: "status", "data-recheck": company || "all" },
+      h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping"), h("span", { class: "k2" }, "Re-check"), h("span", { class: "spin", "aria-hidden": "true" })),
+      h("span", { class: "text title" }, company ? `Checking the ERP for ${name} now…` : "Checking the ERP now…"));
+    appendToday(inner, status);
+    thread.scrollTop = thread.scrollHeight;
+    release();
+    let text;
+    if (!company) {
+      // nothing in the conversation names a company: a full check, then the last question again on the new data
+      let started = true;
+      try { await state.src.checkNow(); } catch { started = false; }
+      state.reask = started ? (rr.previous || null) : null;
+      text = started ? `Checking the whole ERP now (about 2 minutes).${rr.previous ? ` I'll answer "${rr.previous}" again with what it finds.` : ""}`
+        : `I couldn't start a check just now. Try Check now in a minute.`;
+    } else {
+      let rc;
+      try {
+        const out = await state.src.recheck(company, q);
+        rc = out.demo ? demoRecheck(company) : { ...(await waitRecheck(out.recheck)), company };
+      } catch (e) { rc = { status: "unreachable", company, note: e?.offline ? "you're offline" : plainly(e) }; }
+      text = R.recheckAnswer(rc, liveNow(), listLinkFor(company)).text;
+      if (rc.demo) text = text.replace(/^I checked the ERP for (.+?) just now \((.*?)\)\./, "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of $1 ($2).");
+      if (rc.status === "done" && !rc.demo) {        // the feed may have changed (a verdict, a new notice): read it again
+        state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems();
+      }
+    }
+    const reply = { role: "ping", text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString() };
+    state.chat.push(reply);
+    const b = textBubble("ping", reply.text, reply.created_at, true);
+    b.dataset.answeredBy = "recheck";
+    if (status.isConnected) status.replaceWith(b); else route();
+    state.src.addChat(reply).catch(() => {});
+    applyLive?.();
   }
 
   async function queueSend(q, input, inner, thread) {

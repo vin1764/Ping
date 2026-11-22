@@ -604,3 +604,32 @@ begin
 end $$;
 revoke all on function cleanup_demo_sessions(int) from public, anon, authenticated;
 grant execute on function cleanup_demo_sessions(int) to service_role;
+
+-- "check FirstClub again": one company read again from the ERP now (read-only, the same gate as the hourly run).
+-- check-now creates the row (at most one per company per 5 minutes), the Ping workflow (mode recheck) fills it in,
+-- the page waits for it on Realtime and answers from result. Never counts as the hourly run.
+create table if not exists rechecks (
+  id text primary key,
+  company text not null,
+  question text,
+  requested_at timestamptz default now(),
+  started_at timestamptz, finished_at timestamptz,
+  status text default 'queued',      -- queued, running, done, unreachable, failed
+  note text,
+  result jsonb,
+  is_sample boolean default false
+);
+create index if not exists rechecks_company on rechecks (lower(company), requested_at desc);
+alter table rechecks enable row level security;
+revoke all on rechecks from anon;
+grant select on rechecks to authenticated;
+grant select, insert, update, delete on rechecks to service_role;
+drop policy if exists owner_rechecks_read on rechecks;
+create policy owner_rechecks_read on rechecks for select to authenticated using (is_ping_owner() and not coalesce(is_sample, false));
+do $rc$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'rechecks') then
+    alter publication supabase_realtime add table public.rechecks;
+  end if;
+end $rc$;

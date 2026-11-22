@@ -2,6 +2,40 @@
 // (a Supabase function secret), never in the browser.
 import { caller, cors, json } from "../_shared/owner.ts";
 
+const RECHECK_EVERY_MS = 5 * 60_000;   // one ERP re-check per company per 5 minutes
+
+// "check FirstClub again": one company's notices and files read again from the ERP now (the Ping workflow, mode
+// recheck, read-only). A second ask within 5 minutes gets the same re-check (its row), not another ERP login.
+async function recheck(company: string, question: string): Promise<Response> {
+  if (!company) return json({ error: "which company?" }, 400);
+  const repo = Deno.env.get("PING_GITHUB_REPO"), token = Deno.env.get("PING_GITHUB_TOKEN");
+  const ref = Deno.env.get("PING_GITHUB_REF") || "main";
+  const svc = Deno.env.get("PING_SERVICE_KEY"), base = Deno.env.get("SUPABASE_URL");
+  if (!repo || !token || !svc || !base) return json({ error: "re-check is not configured" }, 500);
+  const H = { apikey: svc, Authorization: `Bearer ${svc}`, "Content-Type": "application/json" };
+  const since = new Date(Date.now() - RECHECK_EVERY_MS).toISOString();
+  const recent = await fetch(`${base}/rest/v1/rechecks?select=id,status,requested_at,finished_at&company=ilike.${encodeURIComponent(company)}` +
+    `&requested_at=gte.${encodeURIComponent(since)}&status=in.(queued,running,done)&order=requested_at.desc&limit=1`, { headers: H })
+    .then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  if (recent?.[0]) return json({ ok: true, recheck: recent[0].id, reused: true, status: recent[0].status });
+  const id = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "-re" + crypto.randomUUID().slice(0, 6);
+  const ins = await fetch(`${base}/rest/v1/rechecks`, { method: "POST", headers: { ...H, Prefer: "return=minimal" },
+    body: JSON.stringify({ id, company, question, status: "queued" }) });
+  if (!ins.ok) return json({ error: `the re-check couldn't be queued (${ins.status})` }, 502);
+  const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/ping.yml/dispatches`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "ping-dashboard" },
+    body: JSON.stringify({ ref, inputs: { mode: "recheck", company, run_row: id } }),
+  });
+  if (r.status !== 204) {
+    await fetch(`${base}/rest/v1/rechecks?id=eq.${id}`, { method: "PATCH", headers: H,
+      body: JSON.stringify({ status: "failed", note: `GitHub didn't start the re-check (${r.status})`, finished_at: new Date().toISOString() }) }).catch(() => null);
+    return json({ error: `GitHub said ${r.status}`, recheck: id }, 502);
+  }
+  console.log(JSON.stringify({ event: "recheck_started", id }));
+  return json({ ok: true, recheck: id, reused: false, status: "queued" });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const who = await caller(req);
@@ -17,6 +51,8 @@ Deno.serve(async (req) => {
   // in (logging in, reading ..., done). Best effort: without it the run still starts and makes its own row.
   const svc = Deno.env.get("PING_SERVICE_KEY"), base = Deno.env.get("SUPABASE_URL");
   const now = new Date();
+  const body = await req.json().catch(() => ({}));
+  if (body?.task === "recheck") return recheck(String(body.company || "").trim().slice(0, 80), String(body.question || "").slice(0, 300));
   const id = now.toISOString().replace(/[-:]/g, "").slice(0, 15) + "-check" + crypto.randomUUID().slice(0, 4);
   let row = "";
   if (svc && base) {

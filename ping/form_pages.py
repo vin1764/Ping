@@ -244,10 +244,15 @@ class Reader:
             return self._store(key, {"final_url": url}, error=f"{type(e).__name__}: {str(e)[:120]}")
 
     def read_rows(self, rows: list[dict]) -> dict[str, dict]:
-        """Read the page of each form that has a link (soonest deadline first), within the run's limits."""
+        """Read the page of each form that has a link (soonest deadline first), within the run's limits; by the
+        form's own key (a row can hold several forms: each is read)."""
         for r in sorted(rows, key=lambda r: (r.get("closed"), r.get("due_at") or "9999")):
-            url = r.get("final_url") or r.get("link")
-            if url and not r["key"].startswith(("notice:", "item:", "short:")):
-                last = max((s.get("at") or "" for s in r.get("sources") or []), default=None)
-                self.read(r["key"], url, last or None)
+            last = max((s.get("at") or "" for s in r.get("sources") or []), default=None)
+            for i, fk in enumerate(r.get("form_keys") or []):
+                if fk.startswith(("short:", "url:")) and not is_form_link(fk.split(":", 1)[1]):
+                    continue
+                links = r.get("links") or []
+                url = links[i] if i < len(links) and str(links[i]).startswith("http") else (r.get("final_url") or r.get("link"))
+                if url:
+                    self.read(fk, url, last or None)
         return {k: v for k, v in self.cache.items()}

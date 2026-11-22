@@ -1611,10 +1611,18 @@
     const href = f.final_url || f.link;
     const past = f.due_at && dt(f.due_at) <= nowDate();
     const moved = FORMS.movedLine(f, when), posted = FORMS.postedLine(f);
+    const cos = [...new Set(FORMS.names(f).map(FORMS.cleanName))], many = cos.length > 1;
     return h("article", { class: `form-row${filled ? " filled" : ""}${f.closed ? " closed" : ""}`, "data-form": f.key },
       formTick(f.key),
       h("div", { class: "fr-body" },
-        h("div", { class: "fr-head" }, h("strong", { class: "co" }, FORMS.names(f).join(", ") || "A form"),
+        // several companies: "Additional requirement · 11 companies", then three names and "+8 more" to see all
+        many ? h("div", { class: "fr-head" }, h("strong", { class: "co" }, FORMS.label(f.purpose)), h("span", { class: "fr-what" }, `${cos.length} companies`),
+            f.closed ? h("span", { class: "pill over" }, "Closed") : null, f.signin_required ? h("span", { class: "pill plain" }, "sign-in required") : null)
+          : null,
+        many ? h("div", { class: "fr-line fr-cos" }, cos.slice(0, 3).join(", "), cos.length > 3 ? " " : null,
+            cos.length > 3 ? h("button", { type: "button", class: "linklike", "aria-expanded": "false", onclick: (ev) => {
+              const line = ev.currentTarget.parentElement; line.replaceChildren(cos.join(", ")); } }, `+${cos.length - 3} more`) : null) : null,
+        many ? null : h("div", { class: "fr-head" }, h("strong", { class: "co" }, cos[0] || "A form"),
           h("span", { class: "fr-what" }, FORMS.label(f.purpose)),
           f.closed ? h("span", { class: "pill over" }, "Closed") : null,
           f.signin_required ? h("span", { class: "pill plain" }, "sign-in required") : null),
@@ -1625,7 +1633,6 @@
         f.signin_required ? h("div", { class: "fr-line muted small" }, "This form needs an institute sign-in: Ping can't read it, so open it in your browser. The notice says what it's for.") : null,
         f.closed ? h("div", { class: "fr-line muted small" }, "The form page says it's no longer accepting responses.") : null,
         moved || posted ? h("div", { class: "fr-line muted small" }, [moved, posted].filter(Boolean).join(" · ")) : null,
-        ...(f.looks_like || []).map((x) => looksLike(f, x)),
         h("div", { class: "ac-links" },
           href ? h("a", { class: "act-btn", href, ...EXT, "data-link": "form" }, "Open form") : null,
           notice ? h("button", { type: "button", class: "act-btn", "data-link": "notice", onclick: () => openNotice(Number(notice.id) || notice.id) }, "Notice") : null,

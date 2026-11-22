@@ -118,30 +118,29 @@ def _dt(v) -> datetime | None:
 
 
 def postings(items: list[dict]) -> list[dict]:
-    """One posting per (item, form link): every to-do that asks you to fill a form, from a notice (and the mail that
-    repeated it) or from mail alone. A notice that asks for a form without a link is a posting with no link."""
+    """One posting per form to-do (a notice's, or a mail's): its company, every form link it gives, its sources, its
+    deadline. A notice that asks several companies' applicants to fill forms is several to-dos of ONE notice: they
+    end up in one row (build)."""
     out = []
     for it in items:
         d = it.get("details") or {}
         todo = d.get("todo") or {}
         if it.get("category") != "todo" or todo.get("action") != "fill_form":
             continue
-        # the to-do's own link is the form (the notice or mail said "fill the form": link); the other links of the
-        # message only when they look like a form
         own = todo.get("link") if str(todo.get("link") or "").startswith(("http://", "https://")) else None
-        links = [own] + [x for x in [*(d.get("forms") or []), (d.get("mail") or {}).get("link")] if x and is_form_link(x)]
-        links = list(dict.fromkeys(l for l in links if l)) or [None]
+        links = list(dict.fromkeys(l for l in [own, *(x for x in [*(d.get("forms") or []), (d.get("mail") or {}).get("link")]
+                                                     if x and is_form_link(x))] if l))
         sources = []
         if it.get("notice_id"):
             sources.append({"type": "notice", "id": str(it["notice_id"]), "at": d.get("notice_time") or it.get("first_seen")})
         if d.get("mail"):
             sources.append({"type": "mail", "id": str(d["mail"].get("id") or ""), "at": d["mail"].get("received_at")})
         text = " ".join(x for x in (d.get("subject") or "", it.get("title") or "", todo.get("due_text") or "") if x)
-        for link in links:
-            out.append({"item_id": it["id"], "company": it.get("company") or "", "link": link, "due": todo.get("due") or it.get("due_at"),
-                        "text": text, "purpose": purpose_of(d.get("subject") or "", it.get("title") or "", todo.get("due_text") or ""),
-                        "sources": sources, "role_ids": it.get("role_ids") or [], "at": (sources[0]["at"] if sources else it.get("first_seen")),
-                        "level": it.get("level"), "is_sample": bool(it.get("is_sample"))})
+        out.append({"item_id": it["id"], "company": it.get("company") or "", "links": links, "link": links[0] if links else None,
+                    "due": todo.get("due") or it.get("due_at"), "text": text,
+                    "purpose": purpose_of(d.get("subject") or "", it.get("title") or "", todo.get("due_text") or ""),
+                    "sources": sources, "role_ids": it.get("role_ids") or [], "at": (sources[0]["at"] if sources else it.get("first_seen")),
+                    "level": it.get("level"), "is_sample": bool(it.get("is_sample"))})
     return out
 
 
@@ -150,89 +149,134 @@ def _norm(s: str) -> str:
 
 
 def _company_key(s: str) -> str:
+    s = re.sub(r"\([^)]*(?:www\.|https?:)[^)]*\)", " ", (s or "").lower())       # "Auro Group(www.AuroIM.com)"
     s = _norm(s)
     s = re.sub(r"\b(private|pvt|limited|ltd|llp|inc|india|technologies|technology|solutions|services|group)\b", " ", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
 def similarity(a: dict, b: dict) -> float:
-    """How alike two forms are when their keys differ: company, purpose, title (the form page's, else the notice's
-    words) and the question count when both pages were read. 0..1."""
+    """How alike two forms are (company, purpose, title, questions), 0..1. Kept for reports; Ping no longer merges
+    or asks on it."""
     ca, cb = _company_key(a.get("company")), _company_key(b.get("company"))
     if not ca or not cb or not (ca == cb or ca.startswith(cb) or cb.startswith(ca)):
         return 0.0
-    score = 0.4
-    score += 0.2 if a.get("purpose") == b.get("purpose") else 0.0
+    score = 0.4 + (0.2 if a.get("purpose") == b.get("purpose") else 0.0)
     ta, tb = _norm(a.get("title") or a.get("text")), _norm(b.get("title") or b.get("text"))
     score += 0.3 * (SequenceMatcher(None, ta, tb).ratio() if ta and tb else 0.0)
-    qa, qb = a.get("question_count"), b.get("question_count")
-    if qa and qb:
-        score += 0.1 if qa == qb else -0.15
     return round(min(score, 1.0), 2)
 
 
-HIGH, MEDIUM = 0.85, 0.6
 KNOWN = ("gform", "msform", "zoho", "typeform", "jotform")
+
+
+def _dtv(v):
+    return _dt(v) or datetime.max.replace(tzinfo=timezone.utc)
 
 
 def build(items: list[dict], previous: dict[str, dict] | None = None, merges: list[dict] | None = None,
           pages: dict[str, dict] | None = None, fetch=None, now: datetime | None = None) -> list[dict]:
-    """Forms rows (see sql/schema.sql, forms) from this run's items. previous: the stored rows by key (first_seen,
-    deadline history and sources survive runs). merges: your Merge / Keep both answers. pages: what was read from
-    each form's page, by key."""
+    """Forms rows from this run's items: one row per form posting, merged silently when it's the same thing:
+      - the same notice (a notice for 11 companies is ONE row with the 11 companies), or the same mail
+      - any form link in common (after short links are followed: forms.gle / bit.ly / … and usp / prefill ignored)
+      - the same companies (as a set, names normalised) + the same purpose, posted again with the same or a later
+        deadline (an extension)
+    A merged row keeps the earliest first-seen, the latest deadline with its history and every source. Ping never
+    asks "is this the same form?": a genuinely different posting stays its own row. previous: the stored rows by key
+    (first_seen, history); pages: what was read from each form page, by key; merges: ignored (no prompts any more)."""
     previous, pages = previous or {}, pages or {}
     now = now or datetime.now(timezone.utc)
-    decided = {}
-    for m in merges or []:
-        decided[tuple(sorted((m["a"], m["b"])))] = m["choice"]
-    groups: dict[str, dict] = {}
-    alias: dict[str, str] = {}                     # a key merged into another
-    keyless = []
-    for p in sorted(postings(items), key=lambda x: str(x.get("at") or "")):
-        final, key = resolve(p["link"], fetch) if p["link"] else (None, None)
-        if not key:
-            keyless.append(p)
-            continue
-        key = alias.get(key, key)
-        g = groups.setdefault(key, {"key": key, "posts": [], "link": p["link"], "final_url": final})
-        g["posts"].append(p)
-    rows = {k: _row(g, previous.get(k), pages.get(k), now) for k, g in groups.items()}
-    # keys that differ but are the same form (high confidence, or your "Merge")
-    keys = sorted(rows, key=lambda k: rows[k]["first_seen"] or "")
-    for i, a in enumerate(keys):
-        for b in keys[i + 1:]:
-            if a not in rows or b not in rows:
+    posts = sorted(postings(items), key=lambda x: (str(x.get("at") or ""), x["item_id"]))
+    finals = {}
+    for p in posts:
+        keys = []
+        for link in p["links"]:
+            final, key = resolve(link, fetch)
+            if key:
+                keys.append(key)
+                finals.setdefault(key, final)
+        p["keys"] = list(dict.fromkeys(keys))
+    parent = list(range(len(posts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)       # the earliest posting stays the root
+    first_by: dict[tuple, int] = {}
+    for i, p in enumerate(posts):
+        for k in [("src", s["type"], s["id"]) for s in p["sources"]] + [("link", k) for k in p["keys"]]:
+            if k in first_by:
+                union(first_by[k], i)
+            else:
+                first_by[k] = i
+    # groups so far; then the same companies + purpose, the same or a later deadline, merge (repeat until stable)
+    def groups():
+        g: dict[int, list[int]] = {}
+        for i in range(len(posts)):
+            g.setdefault(find(i), []).append(i)
+        return g
+    changed = True
+    while changed:
+        changed = False
+        gs = groups()
+        sig = {}
+        for root, members in sorted(gs.items()):
+            comps = frozenset(_company_key(posts[i]["company"]) for i in members if _company_key(posts[i]["company"]))
+            purposes = {posts[i]["purpose"] for i in members}
+            purpose = next(iter(purposes - {"form"}), "form") if len(purposes - {"form"}) <= 1 else None
+            if not comps or purpose is None:
                 continue
-            choice = decided.get(tuple(sorted((a, b))))
-            s = similarity(rows[a], rows[b])
-            # two different ids on a form site are two forms as far as Ping can tell: never merged on its own,
-            # at most offered ("Looks like the same form as …"); addresses Ping can't identify merge when sure
-            both_known = a.split(":")[0] in KNOWN and b.split(":")[0] in KNOWN
-            if choice == "merge" or (choice != "keep" and s >= HIGH and not both_known):
-                groups[a]["posts"] += groups[b]["posts"]
-                rows[a] = _row(groups[a], previous.get(a), pages.get(a), now)
-                rows[a]["merged_keys"] = sorted(set(rows[a].get("merged_keys", [])) | {b})
-                del rows[b]
-            elif choice != "keep" and s >= MEDIUM:
-                rows[b].setdefault("looks_like", []).append({"key": a, "title": rows[a]["title"] or rows[a]["purpose"], "score": s})
-    # postings without a link: the form they belong to, else a form of their own (keyed by notice / item)
-    for p in keyless:
-        best, best_s = None, 0.0
-        for k, r in rows.items():
-            s = similarity({**p, "title": p["text"]}, r)
-            if s > best_s:
-                best, best_s = k, s
-        if best and best_s >= HIGH:
-            groups[best]["posts"].append(p)
-            rows[best] = _row(groups[best], previous.get(best), pages.get(best), now)
-            continue
-        key = f"notice:{p['sources'][0]['id']}" if p["sources"] and p["sources"][0]["type"] == "notice" else f"item:{p['item_id']}"
-        g = groups.setdefault(key, {"key": key, "posts": [], "link": None, "final_url": None})
-        g["posts"].append(p)
-        rows[key] = _row(g, previous.get(key), None, now)
-        if best and best_s >= MEDIUM and decided.get(tuple(sorted((key, best)))) != "keep":
-            rows[key].setdefault("looks_like", []).append({"key": best, "title": rows[best]["title"] or rows[best]["purpose"], "score": best_s})
-    return sorted(rows.values(), key=lambda r: (r["due_at"] or "9999", r["company"]))
+            due = max((_dtv(posts[i]["due"]) for i in members), default=None)
+            key = (comps, purpose)
+            if key in sig:
+                other_root, other_first = sig[key]
+                if due >= other_first:            # the same deadline as one it had, or a later one (an extension)
+                    union(other_root, root)
+                    changed = True
+                    break
+            else:
+                sig[key] = (root, min((_dtv(posts[i]["due"]) for i in members), default=None))
+    rows, used = [], set()
+    for root, members in sorted(groups().items()):
+        ps = [posts[i] for i in members]
+        notice_ids = sorted({int(s["id"]) if str(s["id"]).isdigit() else s["id"] for p in ps for s in p["sources"] if s["type"] == "notice"},
+                            key=lambda v: (str(type(v)), v))
+        keys = list(dict.fromkeys(k for p in ps for k in p["keys"]))
+        # the row it was before (a stored row with any of these postings or links): its key stays, so your tick,
+        # its first-seen and its deadline history stay with it
+        ids = {p["item_id"] for p in ps}
+        before = sorted((pr for pr in previous.values() if ids & set(pr.get("item_ids") or [])
+                         or set(keys) & ({pr.get("key")} | set(pr.get("merged_keys") or []))),
+                        key=lambda pr: (str(pr.get("first_seen") or ""), str(pr.get("key"))))
+        before = [pr for pr in before if pr.get("key") not in used]
+        if before:
+            key = before[0]["key"]
+        elif notice_ids:
+            key = f"notice:{notice_ids[0]}"
+        elif keys:
+            key = keys[0]
+        else:
+            key = f"item:{ps[0]['item_id']}"
+        page = next((pages[k] for k in keys if k in pages), None)
+        g = {"key": key, "posts": ps, "link": ps[0]["link"], "final_url": finals.get(keys[0]) if keys else None,
+             "links": [finals.get(k) or k for k in keys]}
+        prev = dict(before[0]) if before else None
+        if prev and len(before) > 1:              # several old rows collapse into this one: all their history and sources
+            prev["deadline_history"] = list({(h.get("from"), h.get("to")): h for b in before for h in (b.get("deadline_history") or [])}.values())
+            prev["sources"] = [x for b in before for x in (b.get("sources") or [])]
+        if key in used:                           # never two rows with one key
+            key = g["key"] = f"item:{ps[0]['item_id']}"
+        used.add(key)
+        r = _row(g, prev, page, now)
+        r["form_keys"] = keys
+        rows.append(r)
+    return sorted(rows, key=lambda r: (r["due_at"] or "9999", r["company"]))
 
 
 def _row(g: dict, prev: dict | None, page: dict | None, now: datetime) -> dict:
@@ -258,7 +302,12 @@ def _row(g: dict, prev: dict | None, page: dict | None, now: datetime) -> dict:
         if (s["type"], s["id"]) not in seen:
             seen.add((s["type"], s["id"]))
             sources.append(s)
-    companies = list(dict.fromkeys(p["company"] for p in posts if p["company"]))
+    seen_c, companies = set(), []
+    for p in posts:
+        ck = _company_key(p["company"])
+        if p["company"] and ck not in seen_c:
+            seen_c.add(ck)
+            companies.append(p["company"])
     purposes = [p["purpose"] for p in posts if p["purpose"] != "form"]
     first = posts[0] if posts else {}
     return {"key": g["key"], "company": companies[0] if len(companies) == 1 else ("several companies" if companies else ""),
@@ -267,6 +316,7 @@ def _row(g: dict, prev: dict | None, page: dict | None, now: datetime) -> dict:
             "question_count": page.get("question_count"), "closed": bool(page.get("closed")),
             "signin_required": bool(page.get("signin_required")),
             "due_at": due, "deadline_history": history, "link": g.get("link"), "final_url": g.get("final_url"),
+            "links": g.get("links") or [],
             "sources": sources, "first_seen": (prev or {}).get("first_seen") or first.get("at") or now.isoformat(),
             "last_seen": now.isoformat(), "item_ids": list(dict.fromkeys(p["item_id"] for p in posts)),
             "role_ids": list(dict.fromkeys(r for p in posts for r in p["role_ids"])), "text": first.get("text") or "",
@@ -279,7 +329,23 @@ def stored(row: dict) -> dict:
             "due_at", "deadline_history", "link", "final_url", "sources", "first_seen", "last_seen", "item_ids", "role_ids",
             "is_sample", "looks_like", "merged_keys")
     return {k: row.get(k) for k in keep if k in row or k in ("looks_like", "merged_keys")} | {
-        "looks_like": row.get("looks_like") or [], "merged_keys": row.get("merged_keys") or []}
+        "looks_like": [], "merged_keys": row.get("form_keys") or []}       # no merge prompts: the same form is merged
+
+
+def carry_ticks(status_rows: list[dict], previous: dict[str, dict], rows: list[dict]) -> list[dict]:
+    """Ticks on rows that were merged into another row: the same tick on the row that now holds their postings."""
+    keys = {r["key"] for r in rows}
+    moved = []
+    for st in status_rows:
+        if st.get("form_key") in keys or not st.get("filled") or st.get("is_demo"):
+            continue
+        old = previous.get(st["form_key"]) or {}
+        to = next((r for r in rows if set(old.get("item_ids") or []) & set(r["item_ids"])
+                   or st["form_key"] in (r.get("form_keys") or [])), None)
+        if to and not any(m["owner_id"] == st.get("owner_id") and m["form_key"] == to["key"] for m in moved):
+            moved.append({"owner_id": st.get("owner_id"), "form_key": to["key"], "filled": True,
+                          "filled_at": st.get("filled_at"), "is_demo": False})
+    return moved
 
 
 def filled_keys(status_rows: list[dict]) -> set[str]:

@@ -1,45 +1,272 @@
 {
- "about": "15 form postings (made up, shaped like real CDC notices and placement mail). Each posting must land in the right form; each form must have the right deadline (with its history), sources, closed / sign-in state and 'looks like' offer. Pages are served by a fake web (no network): the reader follows short links and reads form pages exactly as the hourly run does.",
+ "about": "15 form postings (made up, shaped like real CDC notices and placement mail). Each posting must land in the right form; each form must have the right deadline (with its history), sources, closed / sign-in state and 'looks like' offer. Pages are served by a fake web (no network): the reader follows short links and reads form pages exactly as the hourly run does. Merge rules (22 Nov): the same notice or mail, a form link in common, or the same companies (as a set) + purpose with the same or a later deadline: merged silently. Ping never asks.",
  "pages": {
-  "https://forms.gle/grw1": {"redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform?usp=send_form"},
-  "https://bit.ly/pine-reg": {"redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdPineReg2026xxx/viewform"},
-  "https://tinyurl.com/pine2": {"redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdPineReg2026xxx/viewform?usp=send_form"},
-  "https://lnkd.in/nim": {"redirect": "https://nimbus.typeform.com/to/AbC123?utm_source=mail"},
-  "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform": {"title": "Groww Registration 2026", "questions": 8},
-  "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwSlot2026x/viewform": {"title": "Groww Test Slot Preference", "questions": 3},
-  "https://docs.google.com/forms/d/e/1FAIpQLSdZetaDetails26x/viewform": {"title": "Zeta - Additional details", "questions": 6},
-  "https://docs.google.com/forms/d/e/1FAIpQLSdOrbitCVform26x/viewform": {"signin": true},
-  "https://docs.google.com/forms/d/e/1FAIpQLSdPineReg2026xxx/viewform": {"title": "Pine Labs Registration", "questions": 5},
-  "https://forms.office.com/Pages/ResponsePage.aspx?id=KiteMSX12345": {"closed": true, "title": "Kite registration"},
-  "https://nimbus.typeform.com/to/AbC123": {"title": "Nimbus - Register"},
-  "https://careers.groww.example/apply/form": {"title": "Groww Campus Registration"}
+  "https://forms.gle/grw1": {
+   "redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform?usp=send_form"
+  },
+  "https://bit.ly/pine-reg": {
+   "redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdPineReg2026xxx/viewform"
+  },
+  "https://tinyurl.com/pine2": {
+   "redirect": "https://docs.google.com/forms/d/e/1FAIpQLSdPineReg2026xxx/viewform?usp=send_form"
+  },
+  "https://lnkd.in/nim": {
+   "redirect": "https://nimbus.typeform.com/to/AbC123?utm_source=mail"
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform": {
+   "title": "Groww Registration 2026",
+   "questions": 8
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwSlot2026x/viewform": {
+   "title": "Groww Test Slot Preference",
+   "questions": 3
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdZetaDetails26x/viewform": {
+   "title": "Zeta - Additional details",
+   "questions": 6
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdOrbitCVform26x/viewform": {
+   "signin": true
+  },
+  "https://docs.google.com/forms/d/e/1FAIpQLSdPineReg2026xxx/viewform": {
+   "title": "Pine Labs Registration",
+   "questions": 5
+  },
+  "https://forms.office.com/Pages/ResponsePage.aspx?id=KiteMSX12345": {
+   "closed": true,
+   "title": "Kite registration"
+  },
+  "https://nimbus.typeform.com/to/AbC123": {
+   "title": "Nimbus - Register"
+  },
+  "https://careers.groww.example/apply/form": {
+   "title": "Groww Campus Registration"
+  }
  },
  "postings": [
-  {"id": "P1", "form": "A", "company": "Groww", "subject": "Registration form", "link": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform", "due": "2026-11-21T20:00:00+05:30", "notice": ["2001", "2026-11-20T10:00:00+05:30"], "case": "the full Google Form address"},
-  {"id": "P2", "form": "A", "company": "Groww", "subject": "Registration form", "link": "https://forms.gle/grw1", "due": "2026-11-21T20:00:00+05:30", "mail": ["m1", "2026-11-20T11:00:00+05:30"], "case": "the same form by forms.gle, in mail"},
-  {"id": "P3", "form": "A", "company": "Groww", "subject": "Registration form - deadline extended", "link": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform?usp=sf_link", "due": "2026-11-22T20:00:00+05:30", "notice": ["2005", "2026-11-21T09:00:00+05:30"], "case": "an extension repost with a different usp"},
-  {"id": "P4", "form": "B", "company": "Groww", "subject": "Test slot preference form", "link": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwSlot2026x/viewform", "due": "2026-11-21T22:00:00+05:30", "notice": ["2010", "2026-11-20T12:00:00+05:30"], "case": "a second, different form from the same company"},
-  {"id": "P5", "form": "C", "company": "Zeta", "subject": "Additional details form", "link": "https://docs.google.com/forms/d/e/1FAIpQLSdZetaDetails26x/formResponse?usp=pp_url", "due": "2026-11-21T18:00:00+05:30", "notice": ["2020", "2026-11-20T09:00:00+05:30"], "case": "formResponse with prefill parameters"},
-  {"id": "P6", "form": "C", "company": "Zeta", "subject": "Additional details form", "link": "https://docs.google.com/forms/d/e/1FAIpQLSdZetaDetails26x/viewform?usp=sharing", "due": "2026-11-21T18:00:00+05:30", "mail": ["m2", "2026-11-20T09:30:00+05:30"], "case": "notice and mail, different usp"},
-  {"id": "P7", "form": "D", "company": "Kite", "subject": "Registration form", "link": "https://forms.office.com/Pages/ResponsePage.aspx?id=KiteMSX12345", "due": "2026-11-20T12:00:00+05:30", "notice": ["2030", "2026-11-19T10:00:00+05:30"], "case": "a Microsoft form that no longer accepts responses"},
-  {"id": "P8", "form": "E", "company": "Orbit", "subject": "CV submission form", "link": "https://docs.google.com/forms/d/e/1FAIpQLSdOrbitCVform26x/viewform", "due": "2026-11-22T12:00:00+05:30", "notice": ["2040", "2026-11-20T15:00:00+05:30"], "case": "a form that needs an institute sign-in"},
-  {"id": "P9", "form": "F", "company": "Lumen", "subject": "Registration form", "link": null, "due": "2026-11-22T10:00:00+05:30", "notice": ["2050", "2026-11-20T16:00:00+05:30"], "case": "a notice with no link"},
-  {"id": "P10", "form": "F", "company": "Lumen", "subject": "Registration form", "link": null, "due": "2026-11-22T10:00:00+05:30", "notice": ["2051", "2026-11-21T08:00:00+05:30"], "case": "the same notice posted again, still no link"},
-  {"id": "P11", "form": "G", "company": "Pine Labs", "subject": "Registration form", "link": "https://bit.ly/pine-reg", "due": "2026-11-21T20:00:00+05:30", "notice": ["2060", "2026-11-20T10:30:00+05:30"], "case": "a bit.ly short link"},
-  {"id": "P12", "form": "G", "company": "Pine Labs", "subject": "Registration form extended", "link": "https://tinyurl.com/pine2", "due": "2026-11-23T20:00:00+05:30", "notice": ["2061", "2026-11-21T10:00:00+05:30"], "case": "an extension through a different short link"},
-  {"id": "P13", "form": "H", "company": "Nimbus", "subject": "Registration form", "link": "https://nimbus.typeform.com/to/AbC123", "due": "2026-11-22T20:00:00+05:30", "notice": ["2070", "2026-11-20T11:00:00+05:30"], "case": "a Typeform"},
-  {"id": "P14", "form": "H", "company": "Nimbus", "subject": "Registration form", "link": "https://lnkd.in/nim", "due": "2026-11-22T20:00:00+05:30", "mail": ["m3", "2026-11-20T12:00:00+05:30"], "case": "the same Typeform through lnkd.in, in mail"},
-  {"id": "P15", "form": "I", "company": "Groww", "subject": "Registration form", "link": "https://careers.groww.example/apply/form", "due": "2026-11-21T20:00:00+05:30", "notice": ["2080", "2026-11-20T13:00:00+05:30"], "case": "a different site with a similar title: offered as 'looks like the same form', not merged"}
+  {
+   "id": "P1",
+   "form": "A",
+   "company": "Groww",
+   "subject": "Registration form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform",
+   "due": "2026-11-21T20:00:00+05:30",
+   "notice": [
+    "2001",
+    "2026-11-20T10:00:00+05:30"
+   ],
+   "case": "the full Google Form address"
+  },
+  {
+   "id": "P2",
+   "form": "A",
+   "company": "Groww",
+   "subject": "Registration form",
+   "link": "https://forms.gle/grw1",
+   "due": "2026-11-21T20:00:00+05:30",
+   "mail": [
+    "m1",
+    "2026-11-20T11:00:00+05:30"
+   ],
+   "case": "the same form by forms.gle, in mail"
+  },
+  {
+   "id": "P3",
+   "form": "A",
+   "company": "Groww",
+   "subject": "Registration form - deadline extended",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwReg2026xx/viewform?usp=sf_link",
+   "due": "2026-11-22T20:00:00+05:30",
+   "notice": [
+    "2005",
+    "2026-11-21T09:00:00+05:30"
+   ],
+   "case": "an extension repost with a different usp"
+  },
+  {
+   "id": "P4",
+   "form": "B",
+   "company": "Groww",
+   "subject": "Test slot preference form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdGrowwSlot2026x/viewform",
+   "due": "2026-11-21T22:00:00+05:30",
+   "notice": [
+    "2010",
+    "2026-11-20T12:00:00+05:30"
+   ],
+   "case": "a second, different form from the same company"
+  },
+  {
+   "id": "P5",
+   "form": "C",
+   "company": "Zeta",
+   "subject": "Additional details form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdZetaDetails26x/formResponse?usp=pp_url",
+   "due": "2026-11-21T18:00:00+05:30",
+   "notice": [
+    "2020",
+    "2026-11-20T09:00:00+05:30"
+   ],
+   "case": "formResponse with prefill parameters"
+  },
+  {
+   "id": "P6",
+   "form": "C",
+   "company": "Zeta",
+   "subject": "Additional details form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdZetaDetails26x/viewform?usp=sharing",
+   "due": "2026-11-21T18:00:00+05:30",
+   "mail": [
+    "m2",
+    "2026-11-20T09:30:00+05:30"
+   ],
+   "case": "notice and mail, different usp"
+  },
+  {
+   "id": "P7",
+   "form": "D",
+   "company": "Kite",
+   "subject": "Registration form",
+   "link": "https://forms.office.com/Pages/ResponsePage.aspx?id=KiteMSX12345",
+   "due": "2026-11-20T12:00:00+05:30",
+   "notice": [
+    "2030",
+    "2026-11-19T10:00:00+05:30"
+   ],
+   "case": "a Microsoft form that no longer accepts responses"
+  },
+  {
+   "id": "P8",
+   "form": "E",
+   "company": "Orbit",
+   "subject": "CV submission form",
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSdOrbitCVform26x/viewform",
+   "due": "2026-11-22T12:00:00+05:30",
+   "notice": [
+    "2040",
+    "2026-11-20T15:00:00+05:30"
+   ],
+   "case": "a form that needs an institute sign-in"
+  },
+  {
+   "id": "P9",
+   "form": "F",
+   "company": "Lumen",
+   "subject": "Registration form",
+   "link": null,
+   "due": "2026-11-22T10:00:00+05:30",
+   "notice": [
+    "2050",
+    "2026-11-20T16:00:00+05:30"
+   ],
+   "case": "a notice with no link"
+  },
+  {
+   "id": "P10",
+   "form": "F",
+   "company": "Lumen",
+   "subject": "Registration form",
+   "link": null,
+   "due": "2026-11-22T10:00:00+05:30",
+   "notice": [
+    "2051",
+    "2026-11-21T08:00:00+05:30"
+   ],
+   "case": "the same notice posted again, still no link"
+  },
+  {
+   "id": "P11",
+   "form": "G",
+   "company": "Pine Labs",
+   "subject": "Registration form",
+   "link": "https://bit.ly/pine-reg",
+   "due": "2026-11-21T20:00:00+05:30",
+   "notice": [
+    "2060",
+    "2026-11-20T10:30:00+05:30"
+   ],
+   "case": "a bit.ly short link"
+  },
+  {
+   "id": "P12",
+   "form": "G",
+   "company": "Pine Labs",
+   "subject": "Registration form extended",
+   "link": "https://tinyurl.com/pine2",
+   "due": "2026-11-23T20:00:00+05:30",
+   "notice": [
+    "2061",
+    "2026-11-21T10:00:00+05:30"
+   ],
+   "case": "an extension through a different short link"
+  },
+  {
+   "id": "P13",
+   "form": "H",
+   "company": "Nimbus",
+   "subject": "Registration form",
+   "link": "https://nimbus.typeform.com/to/AbC123",
+   "due": "2026-11-22T20:00:00+05:30",
+   "notice": [
+    "2070",
+    "2026-11-20T11:00:00+05:30"
+   ],
+   "case": "a Typeform"
+  },
+  {
+   "id": "P14",
+   "form": "H",
+   "company": "Nimbus",
+   "subject": "Registration form",
+   "link": "https://lnkd.in/nim",
+   "due": "2026-11-22T20:00:00+05:30",
+   "mail": [
+    "m3",
+    "2026-11-20T12:00:00+05:30"
+   ],
+   "case": "the same Typeform through lnkd.in, in mail"
+  },
+  {
+   "id": "P15",
+   "form": "A",
+   "company": "Groww",
+   "subject": "Registration form",
+   "link": "https://careers.groww.example/apply/form",
+   "due": "2026-11-21T20:00:00+05:30",
+   "notice": [
+    "2080",
+    "2026-11-20T13:00:00+05:30"
+   ],
+   "case": "the same companies + purpose + deadline from another site: merged silently (no prompt)"
+  }
  ],
  "forms": {
-  "A": {"due": "2026-11-22T20:00:00+05:30", "moves": 1, "sources": 3},
-  "B": {"looks_like": false},
-  "C": {"sources": 2},
-  "D": {"closed": true},
-  "E": {"signin_required": true},
-  "F": {"sources": 2},
-  "G": {"due": "2026-11-23T20:00:00+05:30", "moves": 1},
-  "H": {"sources": 2},
-  "I": {"looks_like": "A"}
+  "A": {
+   "due": "2026-11-22T20:00:00+05:30",
+   "moves": 1,
+   "sources": 4
+  },
+  "B": {
+   "looks_like": false
+  },
+  "C": {
+   "sources": 2
+  },
+  "D": {
+   "closed": true
+  },
+  "E": {
+   "signin_required": true
+  },
+  "F": {
+   "sources": 2
+  },
+  "G": {
+   "due": "2026-11-23T20:00:00+05:30",
+   "moves": 1
+  },
+  "H": {
+   "sources": 2
+  }
  }
 }

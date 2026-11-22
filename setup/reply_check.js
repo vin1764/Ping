@@ -24,6 +24,14 @@ async function open(b, w, hh, scheme, touch) {
 // a bubble by what it is: "digest" (an application digest with several roles), "test" (a test alert with a room),
 // "form" (a bubble with a form checkbox), "company" (any single-company message)
 async function pick(p, what) {
+  if (what === "digest") {           // an application digest, else any message listing several roles (a new-roles listing)
+    for (const sel of ['.msg[data-reply][data-key*=":digest:application:"]', '.msg[data-reply][data-key*=":listing:"]:has(.li + .li)']) {
+      const all = p.locator(sel);
+      for (let i = 0; i < 6 && !(await all.count()) && await p.locator(".earlier").count(); i++) await p.click(".earlier");
+      if (await all.count()) return all.last();
+    }
+    return null;
+  }
   const sel = { digest: '.msg[data-reply][data-key*=":digest:application:"]', form: '.msg[data-reply]:has(input.tick-box), .msg[data-reply][data-key*=":digest:form:"]',
                 test: '.msg.item[data-reply].k-test', company: '.msg.item[data-reply][data-key*=":notice:"]' }[what];
   const all = p.locator(sel);
@@ -31,6 +39,7 @@ async function pick(p, what) {
   return (await all.count()) ? all.last() : null;
 }
 async function replyVia(p, el, how) {
+  if (!el) return false;
   await el.scrollIntoViewIfNeeded();
   const box = await el.boundingBox();
   if (how === "hover") { await el.hover(); await el.locator(".reply-btn").click(); }
@@ -73,7 +82,7 @@ async function send(p, q) {
     ok(/not applied yet|applied to all/.test(a.text) && a.quoted && a.mineQuoted, "digest: which haven't I applied to → only that message's roles, quoted both ways", a.text.slice(0, 100));
     // 2. which cv for the second one?
     el = await pick(p, "digest");
-    await replyVia(p, el, touch ? "hold" : "right-click");
+    ok(el && await replyVia(p, el, touch ? "hold" : "right-click"), `${touch ? "long-press" : "right-click"} opens the reply preview`);
     a = await send(p, "which cv for the second one?");
     ok(/apply with|none of your CVs|lists \d role/.test(a.text), `${touch ? "long-press" : "right-click"} → which cv for the second one?`, a.text.slice(0, 100));
     // 3. tap the quote in my last bubble: the original flashes

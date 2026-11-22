@@ -129,3 +129,53 @@ def test_a_repost_in_the_chat_is_one_line_on_the_first_message():
     assert not any(":update:" in i["id"] for i in out)                     # no new "Update" message
     assert other["level"] != "hidden"                                      # a different form from Groww stays
     assert stats["form_extensions"] == 1
+
+
+# ---------------------------------------------------------------------------- 22 Nov: notice 1815 (anonymised)
+CO = ["Lattice Co", "ICOR LOMBARD", "AMARIX PRIVATE LIMITED", "Teal General Insurance", "Pira Finance", "JOVIS",
+      "Aster Energy", "Aura Group(www.AuraIM.com)", "Finaro", "SLX", "BlueBuck"]
+LINKS = [f"https://forms.gle/Form{i:02d}abcdEFGH" for i in range(9)]
+
+
+def notice_1815():
+    """One notice: 'Additional requirement' for 11 companies, 9 form links; the notice reader makes a to-do per
+    company per link, each carrying all the links. The same notice by mail, with the links."""
+    out = []
+    for t, co in enumerate(CO):
+        for k, link in enumerate(LINKS):
+            it = todo(f"notice:1815:{t}:todo{k}", co, link, "2026-11-22T20:00:00+05:30", notice=("1815", "2026-11-22T10:35:00+05:30"),
+                      subject="Additional requirement")
+            it["details"]["forms"] = list(LINKS)
+            out.append(it)
+    mail = todo("mail:m1815", CO[0], LINKS[0], "2026-11-22T20:00:00+05:30", mail=("m1815", "2026-11-22T10:40:00+05:30"),
+                subject="Additional requirement")
+    mail["details"]["forms"] = list(LINKS)
+    return out + [mail]
+
+
+def test_one_notice_for_eleven_companies_is_one_row_and_no_prompt():
+    rows = forms.build(notice_1815(), fetch=lambda u: u, now=NOW)
+    assert len(rows) == 1
+    r = rows[0]
+    assert len(r["companies"]) == 11 and r["purpose"] == "additional requirement"
+    assert [(s["type"], s["id"]) for s in r["sources"]] == [("notice", "1815"), ("mail", "m1815")]
+    assert forms.stored(r)["looks_like"] == []
+    # and the same companies in another order, by another notice the next day, extending it: still one row
+    again = [dict(i, id=i["id"].replace("1815", "1820"), details={**i["details"], "notice_time": "2026-11-23T09:00:00+05:30",
+             "todo": {**i["details"]["todo"], "due": "2026-11-23T20:00:00+05:30"}}, notice_id="1820", due_at="2026-11-23T20:00:00+05:30")
+             for i in reversed(notice_1815()[:-1])]
+    rows2 = forms.build(notice_1815() + again, previous={r["key"]: r}, fetch=lambda u: u, now=NOW)
+    assert len(rows2) == 1 and rows2[0]["key"] == r["key"] and rows2[0]["due_at"] == "2026-11-23T20:00:00+05:30"
+    assert len(rows2[0]["deadline_history"]) == 1
+
+
+def test_old_duplicate_rows_collapse_and_keep_your_tick():
+    items = notice_1815()
+    # what the old code stored: one row per link, the same companies in different orders, each asking "merge?"
+    old = {f"short:forms.gle/Form{k:02d}abcdEFGH": {"key": f"short:forms.gle/Form{k:02d}abcdEFGH", "first_seen": f"2026-11-22T10:3{k}:00+05:30",
+           "item_ids": [f"notice:1815:{t}:todo{k}" for t in range(11)], "looks_like": [{"key": "x"}]} for k in range(9)}
+    rows = forms.build(items, previous=old, fetch=lambda u: u, now=NOW)
+    assert len(rows) == 1 and rows[0]["key"] == "short:forms.gle/Form00abcdEFGH"       # the earliest old row's key
+    ticks = [{"owner_id": "me", "form_key": "short:forms.gle/Form04abcdEFGH", "filled": True, "filled_at": "x", "is_demo": False}]
+    moved = forms.carry_ticks(ticks, old, rows)
+    assert moved == [{"owner_id": "me", "form_key": rows[0]["key"], "filled": True, "filled_at": "x", "is_demo": False}]

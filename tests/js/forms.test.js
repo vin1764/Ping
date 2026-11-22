@@ -51,3 +51,13 @@ test("Ask Ping: which forms haven't I filled, did I fill X, mark X as filled", (
   assert.match(m.text, /^Done: the Piramal Pharma registration is ticked as filled\./);
   assert.equal(F.ask("what's due tomorrow", forms, status, { now, when }), null);    // not about forms: the usual answers
 });
+
+test("company names cleaned, and a short list for a form for many companies", () => {
+  assert.equal(F.cleanName("Auro Group(www.AuroIM.com)"), "Auro Group");
+  assert.equal(F.cleanName("AIRAMATRIX PRIVATE LIMITED"), "AIRAMATRIX");
+  assert.equal(F.cleanName("GOLDMAN SACHS"), "Goldman Sachs");
+  assert.equal(F.cleanName("TATA AIG General Insurance"), "TATA AIG General Insurance");
+  const f = { companies: ["LTM", "AIRAMATRIX PRIVATE LIMITED", "Auro Group(www.AuroIM.com)", "SLB", "JAVIS", "Finarb", "Ather Energy",
+    "Piramal Finance", "BlackBuck", "ICICI LOMBARD", "TATA AIG General Insurance"] };
+  assert.equal(F.shortList(f), "LTM, AIRAMATRIX, Auro Group +8 more");
+});

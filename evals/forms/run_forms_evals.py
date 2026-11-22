@@ -105,6 +105,8 @@ def main() -> int:
                 why.append("not marked closed")
             if exp.get("signin_required") and not r["signin_required"]:
                 why.append("sign-in not seen")
+            if forms.stored(r)["looks_like"]:
+                why.append("a merge prompt (Ping never asks)")
             if exp.get("looks_like") is False and r.get("looks_like"):
                 why.append(f"offered as like {r['looks_like']}")
             if isinstance(exp.get("looks_like"), str):

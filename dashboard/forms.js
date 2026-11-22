@@ -8,6 +8,23 @@
   const isFilled = (status, key) => !!(status && status.get(key)?.filled);
   const label = (purpose) => (!purpose || purpose === "form" ? "Form" : purpose[0].toUpperCase() + purpose.slice(1));
   const names = (f) => (f.companies && f.companies.length > 1 ? f.companies : [f.company]).filter(Boolean);
+  // a company as people say it: no bracketed website, no "Private Limited", and a shouted multi-word name in title
+  // case with its short acronyms kept ("GOLDMAN SACHS" -> "Goldman Sachs", "TATA AIG" -> "Tata AIG"); one-word names
+  // stay as written (AIRAMATRIX)
+  function cleanName(n) {
+    let s = String(n || "").replace(/\s*\(([^()]*)\)/g, (m, inner) => (/https?:|www\.|\.(com|in|io|ai|co)\b/i.test(inner) ? "" : m));
+    for (let i = 0; i < 2; i++) s = s.replace(/[\s,]+(private\s+limited|pvt\.?\s*ltd\.?|limited|ltd\.?|inc\.?|llp|corporation|corp\.?)\s*$/i, "");
+    s = s.replace(/\s{2,}/g, " ").trim();
+    const words = s.split(" ");
+    if (words.length > 1 && s === s.toUpperCase() && /[A-Z]{4,}/.test(s))
+      s = words.map((w) => (w.length <= 3 || /\d/.test(w) ? w : w[0] + w.slice(1).toLowerCase())).join(" ");
+    return s || String(n || "");
+  }
+  // "Piramal, Auro Group, SLB +8 more"
+  function shortList(f, n = 3) {
+    const all = names(f).map(cleanName);
+    return all.length <= n + 1 ? all.join(", ") : `${all.slice(0, n).join(", ")} +${all.length - n} more`;
+  }
 
   // Due today · Upcoming · Past due (not filled) · Closed (the form page says so) · Filled. query: words in company / purpose / title; only: "foryou" |
   // null; at: one deadline (Today's "7 forms due 20:00" opens the list at that time)
@@ -65,20 +82,20 @@
     const q = norm(question);
     if (!/\bforms?\b/.test(q)) return null;
     const open = (f) => !f.closed && !(ms(f.due_at) <= now);
-    const line = (f) => `${names(f).join(", ")}: ${label(f.purpose).toLowerCase()}${f.due_at ? `, due ${when(f.due_at)}` : ""}`;
+    const line = (f) => `${shortList(f)}: ${label(f.purpose).toLowerCase()}${f.due_at ? `, due ${when(f.due_at)}` : ""}`;
     // "mark the Piramal form as filled" / "tick the Groww form"
     if (/\b(mark|tick|check)\b/.test(q) && /\b(filled|done|submitted|complete[d]?)\b|\btick\b/.test(q)) {
       const hits = formsOf(question, forms);
       if (!hits.length) return { text: "Which form? Say the company, for example: “mark the Groww form as filled”." };
       const f = hits.find((x) => !isFilled(status, x.key)) || hits[0];
-      if (isFilled(status, f.key)) return { text: `The ${names(f).join(", ")} form is already ticked as filled.` };
-      return { text: `Done: the ${names(f).join(", ")} ${label(f.purpose).toLowerCase()} is ticked as filled. (Your own record; Ping doesn't fill forms.)`, tick: f.key };
+      if (isFilled(status, f.key)) return { text: `The ${shortList(f)} form is already ticked as filled.` };
+      return { text: `Done: the ${shortList(f)} ${label(f.purpose).toLowerCase()} is ticked as filled. (Your own record; Ping doesn't fill forms.)`, tick: f.key };
     }
     // "did I fill the Groww form?"
     if (/\bdid i\b|\bhave i\b|\bis the\b.*\bfilled\b/.test(q) && formsOf(question, forms).length) {
       const f = formsOf(question, forms)[0];
-      if (isFilled(status, f.key)) return { text: `Yes: you ticked the ${names(f).join(", ")} ${label(f.purpose).toLowerCase()} as filled${status.get(f.key)?.filled_at ? ` (${when(status.get(f.key).filled_at)})` : ""}.` };
-      return { text: `Not ticked yet: the ${names(f).join(", ")} ${label(f.purpose).toLowerCase()}${f.due_at ? ` is due ${when(f.due_at)}` : ""}${f.closed ? " (the form says it's closed)" : ""}. Tick it in Forms once you've filled it.` };
+      if (isFilled(status, f.key)) return { text: `Yes: you ticked the ${shortList(f)} ${label(f.purpose).toLowerCase()} as filled${status.get(f.key)?.filled_at ? ` (${when(status.get(f.key).filled_at)})` : ""}.` };
+      return { text: `Not ticked yet: the ${shortList(f)} ${label(f.purpose).toLowerCase()}${f.due_at ? ` is due ${when(f.due_at)}` : ""}${f.closed ? " (the form says it's closed)" : ""}. Tick it in Forms once you've filled it.` };
     }
     // "which forms haven't I filled?"
     if (/\b(not|haven t|havent|yet|left|pending|unfilled|still|remaining|to fill|due)\b/.test(q)) {
@@ -95,7 +112,7 @@
     return (items || []).filter((it) => isFilled(status, it?.details?.form?.key)).length;
   }
 
-  const api = { sections, badge, postedLine, movedLine, ask, label, isFilled, filledCount, names };
+  const api = { sections, badge, postedLine, movedLine, ask, label, isFilled, filledCount, names, cleanName, shortList };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingForms = api;
 })(typeof window !== "undefined" ? window : globalThis);

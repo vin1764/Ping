@@ -668,9 +668,25 @@ class Runner:
                     except Exception as e:
                         self.problems.append(f"saving form pages failed: {type(e).__name__}: {str(e)[:120]}")
                 self.counts["form_pages"] = reader.stats
+            # rows that were merged into another (the same notice, link, or companies + purpose): their ticks move
+            # with them, the old rows and any pending "same form?" choices go (Ping doesn't ask any more)
+            new_keys = {r["key"] for r in frows}
+            moved = forms_mod.carry_ticks(self._rows("form_status", {"is_demo": "is.false"}), forms_prev, frows)
+            if moved:
+                self.store.upsert("form_status", moved, key="owner_id,form_key")
+                filled = filled | {m["form_key"] for m in moved}
             forms_mod.mark_items(items, frows, filled)
             if frows:
                 self.store.upsert("forms", [forms_mod.stored(r) for r in frows], key="key")
+            stale = [k for k, r in forms_prev.items() if k not in new_keys and not r.get("is_sample")]
+            for k in stale:
+                self.store.delete("forms", {"key": f"eq.{k}", "is_sample": "is.false"})
+            if stale or self._rows("form_merges", {"is_demo": "is.false"}):
+                try:
+                    self.store.delete("form_merges", {"is_demo": "is.false"})
+                except Exception:
+                    pass
+            self.counts["forms_cleanup"] = {"rows_merged_away": len(stale), "ticks_moved": len(moved)}
             self.counts["forms"] = {"forms": len(frows), "filled": len(filled & {r["key"] for r in frows}),
                                     "from_several_postings": sum(1 for r in frows if len(r["sources"]) > 1),
                                     "deadlines_moved": sum(1 for r in frows if r["deadline_history"])}

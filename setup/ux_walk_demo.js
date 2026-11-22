@@ -12,6 +12,17 @@ fs.mkdirSync(OUT, { recursive: true });
     const ctx = await b.newContext({ viewport: { width: w, height: hh } });
     const p = await ctx.newPage();
     const errs = []; p.on("pageerror", (e) => errs.push(e.message));
+    // one tap: a fresh visitor's "Use the demo profile" lands on the feed
+    { const c2 = await b.newContext({ viewport: { width: w, height: hh } }); const q = await c2.newPage();
+      await q.goto(BASE); await q.click("#view-demo");
+      await q.waitForSelector("[data-onboarding], #ask-input", { timeout: 60000 });
+      const t0 = Date.now();
+      await q.locator(".chip", { hasText: "Use the demo profile" }).first().click();
+      await q.waitForSelector("#ask-input", { timeout: 30000 });
+      await q.waitForTimeout(800);
+      await q.screenshot({ path: `${OUT}/demo-one-tap-feed-${w}.png` });
+      console.log(w, "Use the demo profile -> feed in", Date.now() - t0, "ms; items:", await q.locator(".msg.ping").count());
+      await c2.close(); }
     await p.goto(BASE); await p.click("#view-demo");
     await p.waitForSelector("[data-onboarding], #ask-input", { timeout: 60000 });
     await p.waitForTimeout(600);
@@ -29,7 +40,10 @@ fs.mkdirSync(OUT, { recursive: true });
       const want = labels.find((l) => /use the demo cvs|go to my feed/i.test(l)) || labels.find((l) => !/use the demo profile/i.test(l)) || labels[0];
       console.log("  ", step, "->", want, "| options:", labels.join(" | "));
       await p.locator(".onb-q .chip, .composer .chips .chip").filter({ hasText: want }).first().click();
-      await p.waitForTimeout(700);
+      await p.waitForTimeout(300);
+      if (await p.locator(".onb .typing").count()) await p.screenshot({ path: `${OUT}/demo-onb-${step}-waiting-${w}.png` });
+      await p.waitForFunction(() => !document.querySelector(".onb .typing"), null, { timeout: 30000 });
+      await p.waitForTimeout(300);
     }
     await p.waitForSelector("#ask-input", { timeout: 30000 }).catch(() => {});
     for (const v of ["chat", "today", "forms", "companies", "profile"]) {

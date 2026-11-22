@@ -68,3 +68,11 @@ test("checks in a row that found nothing: one thin line that updates in place; a
   const failed = { ...d, stage: "failed", status: "failed: erp" };
   assert.strictEqual(L.collapseQuiet([e(failed)], runs, Date.now())[0].kind, "run");
 });
+
+test("FACT answers stay in the page only while its messages are as new as the last finished check", () => {
+  const runs = [{ id: 7, finished_at: "2026-11-22T06:00:00+05:30", stage: "done" }, { id: 6, finished_at: "2026-11-22T05:00:00+05:30", stage: "done" }];
+  assert.strictEqual(L.messagesCurrent(runs, 7), true);
+  assert.strictEqual(L.messagesCurrent(runs, 6), false);                       // a check finished since: the function answers
+  assert.strictEqual(L.messagesCurrent([...runs, { id: 8, stage: "reading notices" }], 7), true);   // a running one doesn't count yet
+  assert.strictEqual(L.messagesCurrent([], null), true);
+});

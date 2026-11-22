@@ -622,6 +622,7 @@
         if (found.length) state.data.items = [...state.data.items, ...found];
         Object.assign(run, { stage: "done", status: "ok", finished_at: nowDate().toISOString(), new_items: found.length });
         mergeRuns([{ ...run }]);
+        stampItems();               // the demo's messages are current after its check: FACT answers stay in the page
         if (found.length) flash(`found ${found.length} new`);
       }
     };
@@ -2074,7 +2075,7 @@
     const R = window.PingRules;
     if (!R || !state.data) return { why: "no rules" };
     if (R.prefsLike(question)) return { why: "preferences" };
-    if (lastRunId() !== (state.itemsRun ?? null)) return { why: "stale" };
+    if (!LIVE.messagesCurrent(state.data.runs, state.itemsRun)) return { why: "stale" };
     if (targetsOn() && !state.marks?.size && !state.data.roles.some((r) => r.relevance)) return { why: "no marks" };
     const facts = factsOf(state.data);
     const r = R.route(question, previousQuestions(question), facts);

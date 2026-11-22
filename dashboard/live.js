@@ -114,11 +114,16 @@
 
   // the latest run that is going (for the header and the buttons)
   function current(runs, now) { return (runs || []).find((r) => isActive(r, now)) || null; }
+  // the page's messages were loaded after the newest finished check it knows of (Ask Ping answers FACT questions in
+  // the page only then; otherwise the function, whose data is current)
+  function messagesCurrent(runs, stamped) {
+    return (lastFinished(runs)?.id ?? null) === (stamped ?? null);
+  }
   function lastFinished(runs) {
     return (runs || []).filter((r) => r.finished_at).sort((a, b) => t(b.finished_at) - t(a.finished_at))[0] || null;
   }
 
-  const api = { ACTIVE, STEPS, isActive, steps, describe, inThread, quiet, collapseQuiet, pollEvery, buttonLabel, DEMO_STAGES, current,
+  const api = { ACTIVE, STEPS, isActive, steps, describe, inThread, quiet, collapseQuiet, messagesCurrent, pollEvery, buttonLabel, DEMO_STAGES, current,
                 lastFinished, previousDone };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingLive = api;

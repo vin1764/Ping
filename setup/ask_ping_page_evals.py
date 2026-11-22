@@ -1,6 +1,6 @@
 """Ask Ping's single-question evals, asked through the page the way a person asks them (Admin > ask-ping-page).
 
-Seven cases share a one-click demo session ("View demo", "Use the demo profile", the "For you" marks loaded), as in the
+Seven cases share an anonymous demo session (?anon-demo=1, "Use the demo profile", the "For you" marks loaded), as in the
 API evals: Supabase allows about 30 new anonymous sign-ins an hour from one address. The question is typed into the chat and
 the reply read off the screen. Per case it records who answered (the page itself, or the ask-ping function), how
 long from Enter to the reply on screen, whether the typing bubble showed, and the same checks as the API evals.
@@ -84,7 +84,7 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
             page.route("**/functions/v1/ask-ping", on_route)
             page.on("response", lambda r: "/functions/v1/ask-ping" in r.url and calls.append(
                 {"status": r.status, "marks": "marks" in (r.request.post_data or "")}))
-            page.goto(url)
+            page.goto(url + ("&" if "?" in url else "?") + "anon-demo=1")    # the hidden demo session
             page.click("#view-demo")
             page.wait_for_selector("[data-onboarding], #ask-input", timeout=60000)
             if page.locator(".chips .chip:has-text('Use the demo profile')").count():

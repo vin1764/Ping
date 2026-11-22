@@ -8,7 +8,7 @@ Actions > Admin > ask-ping-page.
 1. Owner sign-in screen: a fresh browser sees the email + password form, and a made-up email with a wrong
    password gets Supabase's "Invalid login credentials" back, which proves the live page reaches Supabase Auth
    from its own address. It never signs in as the owner.
-2. The one-click demo: clicks "View demo", lands on the chat with the demo's messages and the demo chip, checks
+2. The anonymous demo session (?anon-demo=1, linked nowhere): clicks its button, lands on the chat with the demo's messages and the demo chip, checks
    with that session's own token that the database gives it 0 real rows, then asks each question; every
    answer must come back from ask-ping with HTTP 200 and not be the rules fallback.
 """
@@ -65,17 +65,19 @@ def main(argv: list[str]) -> int:
         has_email, has_pw = page.locator("#login-email").count(), page.locator("#login-pw").count()
         page.fill("#login-email", "owner-check@example.invalid")
         page.fill("#login-pw", "not-the-password-0")
-        page.click("form.login button.btn")
-        page.wait_for_function("() => /invalid|credentials|error/i.test(document.querySelector('form.login p.muted')?.innerText || '')",
+        page.click("form.login button[type=submit]")
+        page.wait_for_function("() => /match|invalid|credentials|error/i.test(document.querySelector('#login-msg')?.innerText || '')",
                                timeout=30000)
-        msg = page.locator("form.login p.muted").first.inner_text()
-        owner_ok = has_email == 1 and has_pw == 1 and "invalid login credentials" in msg.lower()
+        msg = page.locator("#login-msg").inner_text()
+        no_demo = page.locator("#view-demo").count() == 0
+        owner_ok = has_email == 1 and has_pw == 1 and "don't match" in msg.lower() and no_demo
+        print(f"no demo button on the sign-in screen: {no_demo}")
         failures += not owner_ok
         print(f"owner sign-in screen: email field {has_email}, password field {has_pw}; a wrong password gets "
-              f"'{msg}' from Supabase Auth{'' if owner_ok else '  <-- PROBLEM'}")
+              f"'{msg}'{'' if owner_ok else '  <-- PROBLEM'}")
         page.close()
 
-        # 2. the one-click demo: View demo, the chat, 0 real rows, then the questions
+        # 2. the anonymous demo session (?anon-demo=1), the chat, 0 real rows, then the questions
         page = browser.new_page(viewport={"width": 390, "height": 844})
         calls = []
         page.on("response", lambda r: "/functions/v1/ask-ping" in r.url and calls.append(r.status))
@@ -101,7 +103,7 @@ def main(argv: list[str]) -> int:
             page.route("**/functions/v1/ask-ping", no_ai)
             print("GEMINI_API_KEY_EVALS isn't set: questions that reach the function go with no_ai (no model call)")
         page.on("pageerror", lambda e: print(f"  page error: {e}"))
-        page.goto(url)
+        page.goto(url + ("&" if "?" in url else "?") + "anon-demo=1")    # the hidden demo session for checks
         page.click("#view-demo")
         # a fresh demo session starts with the onboarding; its first bubble offers the demo profile in one tap
         page.wait_for_selector("[data-onboarding]", timeout=30000)

@@ -36,7 +36,7 @@ def open_demo(browser, url, init_script=None):
     page = browser.new_page(viewport={"width": 390, "height": 844})
     if init_script:
         page.add_init_script(init_script)
-    page.goto(url)
+    page.goto(url + ("&" if "?" in url else "?") + "anon-demo=1")    # the hidden demo session for checks
     page.click("#view-demo")
     page.wait_for_selector("[data-onboarding], #ask-input", timeout=30000)
     if page.locator(".chips .chip:has-text('Use the demo profile')").count():

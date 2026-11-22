@@ -23,11 +23,11 @@ async function fresh(b) {
 
 (async () => {
   const b = await chromium.launch(process.env.PING_CHROMIUM ? { executablePath: process.env.PING_CHROMIUM } : {});
-  // 1. the landing page (sign-in and View demo)
+  // 1. the landing page (the sign-in form)
   let { ctx, p } = await fresh(b);
   let t = Date.now();
-  await p.goto(BASE); await p.waitForSelector("#view-demo", { timeout: 30000 });
-  out["landing page usable (sign-in, View demo)"] = `${Date.now() - t} ms`;
+  await p.goto(BASE); await p.waitForSelector("form.login button[type=submit]", { timeout: 30000 });
+  out["landing page usable (the sign-in form)"] = `${Date.now() - t} ms`;
   await ctx.close();
   // 2. the demo with its messages
   ({ ctx, p } = await fresh(b));

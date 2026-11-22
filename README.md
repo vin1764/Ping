@@ -12,12 +12,11 @@ chat, like WhatsApp:
 
 It **only reads**. It cannot apply, submit, upload or accept anything (see [Safety](#safety)).
 
-**Live dashboard:** https://vin1764.github.io/ping-dashboard/ (sign in as the
-owner, or press **View demo**: no account needed). How it gets there: see
-[Live dashboard](#live-dashboard).
+**Live dashboard:** https://vin1764.github.io/ping-dashboard/ (sign in; reviewers use the credentials in the
+submission note). How it gets there: see [Live dashboard](#live-dashboard).
 
-**One-click demo:** the **View demo** button on the sign-in screen opens an
-anonymous, read-only session on the live dashboard. It is an anonymised snapshot of a real run on
+**Demo data:** an anonymous, read-only session on the live dashboard, for the automated checks and eval runners only
+(they open the page with `?anon-demo=1`; nothing links to it, and the sign-in screen has no demo button). It is an anonymised snapshot of a real run on
 21 Nov 2026: real companies, roles, pay, deadlines and notice wording; fake roll
 number, name and CGPA; every other student's name, roll number and phone number
 and everything from the mailbox removed. It shows the feed as it was at that
@@ -62,7 +61,7 @@ flowchart LR
   gha -->|service key| db[("Supabase Postgres<br/>roles, notices, pdf_checks, items,<br/>profile, chat, role_marks ...")]
   db --- storage[("Storage: cvs bucket<br/>owner only")]
   storage -->|new CVs, server-side| gha
-  pages["GitHub Pages: ping-dashboard<br/>(built files only)"] -->|owner login or<br/>View demo (anonymous)| db
+  pages["GitHub Pages: ping-dashboard<br/>(built files only)"] -->|owner login, or the checks'<br/>anonymous demo session| db
   pages -->|Ask Ping| askfn["ask-ping function"]
   askfn -->|the caller's own rows (RLS)| db
   askfn --> gemini
@@ -79,7 +78,7 @@ with your login.
 message, then "back online" when it works. Credentials refused: one email and chat message at once and the
 schedule pauses until you start a run yourself. See [When Ping needs you](#when-ping-needs-you).
 
-**The demo path.** "View demo" signs in anonymously; database rules give that session only the anonymised demo
+**The demo path.** The checks' demo session (`?anon-demo=1`) signs in anonymously; database rules give that session only the anonymised demo
 rows (a made-up student over a real snapshot), its own chat, its own preferences and a rate limit (15
 questions an hour). It can't start a run, read real rows, or reach the CV bucket. See
 [docs/SECURITY.md](docs/SECURITY.md).
@@ -165,7 +164,7 @@ Actions > **Admin** > Run workflow, pick a task:
 | `build-demo` | builds the anonymised demo from your real data, checks it for your roll number, email, name and any other roll or phone number (writes nothing if it finds one), loads it as the demo rows, reads them back and checks them again, commits `dashboard/demo-data.json` and starts the dashboard deploy |
 | `gemini-check` | one test call to Gemini, then retries the notices the rules couldn't read, printing every model's answer |
 | `functions-check` | the Ask Ping / Check now functions on Supabase: deployed version, which secrets they have (names only), every request and crash from the last 23 hours, and two test questions from a demo session |
-| `ask-ping-page` | opens the **live** dashboard in a real browser: checks the owner sign-in screen (without signing in), clicks View demo, confirms the demo session gets 0 real rows, types "slice ctc breakdown" and "what's due tomorrow", then "any tests today?" followed by "anything else?" and "nothing else?" (follow-ups that need the conversation), and prints the replies |
+| `ask-ping-page` | opens the **live** dashboard in a real browser: checks the owner sign-in screen (without signing in), opens the demo session (`?anon-demo=1`), confirms the demo session gets 0 real rows, types "slice ctc breakdown" and "what's due tomorrow", then "any tests today?" followed by "anything else?" and "nothing else?" (follow-ups that need the conversation), and prints the replies |
 | `ask-ping-evals` | runs the Ask Ping evals from demo sessions and commits `evals/ask_ping/REPORT.md` |
 | `auth-config` | Supabase Auth for the live dashboard: Site URL and redirect list, anonymous sign-ins on |
 | `demo-clock` | sets the one-click demo's "now" to the snapshot time in `dashboard/demo-data.json` (the demo shows, and Ask Ping answers, as of that time) without rebuilding the demo |
@@ -370,8 +369,8 @@ text and your targets, never your name, roll number, CGPA or mail.
   queued, logging in, reading companies / notices / PDFs, then "Done at 12:17 — 2 new
   items" or "Done — nothing new since 11:41", or why it couldn't finish. Scrolled up
   while reading? Nothing moves; a "↓ N new" pill takes you to what arrived.
-- **View demo** (sign-in screen): a one-click anonymous session on the anonymised
-  snapshot, with a "Demo - sample data, read-only" chip; its chat is kept for that
+- **The demo session** (`?anon-demo=1`, for the checks and eval runners; not on the sign-in screen): an anonymous
+  session on the anonymised snapshot, with a "Demo - sample data, read-only" chip; its chat is kept for that
   session. `?demo=1` opens the same snapshot from a file, without the database. Both
   show the snapshot as it was when it was taken (a note above the unread messages says so).
 

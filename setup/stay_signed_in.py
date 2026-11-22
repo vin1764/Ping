@@ -95,7 +95,7 @@ def main() -> int:
                     br = p.chromium.launch(executable_path=os.environ.get("PING_CHROMIUM") or None)
                 dev = dict(p.devices[device])
 
-                def open_app(state=None, before=None):
+                def open_app(state=None, before=None, path="?source=app#chat"):
                     ctx = br.new_context(**dev, storage_state=state, service_workers="block")
                     page = ctx.new_page()
                     page.errors = []
@@ -116,7 +116,7 @@ def main() -> int:
                     page.add_init_script("""window.__sawLogin = false; new MutationObserver(() => {
                         if (document.querySelector('form.login')) window.__sawLogin = true; })
                         .observe(document, { childList: true, subtree: true });""")
-                    page.goto(base + "?source=app#chat")
+                    page.goto(base + path)
                     return ctx, page
 
                 def signed_in(page, timeout=20000):
@@ -138,9 +138,10 @@ def main() -> int:
                 check(name, form["form"] == "FORM" and form["user"] == "email" and form["pw"] == "password" and form["submit"],
                       "sign-in is a real form a password manager fills", json.dumps(form))
                 check(name, form["note"], "\"You'll stay signed in\" under the button")
+                check(name, page.locator("#view-demo").count() == 0, "no demo button on the sign-in screen")
                 page.fill("#login-email", EMAIL)
                 page.fill("#login-pw", PASSWORD)
-                page.click("form.login button.btn:not(.demo)")
+                page.click("form.login button[type=submit]")
                 try:
                     page.wait_for_selector("#ask-input, [data-onboarding]", timeout=20000)
                     ok = True
@@ -289,7 +290,7 @@ def main() -> int:
                 ctx.close()
 
                 # 6. a demo session signing out elsewhere doesn't touch the owner's session
-                ctx, page = open_app()           # a fresh copy (no owner session): View demo, then Exit demo
+                ctx, page = open_app(path="?anon-demo=1#chat")   # a fresh copy: the hidden demo session, then Exit demo
                 page.wait_for_selector("#view-demo", timeout=20000)
                 page.click("#view-demo")
                 page.wait_for_selector("#ask-input, [data-onboarding]", timeout=20000)

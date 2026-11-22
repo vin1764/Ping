@@ -3,6 +3,10 @@
 Your own copy of Ping runs under your own accounts. This page is also published as `setup.html` next to the
 dashboard (built from this file at every deploy, so the two always say the same thing).
 
+## Reviewing Ping?
+
+Sign in on the [dashboard](https://vin1764.github.io/ping-dashboard/) with the credentials in the submission note. The rest of this page is for setting up a copy of your own.
+
 ## What you get
 
 - Every hour, Ping reads your placement ERP (companies, notices and the PDFs that name you) and posts only what's about you in one chat thread.

@@ -1,25 +1,24 @@
 # Ping: submission
 
-**Live:** https://vin1764.github.io/ping-dashboard/ → click **View demo** (no account needed).
+**Live:** https://vin1764.github.io/ping-dashboard/ → sign in with the credentials in the submission note.
 
 Ping reads one student's placement ERP every hour (the companies list, the notice board, the PDFs attached to
 notices) and the placement mail in their institute mailbox, keeps only what concerns that student, and tells them
-in a chat. It only reads: it cannot apply, submit, upload or accept anything. The demo is an anonymised snapshot of
-a real run on 21 Nov 2026: real companies, roles, pay, deadlines and notices; a made-up student, made-up CVs and
-four made-up mails.
+in a chat. It only reads: it cannot apply, submit, upload or accept anything. You sign in to the real account of
+the student who built it, so what you see is their live placement season; anything you change there (preferences,
+reminders) is put back after judging.
 
 ## 10 minutes: what to try
 
-1. **Open it** (View demo, then "Use the demo profile"). The thread is today's: a 2-hour reminder for the 20:00
-   deadlines with **For you** first (each with the CV to apply with) and Others collapsed; **Today** on the right
-   (on a phone, the Today tab) with countdowns that tick. (If many people open the demo in the same hour, the
-   page says so and opens the same snapshot from its own copy.)
-2. **Ask a fact**: `what's due tonight?`, `slice ctc breakdown`, `which cv for groww`. These are answered in your
-   browser, from the data the page already has, in well under a second (no typing bubble).
-3. **Ask something open**: `should I apply to blackbuck?`. This goes to the model (Gemini), with only the facts
-   it needs; any number it writes must be in those facts or the rules answer is shown instead.
-4. **Placement mail**: the four messages tagged **via email**, with **Open form / Open test / Join** on them;
-   ask `what's due from mail`.
+1. **Sign in** with the credentials in the submission note. The thread is today's: digests per closing time with
+   **For you** first (each with the CV to apply with) and Others collapsed; **Today** on the right (on a phone, the
+   Today tab) with countdowns that tick.
+2. **Ask a fact**: `what's due tonight?`, `<company> ctc breakdown`, `which cv for <company>`. These are answered in
+   your browser, from the data the page already has, in well under a second (no typing bubble).
+3. **Ask something open**: `should I apply to <company>?`. This goes to the model (Gemini), with only the facts it
+   needs; any number it writes must be in those facts or the rules answer is shown instead.
+4. **Placement mail**: messages tagged **via email**, with **Open form / Open test / Join** on them; ask
+   `what's due from mail`.
 5. **Change what you see by saying it**: `only show me product and consulting roles` (the lists re-split at once),
    then `help`, `how do I install Ping?` (steps for your device).
 6. **Read-only**: `apply for me` → "Ping is read-only, so I can't apply for you".

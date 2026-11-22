@@ -36,7 +36,7 @@ def test_every_line_of_the_doc_is_on_the_page():
 def test_sections_in_order_and_steps_numbered():
     h = page.render()
     heads = re.findall(r"<h2[^>]*>(.*?)</h2>", h)
-    assert heads == ["What you get", "What it never does", "What you need", "Steps", "How long it takes",
+    assert heads == ["Reviewing Ping?", "What you get", "What it never does", "What you need", "Steps", "How long it takes",
                      "If something goes wrong", "Privacy"]
     steps = re.search(r'<h2 id="steps">.*?<ol>(.*?)</ol>', h, re.S).group(1)
     assert 7 <= steps.count("<li>") <= 9

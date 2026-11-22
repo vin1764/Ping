@@ -306,7 +306,7 @@
     const owner = await restoreSession(sb, AUTH_KEY);
     if (owner === "ok") { keepSessionFresh(sb); return startReal(sb); }
     if (owner === "unreachable") return waitForServer(snap);
-    // no owner session on this device: a View demo session from before, if it's still good
+    // no owner session on this device: an anonymous demo session from before (the runners'), if it's still good
     if (await hasStored(DEMO_AUTH_KEY)) {
       const demo = authClient(DEMO_AUTH_KEY);
       if (await restoreSession(demo, DEMO_AUTH_KEY) === "ok") { keepSessionFresh(demo); return startReal(demo); }
@@ -317,7 +317,7 @@
   // ------------------------------------------------------------ staying signed in
   // Sign in once and stay signed in, like a chat app: Supabase keeps a session (a short-lived access token and a
   // refresh token; never the password) in this device's localStorage under a fixed key, refreshes it before it
-  // runs out, and again whenever the app comes back to the screen (phones suspend installed apps). A View demo
+  // runs out, and again whenever the app comes back to the screen (phones suspend installed apps). An anonymous demo
   // session has its own key and its own client, so it can never replace or sign out the owner's session. Sign-outs
   // are for this device only.
   const AUTH_KEY = "ping-auth";
@@ -829,6 +829,7 @@
 
   function status(text) { const el = $("#status"); el.textContent = text; el.hidden = !text; }
 
+  const ANON_DEMO = new URLSearchParams(location.search).get("anon-demo") === "1";
   function showLogin(sb) {
     // a real form with the fields password managers know (iCloud Keychain, Google Password Manager): they offer to
     // save it once and fill it with Face ID or a fingerprint after that. Ping itself never stores the password.
@@ -836,7 +837,7 @@
                                autocapitalize: "none", spellcheck: "false", placeholder: "you@example.com", id: "login-email" });
     const pw = h("input", { type: "password", name: "password", required: true, autocomplete: "current-password",
                             placeholder: "Password", id: "login-pw" });
-    const msg = h("p", { class: "muted small" });
+    const msg = h("p", { class: "muted small", id: "login-msg", role: "status" });
     mountPage(h("form", { class: "login card", method: "post", action: "#chat", autocomplete: "on", onsubmit: async (e) => {
       e.preventDefault();
       msg.textContent = "Signing in…";
@@ -858,8 +859,10 @@
       h("button", { class: "btn", type: "submit" }, "Sign in"),
       h("p", { class: "muted small center stay" }, "You'll stay signed in on this device."),
       msg,
-      h("p", { class: "or" }, "or"),
-      h("button", { type: "button", class: "btn demo", id: "view-demo", onclick: async (e) => {
+      // the anonymous demo session: only for the checks and eval runners (Admin > live-page, ask-ping-page, evals),
+      // which open the page with ?anon-demo=1; it's linked from nowhere, and reviewers sign in like the owner
+      ANON_DEMO ? h("p", { class: "or" }, "or") : null,
+      ANON_DEMO ? h("button", { type: "button", class: "btn demo", id: "view-demo", onclick: async (e) => {
         e.target.disabled = true;
         msg.textContent = "Opening the demo\u2026";
         const demo = authClient(DEMO_AUTH_KEY);          // its own session: never the owner's
@@ -875,8 +878,7 @@
         location.hash = "#chat";
         keepSessionFresh(demo);
         startReal(demo);
-      } }, "View demo"),
-      h("p", { class: "muted small center" }, "No account needed: a sample student's placement season, read-only."),
+      } }, "Open the demo session") : null,
       h("p", { class: "center", style: "margin:0" }, h("a", { class: "own", href: "setup.html", id: "setup-link" }, "Set up Ping for yourself \u2192"))));
   }
 

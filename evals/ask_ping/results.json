@@ -22,7 +22,7 @@
    "answer": "slice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.\nslice (Associate Product Manager): CTC 28,00,000 INR: Bonds: No; Base Salary: 22,00,000; Bond Amount: 0; CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs; 1st Year CTC: 28,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 22,00,000.",
    "model": "rules",
    "route": "fact",
-   "seconds": 6.0,
+   "seconds": 7.4,
    "failed": []
   },
   {
@@ -43,7 +43,7 @@
    "answer": "Harness (Software Engineer I): CG cut-off 7.5, your CGPA 8.0: met; backlogs: No; the rest can't be checked until your department and degree are on the Profile page.",
    "model": "rules",
    "route": "fact",
-   "seconds": 5.0,
+   "seconds": 5.8,
    "failed": []
   },
   {
@@ -61,7 +61,7 @@
    "answer": "Axis Bank (BIU (Business Intelligence Unit)): CG cut-off 6.0, your CGPA 8.0: met; backlogs: No; the rest can't be checked until your department and degree are on the Profile page.",
    "model": "rules",
    "route": "fact",
-   "seconds": 4.3,
+   "seconds": 5.5,
    "failed": []
   },
   {
@@ -82,7 +82,7 @@
    "answer": "Axis Bank (BIU (Business Intelligence Unit)): CG cut-off 6.0, your CGPA 8.0: met; departments allowed: AEROSPACE ENGINEERING, AGRICULTURAL AND FOOD ENGINEERING, BIOSCIENCE AND BIOTECHNOLOGY, CHEMICAL ENGINEERING, CIVIL ENGINEERING, COMPUTER SCIENCE AND ENGINEERING, ELECTRICAL ENGINEERING, ELECTRONICS AND ELECTRICAL COMMUNICATION ENGG., INDUSTRIAL AND SYSTEMS ENGINEERING, MECHANICAL ENGINEERING, METALLURGICAL AND MATERIALS ENGINEERING, MINING ENGINEERING, OCEAN ENGG AND NAVAL ARCHITECTURE; backlogs: No; the rest can't be checked until your department and degree are on the Profile page.",
    "model": "rules",
    "route": "fact",
-   "seconds": 3.4,
+   "seconds": 5.3,
    "failed": []
   },
   {
@@ -103,7 +103,7 @@
    "answer": "Waterfly Technologies roles (5):\n- Graduate Engineer 2 · CTC 20,00,000 INR · closes Sat 21 Nov 20:00\n- Growth and Strategist · CTC 10,00,000 INR · closes Sat 21 Nov 20:00\n- Managment Consultant 2 · CTC 20,00,000 INR · closes Sat 21 Nov 20:00\n- Graduate Engineer 1 · CTC 35,00,000 INR · closes Sat 21 Nov 20:00\n- Management Consultant 1 · CTC 35,00,000 INR · closes Sat 21 Nov 20:00 · ✓ applied",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.7,
+   "seconds": 5.0,
    "failed": []
   },
   {
@@ -121,7 +121,7 @@
    "answer": "Diageo (GBS MANAGEMENT TRAINEE): Joining Bonus, if any: 5,00,000.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 9.6,
    "failed": []
   },
   {
@@ -139,7 +139,7 @@
    "answer": "Harness (Software Engineer I): no bond (Bonds: No).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 5.1,
    "failed": []
   },
   {
@@ -175,7 +175,7 @@
    "answer": "Nothing due tomorrow (Sun 22 Nov) in the ERP data (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 4.9,
    "failed": []
   },
   {
@@ -195,7 +195,7 @@
    "answer": "Close tonight 20:00 (in 2h 28m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.3,
+   "seconds": 5.5,
    "failed": []
   },
   {
@@ -213,7 +213,7 @@
    "answer": "Close tonight 20:00 (in 2h 28m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2\n\nForms and submissions due in the next 7 days:\n- Axon Developers (MDs Office, Manager Strategy): form by Thu 26 Nov 17:00\n- Accenture Japan (Digital Consultant): test registration by Fri 27 Nov 23:59",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.1,
+   "seconds": 4.6,
    "failed": []
   },
   {
@@ -232,7 +232,7 @@
    "answer": "Ather Energy: open deadlines (last checked Sat 21 Nov 17:32):\n- Product Ownership, Hardware Pack Engineering, Chief Engineer +2 more: application by Sat 21 Nov 20:00 (today, in 2h 28m) · applied to 1 of 5\nLast Ather Energy notice: \"Date extension\", Thu 19 Nov 22:57.\nYou applied to: Product Ownership.",
    "model": "rules",
    "route": "fact",
-   "seconds": 4.2,
+   "seconds": 3.6,
    "failed": []
   },
   {
@@ -251,7 +251,7 @@
    "answer": "Diageo: open deadlines (last checked Sat 21 Nov 17:32):\n- GBS MANAGEMENT TRAINEE: application by Sat 21 Nov 20:00 (today, in 2h 28m) · ✓ applied\nNo Diageo notice in the data yet.\nYou applied to: GBS MANAGEMENT TRAINEE.",
    "model": "rules",
    "route": "fact",
-   "seconds": 3.3,
+   "seconds": 4.1,
    "failed": []
   },
   {
@@ -270,7 +270,7 @@
    "answer": "Esri: open deadlines (last checked Sat 21 Nov 17:32):\n- Data Scientist I: application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\nNo Esri notice in the data yet.\nYou haven't applied to the Esri role.",
    "model": "rules",
    "route": "fact",
-   "seconds": 3.2,
+   "seconds": 5.7,
    "failed": []
   },
   {
@@ -288,7 +288,7 @@
    "answer": "No open deadline for Harness in the ERP data (last checked Sat 21 Nov 17:32).\nHarness (Software Engineer I): closed Wed 14 Oct 12:00 (already passed).\nNo Harness notice in the data yet.\nYou haven't applied to the Harness role.",
    "model": "rules",
    "route": "fact",
-   "seconds": 3.1,
+   "seconds": 4.8,
    "failed": []
   },
   {
@@ -306,7 +306,7 @@
    "answer": "Nothing due on Wed 25 Nov in the ERP data (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.3,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -329,7 +329,7 @@
    "answer": "Lists that name you (last 3 weeks):\n- Update - Eternal test: time moved from Thu 19 Nov 19:00 to Thu 19 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Eternal test room list (Product Analyst, Assistant Program Manager). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121. Check your ma… (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)\n- Update - Tolaram Group test: time moved from Sat 14 Nov 21:30 to Sat 14 Nov 21:20; you're now on the list. (over) · Nalanda Classroom Complex · your room: NC 343\n- You're on the Tolaram Group test room list (Management Trainee Enterprise Transformation). Test Sat 14 Nov 21:20, Nalanda Classroom Complex, room NC 343. Check… (over)\n- Update - Media.Net test: time moved from Sat 14 Nov 19:30 to Sat 14 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 222\n- You're on the Media.Net test room list (Senior Product Analyst). Test Sat 14 Nov 19:15, Nalanda Classroom Complex, room NR 222. Check your mail for the link. (over)\n- Update - Auronova Consulting test: time moved from Sat 14 Nov 14:00 to Sat 14 Nov 13:45; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Auronova Consulting test room list (Analyst). Test Sat 14 Nov 13:45, Nalanda Classroom Complex, room NR 121. (over)\n- You're on the IvyCap Ventures test room list (Investment Analyst). Test Sat 14 Nov 07:30, Nalanda Classroom Complex, room NR 122. Check your mail for the link. (over)\n- You're on the IDFC FIRST Bank test room list (2 roles). Test Fri 13 Nov 01:00, Nalanda Classroom Complex, room NC 243. (over)\n- +17 more",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.2,
+   "seconds": 3.7,
    "failed": []
   },
   {
@@ -348,7 +348,7 @@
    "answer": "- Update - Eternal test: time moved from Thu 19 Nov 19:00 to Thu 19 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Eternal test room list (Product Analyst, Assistant Program Manager). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121. Check your ma… (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)",
    "model": "rules",
    "route": "fact",
-   "seconds": 7.8,
+   "seconds": 3.4,
    "failed": []
   },
   {
@@ -366,7 +366,7 @@
    "answer": "- Update - IQVIA test: you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 122",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 3.7,
    "failed": []
   },
   {
@@ -381,10 +381,10 @@
    },
    "why": "Groww, 20 Nov 00:36, 'Additional requirement': fill the Additional Details Form by 20 Nov 2026, 2:00 PM",
    "status": 200,
-   "answer": "Last Groww notice: \"Additional requirement\", Fri 20 Nov 00:36.\nPing's message about it: Update - Groww form: deadline moved from Thu 19 Nov 16:00 to Fri 20 Nov 14:00.\nYou applied to: Associate Product Manager.",
+   "answer": "Last Groww notice: \"Additional requirement\", Fri 20 Nov 00:36.\nPing's message about it: Groww (Associate Product Manager): fill the form by Fri 20 Nov 14:00.\nYou applied to: Associate Product Manager.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.9,
+   "seconds": 3.9,
    "failed": []
   },
   {
@@ -405,7 +405,7 @@
    "answer": "I couldn't find your roll number in the latest Pine Labs list (Pine Labs (Software Development Engineer): submit by Sun 22 Nov 20:00.). Please check the list yourself.",
    "model": "rules",
    "route": "fact",
-   "seconds": 3.2,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -447,7 +447,7 @@
    "answer": "I don't have Google in your ERP data: no role on the companies list and no notice from it (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.9,
+   "seconds": 3.8,
    "failed": []
   },
   {
@@ -465,7 +465,7 @@
    "answer": "Nothing due on Mon 30 Nov in the ERP data (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -496,7 +496,7 @@
    "answer": "I don't have a job location for Diageo: the ERP's role details don't give one.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.7,
+   "seconds": 3.7,
    "failed": []
   },
   {
@@ -519,7 +519,7 @@
    "answer": "I don't have your scores: the ERP doesn't publish test scores or ranks for Eternal.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 4.8,
    "failed": []
   },
   {
@@ -542,7 +542,7 @@
    "answer": "I don't have Netflix in your ERP data: no role on the companies list and no notice from it (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.9,
+   "seconds": 3.2,
    "failed": []
   },
   {
@@ -566,7 +566,7 @@
    "answer": "I don't have contact details for Groww: Ping leaves out names and phone numbers from notices.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -590,7 +590,7 @@
    "answer": "Ping is read-only, so I can't apply for you: it only reads the ERP.\nWaterfly Technologies: open deadlines (last checked Sat 21 Nov 17:32):\n- Graduate Engineer 2, Growth and Strategist, Managment Consultant 2 +2 more: application by Sat 21 Nov 20:00 (today, in 2h 28m) · applied to 1 of 5\nNo Waterfly Technologies notice in the data yet.",
    "model": "rules",
    "route": "act",
-   "seconds": 2.5,
+   "seconds": 3.8,
    "failed": []
   },
   {
@@ -614,7 +614,7 @@
    "answer": "Ping is read-only, so I can't withdraw for you: it only reads the ERP.\nDiageo: open deadlines (last checked Sat 21 Nov 17:32):\n- GBS MANAGEMENT TRAINEE: application by Sat 21 Nov 20:00 (today, in 2h 28m) · ✓ applied\nNo Diageo notice in the data yet.",
    "model": "rules",
    "route": "act",
-   "seconds": 3.2,
+   "seconds": 4.2,
    "failed": []
   },
   {
@@ -638,7 +638,7 @@
    "answer": "Ping is read-only, so I can't change for you: it only reads the ERP.",
    "model": "rules",
    "route": "act",
-   "seconds": 2.3,
+   "seconds": 3.4,
    "failed": []
   },
   {
@@ -662,7 +662,7 @@
    "answer": "Ping is read-only, so I can't fill for you: it only reads the ERP.\nNo open deadline for Groww in the ERP data (last checked Sat 21 Nov 17:32).\nGroww (Associate Product Manager): closed Mon 16 Nov 16:00 (already passed).\nLast Groww notice: \"Additional requirement\", Fri 20 Nov 00:36.",
    "model": "rules",
    "route": "act",
-   "seconds": 3.0,
+   "seconds": 4.3,
    "failed": []
   },
   {
@@ -681,7 +681,7 @@
    "answer": "Waterfly Technologies (Graduate Engineer 2): CTC 20,00,000 INR: Bonds: No; Base Salary: 12,00,000; Bond Amount: 0; CTC Breakup: 2000000 per year, 12LPA in hand and 8LPA ESOPS; 1st Year CTC: 20,00,000; Gross (per Annum): 12,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 12,00,000.\nWaterfly Technologies (Growth and Strategist): CTC 10,00,000 INR: Bonds: No; Base Salary: 10,00,000; Bond Amount: 0; CTC Breakup: 10,00,000; 1st Year CTC: 10,00,000; Gross (per Annum): 10,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 10,00,000.\nWaterfly Technologies (Managment Consultant 2): CTC 20,00,000 INR: Bonds: No; Base Salary: 12,00,000; Bond Amount: 0; CTC Breakup: 2000000 per year, 12LPA in hand and 8LPA ESOPS; 1st Year CTC: 20,00,000; Gross (per Annum): 12,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 12,00,000.\nWaterfly Technologies (Graduate Engineer 1): CTC 35,00,000 INR: Bonds: No; Base Salary: 18,00,000; Bond Amount: 0; CTC Breakup: 3500000 per year, 1800000 in hand and 1700000 ESOPS; 1st Year CTC: 35,00,000; Gross (per Annum): 18,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 18,00,000.\nWaterfly Technologies (Management Consultant 1): CTC 35,00,000 INR: Bonds: No; Base Salary: 18,00,000; Bond Amount: 0; CTC Breakup: 3500000 per year, 1800000 in hand and 1700000 ESOPS; 1st Year CTC: 35,00,000; Gross (per Annum): 18,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 18,00,000.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.6,
+   "seconds": 3.9,
    "failed": []
   },
   {
@@ -699,7 +699,7 @@
    "answer": "Eternal (Software Development Engineer I): CTC 59,00,000 INR: Bonds: No; Base Salary: 24,00,000; Bond Amount: 0; CTC Breakup: FTE Compensation Structure  Total 59 L | Base  24 L | Yearly Cash Bonus  35 L (1st year: 5 L | 2nd year: 10 L | 3rd year: 10 L | 4th year: 10 L); 1st Year CTC: 29,00,000; Gross (per Annum): 24,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 24,00,000.\nEternal (Product Analyst): CTC 47,00,000 INR: Bonds: No; Base Salary: 21,00,000; Bond Amount: 0; CTC Breakup: FTE Compensation Structure  Total 47 L | Base  21 L | Yearly Cash Bonus  26 L (1st year: 3 L | 2nd year: 5 L | 3rd year: 8 L | 4th year: 10 L); 1st Year CTC: 24,00,000; Gross (per Annum): 21,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 21,00,000.\nEternal (Machine Learning Scientist): CTC 59,00,000 INR: Bonds: No; Base Salary: 24,00,000; Bond Amount: 0; CTC Breakup: FTE Compensation Structure  Total 59 L | Base  24 L | Yearly Cash Bonus  35 L (1st year: 5 L | 2nd year: 10 L | 3rd year: 10 L | 4th year: 10 L); 1st Year CTC: 29,00,000; Gross (per Annum): 24,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 24,00,000.\nEternal (Assistant Program Manager): CTC 17,00,000 INR: Bonds: No; Base Salary: 15,00,000; Bond Amount: 0; CTC Breakup: Fixed : 1500000 + Variable : 200000; 1st Year CTC: 17,00,000; Gross (per Annum): 17,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 15,00,000.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 4.1,
    "failed": []
   },
   {
@@ -720,7 +720,7 @@
    "answer": "No open deadline for slice in the ERP data (last checked Sat 21 Nov 17:32).\nslice (Analyst): closed Tue 20 Oct 10:00 (already passed).\nslice (Associate Product Manager): closed Tue 20 Oct 10:00 (already passed).\nslice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.\nslice (Associate Product Manager): CTC 28,00,000 INR: Bonds: No; Base Salary: 22,00,000; Bond Amount: 0; CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs; 1st Year CTC: 28,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 22,00,000.\n\nEsri: open deadlines (last checked Sat 21 Nov 17:32):\n- Data Scientist I: application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\nEsri (Data Scientist I): CTC 18,00,000 INR: Bonds: No; Base Salary: 12,00,000; Bond Amount: 0; CTC Breakup: 18,93,600; 1st Year CTC: 18,93,600; Gross (per Annum): 18,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 18,00,000.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 4.0,
    "failed": []
   },
   {
@@ -738,7 +738,7 @@
    "answer": "Diageo (GBS MANAGEMENT TRAINEE): no bond (Bonds: No).\nYes, you applied to Diageo: GBS MANAGEMENT TRAINEE.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.8,
+   "seconds": 3.8,
    "failed": []
   },
   {
@@ -761,7 +761,7 @@
    "answer": "Ping is read-only, so I can't apply for you: it only reads the ERP.\nNo open deadline for Groww in the ERP data (last checked Sat 21 Nov 17:32).\nGroww (Associate Product Manager): closed Mon 16 Nov 16:00 (already passed).\nLast Groww notice: \"Additional requirement\", Fri 20 Nov 00:36.",
    "model": "rules",
    "route": "act",
-   "seconds": 2.4,
+   "seconds": 3.6,
    "failed": []
   },
   {
@@ -787,7 +787,7 @@
    "answer": "- Groww test (Associate Product Manager) Sat 21 Nov 15:00. (earlier today, over)",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 4.4,
    "failed": []
   },
   {
@@ -812,7 +812,7 @@
    "answer": "Esri: open deadlines (last checked Sat 21 Nov 18:35):\n- Data Scientist I: application by Sat 21 Nov 20:00 (today, in 1h 25m) · not applied\nNo Esri notice in the data yet.\nYou haven't applied to the Esri role.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 3.7,
    "failed": []
   },
   {
@@ -842,7 +842,7 @@
    "answer": "Close tonight 20:00 (in 1h 25m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.3,
+   "seconds": 3.3,
    "failed": []
   },
   {
@@ -866,7 +866,7 @@
    "answer": "Close tonight 20:00 (in 1h 25m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.6,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -887,7 +887,7 @@
    "answer": "Groww (Associate Product Manager): apply with Product CV.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.7,
+   "seconds": 3.6,
    "failed": []
   },
   {
@@ -916,7 +916,7 @@
    "answer": "YMS Financial: open deadlines (last checked Sat 21 Nov 17:32):\n- Quant Researcher: application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\nNo YMS Financial notice in the data yet.\nYou haven't applied to the YMS Financial role.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.6,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -940,10 +940,10 @@
    },
    "why": "(b) a company with no open deadline: Microsoft's CV submission closed Sun 8 Nov 16:00; its last notice is 'PPO' (Wed 11 Nov). The reported bug: this used to get a generic 'due in the next 3 days' list.",
    "status": 200,
-   "answer": "No open deadline for Microsoft in the ERP data (last checked Sat 21 Nov 17:32).\nMicrosoft (Software Engineer): closed Mon 9 Nov 16:00 (already passed).\nLast Microsoft notice: \"PPO\", Wed 11 Nov 17:59.\nYou haven't applied to the Microsoft role.\nI couldn't find your roll number in the Microsoft Corporation test room list (Software Engineer). Please check the list yourself.",
+   "answer": "No open deadline for Microsoft in the ERP data (last checked Sat 21 Nov 17:32).\nMicrosoft (Software Engineer): closed Mon 9 Nov 16:00 (already passed).\nLast Microsoft notice: \"PPO\", Wed 11 Nov 17:59.\nYou haven't applied to the Microsoft role.\nI couldn't find your roll number in the Microsoft Corporation test room list (Software Engineer) (posted Tue 10 Nov 17:37). Please check the list yourself.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 3.8,
    "failed": []
   },
   {
@@ -970,7 +970,7 @@
    "answer": "I don't have Google in your ERP data: no role on the companies list and no notice from it (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.0,
+   "seconds": 4.1,
    "failed": []
   },
   {
@@ -997,7 +997,7 @@
    "answer": "BlackBuck: open deadlines (last checked Sat 21 Nov 17:32):\n- Associate Manager BlackBuck Leadership Program: application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\nLast BlackBuck notice: \"PPT/Workshop/Seminars etc\", Tue 17 Nov 08:14.\nYou haven't applied to the BlackBuck role.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.5,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -1018,10 +1018,10 @@
    },
    "why": "an alias: msft is Microsoft.",
    "status": 200,
-   "answer": "No open deadline for Microsoft in the ERP data (last checked Sat 21 Nov 17:32).\nMicrosoft (Software Engineer): closed Mon 9 Nov 16:00 (already passed).\nLast Microsoft notice: \"PPO\", Wed 11 Nov 17:59.\nYou haven't applied to the Microsoft role.\nI couldn't find your roll number in the Microsoft Corporation test room list (Software Engineer). Please check the list yourself.",
+   "answer": "No open deadline for Microsoft in the ERP data (last checked Sat 21 Nov 17:32).\nMicrosoft (Software Engineer): closed Mon 9 Nov 16:00 (already passed).\nLast Microsoft notice: \"PPO\", Wed 11 Nov 17:59.\nYou haven't applied to the Microsoft role.\nI couldn't find your roll number in the Microsoft Corporation test room list (Software Engineer) (posted Tue 10 Nov 17:37). Please check the list yourself.",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.3,
+   "seconds": 5.3,
    "failed": []
   },
   {
@@ -1041,7 +1041,7 @@
    "answer": "I couldn't tell what you meant. Here's what's due soon:\n- AiPrise (Software Engineer I, Full Stack (Frontend Focused), Software Engineer I, Software Engineer II +1 more): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Astera Labs (Software Quality Assurance (SQA) Engineer): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Ather Energy (Product Ownership, Hardware Pack Engineering, Chief Engineer +2 more): application by Sat 21 Nov 20:00 (today, in 2h 28m) · applied to 1 of 5\n- Auro Group (Data Analyst, AI/ML Software Engineer, Full Stack Developer +4 more): application by Sat 21 Nov 20:00 (today, in 2h 28m) · applied to 1 of 7\n- Axis Bank (BIU (Business Intelligence Unit)): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Axon Developers (MDs Office, Manager Strategy): application by Sat 21 Nov 20:00 (today, in 2h 28m) · ✓ applied\n- BlackBuck (Associate Manager BlackBuck Leadership Program): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Dassault Systemes (Software Engineer - Domain Engineering & AI Innovation-PG, AI Engineer-Data Scientist-PG): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Diageo (GBS MANAGEMENT TRAINEE): application by Sat 21 Nov 20:00 (today, in 2h 28m) · ✓ applied\n- Esri (Data Scientist I): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Flipspaces Technology Labs (Entrepreneur-in-Residence): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) (Avionics Engineer, Aerodynamics Engineer, Mechanical Engineer): application by Sat 21 Nov 20:00 (today, in 2h 28m) · not applied\n- +10 more",
    "model": "rules",
    "route": "open",
-   "seconds": 2.3,
+   "seconds": 8.7,
    "failed": []
   },
   {
@@ -1064,7 +1064,7 @@
    "answer": "Nothing due tomorrow (Sun 22 Nov) in the ERP data (last checked Sat 21 Nov 17:32).",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 4.2,
    "failed": []
   },
   {
@@ -1088,7 +1088,7 @@
    "answer": "Tests and lists today (Sat 21 Nov):\n- Groww test (Associate Product Manager) Sat 21 Nov 15:00. (earlier today, over)",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.2,
+   "seconds": 3.7,
    "failed": []
   },
   {
@@ -1117,7 +1117,7 @@
    "answer": "JP MorganChase (Commercial & Investment Bank Research & Analytics, Global Research - Full Time Analyst):\nWhat you'd do:\n- Developing deep insights while analysing public data\n- Building and maintaining financial models\n- Generating products and servicing key stakeholders\nMust-have: Keen interest in financial markets and strong intellectual curiosity; Strong quantitative skills, analytical aptitude and ability to learn new financial; Strong knowledge of excel, use of internet, standard MSOffice suite; Self -starter with excellent communication, presentation and team skills; Close attention to detail\nEligibility: CG cut-off 7 (ERP)\n(From the ERP's role details.)",
    "model": "jd-summary",
    "route": "",
-   "seconds": 1.7,
+   "seconds": 2.6,
    "failed": []
   },
   {
@@ -1141,7 +1141,7 @@
    "answer": "LTM (Post-Graduate Engineer Trainee): The JD is a link I can't open: https://drive.google.com/file/d/1RI1pyQpwgIcyYG6VtIWqKuGZb-dzcEy9/view?usp=sharing",
    "model": "jd-summary",
    "route": "",
-   "seconds": 2.0,
+   "seconds": 2.6,
    "failed": []
   },
   {
@@ -1164,7 +1164,7 @@
    "answer": "Cars24 (Data Science): no JD on the ERP.",
    "model": "jd-summary",
    "route": "",
-   "seconds": 2.0,
+   "seconds": 2.9,
    "failed": []
   },
   {
@@ -1189,7 +1189,7 @@
    "answer": "Searce (Associate Data Engineer): Data Engineer building reliable, scalable data pipelines\nWhat you'd do:\n- Build reliable, scalable data pipelines\n- Make data trusted and ready for AI\n- Own quality checks, monitoring and governance\nMust-have: Python; SQL; Database fundamentals; Exposure to a cloud warehouse; Cloud basics\nEligibility: CG cut-off 6 (ERP)\n(From the ERP's role details.)\nThe full JD is a link I can't open: https://docs.google.com/document/d/14dVgbE3ZQouUB93nQvNwYr4Qt-yWRkhbuO0pNVLgWno/edit?usp=sharing",
    "model": "jd-summary",
    "route": "",
-   "seconds": 1.7,
+   "seconds": 3.0,
    "failed": []
   },
   {
@@ -1215,7 +1215,7 @@
    "answer": "Arihant Capital Markets (PRODUCT MANAGER): Product Manager in the Product Management / FinTech Product Development team\nWhat you'd do:\n- Define and execute product vision, strategy, and roadmap\n- Own the complete product development lifecycle from idea to launch\n- Use AI for product research, documentation, and workflow automation\nMust-have: Exceptional analytical and problem-solving ability; Strong structured thinking; High ownership and execution mindset; Strong communication and stakeholder-management skills; Ability to work in a fast-paced environment\nLocation: Mumbai / Indore\nEligibility: Freshers from IITs and other premier institutes\n(From the JD file on the ERP.)",
    "model": "jd-summary",
    "route": "",
-   "seconds": 1.7,
+   "seconds": 2.6,
    "failed": []
   },
   {
@@ -1237,7 +1237,7 @@
    "answer": "Close tonight 20:00 (in 1h 25m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.2,
+   "seconds": 3.2,
    "failed": []
   },
   {
@@ -1258,7 +1258,7 @@
    "answer": "47 roles close today (Sat 21 Nov).\n\nClose tonight 20:00 (in 1h 25m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.4,
+   "seconds": 3.9,
    "failed": []
   },
   {
@@ -1277,10 +1277,10 @@
    },
    "why": "Install steps from docs/HELP.md for the asker's platform; never 'I don't have any information'.",
    "status": 200,
-   "answer": "Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline.\nIn Chrome or Edge, look for the install icon at the right end of the address bar, or \"Install Ping\" in the browser's menu. Firefox can't install sites as apps; Ping still works in a normal tab.",
+   "answer": "Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline. Just trying me out? Tap View demo under the sign-in first: an anonymised snapshot, read-only.\nIn Chrome or Edge, look for the install icon at the right end of the address bar, or \"Install Ping\" in the browser's menu. Firefox can't install sites as apps; Ping still works in a normal tab.",
    "model": "rules",
    "route": "help",
-   "seconds": 4.5,
+   "seconds": 3.6,
    "failed": []
   },
   {
@@ -1300,10 +1300,10 @@
    },
    "why": "A platform named in the question wins: the iPhone steps.",
    "status": 200,
-   "answer": "Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline.\nOn iPhone or iPad: open this page in Safari, tap Share (the square with an arrow), then \"Add to Home Screen\" → Add. Open Ping from the Home Screen icon: on iPhone, notifications only work from there. Sign in once inside the installed app; it doesn't share Safari's login. After that you stay signed in, and iCloud Keychain can fill the password with Face ID if you ever need it again.\n(On another device? Ask \"how do I install on iPhone\" or Android, Windows, Mac.)",
+   "answer": "Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline. Just trying me out? Tap View demo under the sign-in first: an anonymised snapshot, read-only.\nOn iPhone or iPad: open this page in Safari, tap Share (the square with an arrow), then \"Add to Home Screen\" → Add. Open Ping from the Home Screen icon: on iPhone, notifications only work from there. Sign in once inside the installed app; it doesn't share Safari's login. After that you stay signed in, and iCloud Keychain can fill the password with Face ID if you ever need it again.\n(On another device? Ask \"how do I install on iPhone\" or Android, Windows, Mac.)",
    "model": "rules",
    "route": "help",
-   "seconds": 3.0,
+   "seconds": 3.2,
    "failed": []
   },
   {
@@ -1327,7 +1327,7 @@
    "answer": "I send at most one notification per ERP check: the most urgent new thing that's for you (a test or shortlist that names you, a form to fill, a deadline for a role you'd apply to), plus a reminder before a test you're on. Never twice for the same thing, and never in your quiet hours (outside the hours I check).\nTo turn them on: Profile → Notifications → \"Turn on\", then allow notifications when your browser asks. \"Send a test\" there checks it works. On iPhone and iPad, add Ping to your Home Screen first and open it from there.\nPrefer email? Profile → Notifications → \"Also email me what's for you\".",
    "model": "rules",
    "route": "help",
-   "seconds": 5.0,
+   "seconds": 3.3,
    "failed": []
   },
   {
@@ -1347,10 +1347,10 @@
    },
    "why": "What Ping can and can't do: read-only.",
    "status": 200,
-   "answer": "I can: read the ERP's companies list, notices and attached lists (I keep only your own row and the table heading), read placement mail in your institute mailbox, work out what's due and what you're eligible for, say which CV fits a role, answer questions here, and notify you.\nI can't: do anything on the ERP. I never apply, withdraw, submit, upload, fill forms or accept offers for you; I only read. Applying and forms are always yours to do on the ERP or the form's own page. The Forms tab is your checklist: tick forms as you fill them (your own record; I never fill or submit them), and I stop reminding you about the ticked ones.",
+   "answer": "I can: read the ERP's companies list, notices and attached lists (I keep only your own row and the table heading), read placement mail in your institute mailbox, work out what's due and what you're eligible for, say which CV fits a role, answer questions here, and notify you.\nJust looking? View demo, under the sign-in, opens an anonymised snapshot of a real run with its own made-up profile: read-only, and it never sees anyone's real data.\nI can't: do anything on the ERP. I never apply, withdraw, submit, upload, fill forms or accept offers for you; I only read. Applying and forms are always yours to do on the ERP or the form's own page. The Forms tab is your checklist: tick forms as you fill them (your own record; I never fill or submit them), and I stop reminding you about the ticked ones.",
    "model": "rules",
    "route": "help",
-   "seconds": 6.4,
+   "seconds": 3.5,
    "failed": []
   },
   {
@@ -1371,10 +1371,10 @@
    },
    "why": "The overview: the topics Ping can explain.",
    "status": 200,
-   "answer": "I'm Ping: I read the placement ERP for you every hour or so and tell you what matters here. I can help with:\n- what's due (today, tonight, tomorrow, a date), tests and rooms, shortlists, CTC, eligibility, which CV to use\n- forms: every form from the notices and your mail is in the Forms tab; tick forms as you fill them and the reminders stop. Ask \"which forms haven't I filled?\" or say \"mark the Groww form as filled\"\n- installing me as an app: ask \"how do I install Ping?\"\n- notifications: ask \"how do I get notifications?\"\n- how often I check: ask \"how often do you check?\"\n- your preferences: ask \"how do I change my preferences?\"\n- what I can and can't do, and where your data lives: ask \"what can you do?\" or \"where is my data?\"",
+   "answer": "I'm Ping: I read the placement ERP for you every hour or so and tell you what matters here. I can help with:\n- what's due (today, tonight, tomorrow, a date), tests and rooms, shortlists, CTC, eligibility, which CV to use\n- forms: every form from the notices and your mail is in the Forms tab; tick forms as you fill them and the reminders stop. Ask \"which forms haven't I filled?\" or say \"mark the Groww form as filled\"\n- installing me as an app: ask \"how do I install Ping?\"\n- notifications: ask \"how do I get notifications?\"\n- how often I check: ask \"how often do you check?\"\n- your preferences: ask \"how do I change my preferences?\"\n- what I can and can't do, and where your data lives: ask \"what can you do?\" or \"where is my data?\"\n- your own copy of Ping: ask \"how do I set this up?\"",
    "model": "rules",
    "route": "help",
-   "seconds": 3.0,
+   "seconds": 6.5,
    "failed": []
   },
   {
@@ -1397,7 +1397,7 @@
    "answer": "I check the ERP every hour by default, between 06:00 and 01:00 IST; you can also tap \"Check now\" for a check right away.\nTo change it: Profile → Schedule & reminders (how often: every 30 minutes, every hour or every 2 hours; and between which hours), or tell me here, for example \"check every 2 hours\" or \"only check between 8 and 23\".\nReminders before a deadline: Profile → Schedule & reminders → \"Remind me before a deadline (hours)\", or \"remind me 3 hours before\".",
    "model": "rules",
    "route": "help",
-   "seconds": 2.9,
+   "seconds": 4.2,
    "failed": []
   },
   {
@@ -1419,7 +1419,7 @@
    "answer": "Placement mail about Axon Developers (newest first):\n- AXON DEVELOPERS: fill the form by Thu 26 Nov 17:00 · via email\n  https://example.com/forms/ping-demo-details",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.9,
+   "seconds": 4.0,
    "failed": []
   },
   {
@@ -1440,7 +1440,7 @@
    "answer": "Test link for Accenture Japan:\n- Accenture Japan: take the online test by Fri 27 Nov 23:59 · via email\n  https://assess.example.com/test/ping-demo",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.7,
+   "seconds": 3.6,
    "failed": []
   },
   {
@@ -1462,7 +1462,7 @@
    "answer": "Due from your mail:\n- AXON DEVELOPERS: fill the form by Thu 26 Nov 17:00 · via email\n  https://example.com/forms/ping-demo-details\n- Accenture Japan: take the online test by Fri 27 Nov 23:59 · via email\n  https://assess.example.com/test/ping-demo",
    "model": "rules",
    "route": "fact",
-   "seconds": 2.6,
+   "seconds": 3.6,
    "failed": []
   },
   {
@@ -1480,10 +1480,10 @@
    },
    "why": "OPEN: a comparison (the model, with the FACTS block).",
    "status": 200,
-   "answer": "slice (Analyst):\n- Fixed Take Home Salary: 19,00,000\n- Bonuses: 2,00,000 Retention Bonus\n- ESOPs: 4,00,000\n- Bond: No\n\nslice (Associate Product Manager):\n- Fixed Take Home Salary: 22,00,000\n- Bonuses: 2,00,000 Retention Bonus\n- ESOPs: 4,00,000\n- Bond: No\n\nEternal (Software Development Engineer I):\n- Fixed Take Home Salary: 24,00,000\n- Bonuses: 35,00,000 Yearly Cash Bonus (5,00,000 1st year, 10,00,000 2nd year, 10,00,000 3rd year, 10,00,000 4th year)\n- ESOPs: None\n- Bond: No\n\nEternal (Product Analyst):\n- Fixed Take Home Salary: 21,00,000\n- Bonuses: 26,00,000 Yearly Cash Bonus (3,00,000 1st year, 5,00,000 2nd year, 8,00,000 3rd year, 10,00,000 4th year)\n- ESOPs: None\n- Bond: No\n\nEternal (Machine Learning Scientist):\n- Fixed Take Home Salary: 24,00,000\n- Bonuses: 35,00,000 Yearly Cash Bonus (5,00,000 1st year, 10,00,000 2nd year, 10,00,000 3rd year, 10,00,000 4th year)\n- ESOPs: None\n- Bond: No\n\nEternal (Assistant Program Manager):\n- Fixed Take Home Salary: 15,00,000\n- Bonuses: 2,00,000 Variable\n- ESOPs: None\n- Bond: No",
+   "answer": "slice (Analyst):\n- Fixed Take Home Salary: 19,00,000\n- Bonuses: 2,00,000 Retention Bonus\n- ESOPs: 4,00,000\n- Bond: No\n\nslice (Associate Product Manager):\n- Fixed Take Home Salary: 22,00,000\n- Bonuses: 2,00,000 Retention Bonus\n- ESOPs: 4,00,000\n- Bond: No\n\nEternal (Software Development Engineer I):\n- Fixed Take Home Salary: 24,00,000\n- Bonuses: 35,00,000 Yearly Cash Bonus\n- ESOPs: None\n- Bond: No\n\nEternal (Product Analyst):\n- Fixed Take Home Salary: 21,00,000\n- Bonuses: 26,00,000 Yearly Cash Bonus\n- ESOPs: None\n- Bond: No\n\nEternal (Machine Learning Scientist):\n- Fixed Take Home Salary: 24,00,000\n- Bonuses: 35,00,000 Yearly Cash Bonus\n- ESOPs: None\n- Bond: No\n\nEternal (Assistant Program Manager):\n- Fixed Take Home Salary: 15,00,000\n- Bonuses: 2,00,000 Variable\n- ESOPs: None\n- Bond: No",
    "model": "gemini-3.1-flash-lite",
    "route": "",
-   "seconds": 16.0,
+   "seconds": 6.0,
    "failed": []
   },
   {
@@ -1500,10 +1500,10 @@
    },
    "why": "OPEN: advice about one company.",
    "status": 200,
-   "answer": "BlackBuck: Associate Manager BlackBuck Leadership Program application closes at 20:00 today (in 2h 28m).\n\nPay:\n- Fixed Take Home Salary (per Annum): 1200000\n- Joining Bonus: 100000\n- Retention Bonus: 100000\n- Relocation Bonus: 100000\n- CTC: 15.5 LPA (12.0L Base + 1.5L Variable + 1.0L Joining Bonus + 1.0L Retention Bonus)\n- Bond: No\n\nApply with: Consulting CV",
+   "answer": "Yes, you should apply to BlackBuck for the Associate Manager BlackBuck Leadership Program. The application deadline is 20:00 today (in 2h 28m).\n\nBlackBuck: Associate Manager BlackBuck Leadership Program\n- Pay: Base Salary 1200000; CTC 1550000 (12.0L + 1.5L Variable + 1.0L Joining Bonus + 1.0L Retention Bonus); Joining Bonus 100000; Retention Bonus 100000; Relocation Bonus 100000; Fixed Take Home Salary 1200000\n- Bond: No\n- Apply with: Consulting CV",
    "model": "gemini-3.1-flash-lite",
    "route": "",
-   "seconds": 15.0,
+   "seconds": 6.5,
    "failed": []
   },
   {
@@ -1520,10 +1520,10 @@
    },
    "why": "OPEN: 'why'.",
    "status": 200,
-   "answer": "Axis Bank (BIU) is a good fit because it matches your target for business/data analyst roles and you are eligible (CG cut-off 6, your CGPA 8.0: met).\n\nRegarding pay, the BIU role offers:\n- Fixed Pay: 1,210,638\n- Target Variable Pay: 140,000\n- Value of Insurance Benefit: 17,757\n- Loan Benefits: 81,168\n- Total CTC: 1,449,563\n- Bond: No bond.\n\nYou have not applied to this role yet. It closes at 20:00 today (in 2h 28m). Apply with Analytics & Finance CV.",
+   "answer": "Axis Bank: BIU (Business Intelligence Unit) is a good fit because it aligns with your target of business/data analyst roles.\n\nEligibility: CG cut-off 6, your CGPA 8.0: met. Add your department and degree on the Profile page to check eligibility.\n\nPay:\n- Fixed Pay: 12,10,638\n- Target Variable Pay: 140,000\n- Total Pay: 13,50,638\n- Value of Insurance Benefit: 17,757\n- Loan Benefits: 81,168\n- Total CTC: 14,49,563\n- Bond: No bond.",
    "model": "gemini-3.1-flash-lite",
    "route": "",
-   "seconds": 6.2,
+   "seconds": 10.0,
    "failed": []
   },
   {
@@ -1540,10 +1540,10 @@
    },
    "why": "OPEN: preparation tips.",
    "status": 200,
-   "answer": "I don't have tips for the Eternal test. The Eternal test (Product Analyst, Assistant Program Manager) was at 19:15 on Thu 19 Nov, so it's over.",
-   "model": "gemini-3.1-flash-lite",
-   "route": "",
-   "seconds": 14.7,
+   "answer": "- Update - Eternal test: time moved from Thu 19 Nov 19:00 to Thu 19 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Eternal test room list (Product Analyst, Assistant Program Manager). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121. Check your ma… (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)\n\n(Gemini busy: answered from your ERP data by rules, not by the model.)",
+   "model": "rules",
+   "route": "open",
+   "seconds": 14.5,
    "failed": []
   }
  ],
@@ -1565,7 +1565,7 @@
      "answer": "Tests and lists today (Sat 21 Nov):\n- Groww test (Associate Product Manager) Sat 21 Nov 15:00. (earlier today, over)",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.2,
+     "seconds": 3.5,
      "failed": []
     },
     {
@@ -1587,7 +1587,7 @@
      "answer": "No other test today: that was the only one. 47 roles close at 20:00 today (in 2h 28m), 38 not applied (8 for you): Auro Group, Axis Bank, BlackBuck, Flipspaces Technology Labs, Waterfly Technologies +2 more.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.6,
+     "seconds": 3.4,
      "failed": []
     }
    ],
@@ -1608,7 +1608,7 @@
      "answer": "Meesho (Senior Assosiate - Business Management): CTC not given: Bonds: No; Base Salary: 15,30,000; Bond Amount: 0; CTC Breakup: Total CTC: ₹36 LPA ● Fixed Pay: ₹15.30 L ● Variable: ₹2.7 L ● Joining Bonus (at the time of joining): ₹3 L ● Retention Bonus (end of year 1): ₹3 L ● Retention Bonus (end of year 2): ₹3 L ● Retention Bonus (end of year 3): ₹4 L ● Retention Bonus (end of year 4): ₹5 L; 1st Year CTC: 21,00,000; Gross (per Annum): 21,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 3,00,000; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 15,30,000.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.8,
+     "seconds": 4.0,
      "failed": []
     },
     {
@@ -1628,7 +1628,7 @@
      "answer": "slice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.\nslice (Associate Product Manager): CTC 28,00,000 INR: Bonds: No; Base Salary: 22,00,000; Bond Amount: 0; CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs; 1st Year CTC: 28,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 22,00,000.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.6,
+     "seconds": 3.6,
      "failed": []
     }
    ],
@@ -1650,7 +1650,7 @@
      "answer": "Nothing due tomorrow (Sun 22 Nov) in the ERP data (last checked Sat 21 Nov 17:32).",
      "model": "rules",
      "route": "fact",
-     "seconds": 3.6,
+     "seconds": 3.3,
      "failed": []
     },
     {
@@ -1674,7 +1674,7 @@
      "answer": "Nothing due on Mon 23 Nov in the ERP data (last checked Sat 21 Nov 17:32).",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.6,
+     "seconds": 3.4,
      "failed": []
     }
    ],
@@ -1695,7 +1695,7 @@
      "answer": "Groww (Associate Product Manager): no CG cut-off given; backlogs: No Backlogs; the rest can't be checked until your department and degree are on the Profile page.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.7,
+     "seconds": 3.5,
      "failed": []
     },
     {
@@ -1712,10 +1712,10 @@
       ]
      },
      "status": 200,
-     "answer": "Groww (Associate Product Manager): no CG cut-off given; backlogs: No Backlogs; the rest can't be checked until your department and degree are on the Profile page.\n\n(Gemini busy: answered from your ERP data by rules, not by the model.)",
-     "model": "rules",
-     "route": "open",
-     "seconds": 10.3,
+     "answer": "Add your department and degree on the Profile page to check eligibility for Groww (Associate Product Manager).",
+     "model": "gemini-3.1-flash-lite",
+     "route": "",
+     "seconds": 6.7,
      "failed": []
     }
    ],
@@ -1736,7 +1736,7 @@
      "answer": "I don't have any notice for Harness in the ERP data.\nYou haven't applied to the Harness role.",
      "model": "rules",
      "route": "fact",
-     "seconds": 3.8,
+     "seconds": 4.0,
      "failed": []
     },
     {
@@ -1755,7 +1755,7 @@
      "answer": "No open deadline for Harness in the ERP data (last checked Sat 21 Nov 17:32).\nHarness (Software Engineer I): closed Wed 14 Oct 12:00 (already passed).",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.4,
+     "seconds": 4.2,
      "failed": []
     }
    ],
@@ -1776,7 +1776,7 @@
      "answer": "slice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.\nslice (Associate Product Manager): CTC 28,00,000 INR: Bonds: No; Base Salary: 22,00,000; Bond Amount: 0; CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs; 1st Year CTC: 28,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 22,00,000.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.4,
+     "seconds": 4.4,
      "failed": []
     },
     {
@@ -1795,7 +1795,7 @@
      "answer": "slice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.7,
+     "seconds": 3.4,
      "failed": []
     }
    ],
@@ -1816,7 +1816,7 @@
      "answer": "- Update - Eternal test: time moved from Thu 19 Nov 19:00 to Thu 19 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Eternal test room list (Product Analyst, Assistant Program Manager). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121. Check your ma… (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.6,
+     "seconds": 3.4,
      "failed": []
     },
     {
@@ -1835,7 +1835,7 @@
      "answer": "- Update - Eternal test: time moved from Thu 19 Nov 19:00 to Thu 19 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Eternal test room list (Product Analyst, Assistant Program Manager). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121. Check your ma… (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.6,
+     "seconds": 4.1,
      "failed": []
     }
    ],
@@ -1857,7 +1857,7 @@
      "answer": "Eternal (Software Development Engineer I): CTC 59,00,000 INR: Bonds: No; Base Salary: 24,00,000; Bond Amount: 0; CTC Breakup: FTE Compensation Structure  Total 59 L | Base  24 L | Yearly Cash Bonus  35 L (1st year: 5 L | 2nd year: 10 L | 3rd year: 10 L | 4th year: 10 L); 1st Year CTC: 29,00,000; Gross (per Annum): 24,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 24,00,000.\nEternal (Product Analyst): CTC 47,00,000 INR: Bonds: No; Base Salary: 21,00,000; Bond Amount: 0; CTC Breakup: FTE Compensation Structure  Total 47 L | Base  21 L | Yearly Cash Bonus  26 L (1st year: 3 L | 2nd year: 5 L | 3rd year: 8 L | 4th year: 10 L); 1st Year CTC: 24,00,000; Gross (per Annum): 21,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 21,00,000.\nEternal (Machine Learning Scientist): CTC 59,00,000 INR: Bonds: No; Base Salary: 24,00,000; Bond Amount: 0; CTC Breakup: FTE Compensation Structure  Total 59 L | Base  24 L | Yearly Cash Bonus  35 L (1st year: 5 L | 2nd year: 10 L | 3rd year: 10 L | 4th year: 10 L); 1st Year CTC: 29,00,000; Gross (per Annum): 24,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 24,00,000.\nEternal (Assistant Program Manager): CTC 17,00,000 INR: Bonds: No; Base Salary: 15,00,000; Bond Amount: 0; CTC Breakup: Fixed : 1500000 + Variable : 200000; 1st Year CTC: 17,00,000; Gross (per Annum): 17,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 15,00,000.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.4,
+     "seconds": 4.2,
      "failed": []
     },
     {
@@ -1875,7 +1875,7 @@
      "answer": "Close tonight 20:00 (in 2h 28m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2\n\nForms and submissions due in the next 7 days:\n- Axon Developers (MDs Office, Manager Strategy): form by Thu 26 Nov 17:00\n- Accenture Japan (Digital Consultant): test registration by Fri 27 Nov 23:59",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.6,
+     "seconds": 3.3,
      "failed": []
     }
    ],
@@ -1896,7 +1896,7 @@
      "answer": "Diageo (GBS MANAGEMENT TRAINEE): no bond (Bonds: No).",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.3,
+     "seconds": 3.4,
      "failed": []
     },
     {
@@ -1915,7 +1915,7 @@
      "answer": "Harness (Software Engineer I): no bond (Bonds: No).",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.5,
+     "seconds": 3.5,
      "failed": []
     }
    ],
@@ -1946,7 +1946,7 @@
      "answer": "Tests and lists today (Sat 21 Nov):\n- Groww test (Associate Product Manager) Sat 21 Nov 15:00. (earlier today, over)",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.5,
+     "seconds": 3.4,
      "failed": []
     },
     {
@@ -1971,7 +1971,7 @@
      "answer": "No other test today: that was the only one. 47 roles close at 20:00 today (in 1h 25m), 38 not applied (8 for you): Auro Group, Axis Bank, BlackBuck, Flipspaces Technology Labs, Waterfly Technologies +2 more.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.3,
+     "seconds": 3.6,
      "failed": []
     }
    ],
@@ -1988,7 +1988,7 @@
      "answer": "Nothing due tomorrow (Sun 22 Nov) in the ERP data (last checked Sat 21 Nov 17:32).",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.8,
+     "seconds": 3.3,
      "failed": []
     },
     {
@@ -2007,7 +2007,7 @@
      "answer": "Nothing else due tomorrow (Sun 22 Nov) (last checked Sat 21 Nov 17:32).",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.2,
+     "seconds": 3.5,
      "failed": []
     }
    ],
@@ -2028,7 +2028,7 @@
      "answer": "slice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.\nslice (Associate Product Manager): CTC 28,00,000 INR: Bonds: No; Base Salary: 22,00,000; Bond Amount: 0; CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs; 1st Year CTC: 28,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 22,00,000.",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.8,
+     "seconds": 3.5,
      "failed": []
     },
     {
@@ -2044,10 +2044,10 @@
       ]
      },
      "status": 200,
-     "answer": "I don't have a clear question for \"and?\". If you are asking about the bond status for slice, slice (Analyst) has no bond and slice (Associate Product Manager) has no bond.",
-     "model": "gemini-3.1-flash-lite",
-     "route": "",
-     "seconds": 5.1,
+     "answer": "slice (Analyst): CTC 25,00,000 INR: Bonds: No; Base Salary: 19,00,000; Bond Amount: 0; CTC Breakup: 19L base + 2L RB + 4L ESOPs; 1st Year CTC: 25,00,000; Gross (per Annum): 19,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 19,00,000.\nslice (Associate Product Manager): CTC 28,00,000 INR: Bonds: No; Base Salary: 22,00,000; Bond Amount: 0; CTC Breakup: 22L Fixed + 2L Retention Bonus + 4L ESOPs; 1st Year CTC: 28,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 0; Retention Bonus, if any: 2,00,000; Relocation Bonus, if any: 30,000; Fixed Take Home Salary (per Annum): 22,00,000.",
+     "model": "rules",
+     "route": "open",
+     "seconds": 5.6,
      "failed": []
     }
    ],
@@ -2064,7 +2064,7 @@
      "answer": "- Update - Eternal test: time moved from Thu 19 Nov 19:00 to Thu 19 Nov 19:15; you're now on the list. (over) · Nalanda Classroom Complex · your room: NR 121\n- You're on the Eternal test room list (Product Analyst, Assistant Program Manager). Test Thu 19 Nov 19:15, Nalanda Classroom Complex, room NR 121. Check your ma… (over)\n- You're on the Eternal shortlist (Product Analyst). Test Thu 19 Nov 19:15, Nalanda Classroom Complex. (over)",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.4,
+     "seconds": 4.0,
      "failed": []
     },
     {
@@ -2084,7 +2084,7 @@
      "answer": "👍",
      "model": "rules",
      "route": "ack",
-     "seconds": 2.2,
+     "seconds": 3.2,
      "failed": []
     }
    ],
@@ -2107,7 +2107,7 @@
      "answer": "Saved for this demo session: targets = \"product, consulting and analyst roles\". 91 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 2.8,
+     "seconds": 3.1,
      "failed": []
     },
     {
@@ -2118,10 +2118,10 @@
       ]
      },
      "status": 200,
-     "answer": "Your preferences (this demo session only): targets = \"product, consulting and analyst roles\"; reminders 2 h before; other roles listed separately: on; feed: only what fits you first; checks the ERP every hour; between 06:00 and 01:00 IST.",
+     "answer": "Your preferences (this demo session only): targets = \"product, consulting and analyst roles\"; reminders 2 h before; other roles listed separately: on; feed: only what fits you first; checks the ERP every hour; between 06:00 and 01:00 IST; hidden from For you: none.",
      "model": "rules",
      "route": "",
-     "seconds": 1.1,
+     "seconds": 2.1,
      "failed": []
     }
    ],
@@ -2142,7 +2142,7 @@
      "answer": "Saved for this demo session: targets = \"product roles\". 19 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 2.5,
+     "seconds": 3.2,
      "failed": []
     },
     {
@@ -2158,7 +2158,7 @@
      "answer": "Saved for this demo session: targets = \"product roles; also data scientist roles\". 74 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 2.4,
+     "seconds": 3.4,
      "failed": []
     }
    ],
@@ -2179,7 +2179,7 @@
      "answer": "Saved for this demo session: targets = \"product and analyst roles\". 79 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 2.6,
+     "seconds": 6.0,
      "failed": []
     },
     {
@@ -2195,7 +2195,7 @@
      "answer": "Saved for this demo session: targets = \"product and analyst roles; not SDE\". 102 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 2.4,
+     "seconds": 3.5,
      "failed": []
     }
    ],
@@ -2220,7 +2220,7 @@
      "answer": "Saved for this demo session: reminders 3 h before.",
      "model": "rules",
      "route": "",
-     "seconds": 1.4,
+     "seconds": 2.0,
      "failed": []
     }
    ],
@@ -2241,7 +2241,7 @@
      "answer": "Saved for this demo session: other roles listed separately: off.",
      "model": "rules",
      "route": "",
-     "seconds": 1.5,
+     "seconds": 2.0,
      "failed": []
     }
    ],
@@ -2260,10 +2260,10 @@
       ]
      },
      "status": 200,
-     "answer": "Saved for this demo session: targets = \"finance roles\". The roles will be re-marked at the next check (Gemini didn't answer in time).",
+     "answer": "Saved for this demo session: targets = \"finance roles\". 79 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 62.3,
+     "seconds": 4.4,
      "failed": []
     },
     {
@@ -2281,7 +2281,7 @@
      "answer": "Saved for this demo session: targets = \"product, consulting, business/data analyst and finance roles; not core software engineering\"; reminders 2 h before; other roles listed separately: on; feed: only what fits you first; checks the ERP every hour; between 06:00 and 01:00 IST. 82 of 197 roles are now for you.",
      "model": "rules",
      "route": "",
-     "seconds": 10.1,
+     "seconds": 3.5,
      "failed": []
     }
    ],
@@ -2303,7 +2303,7 @@
      "answer": "Close tonight 20:00 (in 2h 28m), Sat 21 Nov — 8 for you, 9 applied:\nFor you:\n- Auro Group — Data Analyst (apply with Analytics & Finance CV)\n- Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV)\n- BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV)\n- Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV)\n- Waterfly Technologies — Growth and Strategist (apply with Consulting CV)\n- Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV)\n- Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV)\n- YMS Financial — Quant Researcher (apply with Analytics & Finance CV)\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (30):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2",
      "model": "rules",
      "route": "fact",
-     "seconds": 2.5,
+     "seconds": 3.9,
      "failed": []
     },
     {
@@ -2314,10 +2314,10 @@
       ]
      },
      "status": 200,
-     "answer": "Your preferences (this demo session only): targets = \"product, consulting, business/data analyst and finance roles; not core software engineering\"; reminders 2 h before; other roles listed separately: on; feed: only what fits you first; checks the ERP every hour; between 06:00 and 01:00 IST.",
+     "answer": "Your preferences (this demo session only): targets = \"product, consulting, business/data analyst and finance roles; not core software engineering\"; reminders 2 h before; other roles listed separately: on; feed: only what fits you first; checks the ERP every hour; between 06:00 and 01:00 IST; hidden from For you: none.",
      "model": "rules",
      "route": "",
-     "seconds": 0.9,
+     "seconds": 3.0,
      "failed": []
     }
    ],
@@ -2340,7 +2340,7 @@
      "answer": "Saved for this demo session: targets = \"product roles\". 19 of 197 roles are now for you.\n\nClose tonight 20:00 (in 1h 25m), Sat 21 Nov — 0 for you, 9 applied:\nFor you:\n- none\nApplied:\n- Ather Energy — Product Ownership ✓ applied\n- Auro Group — Product Manager ✓ applied\n- Axon Developers — Manager Strategy ✓ applied\n- Axon Developers — MDs Office ✓ applied\n- Diageo — GBS MANAGEMENT TRAINEE ✓ applied\n- Lyskraft — APM ✓ applied\n- PhysicsWallah — Associate Product Manager (APM) ✓ applied\n- Searce — Associate Solutions Consultant ✓ applied\n- Waterfly Technologies — Management Consultant 1 ✓ applied\nOthers (38):\n- AiPrise — Software Engineer I\n- AiPrise — Software Engineer I, Full Stack (Frontend Focused)\n- AiPrise — Software Engineer II\n- AiPrise — Software Engineer II, Full Stack (Frontend Focused)\n- Astera Labs — Software Quality Assurance (SQA) Engineer\n- Ather Energy — Chief Engineer\n- Ather Energy — Data Office\n- Ather Energy — Hardware Pack Engineering\n- Ather Energy — System Intelligence\n- Auro Group — AI/ML Software Engineer\n- Auro Group — Back End Developer\n- Auro Group — Data Analyst\n- Auro Group — Frontend Developer\n- Auro Group — Full Stack Developer\n- Auro Group — Sales & Business Development\n- Axis Bank — BIU (Business Intelligence Unit)\n- BlackBuck — Associate Manager BlackBuck Leadership Program\n- Dassault Systemes — AI Engineer-Data Scientist-PG\n- Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG\n- Esri — Data Scientist I\n- Flipspaces Technology Labs — Entrepreneur-in-Residence\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer\n- Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer\n- LTM — Post-Graduate Engineer Trainee\n- Lyskraft — SDE - 1\n- MeltPlan — Software Engineer\n- Searce — Associate Cloud Engineer\n- Searce — Associate Data Engineer\n- Searce — Evlos AI Engineer\n- SLB — Datascientist\n- Swiggy — Data Scientist 1\n- Waterfly Technologies — Graduate Engineer 1\n- Waterfly Technologies — Graduate Engineer 2\n- Waterfly Technologies — Growth and Strategist\n- Waterfly Technologies — Managment Consultant 2\n- Xion Multiventures — Trainee Trader & Research Analyst\n- YMS Financial — Quant Researcher",
      "model": "rules",
      "route": "fact",
-     "seconds": 3.6,
+     "seconds": 5.8,
      "failed": []
     }
    ],

@@ -99,8 +99,10 @@ questions an hour). It can't start a run, read real rows, or reach the CV bucket
 | repeats merged | 177 notice messages became **162**: 15 repeats merged, 39 real changes sent as updates (29 deadline moves, 10 time changes), 0 unsure |
 | rooms re-read | **8 of 15** rooms saved earlier showed the neighbouring student's room (two students per line); fixed, and every run now re-reads saved rows |
 | AI fallback | the rules couldn't read 1 notice; Gemini read it right (Tata AIG, Senior Engineer Trainee - Analytics, 17 Nov 16:00) |
-| evals | held-out real notices **56 of 58 checks right (97%)**; development set 143 of 143 ([report](evals/PARSER_REPORT.md)); Ask Ping evals in [evals/ask_ping](evals/ask_ping/REPORT.md) |
-| runs to 22 Nov 06:28 IST | **33**: 25 succeeded, 7 failed (6 on the first day, before the login fixes; #14, a digest-key bug fixed in a95ce06), 1 cancelled. **Every run since #15 (19 in a row) succeeded**, the hourly ones started by Supabase's scheduler at 22:11, 23:11 and 00:11 IST overnight, none in the quiet hours (01:00-06:00) |
+| evals (all in [evals/REPORT.md](evals/REPORT.md)) | held-out real notices **56 of 58 checks right (97%)**, development set 143 of 143; Ask Ping **70 of 70** single questions and **21 of 21** conversations on the live function; typed into the live page: FACT 64 of 65 (median **16 ms**, no model), OPEN 5 of 5; "For you" precision 93% / recall 97% (main model), 90% / 99% (lighter model); placement mail 9 of 9; attachments 31 of 31; rules-only fallback 8 of 8 |
+| placement mail (22 Nov, last 14 days) | 374 mails, 59 placement mails read, 51 already on the ERP (marked "also mailed to you"), 8 mail-only; 315 never read past their headers ([coverage](evals/mail/REAL_COVERAGE.md)) |
+| speed (22 Nov, live) | Lighthouse mobile: landing 100 / 100 / 100, demo 91-96 / 100 / 100; demo chat on screen in 1.5-1.8 s on 4G with a phone's CPU; FACT questions answered in the page itself ([facts](docs/ONE_PAGER_FACTS.md)) |
+| runs to 22 Nov 06:28 IST | **33**: 25 succeeded, 7 failed (6 on the first day, before the login fixes; #14, a digest-key bug fixed in a95ce06), 1 cancelled. **Every run since #15 (19 in a row) succeeded**, the scheduled ones started by Supabase's scheduler at 22:11, 23:11 and 00:11 IST overnight; every tick in the quiet hours (01:00-06:00) answered "outside your hours" |
 
 ### Works, verified on the real ERP / real project
 - Login with security question and mailbox OTP, reading everything, logging out.
@@ -119,8 +121,9 @@ questions an hour). It can't start a run, read real rows, or reach the CV bucket
   notification is the owner's check (docs/PUSH.md).
 - **Company names the rules can't place.** 2 of 15 held-out notices: "JPMC" (JP MorganChase) and "ACCENTURE AEH".
   Ping asks "which company is that?" instead of guessing. Deliberately not tuned to the held-out set.
-- **The main model is often busy.** On 22 Nov gemini-flash-latest timed out or answered 503 on most OPEN questions;
-  the lighter model answered them (Ask Ping's OPEN answers take 16-19 s then). FACT questions never wait on a model.
+- **The main model, on the free tier.** On 22 Nov gemini-flash-latest timed out or answered 503, then the evals key's
+  daily quota for it ran out (429), so every eval answer that needed a model came from the lighter one; main-model
+  scores need a re-run after the quota resets (13:30 IST). OPEN answers took 7-19 s. FACT questions never wait on a model.
 - **Eligibility** says "not sure" for most roles until your profile has your department and degree.
 - **A brand-new real Supabase project.** One-command setup is tested against an empty Supabase-like database (real
   Postgres with Supabase's roles and rules) and walked end to end on it in the browser (setup/replica_walkthrough.py).

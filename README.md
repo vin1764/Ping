@@ -100,6 +100,7 @@ questions an hour). It can't start a run, read real rows, or reach the CV bucket
 | rooms re-read | **8 of 15** rooms saved earlier showed the neighbouring student's room (two students per line); fixed, and every run now re-reads saved rows |
 | AI fallback | the rules couldn't read 1 notice; Gemini read it right (Tata AIG, Senior Engineer Trainee - Analytics, 17 Nov 16:00) |
 | evals | held-out real notices **56 of 58 checks right (97%)**; development set 143 of 143 ([report](evals/PARSER_REPORT.md)); Ask Ping evals in [evals/ask_ping](evals/ask_ping/REPORT.md) |
+| runs to 22 Nov 06:28 IST | **33**: 25 succeeded, 7 failed (6 on the first day, before the login fixes; #14, a digest-key bug fixed in a95ce06), 1 cancelled. **Every run since #15 (19 in a row) succeeded**, the hourly ones started by Supabase's scheduler at 22:11, 23:11 and 00:11 IST overnight, none in the quiet hours (01:00-06:00) |
 
 ### Works, verified on the real ERP / real project
 - Login with security question and mailbox OTP, reading everything, logging out.
@@ -113,21 +114,16 @@ questions an hour). It can't start a run, read real rows, or reach the CV bucket
 - Chat tables applied to the real project from GitHub (Actions > Admin > apply-sql).
 
 ### Not working or not verified yet
-- **The hourly schedule hasn't fired once.** Every run so far was started by
-  hand; checked again at 13:23 IST, the 13:11 slot didn't run although GitHub
-  lists the workflow as active. See [What's left](#whats-left).
-- **Login refusals.** Between 05:26 and 05:37 IST the ERP refused 5 Log Ins in
-  a row after a valid OTP, with no message; it worked again at 12:05. Cause
-  unknown (maybe too many OTPs in a short time while testing). This counts as
-  normal ERP behaviour: Ping retries Log In once, then tries again at the next
-  hourly run (see [When Ping needs you](#when-ping-needs-you)).
-- **Company names the rules can't place.** 2 of 15 held-out notices: "JPMC"
-  (JP MorganChase) and "ACCENTURE AEH". Ping asks "which company is that?"
-  instead of guessing. Deliberately not tuned to the held-out set.
-- **Eligibility** says "not sure" for most roles until your profile has your
-  department and degree (the Profile page).
-- **One-command setup** was tested against an empty Supabase-like database
-  (real Postgres with Supabase's rules), not yet a brand-new real project.
+- **A real phone.** Install and push were verified headless (manifest, service worker, a push delivered to the
+  service worker, an encrypted request that decrypts to the payload, the VAPID token); a tap on a real phone's
+  notification is the owner's check (docs/PUSH.md).
+- **Company names the rules can't place.** 2 of 15 held-out notices: "JPMC" (JP MorganChase) and "ACCENTURE AEH".
+  Ping asks "which company is that?" instead of guessing. Deliberately not tuned to the held-out set.
+- **The main model is often busy.** On 22 Nov gemini-flash-latest timed out or answered 503 on most OPEN questions;
+  the lighter model answered them (Ask Ping's OPEN answers take 16-19 s then). FACT questions never wait on a model.
+- **Eligibility** says "not sure" for most roles until your profile has your department and degree.
+- **A brand-new real Supabase project.** One-command setup is tested against an empty Supabase-like database (real
+  Postgres with Supabase's roles and rules) and walked end to end on it in the browser (setup/replica_walkthrough.py).
 
 ### Known ways it can break
 - The ERP changes a page. The run stops ("page changed") and emails you.

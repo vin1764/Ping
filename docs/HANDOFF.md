@@ -16,6 +16,7 @@ Every check below was run against the live site after the last deploy.
 | Reply to a message | Swipe / long-press / arrow / right-click, quote in the bubble, tap → original flashes; the quoted message is the topic | `setup/reply_check.js` (live, model on and off: 0 problems), `tests/js/reply.test.js` |
 | Forms smart + **dedupe fix** | One posting = one row; merged silently (same notice / mail / form link / companies + purpose + same-or-later deadline); no merge prompts; ticks carried. Live: 25 rows, notice 1815 = 1 row (11 companies), 0 prompts, 0 duplicates | `tests/test_forms.py`, `evals/forms/REPORT.md` (15/15), Admin > `forms-report` |
 | Ask Ping evals (quota reset) | 70/70 single, 21/21 conversations (39/39 turns); all 44 calls on the evals key, 0 on live; main model only n/a (busy every time) | `evals/ask_ping/REPORT.md` |
+| View demo restored | Under the sign-in again (owner sign-in unchanged); own session key; can't read or write your profile (live: profile write → 403, 0 real rows readable); demo refed with today's code (27 forms, 0 duplicates, 0 prompts); sign-in-limit fallback opens the snapshot | `setup/demo_isolation_check.py`, `setup/view_demo_walkthrough.js` (live, 0 problems) |
 | Visual polish | Bubble mark everywhere, accent #0d6b61, warm dark mode, red only < 1 h / past due, finishing details; contrast ≥ 5.3:1 | `docs/screenshots/logo/`, `docs/screenshots/polish/{before,after}/`, PWA check 0 problems |
 
 ## For you to do

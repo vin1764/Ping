@@ -2,38 +2,27 @@
 
 Each fixture persona's roles are marked by the classifier in one call with that persona's targets text (`personas.json`), and compared with labels that are correct for that text (`cases.json`). Re-run: Actions > Admin > `relevance-evals`.
 
-| persona | targets | roles | precision of "For you" | recall of "For you" | best CV right | not answered |
-|---|---|---|---|---|---|---|
-| demo | product, consulting, business/data analyst and finance roles; not core software engineering | 201 | **79%** (77 of 98) | **99%** (77 of 78) | **95%** (73 of 77) | 0 |
-| core-software | software engineering roles: backend, frontend, full-stack and SDE; not data science, machine learning, product management, consulting, analyst, finance or core (non-software) engineering roles | 48 | **100%** (28 of 28) | **100%** (28 of 28) | n/a (no CVs) | 0 |
+| persona | targets | roles | precision of "For you" | recall of "For you" | best CV right | not answered | model that answered |
+|---|---|---|---|---|---|---|---|
+| demo | product, consulting, business/data analyst and finance roles; not core software engineering | 201 | **90%** (76 of 84) | **99%** (76 of 77) | **92%** (70 of 76) | 1 | gemini-flash-lite-latest (200) |
+| core-software | software engineering roles: backend, frontend, full-stack and SDE; not data science, machine learning, product management, consulting, analyst, finance or core (non-software) engineering roles | 48 | **100%** (28 of 28) | **100%** (28 of 28) | n/a (no CVs) | 0 | gemini-flash-lite-latest (48) |
 
 ## Disagreements
 
 | persona | company | role | label | classifier | classifier's reason |
 |---|---|---|---|---|---|
-| demo | Airbus India Private Limited | Associate Engineer Industrialisation_Robotics and Data Analytics_PG | not | for you | Data analytics role for industrial challenges |
-| demo | Arihant Capital Markets Limited | Data Scientist / ML Engineer | not | for you | Data science role fits data analyst preference |
-| demo | Arihant Capital Markets Limited | Trading & WealthTech | CV: Analytics & Finance CV | CV: Product CV | AI product manager role fits product preference |
-| demo | Ather Energy | Data Office | not | for you | Data science and ML role |
-| demo | Ather Energy | Product Ownership | for you | not | Manufacturing leadership program, not PM |
-| demo | Auro Group(www.AuroIM.com) | Sales & Business Development | not | for you | Business development role fits consulting/business track |
+| demo | Accordion India | Data & AI Analyst 2 | CV: Analytics & Finance CV | CV: Product CV | Business requirements analysis and analytical projects |
+| demo | Airbus India Private Limited | Associate Engineer Industrialisation_Robotics and Data Analytics_PG | not | for you | Data analytics applied to industrial operations |
+| demo | Arihant Capital Markets Limited | Customer Data Analytics & Engagement Specialist (CleverTap) | CV: Analytics & Finance CV | CV: Product CV | Customer data analytics and engagement role |
+| demo | Arihant Capital Markets Limited | Trading & WealthTech | CV: Analytics & Finance CV | CV: Product CV | AI product manager role |
+| demo | Ather Energy | Product Ownership | for you | not | Product ownership technical rotational program |
+| demo | AXON DEVELOPERS | Manager Strategy | CV: Consulting CV | CV: Product CV | Manager strategy focusing on process automation and AI |
 | demo | Cars24 | Data Science | not | for you | Data science role |
-| demo | Collins Aerospace | PGET - IP & Technology Research Analyst | not | for you | IP and technology research analyst role |
-| demo | DB | Analyst | CV: Analytics & Finance CV | CV: Consulting CV | Investment banking and corporate support analyst role |
-| demo | ESRI | Data Scientist I | not | for you | Data scientist role |
-| demo | EXL Service | Analytics - Consultant I | CV: Consulting CV | CV: Analytics & Finance CV | Analytics consultant role |
-| demo | EY Global Delivery Services India LLP | Senior Analyst - Data Scientist | not | for you | Data scientist role |
-| demo | FischerJordan | Sr. Analyst | CV: Analytics & Finance CV | CV: Consulting CV | Senior analyst client consulting role |
-| demo | INFO EDGE INDIA LIMITED | Data Scientist | not | for you | Data scientist role |
-| demo | KLA | Product Applications Engineer | not | for you | Product applications and client-facing technical consulting role |
-| demo | Moneyview Ltd | Data Scientist | not | for you | Data scientist role |
-| demo | Nation with Namo | Associate | not | for you | Graduate impact leadership program associate role |
-| demo | Navi Limited | Data Scientist I, Navi | not | for you | Data scientist role |
-| demo | NoBroker.com | Associate Data Scientist | not | for you | Associate data scientist role |
-| demo | Purplle | ALDI Graduate Engineering Trainee | not | for you | Accelerated leadership development management trainee role |
-| demo | Searce Inc. | Associate Data Engineer | not | for you | Data engineer role |
-| demo | SLB | Datascientist | not | for you | Data scientist role |
-| demo | Swiggy Limited | Data Scientist 1 | not | for you | Data scientist role |
-| demo | Telus Digital | Associate Project Manager | not | for you | Associate project manager product role |
-| demo | Tredence Analytics | DATA SCIENTIST | not | for you | Data scientist analytics role |
-| demo | Urban Company | Senior Category Manager | not | for you | Senior category manager general management role |
+| demo | Collins Aerospace | PGET - IP & Technology Research Analyst | not | for you | IP and technology research and strategy analyst |
+| demo | EXL Service | Analytics - Consultant I | CV: Consulting CV | CV: Analytics & Finance CV | Analytics consultant solving business problems |
+| demo | FischerJordan | Sr. Analyst | CV: Analytics & Finance CV | CV: Consulting CV | Senior analyst consulting with clients and providing recommendations |
+| demo | KLA | Product Applications Engineer | not | for you | Product applications engineer bridging technical and customer roles |
+| demo | Nation with Namo | Associate | not | for you | Graduate leadership program associate role |
+| demo | Purplle | ALDI Graduate Engineering Trainee | not | for you | Accelerated leadership development trainee role |
+| demo | Telus Digital | Associate Project Manager | not | for you | Associate project manager role |
+| demo | Urban Company | Senior Category Manager | not | for you | Senior category manager handling operations and strategy |

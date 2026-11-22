@@ -46,7 +46,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.href === CDN) { e.respondWith(caches.match(CDN).then((r) => r || fetch(req))); return; }
   if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return;
-  if (url.pathname.endsWith("/demo-data.json")) { e.respondWith(data(req)); return; }
+  if (url.pathname.endsWith("/demo-data.json") || url.pathname.endsWith("/demo-details.json")) { e.respondWith(data(req)); return; }
   if (req.mode === "navigate") { e.respondWith(shell(req, "index.html")); return; }
   e.respondWith(shell(req));
 });

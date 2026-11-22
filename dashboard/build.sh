@@ -32,7 +32,17 @@ for r in d.get("roles", []):
         lists.append(r.get("allowed"))
     r["allowed"] = index[key]
 d["allowed_lists"] = lists
+# the roles' JD text, pay details and JD summaries (two thirds of the file) go in a second file the page fetches after
+# the chat is on screen; the role sheet and the questions that need them wait for it (app.js demoDetails)
+HEAVY = ("jd_text", "job_description", "more_details", "jd_summary", "selection_details")
+details = {}
+for r in d.get("roles", []):
+    got = {k: r.pop(k) for k in HEAVY if k in r}
+    if got:
+        details[str(r["id"])] = got
+d["details_file"] = "demo-details.json"
 open("_site/demo-data.json", "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+open("_site/demo-details.json", "w", encoding="utf-8").write(json.dumps(details, ensure_ascii=False, separators=(",", ":")))
 PY
 python3 - <<'PY'
 import json, os

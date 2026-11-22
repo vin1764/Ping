@@ -118,7 +118,7 @@
       if (it) { it.level = "hidden"; it.title = fix.ignore ? "Marked not relevant." : `Noted: it's about ${fix.company}.`; }
     }
     async checkNow() { return "Demo mode: this would start a real run on GitHub. Nothing was started."; }
-    async ask(q) { return answerLocally(q, this.d); }
+    async ask(q) { if (state.details) { state.startDetails?.(); await state.details; } return answerLocally(q, this.d); }
     async chat() { return store.get("ping-demo-chat", []); }
     async addChat(m) { store.set("ping-demo-chat", [...store.get("ping-demo-chat", []), m].slice(-500)); }
     async readAt() { return store.get("ping-demo-read", null); }
@@ -306,11 +306,21 @@
     window.PING_DEMO_DATA = null;
     const data = early || await (await fetch("demo-data.json", { cache: "no-store" })).json();
     state.src = new DemoSource(unpackDemo(data));
+    // the roles' JD text, pay details and JD summaries: fetched once the chat is on screen, merged into the same role
+    // objects; the role sheet and local answers wait for them (demoDetails)
+    if (data.details_file) {
+      let go; const started = new Promise((r) => { go = r; });
+      state.details = started.then(() => fetch(data.details_file, { cache: "no-store" })).then((r) => r.json()).then((det) => {
+        for (const r of data.roles || []) if (det[r.id]) Object.assign(r, det[r.id]);
+      }).catch(() => {});
+      state.startDetails = go;
+    }
     $("#mode-badge").replaceChildren("Demo", h("span", { class: "long" }, DEMO_CHIP.replace(/^Demo/, "")));
     $("#mode-badge").title = "Anonymised snapshot of a real run, no login";
     $("#mode-badge").hidden = false;
     if (!noBackend) state.exit = { label: "Exit demo", run: () => { location.href = location.pathname; } };
     await afterStart();
+    if (state.startDetails) requestAnimationFrame(() => setTimeout(state.startDetails, 0));   // after the first paint
   }
 
   async function startOffline(snap) {
@@ -1404,7 +1414,9 @@
     btn.replaceChildren(h("span", { class: "wait", "aria-hidden": "true" }, "…"));
     const t0 = performance.now();
     const mine = { role: "me", text: q, created_at: new Date().toISOString() };
-    // a FACT question: answered at once from the page's own data, no typing bubble
+    // a FACT question: answered at once from the page's own data, no typing bubble (in the demo, once the roles'
+    // details are in: they arrive within a second of opening)
+    if (state.details) { state.startDetails?.(); await state.details; }
     const local = localFact(q);
     if (local.text) {
       state.chat.push(mine);
@@ -1768,6 +1780,11 @@
 
   // the role sheet: everything Ping knows about one role (a bottom sheet on phones, a side panel on desktop)
   function openRole(r) {
+    if (state.details && !state.detailsIn) {           // the demo's JD and pay details: fetched after the first paint
+      state.startDetails?.();
+      state.details.then(() => { state.detailsIn = true; openRole(r); });
+      return;
+    }
     const sheet = $("#sheet");
     const kv = (rows) => { rows = rows.filter(([, v]) => v != null && v !== "" && v !== false);
       return rows.length ? h("dl", { class: "kv" }, rows.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])) : null; };

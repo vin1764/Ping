@@ -651,6 +651,28 @@ def prefs_report(secrets) -> int:
     return 0
 
 
+def forms_report(secrets) -> int:
+    """The forms list as stored (read-only): rows, rows for several companies, merge prompts left (should be 0),
+    pending merge choices, ticks and whether each tick's row exists, and the row(s) of notice 1815."""
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    rows = store.select("forms", {"is_sample": "is.false"})
+    keys = {r["key"] for r in rows}
+    ticks = [t for t in store.select("form_status", {"is_demo": "is.false"}) if t.get("filled")]
+    say(f"forms rows: {len(rows)}; for several companies: {sum(1 for r in rows if len(r.get('companies') or []) > 1)}; "
+        f"rows with a merge prompt: {sum(1 for r in rows if r.get('looks_like'))}; pending merge choices: {len(store.select('form_merges', {'is_demo': 'is.false'}))}")
+    say(f"ticks: {len(ticks)}, on rows that exist: {sum(1 for t in ticks if t['form_key'] in keys)}")
+    for r in rows:
+        if any(s.get("id") == "1815" for s in r.get("sources") or []):
+            say(f"notice 1815 -> row {r['key']}: {len(r.get('companies') or [])} companies, due {r.get('due_at')}, "
+                f"{len(r.get('sources') or [])} sources, {len(r.get('deadline_history') or [])} deadline moves")
+    sig = {}
+    for r in rows:
+        sig.setdefault((frozenset(c.lower() for c in r.get("companies") or []), r.get("purpose"), r.get("due_at")), []).append(r["key"])
+    dup = {k: v for k, v in sig.items() if len(v) > 1}
+    say(f"rows with the same companies, purpose and deadline: {sum(len(v) for v in dup.values())} in {len(dup)} groups")
+    return 0
+
+
 def live_page(secrets) -> int:
     """Live updates on the published dashboard (setup/live_page_test.py): a new message appears without a reload,
     the scroll rules, the demo's Check now, catching up without the socket, and the row rules on the Realtime
@@ -1239,7 +1261,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

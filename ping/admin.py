@@ -705,6 +705,18 @@ def auth_sessions(secrets) -> int:
             ORDER BY timestamp DESC LIMIT 500""", hours=24 * 7)
         if rows or not _logs.last_error:
             break
+    if not rows:
+        # nothing matched: look at what the auth log holds at all (the last 24 h; the logs API keeps a short window
+        # on the free plan), under either source name
+        for src in ("auth_logs", "auth"):
+            for col in ("source", "source_name"):
+                rows = _logs(ref, token, f"SELECT timestamp, event_message FROM logs WHERE {col} = '{src}' "
+                                         "ORDER BY timestamp DESC LIMIT 300", hours=24)
+                if rows:
+                    say(f"(auth events found under {col} = '{src}', last 24 h)")
+                    break
+            if rows:
+                break
     counts: dict[str, int] = {}
     lines = []
     for r in rows:

@@ -599,6 +599,119 @@ def functions_check(secrets) -> int:
     return 0
 
 
+def _model_tally(events: list[dict]) -> dict:
+    """Per model: calls, answers, and why the rest failed, from the 'tried' lists ("model:429:300ms",
+    "model:TimeoutError:10000ms", "model:empty(MAX_TOKENS)") of the answered / no_answer events."""
+    out: dict = {}
+    for ev in events:
+        tried = ev.get("tried") or []
+        seen = []
+        for t in tried:
+            parts = str(t).split(":")
+            model, what = parts[0], parts[1] if len(parts) > 1 else "?"
+            m = out.setdefault(model, {"calls": 0, "answered": 0, "why": {}})
+            if what.startswith("empty("):          # a 200 with no text: that call didn't answer
+                m["answered"] -= 1
+                m["why"]["empty"] = m["why"].get("empty", 0) + 1
+                continue
+            m["calls"] += 1
+            seen.append(model)
+            if what == "200":
+                m["answered"] += 1
+            else:
+                key = "timeout" if "Timeout" in what or "Abort" in what else what
+                m["why"][key] = m["why"].get(key, 0) + 1
+        # a 200 whose answer was then thrown away (a made-up number) still counts as the model answering
+    return out
+
+
+def chat_diagnose(secrets) -> int:
+    """Reads only. (1) the latest chat message with 'relevant' in it (24 h): its time, the message it replied to, Ping's
+    answer, and the ask-ping requests and log lines around it; (2) per model, on the live key and on the evals key:
+    calls, answers and failures in the last 24 h."""
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    if not token:
+        say("SUPABASE_ACCESS_TOKEN is not set in the repo secrets")
+        return 2
+    ref = sa.project_ref(secrets.supabase_url)
+    hdr = {"Authorization": f"Bearer {token}"}
+    fns = requests.get(f"{API}/v1/projects/{ref}/functions", headers=hdr, timeout=30).json()
+    ask_id = next((f.get("id") for f in fns if f.get("slug") == "ask-ping"), None) if isinstance(fns, list) else None
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    from datetime import timedelta, timezone
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    msgs = store.select("chat_messages", {"created_at": f"gte.{since}", "order": "created_at.asc"},
+                        columns="role,text,created_at,reply_quote,owner_id")
+    me = [m for m in msgs if m.get("role") == "me" and re.search(r"relevan", m.get("text") or "", re.I)]
+    at = None
+    if me:
+        m = me[-1]
+        at = datetime.fromisoformat(m["created_at"].replace("Z", "+00:00"))
+        nxt = next((x for x in msgs if x.get("role") == "ping" and x.get("owner_id") == m.get("owner_id")
+                    and x["created_at"] > m["created_at"]), None)
+        say(f"the message: {_when(m['created_at'])} {m['text']!r}")
+        say(f"  replying to: {str(m.get('reply_quote') or '(not a reply)')[:200]}")
+        if nxt:
+            say(f"  Ping's answer ({_when(nxt['created_at'])}), first 600 chars:\n    " + nxt["text"][:600].replace("\n", "\n    "))
+    else:
+        say("no chat message with 'relevant' in the last 24 h")
+    edge = _logs(ref, token, f"""
+        SELECT timestamp, log_attributes['response.status_code'] AS status, log_attributes['execution_time_ms'] AS ms,
+               log_attributes['version'] AS version
+        FROM logs WHERE source = 'function_edge_logs' AND log_attributes['function_id'] = '{ask_id}'
+        ORDER BY timestamp DESC LIMIT 1000""", hours=24)
+    lines = _logs(ref, token, f"""
+        SELECT timestamp, event_message FROM logs
+        WHERE source = 'function_logs' AND log_attributes['function_id'] = '{ask_id}'
+        ORDER BY timestamp DESC LIMIT 5000""", hours=24)
+
+    def ts(x):
+        v = float(x.get("timestamp") or 0)
+        return datetime.fromtimestamp(v / 1e6 if v > 1e14 else v / 1e3, timezone.utc)
+    if at:
+        say("\nask-ping requests within 3 min of it (HTTP status, time):")
+        for x in sorted(edge, key=ts):
+            if abs((ts(x) - at).total_seconds()) <= 180:
+                say(f"  {_when(x['timestamp'])} HTTP {x.get('status')} in {x.get('ms')} ms (version {x.get('version')})")
+        say("ask-ping log lines within 3 min of it:")
+        for x in sorted(lines, key=ts):
+            if abs((ts(x) - at).total_seconds()) <= 180:
+                say(f"  {_when(x['timestamp'])} {' '.join(str(x.get('event_message') or '').split())[:500]}")
+    codes: dict = {}
+    for x in edge:
+        codes[str(x.get("status"))] = codes.get(str(x.get("status")), 0) + 1
+    say(f"\nask-ping HTTP statuses, last 24 h: {dict(sorted(codes.items()))}")
+    evs = []
+    for x in lines:
+        try:
+            ev = json.loads(str(x.get("event_message") or "").strip())
+        except ValueError:
+            continue
+        if isinstance(ev, dict):
+            evs.append(ev)
+    for key in ("live", "evals"):
+        mine = [e for e in evs if e.get("event") in ("answered", "no_answer") and e.get("key") == key]
+        by = {}
+        for e in mine:
+            k = e.get("model") if e.get("event") == "answered" else "no answer"
+            by[k] = by.get(k, 0) + 1
+        say(f"\n{key} key: {len(mine)} answers in 24 h, answered by: {by}")
+        for model, t in sorted(_model_tally(mine).items()):
+            rate = f"{100 * t['answered'] / t['calls']:.0f}%" if t["calls"] else "n/a"
+            say(f"  {model}: {t['calls']} calls, {t['answered']} answered ({rate}); failures: {t['why']}")
+    errs: dict = {}
+    for e in evs:
+        if e.get("event") == "gemini_error":
+            k = (e.get("model"), e.get("status"))
+            errs[k] = errs.get(k, 0) + 1
+    say(f"\nGemini error responses, both keys, 24 h (model, HTTP status: count): {errs}")
+    for e in evs:
+        if e.get("event") == "gemini_error":
+            say(f"  e.g. {e.get('model')} {e.get('status')}: {str(e.get('body'))[:300]}")
+            break
+    return 0
+
+
 def ask_ping_page(secrets) -> int:
     """The live page's checks (setup/ask_ping_page_test.py), then every single-question eval typed into the page
     (setup/ask_ping_page_evals.py: who answered, time to the reply on screen, the checks), written to
@@ -1263,7 +1376,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
              "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

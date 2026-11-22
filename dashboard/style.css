@@ -719,6 +719,7 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 
 /* onboarding: the CV step's controls inside the bubble */
 .onb-q .onb-actions { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: var(--s2); }
+.msg.item .choose { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
 .onb-q .onb-upload { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 .onb-q .onb-upload input#onb-cv-label { flex: 1 1 160px; min-width: 0; }
 .onb-q .onb-label { width: 100%; font-size: var(--t-sm); color: var(--muted); }

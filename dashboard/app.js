@@ -1774,6 +1774,10 @@
       // "check the list yourself" / "couldn't read it": the list itself, right there (opens the ERP in the browser)
       listLink(it) ? h("div", { class: "mail-link" }, h("a", { href: listLink(it), target: "_blank", rel: "noopener",
         onclick: (ev) => ev.stopPropagation() }, "Open list ↗")) : null,
+      // "Which company is that? Tap to choose.": the choices are on the message, not under Details
+      it.needs_review && it.level !== "hidden" && !past && d.candidates?.length ? h("div", { class: "onb-actions choose", role: "group", "aria-label": "Which company" },
+        d.candidates.map((c) => h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { company: c }); } }, c)),
+        h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { ignore: true }); } }, "None of these")) : null,
       h("div", { class: "foot" }, h("span", { class: "expand" }, open ? "Less ▴" : "Details ▾"), h("span", { class: "time" }, clock(at))));
     const toggle = (ev) => {
       if (ev.target.closest("a, button, .more, summary, details")) return;
@@ -1924,11 +1928,6 @@
       !isPast(it) ? h("button", { type: "button", onclick: () => toggleDone(it) }, it.done ? "Undo done" : "Mark done") : null,
     ];
     const more = h("div", { class: "more" }, lines, h("div", { class: "links" }, links));
-    if (it.needs_review && it.level !== "hidden") {
-      more.append(h("div", { class: "links" }, "It's about:",
-        (d.candidates || []).map((c) => h("button", { type: "button", onclick: () => fix(it, { company: c }) }, c)),
-        h("button", { type: "button", onclick: () => fix(it, { ignore: true }) }, "none of these")));
-    }
     return more;
   }
 

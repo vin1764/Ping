@@ -70,7 +70,7 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026; updated 22 N
 | "For you" marks for the page | 2.4 s (197 roles, from the cache) | live call, 21 Nov 14:34 UTC |
 | preference change incl. re-marking 197 roles in one Gemini call | 30.2 s | live call, 21 Nov 14:34 UTC |
 
-## Performance (22 Nov 07:20 IST, live site, build 53ed8f7)
+## Performance (22 Nov 07:12 IST, live site, build 53ed8f7)
 
 | what | value | source |
 |---|---|---|

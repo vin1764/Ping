@@ -1,6 +1,6 @@
 # Forms evals
 
-Run Mon 23 Nov 04:27 IST. **17/17 postings** land in the right form with the right deadline, history, sources, closed / sign-in state and 'looks like' offer; reposts in the chat: 2/2 are one 'deadline extended' line on the existing message (no new message).
+Run Mon 23 Nov 05:00 IST. **17/17 postings** land in the right form with the right deadline, history, sources, closed / sign-in state and 'looks like' offer; reposts in the chat: 2/2 are one 'deadline extended' line on the existing message (no new message).
 
 Form pages read: {'followed': 4, 'read': 9, 'cached': 4, 'closed': 1, 'signin': 1, 'errors': 0}.
 

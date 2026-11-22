@@ -213,7 +213,7 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                 if pdf_yes:
                     title = f"You're on the {company} {what}{label_s}.{' Test' + ev if ev else ''}{venue}{room}.{mail}"
                 elif t_status == "no":
-                    # never "you're not on it": Ping only says it couldn't find your roll number, in a file it read
+                    # never an absence ("not on it"): Ping only says it couldn't find your roll number, in a file it read
                     # in full, and asks you to look yourself (the message links the list and says when it was read)
                     posted = f" (posted {fmt_when(_dt(n.get('notice_time')), now)})" if n.get("notice_time") else ""
                     if under is not None:

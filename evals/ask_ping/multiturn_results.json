@@ -1,0 +1,328 @@
+{
+ "at": "2026-11-22T09:09:36.480Z",
+ "url": "https://vin1764.github.io/ping-dashboard/",
+ "results": [
+  {
+   "id": "M1",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "check firstclub",
+     "expected": "fact",
+     "text": "No open deadline for FirstClub in the ERP data (last checked Sat 21 Nov 18:04). FirstClub (Product Management): closed Fri 13 Nov 14:00 (already passed). Last FirstClub notice: \"Urgent\", Sat 14 Nov 23:29. You applied to: Product Management.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "check again",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M2",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "check firstclub",
+     "expected": "fact",
+     "text": "No open deadline for FirstClub in the ERP data (last checked Sat 21 Nov 18:04). FirstClub (Product Management): closed Fri 13 Nov 14:00 (already passed). Last FirstClub notice: \"Urgent\", Sat 14 Nov 23:29. You applied to: Product Management.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "check erp for latest updates, don't answer on old data",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M3",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "firstclub shortlist?",
+     "expected": "fact",
+     "text": "No FirstClub shortlist or result that names you or leaves you out in the data.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "I got a call, I think I'm there",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M4",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "what's due tonight",
+     "expected": "fact",
+     "text": "Close tonight 20:00 (in 1h 55m), Sat 21 Nov — 8 for you, 9 applied: For you: Auro Group — Data Analyst (apply with Analytics & Finance CV) Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV) BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV) Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV) Waterfly Technologies — Growth and Strategist (apply with Consulting CV) Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV) Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV) YMS Financial — Quant Researcher (apply with Analytics & Finance CV) Applied: Ather Energy — Product Ownership ✓ applied Auro Group — Product Manager ✓ applied Axon Developers — Manager Strategy ✓ applied Axon Developers — MDs Office ✓ applied Diageo — GBS MANAGEMENT TRAINEE ✓ applied Lyskraft — APM ✓ applied PhysicsWallah — Associate Product Manager (APM) ✓ applied Searce — Associate Solutions Consultant ✓ applied Waterfly Technologies — Management Consultant 1 ✓ applied Others (30): AiPrise — Software Engineer I AiPrise — Software Engineer I, Full Stack (Frontend Focused) AiPrise — Software Engineer II AiPrise — Software Engineer II, Full Stack (Frontend Focused) Astera Labs — Software Quality Assurance (SQA) Engineer Ather Energy — Chief Engineer Ather Energy — Data Office Ather Energy — Hardware Pack Engineering Ather Energy — System Intelligence Auro Group — AI/ML Software Engineer Auro Group — Back End Developer Auro Group — Frontend Developer Auro Group — Full Stack Developer Auro Group — Sales & Business Development Dassault Systemes — AI Engineer-Data Scientist-PG Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG Esri — Data Scientist I Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer LTM — Post-Graduate Engineer Trainee Lyskraft — SDE - 1 MeltPlan — Software Engineer Searce — Associate Cloud Engineer Searce — Associate Data Engineer Searce — Evlos AI Engineer SLB — Datascientist Swiggy — Data Scientist 1 Waterfly Technologies — Graduate Engineer 1 Waterfly Technologies — Graduate Engineer 2",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "and groww?",
+     "expected": "fact",
+     "text": "No open deadline for Groww in the ERP data (last checked Sat 21 Nov 18:04). Groww (Associate Product Manager): closed Mon 16 Nov 16:00 (already passed). Last Groww notice: \"Additional requirement\", Fri 20 Nov 00:36. You applied to: Associate Product Manager.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M5",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "groww ctc",
+     "expected": "fact",
+     "text": "Groww (Associate Product Manager): CTC 32,00,000 INR: Bonds: No; Base Salary: 20,00,000; Bond Amount: 0; CTC Breakup: Fixed - 2000000, Variable - 200000, Joining Bonus - 200000, ESOPs - 800000; 1st Year CTC: 24,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 2,00,000; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 20,00,000.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "ok what's due tonight",
+     "expected": "fact",
+     "text": "Close tonight 20:00 (in 1h 55m), Sat 21 Nov — 8 for you, 9 applied: For you: Auro Group — Data Analyst (apply with Analytics & Finance CV) Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV) BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV) Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV) Waterfly Technologies — Growth and Strategist (apply with Consulting CV) Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV) Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV) YMS Financial — Quant Researcher (apply with Analytics & Finance CV) Applied: Ather Energy — Product Ownership ✓ applied Auro Group — Product Manager ✓ applied Axon Developers — Manager Strategy ✓ applied Axon Developers — MDs Office ✓ applied Diageo — GBS MANAGEMENT TRAINEE ✓ applied Lyskraft — APM ✓ applied PhysicsWallah — Associate Product Manager (APM) ✓ applied Searce — Associate Solutions Consultant ✓ applied Waterfly Technologies — Management Consultant 1 ✓ applied Others (30): AiPrise — Software Engineer I AiPrise — Software Engineer I, Full Stack (Frontend Focused) AiPrise — Software Engineer II AiPrise — Software Engineer II, Full Stack (Frontend Focused) Astera Labs — Software Quality Assurance (SQA) Engineer Ather Energy — Chief Engineer Ather Energy — Data Office Ather Energy — Hardware Pack Engineering Ather Energy — System Intelligence Auro Group — AI/ML Software Engineer Auro Group — Back End Developer Auro Group — Frontend Developer Auro Group — Full Stack Developer Auro Group — Sales & Business Development Dassault Systemes — AI Engineer-Data Scientist-PG Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG Esri — Data Scientist I Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer LTM — Post-Graduate Engineer Trainee Lyskraft — SDE - 1 MeltPlan — Software Engineer Searce — Associate Cloud Engineer Searce — Associate Data Engineer Searce — Evlos AI Engineer SLB — Datascientist Swiggy — Data Scientist 1 Waterfly Technologies — Graduate Engineer 1 Waterfly Technologies — Graduate Engineer 2",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "R1",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "am I on the firstclub shortlist",
+     "expected": "fact",
+     "text": "No FirstClub shortlist or result that names you or leaves you out in the data.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "are you sure? that's wrong",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "R2",
+   "model": "on",
+   "pass": true,
+   "turns": [
+    {
+     "q": "groww ctc",
+     "expected": "fact",
+     "text": "Groww (Associate Product Manager): CTC 32,00,000 INR: Bonds: No; Base Salary: 20,00,000; Bond Amount: 0; CTC Breakup: Fixed - 2000000, Variable - 200000, Joining Bonus - 200000, ESOPs - 800000; 1st Year CTC: 24,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 2,00,000; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 20,00,000.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "recheck firstclub",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M1",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "check firstclub",
+     "expected": "fact",
+     "text": "No open deadline for FirstClub in the ERP data (last checked Sat 21 Nov 18:04). FirstClub (Product Management): closed Fri 13 Nov 14:00 (already passed). Last FirstClub notice: \"Urgent\", Sat 14 Nov 23:29. You applied to: Product Management.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "check again",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M2",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "check firstclub",
+     "expected": "fact",
+     "text": "No open deadline for FirstClub in the ERP data (last checked Sat 21 Nov 18:04). FirstClub (Product Management): closed Fri 13 Nov 14:00 (already passed). Last FirstClub notice: \"Urgent\", Sat 14 Nov 23:29. You applied to: Product Management.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "check erp for latest updates, don't answer on old data",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M3",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "firstclub shortlist?",
+     "expected": "fact",
+     "text": "No FirstClub shortlist or result that names you or leaves you out in the data.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "I got a call, I think I'm there",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M4",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "what's due tonight",
+     "expected": "fact",
+     "text": "Close tonight 20:00 (in 1h 55m), Sat 21 Nov — 8 for you, 9 applied: For you: Auro Group — Data Analyst (apply with Analytics & Finance CV) Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV) BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV) Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV) Waterfly Technologies — Growth and Strategist (apply with Consulting CV) Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV) Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV) YMS Financial — Quant Researcher (apply with Analytics & Finance CV) Applied: Ather Energy — Product Ownership ✓ applied Auro Group — Product Manager ✓ applied Axon Developers — Manager Strategy ✓ applied Axon Developers — MDs Office ✓ applied Diageo — GBS MANAGEMENT TRAINEE ✓ applied Lyskraft — APM ✓ applied PhysicsWallah — Associate Product Manager (APM) ✓ applied Searce — Associate Solutions Consultant ✓ applied Waterfly Technologies — Management Consultant 1 ✓ applied Others (30): AiPrise — Software Engineer I AiPrise — Software Engineer I, Full Stack (Frontend Focused) AiPrise — Software Engineer II AiPrise — Software Engineer II, Full Stack (Frontend Focused) Astera Labs — Software Quality Assurance (SQA) Engineer Ather Energy — Chief Engineer Ather Energy — Data Office Ather Energy — Hardware Pack Engineering Ather Energy — System Intelligence Auro Group — AI/ML Software Engineer Auro Group — Back End Developer Auro Group — Frontend Developer Auro Group — Full Stack Developer Auro Group — Sales & Business Development Dassault Systemes — AI Engineer-Data Scientist-PG Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG Esri — Data Scientist I Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer LTM — Post-Graduate Engineer Trainee Lyskraft — SDE - 1 MeltPlan — Software Engineer Searce — Associate Cloud Engineer Searce — Associate Data Engineer Searce — Evlos AI Engineer SLB — Datascientist Swiggy — Data Scientist 1 Waterfly Technologies — Graduate Engineer 1 Waterfly Technologies — Graduate Engineer 2",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "and groww?",
+     "expected": "fact",
+     "text": "No open deadline for Groww in the ERP data (last checked Sat 21 Nov 18:04). Groww (Associate Product Manager): closed Mon 16 Nov 16:00 (already passed). Last Groww notice: \"Additional requirement\", Fri 20 Nov 00:36. You applied to: Associate Product Manager.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "M5",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "groww ctc",
+     "expected": "fact",
+     "text": "Groww (Associate Product Manager): CTC 32,00,000 INR: Bonds: No; Base Salary: 20,00,000; Bond Amount: 0; CTC Breakup: Fixed - 2000000, Variable - 200000, Joining Bonus - 200000, ESOPs - 800000; 1st Year CTC: 24,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 2,00,000; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 20,00,000.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "ok what's due tonight",
+     "expected": "fact",
+     "text": "Close tonight 20:00 (in 1h 55m), Sat 21 Nov — 8 for you, 9 applied: For you: Auro Group — Data Analyst (apply with Analytics & Finance CV) Axis Bank — BIU (Business Intelligence Unit) (apply with Analytics & Finance CV) BlackBuck — Associate Manager BlackBuck Leadership Program (apply with Consulting CV) Flipspaces Technology Labs — Entrepreneur-in-Residence (apply with Consulting CV) Waterfly Technologies — Growth and Strategist (apply with Consulting CV) Waterfly Technologies — Managment Consultant 2 (apply with Consulting CV) Xion Multiventures — Trainee Trader & Research Analyst (apply with Analytics & Finance CV) YMS Financial — Quant Researcher (apply with Analytics & Finance CV) Applied: Ather Energy — Product Ownership ✓ applied Auro Group — Product Manager ✓ applied Axon Developers — Manager Strategy ✓ applied Axon Developers — MDs Office ✓ applied Diageo — GBS MANAGEMENT TRAINEE ✓ applied Lyskraft — APM ✓ applied PhysicsWallah — Associate Product Manager (APM) ✓ applied Searce — Associate Solutions Consultant ✓ applied Waterfly Technologies — Management Consultant 1 ✓ applied Others (30): AiPrise — Software Engineer I AiPrise — Software Engineer I, Full Stack (Frontend Focused) AiPrise — Software Engineer II AiPrise — Software Engineer II, Full Stack (Frontend Focused) Astera Labs — Software Quality Assurance (SQA) Engineer Ather Energy — Chief Engineer Ather Energy — Data Office Ather Energy — Hardware Pack Engineering Ather Energy — System Intelligence Auro Group — AI/ML Software Engineer Auro Group — Back End Developer Auro Group — Frontend Developer Auro Group — Full Stack Developer Auro Group — Sales & Business Development Dassault Systemes — AI Engineer-Data Scientist-PG Dassault Systemes — Software Engineer - Domain Engineering & AI Innovation-PG Esri — Data Scientist I Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Aerodynamics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Avionics Engineer Kalam Labs (legal name: Elixar Systems Pvt Ltd) — Mechanical Engineer LTM — Post-Graduate Engineer Trainee Lyskraft — SDE - 1 MeltPlan — Software Engineer Searce — Associate Cloud Engineer Searce — Associate Data Engineer Searce — Evlos AI Engineer SLB — Datascientist Swiggy — Data Scientist 1 Waterfly Technologies — Graduate Engineer 1 Waterfly Technologies — Graduate Engineer 2",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "R1",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "am I on the firstclub shortlist",
+     "expected": "fact",
+     "text": "No FirstClub shortlist or result that names you or leaves you out in the data.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "are you sure? that's wrong",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  },
+  {
+   "id": "R2",
+   "model": "off",
+   "pass": true,
+   "turns": [
+    {
+     "q": "groww ctc",
+     "expected": "fact",
+     "text": "Groww (Associate Product Manager): CTC 32,00,000 INR: Bonds: No; Base Salary: 20,00,000; Bond Amount: 0; CTC Breakup: Fixed - 2000000, Variable - 200000, Joining Bonus - 200000, ESOPs - 800000; 1st Year CTC: 24,00,000; Gross (per Annum): 22,00,000; Joining Bonus, if any: 2,00,000; Retention Bonus, if any: 0; Relocation Bonus, if any: 0; Fixed Take Home Salary (per Annum): 20,00,000.",
+     "by": "page",
+     "checking": false,
+     "problems": []
+    },
+    {
+     "q": "recheck firstclub",
+     "expected": "recheck",
+     "text": "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of FirstClub (18:04). The ERP has no notices for FirstClub.",
+     "by": "recheck",
+     "checking": false,
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

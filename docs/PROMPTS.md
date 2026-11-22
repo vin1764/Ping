@@ -139,6 +139,9 @@ for you and not applied yet), "For you", "Applied" (each with "✓ applied"), th
 each (keep Others unless the question narrows the list). Don't add
 reasons, deadlines or groupings per line, and don't merge roles of one company into one line. To narrow a list
 ("only product ones"), drop lines but keep the format.
+Lists (shortlists, tests, rooms, results): never tell the student they are not on a list. If their roll number
+wasn't found, say "I couldn't find your roll number in the <company> <list> (posted <time>). Please check the list
+yourself." If the file wasn't read reliably, say so and ask them to check it. Say which notice and when it was read.
 CVs: the student's CVs are ${cvLabels.length ? cvLabels.map((l: string) => `"${l}"`).join(", ") : "not uploaded yet"}. For "which cv for X" or "what
 should I apply to with my <label>", use "apply with" in the role lines and answer "Apply with: <label>" per role
 (if no CV fits a role, leave its Apply with line out; never write "no CV fits it best"). Write plain text: no

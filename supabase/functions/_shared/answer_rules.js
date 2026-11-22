@@ -387,7 +387,7 @@
       const where = [i.venue && !t.includes(i.venue) ? i.venue : "", row.room && !t.includes(row.room) ? `your room: ${row.room}` : "",
                      row.slot && !t.includes(row.slot) ? `your slot: ${row.slot}` : ""].filter(Boolean).join(" · ");
       const st = pdf.status || i.pdf_status;
-      // never "you're not on it": only "couldn't find your roll number" (a file read in full) or "couldn't read it"
+      // never an absence ("not on it"): only "couldn't find your roll number" (a file read in full) or "couldn't read it"
       const list = /you're (now )?on|you are on|couldn't (find|read)/i.test(t) ? "" : st === "yes" ? "you're on the list"
         : st === "no" ? "I couldn't find your roll number in it; please check the list yourself" : st === "unknown" ? "I couldn't read the file reliably; check it yourself" : "";
       const time = at ? (at < now ? ` (${dayKey(at) === dayKey(now) ? "earlier today, " : ""}over)` : relTime(at.getTime(), now) || "") : "";
@@ -434,9 +434,11 @@
         const lists = ev.filter((i) => (i.pdf?.status || i.pdf_status) === "yes" || (i.pdf?.status || i.pdf_status) === "no");
         // the latest list decides the yes / no; the ones before it follow, one line each
         const st = (i) => i.pdf?.status || i.pdf_status;
-        lines.push(lists.length ? [`${st(lists[0]) === "yes" ? "Yes, you're on" : "No, you're not on"} the latest ${ent.name} list: ${lists[0].title}`,
+        // never an absence ("not on it"): a list without your roll is "I couldn't find your roll number", checked by you
+        lines.push(lists.length ? [st(lists[0]) === "yes" ? `Yes, you're on the latest ${ent.name} list: ${lists[0].title}`
+          : `I couldn't find your roll number in the latest ${ent.name} list${/couldn't find/.test(lists[0].title) ? "" : ` (${lists[0].title})`}. Please check the list yourself.`,
           ...lists.slice(1, 3).filter((i) => st(i) !== st(lists[0])).map((i) => `Earlier: ${i.title}`)].join("\n")
-          : `No ${ent.name} shortlist or result that names you or leaves you out in the data.`);
+          : `No ${ent.name} shortlist or result in the ERP data yet.`);
       } else {
         // "which room was I in": the one list that has your row
         const mineRow = /\b(room|slot|seat)\b/.test(norm(question)) ? ev.filter((i) => i.pdf?.details?.room || i.pdf?.details?.slot).slice(0, 1) : [];
@@ -853,7 +855,7 @@
 
   // ---------------------------------------------------------------- a re-check's answer
   // rc: a rechecks row { status, company, note, result: { read_at, notices: [{ notice_id, subject, kind, notice_time,
-  // file: { status, reliability, read_at, details }, title, link }], changes } }. Never "you're not on it".
+  // file: { status, reliability, read_at, details }, title, link }], changes } }. Never an absence ("not on it").
   const HMs = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const LISTWORD = { shortlist: "shortlist", test: "test list", test_rooms: "test room list", result: "result" };
   function recheckAnswer(rc, now, fallbackLink) {

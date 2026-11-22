@@ -6,7 +6,7 @@ Only your own row and the table heading are kept. The rest of the file
 Result status:
   yes      your roll number (or, as a fallback, your name) is in it
   no       the file was read in full, it lists students by roll number, and yours isn't there. Ping never says
-           "you're not on it" for this: it says it couldn't find your roll number and asks you to check the list
+           an absence ("not on it") for this: it says it couldn't find your roll number and asks you to check the list
   unknown  the file couldn't be read reliably: not opened, scanned (read by OCR), a page without text, or a list
            without roll numbers (names only). "reliability" says which
 """

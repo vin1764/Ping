@@ -68,7 +68,8 @@ def test_never_you_are_not_on_it():
     for f in [*root.glob("ping/*.py"), *root.glob("dashboard/*.js"), *root.glob("supabase/functions/**/*.ts"),
               *root.glob("supabase/functions/**/*.js")]:
         text = f.read_text(encoding="utf-8", errors="ignore")
-        assert "You're not on it" not in text and "you're not on the list" not in text.lower(), f
+        import re
+        assert not re.search(r"(you'?re|you are) not on (it|the|this|that)\b|not shortlisted|leaves you out", text, re.I), f
 
 
 def test_rescan_reads_lists_again_and_reports_what_changed(monkeypatch):

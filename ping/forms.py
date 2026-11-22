@@ -126,8 +126,11 @@ def postings(items: list[dict]) -> list[dict]:
         todo = d.get("todo") or {}
         if it.get("category") != "todo" or todo.get("action") != "fill_form":
             continue
-        links = [x for x in [todo.get("link"), *(d.get("forms") or []), (d.get("mail") or {}).get("link")] if x]
-        links = list(dict.fromkeys(l for l in links if is_form_link(l))) or [None]
+        # the to-do's own link is the form (the notice or mail said "fill the form": link); the other links of the
+        # message only when they look like a form
+        own = todo.get("link") if str(todo.get("link") or "").startswith(("http://", "https://")) else None
+        links = [own] + [x for x in [*(d.get("forms") or []), (d.get("mail") or {}).get("link")] if x and is_form_link(x)]
+        links = list(dict.fromkeys(l for l in links if l)) or [None]
         sources = []
         if it.get("notice_id"):
             sources.append({"type": "notice", "id": str(it["notice_id"]), "at": d.get("notice_time") or it.get("first_seen")})

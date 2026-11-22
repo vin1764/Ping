@@ -110,9 +110,9 @@
 
   const todoWhat = (it) => (/fill the form/i.test(it.title || "") || it.details?.todo?.action === "fill_form" ? "form"
     : it.details?.todo?.action === "take_test" ? "test" : /submit/i.test(it.title || "") ? "submission" : "to-do");
-  function todos(items, day, inChat) {
+  function todos(items, day, inChat, isFilled = () => false) {
     const one = (it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do", via: it.details?.via || null,
-                           itemIds: [it.id],
+                           itemIds: [it.id], forms: todoWhat(it) === "form", filledAll: todoWhat(it) === "form" && isFilled(it),
                            sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
                            target: inChat(it) ? { item: it.id } : { company: it.company } });
     const list = (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day
@@ -127,8 +127,10 @@
       const what = whats.size === 1 ? [...whats][0] : "to-do";
       const names = [...new Set(its.map((it) => shortName(it.company)).filter(Boolean))];
       const digest = (items || []).find((x) => inChat(x) && x.category === "digest" && x.details?.kind === "form" && ms(x.due_at) === t);
+      const filled = what === "form" ? its.filter(isFilled).length : 0;
       return { kind: "todo", group: true, at: t, due: new Date(t).toISOString(), itemIds: its.map((it) => it.id), what,
-               title: `${its.length} ${what}s due ${clock(t)}`, sub: "", names: listNames(names, 4),
+               forms: what === "form", filled, filledAll: filled > 0 && filled === its.length,
+               title: `${its.length} ${what}s due ${clock(t)}${filled ? ` · ${filled} filled` : ""}`, sub: "", names: listNames(names, 4),
                children: its.map(child).sort((a, b) => a.title.localeCompare(b.title)),
                target: digest ? { item: digest.id } : null };
     });
@@ -184,10 +186,11 @@
   }
 
   function build({ items = [], roles = [], notices: nlist = [], runs = [], profile = {}, now = Date.now(),
-                   isMine = () => true, inChat = () => true } = {}) {
+                   isMine = () => true, inChat = () => true, isFilled = () => false } = {}) {
     const day = dayOf(now), tomorrow = dayOf(now + 86400000);
-    const timed = [...tests(items, day, inChat), ...deadlines(roles, day, isMine, items, inChat), ...todos(items, day, inChat)]
-      .map((r) => ({ ...r, over: r.at <= now }));
+    // a form row you've ticked in full is done: it stays on the list, but isn't "still ahead"
+    const timed = [...tests(items, day, inChat), ...deadlines(roles, day, isMine, items, inChat), ...todos(items, day, inChat, isFilled)]
+      .map((r) => ({ ...r, over: r.at <= now || !!r.filledAll }));
     const news = notices(nlist, day, items, inChat).map((r) => ({ ...r, over: false }));
     const next = nextCheck(runs, profile, now);
     const ahead = timed.filter((r) => !r.over);
@@ -196,7 +199,7 @@
     const tTests = tests(items, tomorrow, inChat).length;
     const tDead = (roles || []).filter((r) => { const t = ms(r.effective_deadline || r.apply_end);
       return t > 0 && dayOf(t) === tomorrow && !r.applied && isMine(r); }).length
-      + todos(items, tomorrow, inChat).reduce((n, r) => n + (r.children ? r.children.length : 1), 0);
+      + todos(items, tomorrow, inChat, isFilled).filter((r) => !r.filledAll).reduce((n, r) => n + (r.children ? r.children.length - (r.filled || 0) : 1), 0);
     const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
     return {
       rows: [...rows, ...done], ahead: ahead.length, nextCheck: next,

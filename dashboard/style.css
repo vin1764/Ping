@@ -633,3 +633,37 @@ dialog.sheet.act .sheet-head .close { display: none; }
 .pill-btn.in-composer[hidden] { display: none; }
 /* narrow phones: a little room for the status line next to the demo chip */
 @media (max-width: 420px) { .top .badge { padding: 4px 7px; } }
+
+/* Forms: the tab, and the tick wherever a form appears (chat digests, the sheet) */
+.forms-page { display: grid; gap: var(--s3); }
+.forms-page h1 { margin: 0; }
+.forms-tools { display: grid; gap: var(--s2); }
+.forms-tools input[type=search] { width: 100%; border-radius: var(--r-pill); padding: 10px var(--s4); min-height: 44px; }
+.forms-tools .chips { padding: 0; }
+.forms-sec h2 { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-xs); line-height: 16px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); margin: var(--s2) 0; }
+.forms-sec h2 .n { font-weight: 600; color: var(--ink); }
+.forms-rows { display: grid; gap: var(--s2); }
+.form-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--s2); border: 1px solid var(--line); border-radius: var(--r-card);
+  padding: var(--s2) var(--s3) var(--s3) var(--s1); background: var(--surface); }
+.form-row.filled .co, .form-row.filled .fr-what { color: var(--muted); }
+.form-row.closed { background: var(--thread); }
+.fr-body { display: grid; gap: 4px; min-width: 0; padding-top: 10px; }
+.fr-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--s2); }
+.fr-head .co { font-size: var(--t-md); line-height: 22px; }
+.fr-what { font-size: var(--t-sm); line-height: 20px; color: var(--ink); }
+.fr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--t-sm); line-height: 20px; }
+.fr-line { font-size: var(--t-sm); line-height: 20px; overflow-wrap: anywhere; }
+.fr-similar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-size: var(--t-sm); line-height: 20px;
+  background: var(--thread); border-radius: var(--r-ctl); padding: var(--s2); }
+label.tick { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; cursor: pointer; margin: -10px -6px -10px -10px; }
+.form-row > label.tick { margin: 0; }
+.tick-box { width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; margin: 0; }
+.tick-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg .li.has-tick { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h, 64px) + 12px + env(safe-area-inset-bottom, 0px)); z-index: 50;
+  display: flex; align-items: center; gap: var(--s3); width: max-content; max-width: min(calc(100vw - 32px), 520px); padding: 6px 6px 6px var(--s4); border-radius: var(--r-card);
+  background: var(--ink); color: var(--surface); font-size: var(--t-sm); line-height: 20px; box-shadow: var(--shadow); }
+.toast[hidden] { display: none; }
+.toast .linklike { color: var(--surface); font-weight: 600; text-decoration: underline; min-height: 44px; }
+@media (min-width: 900px) { .toast { bottom: 24px; } }

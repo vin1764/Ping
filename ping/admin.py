@@ -1124,9 +1124,9 @@ def rearm_schedule(secrets) -> int:
 def demo_mails(secrets) -> int:
     """The four made-up sample mails in the demo snapshot (dashboard/demo-data.json) and in the demo rows a one-click
     demo session reads, so View demo shows "via email". Nothing from the real mailbox is used."""
-    from .demo_from_real import add_sample_mails
+    from .demo_from_real import add_forms, add_sample_mails
     out = ROOT / "dashboard" / "demo-data.json"
-    data = add_sample_mails(json.loads(out.read_text(encoding="utf-8")))
+    data = add_forms(add_sample_mails(json.loads(out.read_text(encoding="utf-8"))))
     problems = final_check(data)
     if problems:
         say("NOT written, the check found: " + "; ".join(problems))

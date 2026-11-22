@@ -129,6 +129,16 @@
       if (it) { it.level = "hidden"; it.title = fix.ignore ? "Marked not relevant." : `Noted: it's about ${fix.company}.`; }
     }
     async checkNow() { return "Demo mode: this would start a real run on GitHub. Nothing was started."; }
+    // form ticks: this browser's own (the static demo has no login)
+    async formStatus() { return Object.entries(store.get("ping-demo-forms", {})).map(([form_key, v]) => ({ form_key, ...v })); }
+    async setFormStatus(key, filled) {
+      const all = store.get("ping-demo-forms", {});
+      all[key] = { filled, filled_at: filled ? new Date().toISOString() : null };
+      store.set("ping-demo-forms", all);
+      return all[key];
+    }
+    async formMerge(a, b, choice) { store.set("ping-demo-merges", { ...store.get("ping-demo-merges", {}), [`${a}|${b}`]: choice }); }
+    async formMerges() { return Object.entries(store.get("ping-demo-merges", {})).map(([k, choice]) => { const [a, b] = k.split("|"); return { a, b, choice }; }); }
     async ask(q) { if (state.details) { state.startDetails?.(); await state.details; } return answerLocally(q, this.d); }
     async chat() { return store.get("ping-demo-chat", []); }
     async addChat(m) { store.set("ping-demo-chat", [...store.get("ping-demo-chat", []), m].slice(-500)); }
@@ -163,9 +173,27 @@
         this.sb.from("notices").select("notice_id,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(1000)
           .then((r) => r.data || [], () => []),
       ]);
+      const forms = await this.forms();
       // the demo is a snapshot: its profile row carries the time it was taken
-      return { items, roles, profile: profile[0] || {}, runs, notices,
+      return { items, roles, profile: profile[0] || {}, runs, notices, forms,
                generated_at: this.demo ? profile[0]?.updated_at : undefined };
+    }
+    // the forms list (the hourly run builds it) and your ticks (your own rows: form_status)
+    async forms() { return this.q("forms", (q) => q.order("due_at", { ascending: true }).limit(2000)).catch(() => []); }
+    async formStatus() { return this.q("form_status").catch(() => []); }
+    async setFormStatus(key, filled) {
+      const { data: { session } } = await this.sb.auth.getSession();
+      const row = { owner_id: session?.user?.id, form_key: key, filled, filled_at: filled ? new Date().toISOString() : null,
+                    updated_at: new Date().toISOString() };
+      const { error } = await this.sb.from("form_status").upsert(row, { onConflict: "owner_id,form_key" });
+      if (error) throw new Error(error.message);
+      return row;
+    }
+    async formMerges() { return this.q("form_merges").catch(() => []); }
+    async formMerge(a, b, choice) {
+      const { data: { session } } = await this.sb.auth.getSession();
+      const { error } = await this.sb.from("form_merges").upsert({ owner_id: session?.user?.id, a, b, choice }, { onConflict: "owner_id,a,b" });
+      if (error) throw new Error(error.message);
     }
     // live updates (see startLive): the latest runs, and the items again once a run has finished
     async liveRuns() { return this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)); }
@@ -498,6 +526,8 @@
   async function afterStart() {
     try {
       state.data = await state.src.load();
+      state.data.forms = state.data.forms || [];
+      await loadTicks();
       stampItems();
       state.chat = await state.src.chat();
       state.readAt = await state.src.readAt();
@@ -571,6 +601,8 @@
     live.channel = sb.channel("ping-live")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (p) => onChat(p.new))
       .on("postgres_changes", { event: "*", schema: "public", table: "runs" }, (p) => onRun(p.new))
+      // a tick on another device (your own rows only: the row rules hold on the channel)
+      .on("postgres_changes", { event: "*", schema: "public", table: "form_status" }, (p) => onTick(p.new))
       .subscribe((st) => {
         const was = live.ok;
         live.ok = st === "SUBSCRIBED";
@@ -595,7 +627,11 @@
       mergeRuns(await state.src.liveRuns(), true);
       const chat = await state.src.chat();
       for (const m of chat || []) addChatRow(m);
-      if (LIVE.lastFinished(state.data.runs)?.id !== before) { state.data.items = withoutHeld(await state.src.items()); stampItems(); }
+      if (LIVE.lastFinished(state.data.runs)?.id !== before) {
+        state.data.items = withoutHeld(await state.src.items()); stampItems();
+        if (state.src.forms) state.data.forms = await state.src.forms();
+      }
+      await loadTicks(true);
       applyLive();
     } catch { /* offline for a moment: the next poll or focus tries again */ }
     finally { live.syncing = false; schedulePoll(); }
@@ -907,6 +943,7 @@
     if (hash === "feed") return viewFeed();
     if (hash === "today") return viewToday();
     if (hash === "companies") return viewCompanies();
+    if (hash === "forms") return viewForms();
     if (hash === "profile") return viewProfile();
     if (state.onb) return viewOnboarding();
     return viewChat();
@@ -1380,6 +1417,151 @@
   }
   // "in 1 h 48 m" / "in 42 m" / "over": amber under 3 h, red under 1 h; every chip ticks (tick() below)
   const TODAY = window.PingToday;
+  const FORMS = window.PingForms;
+
+  // ------------------------------------------------------------ forms: your ticks (form_status), the Forms tab
+  // A tick is your own record that you've filled a form: Ping never fills, submits or signs in to a form. It reaches
+  // your other open devices at once (Realtime), and the next check stops reminders for it.
+  state.formStatus = new Map();
+  async function loadTicks(quiet) {
+    if (!state.src?.formStatus) return;
+    try {
+      const rows = await state.src.formStatus();
+      state.formStatus = new Map((rows || []).map((r) => [r.form_key, { filled: !!r.filled, filled_at: r.filled_at || null }]));
+      if (state.src.formMerges) state.formMerges = await state.src.formMerges();
+      if (quiet) refreshTicks();
+    } catch { /* the table isn't there yet: no ticks */ }
+  }
+  function onTick(row) {
+    if (!row?.form_key) return;
+    const was = state.formStatus.get(row.form_key);
+    if (was && was.filled === !!row.filled) return;
+    state.formStatus.set(row.form_key, { filled: !!row.filled, filled_at: row.filled_at || null });
+    refreshTicks();
+  }
+  const formByKey = (key) => (state.data?.forms || []).find((f) => f.key === key);
+  async function setTick(key, filled, { quiet = false } = {}) {
+    const before = state.formStatus.get(key);
+    state.formStatus.set(key, { filled, filled_at: filled ? new Date().toISOString() : null });
+    refreshTicks();
+    try { await state.src.setFormStatus(key, filled); }
+    catch (e) {
+      if (before) state.formStatus.set(key, before); else state.formStatus.delete(key);
+      refreshTicks();
+      toast(`Couldn't save the tick. ${plainly(e)}`);
+      return;
+    }
+    if (quiet) return;
+    const f = formByKey(key);
+    const what = f ? `${FORMS.names(f).join(", ")} ${FORMS.label(f.purpose).toLowerCase()}` : "Form";
+    toast(filled ? `Ticked: ${what}. Reminders stop for it.` : `Unticked: ${what}.`, "Undo", () => setTick(key, !filled, { quiet: true }));
+  }
+  // every checkbox for a form, wherever it is (Forms, the chat's digests, the sheet), shows the same tick
+  function formTick(key) {
+    const box = h("input", { type: "checkbox", class: "tick-box", "data-form-key": key, "aria-label": "Filled" });
+    box.checked = FORMS.isFilled(state.formStatus, key);
+    box.addEventListener("click", (ev) => ev.stopPropagation());
+    box.addEventListener("change", () => setTick(key, box.checked));
+    return h("label", { class: "tick", title: "Tick when you've filled it (your own record)", onclick: (ev) => ev.stopPropagation() }, box);
+  }
+  function refreshTicks() {
+    document.querySelectorAll("input[data-form-key]").forEach((b) => { b.checked = FORMS.isFilled(state.formStatus, b.dataset.formKey); });
+    formsBadge();
+    renderToday();
+    if ((location.hash.slice(1) || "chat") === "forms") drawForms();
+  }
+  function formsBadge() {
+    const b = $("#nav-forms");
+    if (!b || !state.data) return;
+    const n = FORMS.badge(state.data.forms || [], state.formStatus, liveNow());
+    b.textContent = String(n); b.hidden = !n;
+    b.parentElement.setAttribute("aria-label", n ? `Forms, ${n} due in the next 24 hours` : "Forms");
+  }
+  let toastTimer = null;
+  function toast(text, action, run) {
+    let t = $("#toast");
+    if (!t) { t = h("div", { id: "toast", class: "toast", role: "status", "aria-live": "polite" }); document.body.append(t); }
+    t.replaceChildren(...[h("span", {}, text), action ? h("button", { type: "button", class: "linklike", onclick: () => { t.hidden = true; run(); } }, action) : null].filter(Boolean));
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+  }
+  // "For you": forms for companies you're eligible for or that match your targets (a form with no known role counts)
+  function formMine(f) {
+    const roles = (f.role_ids || []).map((id) => roleById().get(id)).filter(Boolean);
+    const rs = roles.length ? roles : state.data.roles.filter((r) => FORMS.names(f).some((n) => cleanName(r.company).toLowerCase() === cleanName(n).toLowerCase()));
+    return !rs.length || rs.some((r) => r.applied || isMine(r));
+  }
+  function viewForms() {
+    state.formsOnly = state.formsOnly || "foryou";
+    const search = h("input", { type: "search", id: "forms-search", placeholder: "Search a company or form", "aria-label": "Search forms",
+      value: state.formsQuery || "", oninput: (ev) => { state.formsQuery = ev.target.value; drawForms(); } });
+    mountPage(h("div", { class: "forms-page" },
+      h("h1", {}, "Forms"),
+      h("p", { class: "muted small" }, "Every form from the notices and your placement mail. Tick one when you've filled it: it's your own record (Ping never fills or submits a form), and the reminders stop for it."),
+      h("div", { class: "forms-tools" }, search, h("div", { class: "chips", id: "forms-chips", role: "group", "aria-label": "Show" })),
+      h("div", { id: "forms-list" })));
+    drawForms();
+  }
+  function drawForms() {
+    const list = $("#forms-list"), chips = $("#forms-chips");
+    if (!list || !state.data) return;
+    const now = liveNow();
+    const all = state.data.forms || [];
+    const chip = (key, label) => h("button", { type: "button", class: "chip", "aria-pressed": String(state.formsOnly === key), "data-only": key,
+      onclick: () => { state.formsOnly = key; drawForms(); } }, label);
+    chips.replaceChildren(...[chip("foryou", "For you"), chip("all", "All"),
+      state.formsAt ? h("button", { type: "button", class: "chip", "aria-pressed": "true", "data-at": "1", onclick: () => { state.formsAt = null; drawForms(); } },
+        `Due ${when(new Date(state.formsAt).toISOString())} ×`) : null].filter(Boolean));
+    const sec = FORMS.sections(all, state.formStatus, { now, query: state.formsQuery || "", only: state.formsOnly, mineOf: formMine, at: state.formsAt ?? null });
+    const block = (id, title, rows, empty) => h("section", { class: "forms-sec", id: `forms-${id}`, "aria-label": title },
+      h("h2", {}, title, h("span", { class: "n" }, rows.length)), rows.length ? h("div", { class: "forms-rows" }, rows.map(formRow)) : h("p", { class: "muted small" }, empty));
+    if (!all.length) { list.replaceChildren(h("p", { class: "muted" }, "No forms yet. Forms from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
+    list.replaceChildren(
+      block("today", "Due today", sec.today, "Nothing due today."),
+      block("upcoming", "Upcoming", sec.upcoming, "Nothing coming up."),
+      block("past", "Past due (not filled)", sec.past, "None."),
+      block("filled", "Filled", sec.filled, "Tick a form when you've filled it."));
+    formsBadge();
+  }
+  function formRow(f) {
+    const filled = FORMS.isFilled(state.formStatus, f.key);
+    const notice = (f.sources || []).find((x) => x.type === "notice");
+    const item = (f.item_ids || []).map((id) => itemById().get(id)).find((i) => i && inChat(i));
+    const href = f.final_url || f.link;
+    const past = f.due_at && dt(f.due_at) <= nowDate();
+    const moved = FORMS.movedLine(f, when), posted = FORMS.postedLine(f);
+    return h("article", { class: `form-row${filled ? " filled" : ""}${f.closed ? " closed" : ""}`, "data-form": f.key },
+      formTick(f.key),
+      h("div", { class: "fr-body" },
+        h("div", { class: "fr-head" }, h("strong", { class: "co" }, FORMS.names(f).join(", ") || "A form"),
+          h("span", { class: "fr-what" }, FORMS.label(f.purpose)),
+          f.closed ? h("span", { class: "pill over" }, "Closed") : null,
+          f.signin_required ? h("span", { class: "pill plain" }, "sign-in required") : null),
+        h("div", { class: "fr-meta" }, f.due_at ? h("span", { class: "num" }, when(f.due_at)) : h("span", { class: "muted" }, "No deadline given"),
+          f.due_at && !filled ? (past ? h("span", { class: "pill cd c-over" }, "over") : countPill(f.due_at)) : null,
+          filled && moved ? h("span", { class: "pill plain" }, "deadline extended") : null),
+        f.title ? h("div", { class: "fr-line" }, f.title) : null,
+        moved || posted ? h("div", { class: "fr-line muted small" }, [moved, posted].filter(Boolean).join(" · ")) : null,
+        ...(f.looks_like || []).map((x) => looksLike(f, x)),
+        h("div", { class: "ac-links" },
+          href ? h("a", { class: "act-btn", href, ...EXT, "data-link": "form" }, "Open form") : null,
+          notice ? h("button", { type: "button", class: "act-btn", "data-link": "notice", onclick: () => openNotice(Number(notice.id) || notice.id) }, "Notice") : null,
+          item ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => goTo({ item: item.id }) }, "Show in chat") : null)));
+  }
+  // "Looks like the same form as <X>, merge?": your answer is remembered (form_merges) and the next check follows it
+  function looksLike(f, x) {
+    const other = formByKey(x.key);
+    const decided = (state.formMerges || []).find((m) => (m.a === f.key && m.b === x.key) || (m.a === x.key && m.b === f.key));
+    if (decided) return h("div", { class: "fr-line muted small" }, decided.choice === "merge" ? "You merged this with a similar form: the next check joins them." : "Kept apart from a similar form.");
+    const answer = async (choice) => {
+      try { await state.src.formMerge(f.key, x.key, choice); state.formMerges = [...(state.formMerges || []), { a: f.key, b: x.key, choice }]; drawForms(); }
+      catch (e) { toast(`Couldn't save that. ${plainly(e)}`); }
+    };
+    return h("div", { class: "fr-similar" }, `Looks like the same form as ${other ? FORMS.names(other).join(", ") + " " + FORMS.label(other.purpose).toLowerCase() : x.title || "another one"}${other?.due_at ? ` (due ${when(other.due_at)})` : ""}, merge?`,
+      h("button", { type: "button", class: "act-btn", onclick: () => answer("merge") }, "Merge"),
+      h("button", { type: "button", class: "act-btn", onclick: () => answer("keep") }, "Keep both"));
+  }
   const countdown = (at) => TODAY.countdown(at, liveNow()).text;
   const countPill = (at) => { const c = TODAY.countdown(at, liveNow());
     return h("span", { class: `pill cd c-${c.level}`, "data-due": dt(at).toISOString(), title: when(at) }, c.text); };
@@ -1481,6 +1663,9 @@
     return out;
   }
 
+  let itemMap = null;
+  const itemById = () => (itemMap && itemMap.src === state.data.items ? itemMap.map
+    : (itemMap = { src: state.data.items, map: new Map(state.data.items.map((i) => [i.id, i])) }).map);
   let roleMap = null;
   const roleById = () => (roleMap && roleMap.src === state.data.roles ? roleMap.map
     : (roleMap = { src: state.data.roles, map: new Map(state.data.roles.map((r) => [r.id, r])) }).map);
@@ -1517,7 +1702,8 @@
     // a row: "Company — Role", a ✓ applied badge, and the reason / which CV on a second line
     const row = (r) => {
       const applied = r.tag === "done" || roleById().get(r.id)?.applied;
-      return h("div", { class: `li ${r.tag || ""}` }, h("span", { class: "rt" }, cleanRowText(r.text)),
+      const fkey = itemById().get(r.id)?.details?.form?.key;
+      return h("div", { class: `li ${r.tag || ""}${fkey ? " has-tick" : ""}` }, fkey ? formTick(fkey) : null, h("span", { class: "rt" }, cleanRowText(r.text)),
         applied ? h("span", { class: "pill applied" }, "✓ applied") : null,
         r.note ? h("span", { class: "why" }, r.note) : null);
     };
@@ -1609,7 +1795,11 @@
     // a FACT question: answered at once from the page's own data, no typing bubble (in the demo, once the roles'
     // details are in: they arrive within a second of opening)
     if (state.details) { state.startDetails?.(); await state.details; }
-    const local = localFact(q);
+    // forms: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the
+    // last ticks it: your own record, never the ERP or the form)
+    const fq = FORMS && state.data?.forms?.length ? FORMS.ask(q, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
+    if (fq?.tick) setTick(fq.tick, true, { quiet: true });
+    const local = fq ? { text: fq.text } : localFact(q);
     if (local.text) {
       state.chat.push(mine);
       appendToday(inner, textBubble("me", q, mine.created_at, true));
@@ -1708,7 +1898,8 @@
   const isMine = (r) => r.eligible !== false && (targetsOn() ? !!markOf(r)?.relevant : true);
   function todayModel() {
     return TODAY.build({ items: state.data.items.filter((it) => !it.dismissed), roles: state.data.roles,
-      notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat });
+      notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat,
+      isFilled: (it) => FORMS.isFilled(state.formStatus, it.details?.form?.key) });
   }
   function todayPanel(m) {
     const now = nowDate();
@@ -1716,7 +1907,8 @@
       h("span", { class: "muted small" }, now.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" })));
     if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), h("p", { class: "tomorrow" }, m.tomorrow.text));
     const row = (r) => {
-      const status = [r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
+      const status = [r.filledAll ? h("span", { class: "pill applied" }, "✓ filled") : null,
+        r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
         : r.status === "off" ? h("span", { class: "pill over" }, "not on the list") : null,
         r.via === "email" ? h("span", { class: "pill via" }, "via email") : null].filter(Boolean);
       const right = r.kind === "notice" || r.kind === "more" ? null : r.over ? h("span", { class: "pill cd c-over" }, "over")
@@ -1755,6 +1947,7 @@
   function renderToday() {
     if (!state.data || !TODAY) return;
     profileDot();
+    formsBadge();
     const m = todayModel();
     const badge = $("#nav-today");
     if (badge) { badge.textContent = String(m.ahead); badge.hidden = !m.ahead;
@@ -1995,7 +2188,8 @@
              mine: role && targetsOn() ? !!m?.relevant : null, reason: m?.relevant ? m.reason || "" : "", cv: m?.relevant ? m.best_cv || "" : "",
              place: [row.room ? `Room ${row.room}` : "", row.slot ? `Slot ${row.slot}` : "", !row.room && d.venue ? d.venue : ""].filter(Boolean).join(" · "),
              myRow: d.pdf?.my_row ? (d.pdf.header ? d.pdf.header.map((x, i) => `${x}: ${d.pdf.my_row[i] ?? ""}`) : d.pdf.my_row).join(" · ") : "",
-             forms: TODAY.formLinks(it), noticeId: it.notice_id || null, pdf: it.notice_id && st ? it : null, chat: inChat(it) ? it.id : null };
+             forms: TODAY.formLinks(it), noticeId: it.notice_id || null, pdf: it.notice_id && st ? it : null, chat: inChat(it) ? it.id : null,
+             formKey: d.form?.key || null };
   }
   function sheetCard(c) {
     const status = c.list === "on" ? h("span", { class: "pill you" }, "on the list") : c.list === "off" ? h("span", { class: "pill over" }, "not on the list")
@@ -2012,7 +2206,8 @@
       c.chat ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => { closeSheet(); goTo({ item: c.chat }); } }, "Show in chat") : null,
     ].filter(Boolean);
     return h("article", { class: `act-card${c.mine === false && !c.applied ? " other" : ""}`, "data-kind": c.kind },
-      h("div", { class: "ac-head" }, h("strong", { class: "co" }, c.company || "Notice"), c.roleName ? h("span", { class: "rn" }, c.roleName) : null),
+      h("div", { class: "ac-head" }, c.formKey ? formTick(c.formKey) : null, h("strong", { class: "co" }, c.company || "Notice"),
+        c.roleName ? h("span", { class: "rn" }, c.roleName) : null),
       h("div", { class: "ac-meta" }, h("span", { class: "kind" }, KIND_WORD[c.kind] || c.kind),
         c.due ? h("span", { class: "num" }, when(c.due)) : null,
         c.due ? (pastDue ? h("span", { class: "pill cd c-over" }, "over") : countPill(c.due)) : null, status, fit,
@@ -2081,6 +2276,11 @@
       const roles = (r.roleIds || []).map((id) => roleById().get(id)).filter(Boolean);
       return openActSheet({ title: TODAY.sheetTitle({ n: roles.length, at: r.at, now: liveNow(), mine: r.mine, applied: r.applied }),
         cards: roles.map((x) => roleCard(x, { chat: r.digestId })), filters: true });
+    }
+    if (r.kind === "todo" && r.forms) {                 // forms: the Forms list at that deadline
+      state.formsAt = r.at; state.formsOnly = "all"; state.formsQuery = "";
+      location.hash = "#forms";
+      return;
     }
     if (r.kind === "todo" || r.kind === "test") {
       const cards = items.map(itemCardOf);

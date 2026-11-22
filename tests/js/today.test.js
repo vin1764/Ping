@@ -164,3 +164,19 @@ test("Today rows carry what they stand for (role ids, item ids, the notice)", ()
   assert.equal(d.applied, 1);
   assert.equal(d.total, 2);
 });
+
+test("form rows count your ticks: '3 forms due 20:00 · 2 filled', all ticked = done", () => {
+  const now = Date.parse("2026-11-21T12:00:00+05:30");
+  const due = "2026-11-21T20:00:00+05:30";
+  const f = (id, k) => ({ id, category: "todo", company: `Co${id}`, title: `Co${id}: fill the form by 20:00.`, due_at: due, level: "show",
+                          details: { todo: { action: "fill_form" }, form: { key: k } } });
+  const items = [f("a", "ka"), f("b", "kb"), f("c", "kc")];
+  let m = T.build({ items, now, isFilled: (it) => ["ka", "kb"].includes(it.details.form.key) });
+  const row = m.rows.find((r) => r.kind === "todo");
+  assert.equal(row.title, "3 forms due 20:00 · 2 filled");
+  assert.equal(row.forms, true);
+  assert.equal(m.ahead, 1);
+  m = T.build({ items, now, isFilled: () => true });
+  assert.equal(m.rows.find((r) => r.kind === "todo").filledAll, true);
+  assert.equal(m.ahead, 0);
+});

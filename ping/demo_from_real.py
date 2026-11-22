@@ -262,7 +262,7 @@ def add_sample_mails(data: dict) -> dict:
     data["about"] = ("Anonymised snapshot of a real Ping run: real companies, roles, pay, deadlines and notice "
                      "wording; fake roll number, name and CGPA; other students' details and all real mail removed (the 4 "
                      "mails shown are made-up samples).")
-    return data
+    return add_forms(data)
 
 
 def _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll, emails=None):
@@ -366,7 +366,7 @@ def build_from_store(store, real_roll: str, mail: str) -> dict:
     data["about"] = ("Anonymised snapshot of a real Ping run: real companies, roles, pay, deadlines and notice "
                      "wording; fake roll number, name and CGPA; other students' details and all real mail removed (the 4 "
                      "mails shown are made-up samples).")
-    return data
+    return add_forms(data)
 
 
 def verify(data: dict, real_roll: str, mail: str, real_name: str | None) -> list[str]:
@@ -416,18 +416,36 @@ def final_check(data) -> list[str]:
     return problems
 
 
+def add_forms(data: dict) -> dict:
+    """The forms list for the snapshot (ping/forms.py, the same code the hourly run uses), from its own form to-dos;
+    no form page is read for the demo. Each form item learns its form. Idempotent."""
+    from . import forms
+    now = datetime.fromisoformat(data["generated_at"])
+    rows = forms.build(data["items"], now=now)
+    forms.mark_items(data["items"], rows, filled=set())
+    data["forms"] = [{**forms.stored(r), "is_sample": True} for r in rows]
+    return data
+
+
 def load_to_db(store, data: dict) -> dict:
     """Replace the demo rows a one-click demo session sees (is_sample = true). Real rows are never touched."""
     counts = {}
-    for table in ("items", "pdf_checks", "notices", "roles", "runs", "contacts", "emails"):
-        store.delete(table, {"is_sample": "is.true"})
+    for table in ("items", "pdf_checks", "notices", "roles", "runs", "contacts", "emails", "forms"):
+        try:
+            store.delete(table, {"is_sample": "is.true"})
+        except Exception:                            # a table this project doesn't have yet (apply-sql)
+            pass
     # the demo's "now": a demo session reads the snapshot time from the profile's updated_at
     store.upsert("profile", [{**data["profile"], "updated_at": data["profile"].get("updated_at") or data["generated_at"]}])
     for table, key in (("roles", "id"), ("notices", "id"), ("pdf_checks", "notice_id"), ("items", "id"),
-                       ("runs", "id"), ("emails", "id")):
+                       ("runs", "id"), ("emails", "id"), ("forms", "key")):
         rows = data.get(table) or []
         if rows:
-            store.upsert(table, rows, key=key)
+            try:
+                store.upsert(table, rows, key=key)
+            except Exception:
+                if table != "forms":                 # forms: only once apply-sql has made the table
+                    raise
         counts[table] = len(rows)
     return counts
 
@@ -436,6 +454,14 @@ if __name__ == "__main__":
     # python -m ping.demo_from_real add-mails   (adds the 4 sample mails to dashboard/demo-data.json, checked)
     import sys
     from pathlib import Path
+    if sys.argv[1:] == ["add-forms"]:
+        path = Path(__file__).resolve().parents[1] / "dashboard" / "demo-data.json"
+        data = add_forms(json.loads(path.read_text(encoding="utf-8")))
+        problems = final_check(data)
+        if problems:
+            sys.exit("NOT written: " + "; ".join(problems))
+        path.write_text(json.dumps(data, default=str, ensure_ascii=False), encoding="utf-8")
+        print(f"added {len(data['forms'])} forms; check passed")
     if sys.argv[1:] == ["add-mails"]:
         path = Path(__file__).resolve().parents[1] / "dashboard" / "demo-data.json"
         data = add_sample_mails(json.loads(path.read_text(encoding="utf-8")))

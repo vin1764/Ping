@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-EXPECTED = {"index.html", "app.js", "onboarding.js", "names.js", "live.js", "today.js", "answer_rules.js", "help.js", "setup.html", "style.css", "config.js", "demo-data.json", "demo-details.json", "README.md", ".nojekyll",
+EXPECTED = {"index.html", "app.js", "onboarding.js", "names.js", "live.js", "today.js", "forms.js", "answer_rules.js", "help.js", "setup.html", "style.css", "config.js", "demo-data.json", "demo-details.json", "README.md", ".nojekyll",
             "manifest.webmanifest", "sw.js"}
 # the installable app's icons: the one sub-folder allowed, these files only (PNGs are images: no text checks)
 ICONS = {"icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png", "badge-96.png", "favicon-32.png",

@@ -304,6 +304,28 @@ def main() -> int:
                 ctx.close()
                 ctx, page = open_app(state)
                 check(name, signed_in(page) and not page.evaluate("window.__sawLogin"), "after a demo session signed out elsewhere, the owner is still signed in")
+                ctx.close()
+
+                # 6b. a reviewer signs in with the same login on their own device, then signs out there: the owner's
+                #     phone (a session from before) stays signed in, and its next refresh works
+                rctx, rpage = open_app()
+                rpage.wait_for_selector("form.login", timeout=20000)
+                rpage.fill("#login-email", EMAIL)
+                rpage.fill("#login-pw", PASSWORD)
+                rpage.click("form.login button[type=submit]")
+                rpage.wait_for_selector("#ask-input, [data-onboarding]", timeout=20000)
+                rpage.evaluate("location.hash = '#profile'")
+                out_btn = rpage.locator("button", has_text="Sign out")
+                out_btn.first.wait_for(timeout=15000)
+                out_btn.first.click()
+                rpage.wait_for_selector("form.login", timeout=20000)
+                rctx.close()
+                n = len([x for x in fake.auth_log if x[0] == "refresh" and x[2] == "ok"])
+                ctx, page = open_app(expire(state))
+                ok = signed_in(page) and not page.evaluate("window.__sawLogin")
+                page.wait_for_timeout(500)
+                refreshed = len([x for x in fake.auth_log if x[0] == "refresh" and x[2] == "ok"]) > n
+                check(name, ok and refreshed, "a reviewer signed in and out on another device: the owner's phone stays signed in and refreshes")
                 logouts = [x for x in fake.auth_log if x[0] == "logout"]
                 check(name, all(x[1] == "local" for x in logouts), "every sign-out signs out only that device", json.dumps(logouts[-2:]))
                 errs = page.errors

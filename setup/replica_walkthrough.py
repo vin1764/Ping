@@ -155,6 +155,24 @@ def main() -> int:
             page.screenshot(path=str(OUT / "replica-profile-390.png"), full_page=True)
             step("7. Profile: every card there", time.perf_counter(),
                  ", ".join(page.locator(".pcard h2").all_inner_texts()))
+            # 8. signed in, every page at three widths, light and dark: no sideways scroll, nothing under 12 px
+            issues = []
+            for w, h, tag in ((390, 844, "390"), (768, 1024, "768"), (1280, 800, "1280")):
+                for scheme in ("light", "dark"):
+                    page.set_viewport_size({"width": w, "height": h})
+                    page.emulate_media(color_scheme=scheme)
+                    for pg in ("chat", "today", "feed", "companies", "profile"):
+                        if pg == "today" and w >= 1100:
+                            continue
+                        page.evaluate(f"location.hash = '#{pg}'")
+                        page.wait_for_timeout(450)
+                        r = page.evaluate("""() => ({ over: document.documentElement.scrollWidth - innerWidth,
+                          tiny: [...document.querySelectorAll('body *')].filter((el) => el.childElementCount === 0 && el.textContent.trim()
+                            && el.getBoundingClientRect().width > 0 && parseFloat(getComputedStyle(el).fontSize) < 12).length })""")
+                        if r["over"] > 1 or r["tiny"]:
+                            issues.append(f"{pg} {tag} {scheme}: {r}")
+                        page.screenshot(path=str(OUT / f"signed-in-{pg}-{tag}-{scheme}.png"))
+            step("8. signed-in pages, 3 widths x light/dark", time.perf_counter(), "; ".join(issues) or "no sideways scroll, no text under 12 px")
             print(f"\npage errors: {errs[:3] or 'none'}")
             br.close()
         print(f"\nfresh project to first feed: {time.perf_counter() - t_all:.0f} s (machine time; a person adds the "

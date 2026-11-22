@@ -56,7 +56,7 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026; updated 22 N
 |---|---|---|
 | parser, held-out real notices | 56 of 58 checks (97%) on 15 notices | `evals/PARSER_REPORT.md` |
 | parser, development set | 143 of 143 checks (100%) on 31 notices + 7 attachment layouts | `evals/PARSER_REPORT.md` |
-| Ask Ping, single questions | 37 of 42 (88%) in the last run (38 of 42 in the run before it) | `evals/ask_ping/REPORT.md` |
+| Ask Ping, single questions | 70 of 70 (100%), 22 Nov 17:50 IST on the evals key (44 of 44 calls on "evals", 0 on live). Main model only: n/a (busy or timed out every time; rules 61, JD summaries 5, lighter model 4) | `evals/ask_ping/REPORT.md` |
 | Ask Ping, multi-turn conversations | 21 of 21 conversations, 39 of 39 turns (incl. 8 of 8 preference-by-chat conversations and the wrong-detection check) | `evals/ask_ping/REPORT.md` |
 | Ask Ping, before conversation memory | 34 of 36 single; 4 of 9 conversations (13 of 18 turns) | `evals/REPORT.md` |
 | relevance, demo persona (product / consulting / analyst / finance) | precision 93% (76 of 82), recall 97% (76 of 78), best CV right 96% (73 of 76) | `evals/relevance/REPORT.md` |

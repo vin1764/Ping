@@ -29,13 +29,17 @@ reminders) is put back after judging.
    or posted again with a later deadline, is one row with its history). Tick one as filled: an undo toast, it moves
    to Filled, its reminders stop; ask `which forms haven't I filled?` or `mark the <company> form as filled`.
 9. **Companies** tab: every role with pay, deadline and eligibility; tap one for the JD summary and "Apply with".
+10. **When Gemini is busy** (free tier): an open question still gets an answer from your ERP data, marked
+    "(Gemini busy: answered from your ERP data by rules, not by the model.)"; facts never need the model.
+11. **Reply to a message**: swipe a bubble right (phone) or use its arrow (PC), then ask `which of these haven't I
+    applied to?` on a digest, `where is it?` on a test, or `done` on a form line.
 
 ## How good is it (numbers, each with its source)
 
 | | result | where |
 |---|---|---|
 | parser, held-out real notices | 56 of 58 checks (97%) | [evals/PARSER_REPORT.md](../evals/PARSER_REPORT.md) |
-| Ask Ping, single questions (live function, evals key) | 70 of 70 (100%); the main model was out of quota on the evals key, so the 3 that needed a model got the lighter one | [evals/ask_ping/REPORT.md](../evals/ask_ping/REPORT.md) |
+| Ask Ping, single questions (live function, evals key) | 70 of 70 (100%), re-run 22 Nov 17:50 IST after the quota reset (all 44 calls on the evals key, none on the live key). Main model only: n/a: it was busy or timed out every time, so the 4 that needed a model got the lighter one; 61 were answered by rules | [evals/ask_ping/REPORT.md](../evals/ask_ping/REPORT.md) |
 | Ask Ping, conversations | 21 of 21 (39 of 39 turns) | same |
 | Ask Ping typed into the live page | FACT: 65 of 65 answered in the page, median 16 ms, 64 of 65 pass; OPEN: 5 of 5, median 9.4 s | [evals/ask_ping/PAGE_RUN.md](../evals/ask_ping/PAGE_RUN.md) |
 | "For you" relevance | main model: precision 93%, recall 97%, right CV 96% (demo persona), 100% / 100% (core-software persona); lighter model: 90% / 99% / 92% and 100% / 100% | [evals/relevance/REPORT.md](../evals/relevance/REPORT.md) |

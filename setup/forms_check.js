@@ -64,7 +64,9 @@ const ok = (cond, what, note = "") => { if (!cond) bad++; console.log(`${cond ? 
       ok(/forms? not ticked yet|Nothing left/.test(a1), "Ask: which forms haven't I filled?", a1.slice(0, 120));
       const company = await p.evaluate((k) => (window.__f = null, k), key);
       const name = await p.evaluate(() => [...document.querySelectorAll(".form-row .co")].map((e) => e.textContent)[0] || "");
-      const first = (a1.match(/- ([^:]+):/) || [])[1] || "";
+      // the answer's list (rendered as a list: no "- " in the text any more)
+      const firstLi = await p.locator(".msg.ping:not(.typing) .text li").last().innerText().catch(() => "");
+      const first = (firstLi.match(/^([^:]+):/) || a1.match(/- ([^:]+):/) || [])[1] || "";
       const word = first.split(/[ ,]/)[0];
       const a2 = await ask(`did I fill the ${word} form?`);
       ok(/^(Yes|Not ticked yet)/.test(a2), `Ask: did I fill the ${word} form?`, a2.slice(0, 120));

@@ -302,8 +302,10 @@
     return d;
   }
   async function startDemo(noBackend) {
-    const r = await fetch("demo-data.json", { cache: "no-store" });
-    state.src = new DemoSource(unpackDemo(await r.json()));
+    const early = window.PING_DEMO_DATA && await window.PING_DEMO_DATA;      // started in the page's head
+    window.PING_DEMO_DATA = null;
+    const data = early || await (await fetch("demo-data.json", { cache: "no-store" })).json();
+    state.src = new DemoSource(unpackDemo(data));
     $("#mode-badge").replaceChildren("Demo", h("span", { class: "long" }, DEMO_CHIP.replace(/^Demo/, "")));
     $("#mode-badge").title = "Anonymised snapshot of a real run, no login";
     $("#mode-badge").hidden = false;

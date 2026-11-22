@@ -17,6 +17,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="style.css">
   <script>try { const t = JSON.parse(localStorage.getItem("ping-theme")); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <!-- the demo's snapshot starts downloading now, alongside the scripts (app.js picks it up) -->
+  <script>if (/[?&]demo=1\b/.test(location.search) || location.hash === "#demo") window.PING_DEMO_DATA = fetch("demo-data.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null);</script>
 </head>
 <body>
   <header class="top">

@@ -85,6 +85,55 @@ def replacements(real_name: str | None) -> list[tuple[str, str, str]]:
     return pairs
 
 
+def _blobs(repo: Path):
+    """(path, text) of every text blob in the repository's history, once each."""
+    seen = set()
+    for line in run("git", "rev-list", "--all", "--objects", cwd=repo).splitlines():
+        oid, _, path = line.partition(" ")
+        if not path or oid in seen:
+            continue
+        seen.add(oid)
+        if run("git", "cat-file", "-t", oid, cwd=repo, check=False).strip() != "blob":
+            continue
+        data = subprocess.run(["git", "cat-file", "-p", oid], cwd=repo, capture_output=True).stdout
+        try:
+            yield path, data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+
+
+def _numbers_today() -> set[str]:
+    """Ten-digit numbers in today's tracked files (each looked at by hand: test fixtures, an exit code, digit maps)."""
+    from .demo_from_real import _ten_digit_numbers
+    out = set()
+    for f in run("git", "ls-files", cwd=ROOT).split("\n"):
+        if not f or f.endswith("demo-data.json"):
+            continue
+        try:
+            out |= set(_ten_digit_numbers((ROOT / f).read_text(encoding="utf-8")))
+        except (UnicodeDecodeError, OSError):
+            continue
+    return out
+
+
+def _fake(n: str) -> bool:
+    return re.sub(r"\D", "", n).startswith("90000")
+
+
+def history_values(repo: Path) -> tuple[set[str], set[str]]:
+    """What only the history holds: names on the anonymiser's denylist (quoted prompts, early versions written
+    before the list was hashed) and ten-digit numbers that aren't in today's files. Kept in memory, never printed."""
+    from .demo_from_real import _ten_digit_numbers, deny_hits
+    today = _numbers_today()
+    names, numbers = set(), set()
+    for path, text in _blobs(repo):
+        if path.endswith("demo-data.json"):
+            continue                                  # replaced by today's clean snapshot anyway
+        names |= {text[a:b] for a, b in deny_hits(text)}
+        numbers |= {n for n in _ten_digit_numbers(text) if n not in today and not _fake(n)}
+    return names, numbers
+
+
 def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
     run("git", "clone", "--quiet", "--mirror", str(ROOT), str(target))
     # every historical blob of the demo snapshot -> today's clean one
@@ -100,6 +149,12 @@ def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
     rules = target.parent / "replacements.txt"
     lines = [f"regex:(?i){pat}==>{rep}" for _, pat, rep in pairs]
     lines.append(f"regex:(?i){BANNED}==>Ping")
+    names, numbers = history_values(target)
+    # the denylist's own idea of a word: a run of letters (so "Name_2" and "Name2" count, as in deny_hits)
+    lines += [f"regex:(?<![A-Za-z]){re.escape(n)}(?![A-Za-z])==>[name]" for n in sorted(names, key=len, reverse=True)]
+    lines += [f"literal:{n}==>9000000000" for n in sorted(numbers, key=len, reverse=True)]
+    say(f"also replacing {len(names)} denylisted name(s) and {len(numbers)} ten-digit number(s) found only in "
+        f"history or in quoted prompts (not printed)")
     rules.write_text("\n".join(lines) + "\n", encoding="utf-8")
     callback = (f"ids = set(open({str(ids_file)!r}).read().split())\n"
                 f"if blob.original_id.decode() in ids:\n"
@@ -111,7 +166,8 @@ def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
 
 
 def check(target: Path, secrets: dict[str, str]) -> list[str]:
-    from .demo_from_real import final_check
+    from .demo_from_real import _ten_digit_numbers, deny_hits, final_check
+    today = _numbers_today()
     problems = []
     blobs = set()
     for line in run("git", "rev-list", "--all", "--objects", cwd=target).splitlines():
@@ -133,6 +189,10 @@ def check(target: Path, secrets: dict[str, str]) -> list[str]:
             counts["demo-data versions"] += 1
             if final_check(text):
                 problems.append(f"a demo-data.json version fails the anonymiser check: {final_check(text)}")
+        if deny_hits(text):
+            leaks["a denylisted name"] = leaks.get("a denylisted name", 0) + 1
+        if not path.endswith("demo-data.json") and any(n not in today and not _fake(n) for n in _ten_digit_numbers(text)):
+            leaks["a ten-digit number not in today's files"] = leaks.get("a ten-digit number not in today's files", 0) + 1
         low = text.lower()
         if BANNED in low:
             leaks["the banned word"] = leaks.get("the banned word", 0) + 1

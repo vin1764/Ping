@@ -8,7 +8,7 @@ ok   192, 512 and a maskable icon
 ok   iOS: apple-touch-icon and theme-color
 ok   service worker activated, scope https://vin1764.github.io/ping-dashboard/
 ok   the page is served by the service worker after a reload
-ok   offline: the app opens with its thread (115 messages)
+ok   offline: the app opens with its thread (61 messages)
 note real subscription here: not possible headless (AbortError: Registration failed - permission denied)
 ok   config.js carries the VAPID public key
 ok   service worker registration 0 for https://vin1764.github.io/ping-dashboard/

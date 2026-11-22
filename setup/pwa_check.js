@@ -45,7 +45,10 @@ const pngSize = (buf) => [buf.readUInt32BE(16), buf.readUInt32BE(20)];
         "iOS: apple-touch-icon and theme-color");
 
   // 2. the service worker
-  const sw = await p.evaluate(async () => { const r = await navigator.serviceWorker.ready; return { scope: r.scope, state: r.active?.state }; });
+  // a fresh deploy's worker may still be "activating" for a moment: wait for it (up to 10 s)
+  const sw = await p.evaluate(async () => { const r = await navigator.serviceWorker.ready;
+    for (let i = 0; i < 100 && r.active?.state !== "activated"; i++) await new Promise((res) => setTimeout(res, 100));
+    return { scope: r.scope, state: r.active?.state }; });
   check(sw.scope === new URL("./", BASE).href && sw.state === "activated", `service worker ${sw.state}, scope ${sw.scope}`);
   await p.reload(); await p.waitForSelector("#ask-input");
   check(await p.evaluate(() => !!navigator.serviceWorker.controller), "the page is served by the service worker after a reload");

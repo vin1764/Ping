@@ -34,12 +34,12 @@ def main() -> int:
            "Each fixture persona's roles are marked by the classifier in one call with that persona's targets text "
            "(`personas.json`), and compared with labels that are correct for that text (`cases.json`). Re-run: "
            "Actions > Admin > `relevance-evals`.", "",
-           "| persona | targets | roles | precision of \"For you\" | recall of \"For you\" | best CV right | not answered |",
-           "|---|---|---|---|---|---|---|"]
+           "| persona | targets | roles | precision of \"For you\" | recall of \"For you\" | best CV right | not answered | model that answered |",
+           "|---|---|---|---|---|---|---|---|"]
     details = []
     for p in spec["personas"]:
         if not p.get("labels_confirmed"):
-            out.append(f"| {p['persona']} | | | not scored (labels not confirmed) | | |")
+            out.append(f"| {p['persona']} | | | not scored (labels not confirmed) | | | | |")
             continue
         targets = personas[p["persona"]]["targets"]
         cvs = cvs_text(personas[p["persona"]].get("cvs"))
@@ -75,12 +75,16 @@ def main() -> int:
         prec = tp / (tp + fp) if tp + fp else 0.0
         rec = tp / (tp + fn) if tp + fn else 0.0
         missing = len(p["cases"]) - len(got)
+        models = {}
+        for g in got.values():
+            models[g.get("model") or "?"] = models.get(g.get("model") or "?", 0) + 1
+        model_note = ", ".join(f"{m} ({n})" for m, n in sorted(models.items(), key=lambda x: -x[1])) or "none"
         out.append(f"| {p['persona']} | {targets} | {len(p['cases'])} | **{prec:.0%}** ({tp} of {tp + fp}) | "
                    f"**{rec:.0%}** ({tp} of {tp + fn}) | "
-                   f"{f'**{cv_ok / cv_n:.0%}** ({cv_ok} of {cv_n})' if cv_n else 'n/a (no CVs)'} | {missing} |")
+                   f"{f'**{cv_ok / cv_n:.0%}** ({cv_ok} of {cv_n})' if cv_n else 'n/a (no CVs)'} | {missing} | {model_note} |")
         details += wrong
         print(f"{p['persona']}: precision {prec:.0%}, recall {rec:.0%}, {missing} unanswered, {calls} call(s), {secs:.1f}s, "
-              f"last error {relevance.stats['last_error']}")
+              f"answered by {model_note}, last error {relevance.stats['last_error']}")
     out += ["", "## Disagreements", "", "| persona | company | role | label | classifier | classifier's reason |",
             "|---|---|---|---|---|---|", *details]
     (HERE / "REPORT.md").write_text("\n".join(out) + "\n", encoding="utf-8")

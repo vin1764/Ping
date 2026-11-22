@@ -70,7 +70,9 @@ def test_name_only_list_one_letter_typo():
 
 def test_name_only_list_without_you():
     rows = [["S.No", "Name", "Room"], ["1", "Rahul Verma", "V1"], ["2", "Demo Studentson", "V2"], ["3", "Dema Stuart", "V3"]]
-    assert check_attachment(table_pdf(rows), ME, name="Demo Student")["status"] == "no"
+    # a list of names only: Ping can't be sure from a name, so it never reports "not found" for one
+    r = check_attachment(table_pdf(rows), ME, name="Demo Student")
+    assert r["status"] == "unknown" and "no roll numbers" in r["reliability"]
 
 
 # ---------------------------------------------------------------- 3. your own row on messy tables
@@ -170,7 +172,8 @@ def test_feed_says_on_it_only_for_the_company_whose_section_lists_you():
                         "21 November 2026 at 2:00 PM. Room allocation attached.")
     alpha, beta = feed["Alpha Analytics Private Limited"], feed["Beta Bank Limited"]
     assert beta["pdf_status"] == "yes" and beta["title"].startswith("You're on the Beta Bank") and "NR 422" in beta["title"]
-    assert alpha["pdf_status"] == "no" and "You're not on it (the file lists you under Beta Bank Limited)" in alpha["title"]
+    assert alpha["pdf_status"] == "no" and alpha["title"].startswith("I found you under Beta Bank Limited in this test room list, "
+                                                                     "not under Alpha Analytics") and "not on it" not in alpha["title"]
     assert "NR 422" not in alpha["title"]
 
 
@@ -205,5 +208,6 @@ def test_scanned_pdf_is_read_with_ocr():
     assert res["scanned"] and res["ocr"], res
     assert res["status"] == "yes" and res["matched_by"] == "roll" and res["details"]["room"] == "NR 422", res
     print(f"scanned 1-page list read with OCR in {time.monotonic() - t:.1f} s; kept: {res['my_row']}")
+    # not found in a scanned file: OCR can misread a roll number, so never "not found", always "check it yourself"
     res = check_attachment(scanned_pdf(table_pdf(roster_rows(25, None))), ME)
-    assert res["scanned"] and res["ocr"] and res["status"] == "no"
+    assert res["scanned"] and res["ocr"] and res["status"] == "unknown" and "scanned" in res["reliability"]

@@ -383,7 +383,9 @@
       const where = [i.venue && !t.includes(i.venue) ? i.venue : "", row.room && !t.includes(row.room) ? `your room: ${row.room}` : "",
                      row.slot && !t.includes(row.slot) ? `your slot: ${row.slot}` : ""].filter(Boolean).join(" · ");
       const st = pdf.status || i.pdf_status;
-      const list = /you're (now )?(on|not on)|you are (not )?on/i.test(t) ? "" : st === "yes" ? "you're on the list" : st === "no" ? "you're not on the list" : "";
+      // never "you're not on it": only "couldn't find your roll number" (a file read in full) or "couldn't read it"
+      const list = /you're (now )?on|you are on|couldn't (find|read)/i.test(t) ? "" : st === "yes" ? "you're on the list"
+        : st === "no" ? "I couldn't find your roll number in it; please check the list yourself" : st === "unknown" ? "I couldn't read the file reliably; check it yourself" : "";
       const time = at ? (at < now ? ` (${dayKey(at) === dayKey(now) ? "earlier today, " : ""}over)` : relTime(at.getTime(), now) || "") : "";
       return `- ${i.title}${time}${where ? ` · ${where}` : ""}${list ? ` · ${list}` : ""}`;
     });

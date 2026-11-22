@@ -12,7 +12,7 @@ on:
       mode:
         description: "What to do"
         type: choice
-        options: [run, check, probe, load-sample, remove-sample, diagnose, recheck]
+        options: [run, check, probe, load-sample, remove-sample, diagnose, recheck, rescan]
         default: run
       source:
         description: "Who started it (kick-run sends 'schedule': it then counts as a scheduled run)"

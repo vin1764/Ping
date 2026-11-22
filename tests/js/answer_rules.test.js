@@ -28,7 +28,7 @@ const data = {
     // hidden only because the form digest carries it: still due
     { id: "i5", company: "BlackBuck", category: "todo", title: "BlackBuck (Associate Manager): fill the form by Sun 22 Nov 12:00.",
       due_at: "2026-11-22T12:00:00+05:30", level: "hidden", hidden_because: "in the form digest", role_ids: ["r3"] },
-    { id: "i3", company: "Microsoft Corporation", category: "test", title: "Microsoft Corporation test room list is out (Software Engineer). You're not on it.",
+    { id: "i3", company: "Microsoft Corporation", category: "test", title: "I couldn't find your roll number in the Microsoft Corporation test room list (Software Engineer) (posted Mon 9 Nov 12:00). Please check the list yourself.",
       event_at: "2026-11-10T18:00:00+05:30", pdf_status: "no" },
   ],
   notices: [
@@ -55,7 +55,8 @@ test("a company with no open deadline: says so plainly, with the last notice", (
   assert.strictEqual(a.kind, "company");
   assert.match(a.text, /^No open deadline for Microsoft in the ERP data \(last checked Sat 21 Nov 17:11\)\./);
   assert.match(a.text, /Last Microsoft notice: "PPO", Wed 11 Nov 17:59\./);
-  assert.match(a.text, /You're not on it/);
+  assert.match(a.text, /couldn't find your roll number/);
+  assert.doesNotMatch(a.text, /not on (it|the list)/i);
   assert.doesNotMatch(a.text, /Meesho|BlackBuck|due/i);
 });
 

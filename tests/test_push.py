@@ -16,7 +16,7 @@ DIGEST_OTHERS = {"id": "d2", "category": "digest", "level": "show", "due_at": "2
 TEST_MINE = {"id": "t1", "company": "Groww", "category": "test", "level": "always", "event_at": "2026-11-21T15:00:00+05:30",
              "title": "Groww test (APM) Sat 21 Nov 15:00.", "details": {"kind": "test", "pdf": {"status": "yes", "details": {"room": "304"}}}}
 TEST_NOT = {"id": "t2", "company": "Pine Labs", "category": "test", "level": "show", "event_at": "2026-11-21T16:00:00+05:30",
-            "title": "Pine Labs test room list is out. You're not on it.", "details": {"kind": "test_rooms", "pdf": {"status": "no"}}}
+            "title": "I couldn't find your roll number in the Pine Labs test room list. Please check the list yourself.", "details": {"kind": "test_rooms", "pdf": {"status": "no"}}}
 
 
 def test_for_you_or_not():

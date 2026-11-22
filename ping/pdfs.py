@@ -5,8 +5,10 @@ Only your own row and the table heading are kept. The rest of the file
 
 Result status:
   yes      your roll number (or, as a fallback, your name) is in it
-  no       the file was read and you are not in it
-  unknown  the file could not be read at all
+  no       the file was read in full, it lists students by roll number, and yours isn't there. Ping never says
+           "you're not on it" for this: it says it couldn't find your roll number and asks you to check the list
+  unknown  the file couldn't be read reliably: not opened, scanned (read by OCR), a page without text, or a list
+           without roll numbers (names only). "reliability" says which
 """
 
 from __future__ import annotations
@@ -209,12 +211,14 @@ def sniff(data: bytes, content_type: str = "") -> str:
 
 # ---------------------------------------------------------------- check
 
-def check_attachment(data: bytes, roll: str, name: str = "", content_type: str = "") -> dict:
+def check_attachment(data: bytes, roll: str, name: str = "", content_type: str = "", also: list[str] | None = None) -> dict:
+    """also: other spellings of your roll to look for (your ERP login id when the profile has a roll of its own)."""
     roll = (roll or "").strip().upper()
+    others = [r.strip().upper() for r in (also or []) if r and r.strip().upper() != roll]
     fmt = sniff(data, content_type)
     result = {"status": "unknown", "matched_by": None, "format": fmt, "pages": 0, "text_chars": 0,
               "scanned": False, "ocr": False, "roll_like_count": 0, "header": None, "my_row": None,
-              "context": None, "section": None, "details": {}, "error": None}
+              "context": None, "section": None, "details": {}, "error": None, "reliability": None}
     try:
         if fmt == "pdf":
             doc = _read_pdf(data)
@@ -253,10 +257,18 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
 
     result["roll_like_count"] = len(set(ROLL_LIKE.findall(all_text.upper())))
 
-    found = _find_in_tables(pages, roll, by="roll") if roll else None
-    if not found and roll and roll_pattern(roll).search(all_text):
-        found = _find_in_text(pages, roll, by="roll") or \
-            {"matched_by": "roll", "header": None, "my_row": None, "context": "roll number found (split across lines)"}
+    found = None
+    for r in [roll, *others]:
+        if not r:
+            continue
+        found = _find_in_tables(pages, r, by="roll")
+        if not found and roll_pattern(r).search(all_text):
+            found = _find_in_text(pages, r, by="roll") or \
+                {"matched_by": "roll", "header": None, "my_row": None, "context": "roll number found (split across lines)"}
+        if found:
+            if r != roll:
+                roll = r                      # the room / slot next to it are read against this spelling
+            break
     if not found and name:
         found = _find_in_tables(pages, name, by="name") or _find_in_text(pages, name, by="name")
     if not found and name:
@@ -279,8 +291,25 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
         if found.get("section"):
             det["section"] = found["section"][:160]   # stored inside details (pdf_checks.details): the run re-reads it
         result["details"] = det
+        result["reliability"] = "found"
     else:
-        result["status"] = "no"
+        # not found: say so only for a file read in full that lists students by roll number
+        blank = [i + 1 for i, p in enumerate(pages) if len((p["text"] or "").strip()) < 20 and not p["tables"]]
+        if result["scanned"]:
+            why = "scanned file (read by OCR, which can misread roll numbers)"
+        elif blank:
+            why = f"page {', '.join(map(str, blank))} had no readable text"
+        elif result["roll_like_count"] == 0:
+            why = "the list has no roll numbers (names only?)"
+        else:
+            why = None
+        if why:
+            result["status"] = "unknown"
+            result["reliability"] = why
+            result["error"] = result["error"] or why
+        else:
+            result["status"] = "no"
+            result["reliability"] = "read in full"
     return result
 
 

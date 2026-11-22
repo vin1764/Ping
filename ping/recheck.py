@@ -38,7 +38,7 @@ def diagnose(runner, company: str, log=print) -> int:
     profile = runner.profile()
     roll, name = profile["roll"], profile.get("name") or ""
     erp_id = (runner.secrets.roll or "").upper()
-    raw = (runner.store.select("profile") or [{}])[0] if runner.store_ok else {}
+    raw = (runner.store.select("profile", {"id": "eq.1"}) or [{}])[0] if runner.store_ok else {}
     log(f"roll searched for: shape {re.sub(r'[0-9]', 'D', re.sub(r'[A-Z]', 'L', roll))}, "
         f"same as your ERP login id: {roll == erp_id}; profile.roll set: {bool(raw.get('roll'))}, "
         f"profile.roll == ERP id: {str(raw.get('roll') or '').upper() == erp_id}; profile updated_at: {raw.get('updated_at')}")
@@ -103,3 +103,79 @@ def diagnose(runner, company: str, log=print) -> int:
         except Exception:
             pass
     return 0
+
+
+LIST_KINDS = ("test", "test_rooms", "shortlist", "result")
+CHECK_FIELDS = ("status", "matched_by", "format", "pages", "text_chars", "scanned", "ocr", "roll_like_count",
+                "header", "my_row", "context", "details", "error", "checked_at")
+
+
+def rescan(runner, days: int = 14, company: str | None = None, log=print) -> list[dict]:
+    """Read again, from the ERP now, the attachment of every list notice (shortlist, test, room list, result) of the
+    last `days` days (or every notice of one company), check it with today's code, save it, rebuild the feed.
+    Returns what changed: [{company, notice, subject, old, new}]."""
+    from .items import LIST_KINDS as _  # noqa: F401  (same kinds)
+    from .matching import CompanyIndex
+    from .notices import analyze
+    profile = runner.profile()
+    roll, name = profile["roll"], profile.get("name") or ""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    stored = {n["id"]: n for n in runner.store.select("notices", REAL)}
+    old_checks = {c["notice_id"]: c for c in runner.store.select("pdf_checks", REAL)}
+    runner.login_stats = runner.erp.login()
+    changes, new_checks, new_notices = [], {}, []
+    try:
+        runner.erp.open_placement()
+        board = parse_notices(runner.erp.notices_xml())
+        if company:
+            todo = [n for n in board if company_matches(n, company)]
+        else:
+            todo = [n for n in board if n["notice_time"] and datetime.fromisoformat(n["notice_time"]) >= since]
+        roles = runner.store.select("roles", REAL)
+        index = CompanyIndex(roles)
+        for n in todo:
+            s = stored.get(n["id"])
+            if s is None:
+                # a notice the hourly run hasn't seen yet: read it the same way
+                try:
+                    n["text"] = parse_notice_page(runner.erp.notice_text(n["year"], str(n["notice_id"])))["text"] or n["preview"]
+                except Exception:
+                    n["text"] = n["preview"]
+                n["analysis"] = analyze(n, n["text"], index, roll, name, runner.secrets.ai)
+                new_notices.append(n)
+                s = n
+            kind = (s.get("analysis") or {}).get("kind")
+            if not n["has_attachment"] or (kind not in LIST_KINDS and not company):
+                continue
+            try:
+                data, ctype = runner.erp.notice_attachment(n["year"], str(n["notice_id"]))
+            except Exception as e:
+                log(f"notice {n['id']} ({n['company']}): attachment not downloaded ({type(e).__name__})")
+                continue
+            res = check_attachment(data, roll, name, ctype, also=[runner.secrets.roll])
+            res["checked_at"] = datetime.now(timezone.utc).isoformat()
+            new_checks[n["id"]] = res
+            before = (old_checks.get(n["id"]) or {}).get("status")
+            log(f"notice {n['id']} | {n['notice_time']} | {n['company'][:40]} | {kind} | {res['format']} {res['pages']}p "
+                f"roll-like {res['roll_like_count']} | was {before or 'not checked'} -> now {res['status']}"
+                + (f" ({res.get('reliability')})" if res["status"] != "yes" else f" by {res['matched_by']}"))
+            if before != res["status"]:
+                changes.append({"company": n["company"], "notice": n["id"], "subject": n["subject"], "kind": kind,
+                                "posted": n["notice_time"], "old": before or "not checked", "new": res["status"],
+                                "why": res.get("reliability")})
+    finally:
+        try:
+            runner.erp.logout()
+        except Exception:
+            pass
+    if new_notices:
+        runner.store.upsert("notices", [{k: n.get(k) for k in (
+            "id", "year", "notice_id", "type", "subject", "company", "preview", "text", "notice_time",
+            "notice_time_text", "has_attachment", "analysis")} for n in new_notices])
+    if new_checks:
+        runner.store.upsert("pdf_checks", [{"notice_id": k, **{f: v.get(f) for f in CHECK_FIELDS}} for k, v in new_checks.items()],
+                            key="notice_id")
+    runner.now = datetime.now(timezone.utc).astimezone(runner.now.tzinfo) if getattr(runner, "now", None) else runner.now
+    runner.items = runner._rebuild(profile)
+    runner.rechecked = {"notices": len(todo), "files": len(new_checks), "new_notices": len(new_notices), "changes": changes}
+    return changes

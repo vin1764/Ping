@@ -159,7 +159,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                     "deadlines": a.get("deadlines"), "method": a.get("method"),
                     "notice_time": n.get("notice_time"), "notice_year": n.get("year"), "notice_key": n["id"]}
         if check:
-            ndetails["pdf"] = {k: check.get(k) for k in ("status", "matched_by", "details", "error", "header", "my_row")}
+            ndetails["pdf"] = {k: check.get(k) for k in ("status", "matched_by", "details", "error", "header", "my_row",
+                                                         "checked_at", "format", "pages", "scanned", "ocr")}
 
         produced = False
         # several companies in one notice (a day's test schedule): the file says "you're on it" only for the company
@@ -212,15 +213,20 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                 if pdf_yes:
                     title = f"You're on the {company} {what}{label_s}.{' Test' + ev if ev else ''}{venue}{room}.{mail}"
                 elif t_status == "no":
-                    elsewhere = ""
+                    # never "you're not on it": Ping only says it couldn't find your roll number, in a file it read
+                    # in full, and asks you to look yourself (the message links the list and says when it was read)
+                    posted = f" (posted {fmt_when(_dt(n.get('notice_time')), now)})" if n.get("notice_time") else ""
                     if under is not None:
                         others_ = [targets[i].get("company") or targets[i].get("name") for i in sorted(under)]
-                        elsewhere = f" (the file lists you under {', '.join(o for o in others_ if o)})"
-                    title = f"{company} {what} is out{label_s}. You're not on it{elsewhere}."
+                        title = (f"I found you under {', '.join(o for o in others_ if o)} in this {what}, not under "
+                                 f"{company}{posted}.")
+                    else:
+                        title = (f"I couldn't find your roll number in the {company} {what}{label_s}{posted}. "
+                                 f"Please check the list yourself.")
                     if not applied:
                         level = "hidden"
                 elif pdf_status == "unknown":
-                    title = f"{company} {what} is out{label_s} but the file couldn't be read. Check it yourself."
+                    title = f"I couldn't read the {company} {what}{label_s} reliably. Check it yourself."
                 elif n.get("has_attachment") and check is None:
                     title = f"{company} {what} is out{label_s}. File not checked yet."
                 else:
@@ -391,7 +397,7 @@ def _mail_item(m: dict, roles: list[dict], elig: dict, profile: dict, now: datet
     elif kind == "shortlist" and pst == "yes":
         title = f"{who} shortlist is out. You're on it" + (f" ({where})" if where else "") + "."
     elif kind == "shortlist" and pst == "no":
-        title = f"{who} shortlist is out. You're not on it."
+        title = f"{who} shortlist is out. I couldn't find your roll number in it; please check the list yourself."
     elif kind == "ppt":
         title = f"{who} pre-placement talk: {fmt_when(_dt(event), now)}." if event else f"{who} pre-placement talk: {subject}"
     elif kind == "offer":

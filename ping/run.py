@@ -126,7 +126,9 @@ class Runner:
         self.counts[key] = self.counts.get(key, 0) + n
 
     def profile(self) -> dict:
-        rows = self.store.select("profile") if self.store_ok else []
+        # your own row only (id 1). The table also holds the demo's made-up profile (id 2, is_sample): reading
+        # "the first row" once picked that one up, and lists were searched for the demo's roll (22 Nov, FirstClub)
+        rows = [r for r in (self.store.select("profile", {"id": "eq.1"}) if self.store_ok else []) if not r.get("is_sample")]
         prof = dict(PROFILE_DEFAULTS)
         if rows:
             prof.update({k: v for k, v in rows[0].items() if v is not None})
@@ -493,7 +495,8 @@ class Runner:
                 self.c("pdf_download_failed")
                 self.problems.append(f"notice {n['notice_id']}: attachment not downloaded ({type(e).__name__})")
                 continue
-            res = check_attachment(data, roll, profile.get("name") or "", ctype)
+            res = check_attachment(data, roll, profile.get("name") or "", ctype, also=[self.secrets.roll])
+            res["checked_at"] = datetime.now(timezone.utc).isoformat()
             checks[n["id"]] = res
             self.c(f"pdf_{res['status']}")
             if res["status"] != "unknown":
@@ -577,7 +580,8 @@ class Runner:
             if checks:
                 self.store.upsert("pdf_checks", [{"notice_id": k, **{f: v.get(f) for f in (
                     "status", "matched_by", "format", "pages", "text_chars", "scanned", "ocr", "roll_like_count",
-                    "header", "my_row", "context", "details", "error")}} for k, v in checks.items()],
+                    "header", "my_row", "context", "details", "error", "checked_at")
+                    if f != "checked_at" or v.get(f)}} for k, v in checks.items()],
                     key="notice_id")
         except Exception as e:
             self.problems.append(f"saving failed: {e}")
@@ -832,7 +836,7 @@ class Runner:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m ping.run")
     ap.add_argument("--mode", default=os.environ.get("PING_MODE") or "run",
-                    choices=["run", "check", "probe", "load-sample", "remove-sample", "diagnose", "recheck"])
+                    choices=["run", "check", "probe", "load-sample", "remove-sample", "diagnose", "recheck", "rescan"])
     ap.add_argument("--company", default=os.environ.get("PING_COMPANY") or "",
                     help="diagnose / recheck: the company to read again from the ERP")
     ap.add_argument("--memory", help="use a local JSON file instead of Supabase (testing)")
@@ -881,6 +885,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "probe":
         from .probe import probe
         return probe(secrets, store if ok else None)
+    if args.mode == "rescan":
+        from .recheck import rescan
+        r = Runner(secrets, store, store_ok=ok, trigger=trigger)
+        changes = rescan(r, days=int(os.environ.get("PING_DAYS") or 14))
+        print(f"\n==== re-scan: {r.rechecked['files']} files read again, {len(changes)} verdict(s) changed ====")
+        for c in changes:
+            print(f"  {c['company']} | {c['subject']} ({c['kind']}, posted {c['posted']}) | {c['old']} -> {c['new']}"
+                  + (f" | {c['why']}" if c.get('why') else ""))
+        store.save()
+        return 0
     if args.mode == "diagnose":
         from .recheck import diagnose
         if not args.company:

@@ -1909,7 +1909,7 @@
     const row = (r) => {
       const status = [r.filledAll ? h("span", { class: "pill applied" }, "✓ filled") : null,
         r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
-        : r.status === "off" ? h("span", { class: "pill over" }, "not on the list") : null,
+        : r.status === "off" ? h("span", { class: "pill plain" }, "roll not found: check the list") : null,
         r.via === "email" ? h("span", { class: "pill via" }, "via email") : null].filter(Boolean);
       const right = r.kind === "notice" || r.kind === "more" ? null : r.over ? h("span", { class: "pill cd c-over" }, "over")
         : r.due ? countPill(r.due) : null;
@@ -2053,7 +2053,9 @@
       h("pre", { class: "notice" }, n.text || n.preview || ""),
       c ? h("div", { class: "card" },
         h("strong", {}, c.status === "yes" ? `You're in the attachment (matched by ${c.matched_by})` :
-                         c.status === "no" ? "You're not in the attachment" : "The attachment couldn't be read"),
+                         c.status === "no" ? "I couldn't find your roll number in the attachment. Please check it yourself."
+                         : "I couldn't read the attachment reliably. Check it yourself."),
+        c.checked_at ? h("p", { class: "muted small" }, `File read ${when(c.checked_at)}${c.format ? ` · ${String(c.format).toUpperCase()}${c.pages ? `, ${c.pages} page${c.pages === 1 ? "" : "s"}` : ""}` : ""}`) : null,
         c.my_row ? h("div", { class: "table-wrap" }, h("table", {},
           c.header ? h("tr", {}, c.header.map((x) => h("th", {}, x))) : null,
           h("tr", {}, c.my_row.map((x) => h("td", {}, x))))) : null,
@@ -2192,7 +2194,7 @@
              formKey: d.form?.key || null };
   }
   function sheetCard(c) {
-    const status = c.list === "on" ? h("span", { class: "pill you" }, "on the list") : c.list === "off" ? h("span", { class: "pill over" }, "not on the list")
+    const status = c.list === "on" ? h("span", { class: "pill you" }, "on the list") : c.list === "off" ? h("span", { class: "pill plain" }, "roll not found: check the list")
       : c.applied === true ? h("span", { class: "pill applied" }, "✓ applied") : c.applied === false ? h("span", { class: "pill plain" }, "not applied") : null;
     const fit = c.mine === true ? h("span", { class: "pill you" }, "For you") : c.mine === false ? h("span", { class: "pill plain" }, "Other") : null;
     const erp = c.role || c.kind === "application" ? TODAY.erpLink(c.role || { company: c.company }, myRoll()) : null;

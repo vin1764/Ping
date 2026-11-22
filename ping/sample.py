@@ -197,7 +197,7 @@ def load(store) -> int:
     for table in ("roles", "notices", "pdf_checks", "emails", "contacts", "items", "runs"):
         key = "notice_id" if table == "pdf_checks" else "id"
         n += store.upsert(table, data[table], key=key)
-    prof = (store.select("profile") or [{}])[0]
+    prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
     real = any(prof.get(k) for k in ("department", "degree", "cgpa", "roll")) and not prof.get("is_sample")
     if not real:  # never overwrite a real profile with the demo one
         store.upsert("profile", [{"id": 1, **data["profile"], "is_sample": True,
@@ -214,7 +214,7 @@ def remove(store) -> int:
         if rows:
             store.delete(table, {"is_sample": "is.true"})
             n += len(rows)
-    prof = (store.select("profile") or [{}])[0]
+    prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
     if prof.get("is_sample"):
         store.upsert("profile", [{"id": 1, **{k: None for k in PROFILE}, "notice_types": ["PLACEMENT"],
                                   "cv_names": [], "interested_companies": [], "not_interested_companies": [],

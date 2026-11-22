@@ -282,11 +282,14 @@
    "question": "am I on the Pine Labs list",
    "checks": {
     "must_contain": [
-     "not on|no,|aren't on|are not on|weren't on|were not on|not shortlisted|not in|not listed|no. you"
+     "couldn't find your roll|could not find your roll|couldn't read|check (the|it|this) list|check it yourself"
     ],
-    "max_words": 60
+    "max_words": 60,
+    "must_not_contain": [
+     "not on it|aren't on|are not on|you're not on|you are not on|not shortlisted"
+    ]
    },
-   "why": "Pine Labs shortlist (20 Nov) and test room list (9 Nov): not on either"
+   "why": "Pine Labs shortlist (20 Nov) and test room list (9 Nov): roll not found in either. Ping never asserts absence: it says it couldn't find the roll and asks to check the list"
   },
   {
    "id": "N6",

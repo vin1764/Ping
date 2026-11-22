@@ -138,3 +138,27 @@ Judgement calls made while working unattended, one line each.
 - **Demo corrections and Mark done** change the page only ("Noted for this demo session"); nothing is sent, so the
   demo still can't write a row.
 - **Today**: a notice about a deadline already on Today joins that row instead of a second row.
+
+## 23 Nov: chat, feedback, Today, Forms, public copy
+
+- **The 23 Nov "piamal not relevantt" bug had two causes**: the page sent the reply's context inside the question
+  (over 500 characters: HTTP 400, then the page answered the whole quoted message by rules), and there was no
+  feedback intent. The reply now travels as its own field; feedback is rules-only (works with the model down).
+- **Feedback lists**: company-level uses the existing `not_interested_companies` / `interested_companies` (the
+  hourly run already hides a not-interested company's items); role-level is new (`hidden_roles`, `shown_roles`).
+  "Show X again" after a hide clears the hide (Ping's marks decide again); "X is relevant" when nothing was hidden
+  pins it For you. Undo restores the lists exactly as they were (`prefs_undo`).
+- **Chat models**: Groq `openai/gpt-oss-120b` first (best production model with published free limits: 1,000
+  requests and 200K tokens a day, 8K tokens a minute), so it gets a compact prompt (the roles of the companies asked
+  about, not all 400); Gemini flash-lite second (it answered 5/5 live calls on 23 Nov, flash-latest 0/7); then the
+  rules. 15 s in all. Evals use their own Groq key or skip Groq, never the live key.
+- **Today counts what's left**: "1 for you to apply by 20:00"; applied and filled things are said once, in the
+  "Done today" line (digests: "You've done 11.", reminders never). The badge is the same number as the rows.
+- **Forms: two links are never one form.** A notice's link belongs to the listed companies on its own line; a
+  link for a company outside the list belongs to no one; a listed company with no link gets its own "form link
+  not found" row. P15 of the forms fixture expected the old merge (a different link, same companies + purpose) and
+  now expects its own row. An over-merged row's key (and tick) stays with the form whose page title it showed.
+- **The tick on the merged "Additional requirement" row**: form_status holds no tick for the owner's login (Admin >
+  forms-report: 0 rows), so there was nothing to carry; the LTM row is unticked. Tick it again in Forms.
+- **Public copy**: force-pushed (it holds only the generated copy), marked as a template when the token allows;
+  Ping and Dashboard workflows are green with no secrets (they say "not set up yet" / build without publishing).

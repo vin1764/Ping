@@ -14,9 +14,9 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026; updated 22 N
 
 | fact | value | source |
 |---|---|---|
-| runs per day | 20 (every hour at :41 UTC, 00:41-19:41 UTC = 06:11-01:11 IST) | `sql/schedule.sql` (job `ping-hourly`, `41 0-19 * * *`), `.github/workflows/ping.yml` (backup cron) |
+| runs per day | the student's own schedule, set in the chat or on Profile: the owner's is every 60 min, 06:00-01:00 IST (about 19 a day). pg_cron ticks every 30 min (:11 and :41 UTC) and kick-run starts a run when the schedule says so | `sql/schedule.sql` (job `ping-hourly`, `11,41 * * * *`), `supabase/functions/kick-run/`, `.github/workflows/ping.yml` (backup cron) |
 | what starts a run | Supabase pg_cron -> `kick-run` function -> workflow_dispatch; GitHub cron as backup | `sql/schedule.sql`, `supabase/functions/kick-run/` |
-| guard against double runs | skip if a run is going or started < 50 min ago | `supabase/functions/kick-run/guard.ts`, `ping/schedule_guard.py` |
+| guard against double runs | skip if a run is going or one started less than the schedule's interval ago ("a Ping run started 13 min ago (every 60 min)") | `supabase/functions/kick-run/guard.ts`, `ping/schedule_guard.py` |
 | first pg_cron-started run | 21 Nov 13:41:04 UTC (19:11 IST), Ping run #13, success, 57 s | GitHub Actions run 44910079892 |
 | pg_cron ticks after the #14 fix | 15:41 UTC (21:11 IST): kick-run answered "a Ping run started 33 min ago", nothing started (the guard, after manual run #15); 16:41 UTC (22:11 IST): started run #16, success | Admin > schedule-status (cron.job_run_details, kick-run's replies) |
 
@@ -25,7 +25,8 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026; updated 22 N
 | fact | value | source |
 |---|---|---|
 | runs to 22 Nov 06:28 IST | 33: 25 succeeded, 7 failed, 1 cancelled; the last 19 in a row succeeded (#15-#33) | Actions > Ping |
-| overnight 21-22 Nov | scheduled runs at 22:11, 23:11, 00:11 IST, all succeeded; none 01:00-06:00 IST (the check window) | Actions > Ping, run times |
+| overnight 21-22 Nov | started by pg_cron and kick-run at 22:11, 23:11 and 00:11 IST: all three succeeded. Every tick from 01:11 to 05:41 IST answered "outside your hours (06:00-01:00 IST)" and started nothing. 06:11 and 06:41 IST: "a Ping run started 16 / 13 min ago (every 60 min)", the guard, after manual runs #32 (05:54) and #33 (06:28), both succeeded. The runs between 01:00 and 06:00 IST (#27-#31) were started by hand (JD work), all succeeded | Admin > schedule-status of 22 Nov 07:08 IST (kick-run's replies, kept about 6 h by pg_net), Actions > Ping |
+| push ticks | every 5 min (`ping-push-due`); one answered HTTP 500 "push is not set up" at 04:40 IST, before push-setup was run; every tick since: HTTP 200 | same |
 
 ### Up to 21 Nov 17:40 UTC (first day)
 

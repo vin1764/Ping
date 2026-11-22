@@ -1,6 +1,6 @@
 # Facts for the 1-pager
 
-Numbers only, each with where it comes from. Collected 21 Nov 2026.
+Numbers only, each with where it comes from. Collected 21 Nov 2026; updated 22 Nov 2026 (the final round).
 
 ## Problem framing (README)
 
@@ -20,7 +20,14 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026.
 | first pg_cron-started run | 21 Nov 13:41:04 UTC (19:11 IST), Ping run #13, success, 57 s | GitHub Actions run 44910079892 |
 | pg_cron ticks after the #14 fix | 15:41 UTC (21:11 IST): kick-run answered "a Ping run started 33 min ago", nothing started (the guard, after manual run #15); 16:41 UTC (22:11 IST): started run #16, success | Admin > schedule-status (cron.job_run_details, kick-run's replies) |
 
-## Runs so far (GitHub Actions, Ping workflow, up to 21 Nov 17:40 UTC)
+## Runs (GitHub Actions, Ping workflow)
+
+| fact | value | source |
+|---|---|---|
+| runs to 22 Nov 06:28 IST | 33: 25 succeeded, 7 failed, 1 cancelled; the last 19 in a row succeeded (#15-#33) | Actions > Ping |
+| overnight 21-22 Nov | scheduled runs at 22:11, 23:11, 00:11 IST, all succeeded; none 01:00-06:00 IST (the check window) | Actions > Ping, run times |
+
+### Up to 21 Nov 17:40 UTC (first day)
 
 | fact | value | source |
 |---|---|---|
@@ -61,6 +68,28 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026.
 | Ask Ping answer, per model | gemini-flash-lite-latest: median 5.1 s, 90th percentile 11.4 s, max 49.1 s (70 answers); answers decided by rules (preferences, read-only): median 3.4 s, max 31.9 s incl. re-marking 197 roles (11 answers). All 81 answers came from these two; no fallback model was needed | `evals/ask_ping/results.json` |
 | "For you" marks for the page | 2.4 s (197 roles, from the cache) | live call, 21 Nov 14:34 UTC |
 | preference change incl. re-marking 197 roles in one Gemini call | 30.2 s | live call, 21 Nov 14:34 UTC |
+
+## Performance (22 Nov, live site)
+
+| what | value | source |
+|---|---|---|
+| Lighthouse, mobile, landing page | performance 100, accessibility 100, best practices 100 (FCP 0.8 s, LCP 1.8 s, TBT 0 ms, CLS 0) | Lighthouse 12.2.1 on https://vin1764.github.io/ping-dashboard/ |
+| Lighthouse, mobile, the demo (`?demo=1`) | performance 89, accessibility 100, best practices 100 (FCP 0.9 s, LCP 3.6 s, TBT 120 ms, CLS 0); before the fixes of 22 Nov: 55 / 96 / 100 (TBT 1,360 ms) | same, build 8ba9236; before: build a3c4358 |
+| first load on 4G (9 Mbps, 170 ms) with a phone's CPU (4x slower), cold cache | landing page usable in 1.2 s; the demo's chat with its messages in 1.8 s | `setup/perf_check.js` |
+| FACT answer, typed into the page | median 16 ms on screen (65 of 65 under 300 ms), 162 ms with a phone's CPU; no typing bubble | `evals/ask_ping/PAGE_RUN.md`, `setup/perf_check.js` |
+| OPEN answer (the model) | median 17.6 s on screen: the main model timed out or was busy (503), the lighter model answered in 1-2 s | `evals/ask_ping/PAGE_RUN.md`, Admin > functions-check |
+| Companies, all 201 roles | first 60 drawn in 0.23 s, all 201 in 0.48 s; scrolling 61 frames/s, 0 frames over 50 ms (phone CPU) | `setup/perf_check.js` |
+| layout shift when a message arrives | 0.000 | `setup/perf_check.js` |
+| the demo's data as published | 3.0 MB (334 KB gzipped), was 6.6 MB (582 KB) | `dashboard/build.sh` |
+
+## Placement mail (22 Nov, the real mailbox, last 14 days)
+
+| what | value | source |
+|---|---|---|
+| mails in the window | 374 (headers only read for all) | `evals/mail/REAL_COVERAGE.md` |
+| placement mails, read in full | 59: 51 already on the ERP, 8 mail-only | same |
+| never read beyond the headers | 315 (75 OTP mails, 130 bulk, 18 job-board alerts, 87 no placement signal, 5 account/shopping) | same |
+| fixture eval (20 made-up mails) | 9 of 9 checks: no noise stored or read, OTP never stored, the ERP duplicate merged, the form deadline, the roll in the PDF | `evals/mail/REPORT.md` |
 
 ## Cost
 

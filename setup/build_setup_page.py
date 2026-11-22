@@ -135,13 +135,13 @@ def render(doc: str | None = None) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{html.escape(title)} · Ping</title>
   <meta name="description" content="How to run your own copy of Ping: what you get, what you need, the steps, privacy.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230e6b5c'/%3E%3Ccircle cx='16' cy='16' r='5' fill='white'/%3E%3C/svg%3E">
+  <link rel="icon" href="icons/ping.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <script>try {{ const t = JSON.parse(localStorage.getItem("ping-theme")); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; }} catch (e) {{}}</script>
 </head>
 <body class="doc">
   <header class="top">
-    <a class="brand" href="./"><span class="avatar" aria-hidden="true">P</span>
+    <a class="brand" href="./"><span class="avatar" aria-hidden="true"><svg viewBox="96 110 320 320"><path class="mk-b" d="M140 136h232a44 44 0 0 1 44 44v136a44 44 0 0 1-44 44H238l-78 62v-62h-20a44 44 0 0 1-44-44V180a44 44 0 0 1 44-44z"/><circle class="mk-c" cx="256" cy="248" r="28"/><path class="mk-a" d="M202 200a9000000000M310 200a9000000000"/></svg></span>
       <span><strong>Ping</strong><span class="sub">back to sign in</span></span></a>
   </header>
   <main class="page doc-page">

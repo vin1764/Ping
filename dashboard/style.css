@@ -6,7 +6,7 @@
 :root {
   --bg: #f4f2ec; --surface: #ffffff; --thread: #ecebe4;
   --ink: #1b1c19; --muted: #5a5b53; --line: #dddbd2; --line-strong: #8d8e85;
-  --accent: #0e6b5c; --accent-soft: #e0f1ec; --on-accent: #ffffff;
+  --accent: #0d6b61; --accent-soft: #dcefe9; --on-accent: #ffffff;
   --applied: #33527a; --applied-soft: #e4ebf5;
   --soon: #8a4b00; --soon-soft: #fbefdf;
   --test: #5b3fb0; --test-soft: #eee9fb;
@@ -16,33 +16,33 @@
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
   --r-ctl: 8px; --r-card: 14px; --r-pill: 999px;
   --rail: 88px; --bar: 56px;
-  --wall: #e5eae4; --bubble-ping: #ffffff; --bubble-me: #d3eee2;
+  --wall: #e7ebe5; --bubble-ping: #ffffff; --bubble-me: #d4ede6;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #121513; --surface: #1b1f1c; --thread: #0e110f;
-    --ink: #eceeea; --muted: #a3a99f; --line: #2d332f; --line-strong: #6b726c;
-    --accent: #5cc9ae; --accent-soft: #163029; --on-accent: #0b1f1a;
+    --bg: #161412; --surface: #201d1a; --thread: #110f0d;
+    --ink: #efebe4; --muted: #b3ab9f; --line: #34302b; --line-strong: #736c62;
+    --accent: #5fd0b8; --accent-soft: #163029; --on-accent: #0b1f1a;
     --applied: #9db8e0; --applied-soft: #1c2636;
     --soon: #f0b46a; --soon-soft: #33250f;
     --test: #c3b0f5; --test-soft: #262040;
     --danger: #ff8f86; --danger-soft: #3a1c1a;
     --shadow: 0 6px 24px rgba(0, 0, 0, .5);
-    --wall: #0b100e; --bubble-ping: #232a28; --bubble-me: #143f35;
+    --wall: #0f0d0b; --bubble-ping: #26221e; --bubble-me: #17403a;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #121513; --surface: #1b1f1c; --thread: #0e110f;
-  --ink: #eceeea; --muted: #a3a99f; --line: #2d332f; --line-strong: #6b726c;
-  --accent: #5cc9ae; --accent-soft: #163029; --on-accent: #0b1f1a;
+  --bg: #161412; --surface: #201d1a; --thread: #110f0d;
+  --ink: #efebe4; --muted: #b3ab9f; --line: #34302b; --line-strong: #736c62;
+  --accent: #5fd0b8; --accent-soft: #163029; --on-accent: #0b1f1a;
   --applied: #9db8e0; --applied-soft: #1c2636;
   --soon: #f0b46a; --soon-soft: #33250f;
   --test: #c3b0f5; --test-soft: #262040;
   --danger: #ff8f86; --danger-soft: #3a1c1a;
   --shadow: 0 6px 24px rgba(0, 0, 0, .5);
-  --wall: #0b100e; --bubble-ping: #232a28; --bubble-me: #143f35;
+  --wall: #0f0d0b; --bubble-ping: #26221e; --bubble-me: #17403a;
   color-scheme: dark;
 }
 
@@ -144,7 +144,7 @@ label .hint, .hint { font-weight: 400; color: var(--muted); font-size: var(--t-s
 .pill.applied { background: var(--applied-soft); color: var(--applied); }
 .pill.you { background: var(--accent-soft); color: var(--accent); }
 .pill.over { background: var(--thread); color: var(--muted); }
-.pill.no { background: var(--danger-soft); color: var(--danger); }
+.pill.no { background: transparent; color: var(--muted); border: 1px solid var(--line-strong); }
 .pill.cv { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); font-weight: 400; }
 
 /* ---------------------------------------------------------------- chat (home) */
@@ -305,7 +305,7 @@ th, td { text-align: left; padding: var(--s2) 10px; border-bottom: 1px solid var
 th { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-ctl); }
 .yes { color: var(--accent); font-weight: 600; }
-.no { color: var(--danger); font-weight: 600; }
+.no { color: var(--ink); font-weight: 600; }
 
 /* profile: cards, each edited in place */
 .pcards { display: grid; gap: var(--s3); }
@@ -388,9 +388,9 @@ body.doc { display: block; overflow: auto; height: auto; min-height: 100%; }
 @media (min-width: 900px) { .check-top { display: none; } }
 .nav .check-label { display: block; max-width: 80px; text-align: center; white-space: normal; line-height: 14px; }
 .msg.run { border-left: 4px solid var(--accent); }
-.msg.run.r-failed { border-left-color: var(--danger); }
+.msg.run.r-failed { border-left-color: var(--soon); }
 .msg.run .kicker .k { color: var(--accent); }
-.msg.run.r-failed .kicker .k { color: var(--danger); }
+.msg.run.r-failed .kicker .k { color: var(--soon); }
 .msg.run .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent);
   animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -433,8 +433,12 @@ body { grid-template-columns: minmax(0, 1fr); }
 
 /* header: avatar with presence, name, status line */
 .top .avatar { width: 40px; height: 40px; position: relative; transition: background-color .2s; }
-.top .avatar svg { width: 26px; height: 26px; fill: none; stroke: var(--on-accent); stroke-width: 2.2; stroke-linecap: round; }
-.top .avatar svg circle { fill: var(--on-accent); stroke: none; }
+/* the mark (docs/design/logo-bubble.svg): a chat bubble with a ping in it */
+.avatar svg { width: 24px; height: 24px; }
+.avatar svg .mk-b { fill: var(--on-accent); }
+.avatar svg .mk-c { fill: var(--accent); }
+.avatar svg .mk-a { fill: none; stroke: var(--accent); stroke-width: 22; stroke-linecap: round; }
+.login-mark { display: block; width: 64px; height: 64px; margin: 0 auto var(--s3); border-radius: 16px; }
 .avatar[data-state="checking"]::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--accent);
   animation: presence 1.4s ease-out infinite; }
 @keyframes presence { from { transform: scale(.9); opacity: .9; } to { transform: scale(1.25); opacity: 0; } }
@@ -468,7 +472,7 @@ body { grid-template-columns: minmax(0, 1fr); }
 .k-soon .kicker .k { color: var(--soon); } .k-test .kicker .k { color: var(--test); } .k-new .kicker .k { color: var(--accent); }
 .k-you .kicker .k { color: var(--applied); } .k-review .kicker .k { color: var(--accent); }
 .msg.run .kicker .k { color: var(--applied); } .msg.run .kicker .k2 { color: var(--muted); }
-.msg.run.r-failed .kicker .k { color: var(--danger); }
+.msg.run.r-failed .kicker .k { color: var(--soon); }
 .msg .expand { opacity: 1; }   /* full --muted: 4.5:1 or more on white (it was .8: 4.2:1) */
 /* digests: rows as a quiet list; "Show 30 more ▸" opens the rest in place */
 .msg .li { border-left-width: 2px; padding: 4px 0 4px 10px; }
@@ -488,6 +492,8 @@ body { grid-template-columns: minmax(0, 1fr); }
 .pill.c-red::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: beat 1.2s ease-in-out infinite; }
 @keyframes beat { 50% { opacity: .25; } }
 .pill.c-over { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+/* a form you haven't filled whose deadline has passed: red, the only other red */
+.pill.c-overdue { background: var(--danger-soft); color: var(--danger); }
 
 /* motion: new bubbles rise (150 ms), the typing bubble, the send button, the unread pill */
 .msg.enter { animation: rise .16s ease-out both; }
@@ -697,3 +703,16 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .reply-preview .rp-x { flex: none; width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; }
 .msg.flash { animation: hl 1.6s ease-out; }
 .msg .ext-line { margin-top: 4px; font-size: var(--t-sm); color: var(--soon); font-weight: 600; }
+
+/* ---- finishing details (22 Nov): one icon weight, one card radius, a clearer active tab, aligned pills, a little
+   more room in the header and the Today rail. Sizes and positions stay as they were. */
+.nav svg, .composer .send svg, .search-row svg, .check-top svg { stroke-width: 2; }
+.msg, .card, .act-card, .form-row, .today-row { border-radius: var(--r-card); }
+.top { padding-top: var(--s2); padding-bottom: var(--s2); gap: var(--s4); }
+.top .sub { margin-top: 1px; }
+.today { gap: var(--s4); }
+.today-row { padding-top: var(--s2); padding-bottom: var(--s2); }
+.pill { line-height: 18px; vertical-align: middle; }
+.kicker .pill, .fr-head .pill, .fr-meta .pill { align-self: center; }
+.nav a.on { font-weight: 700; }
+.nav a.on svg { background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 14px; margin: -2px -14px; box-sizing: content-box; }

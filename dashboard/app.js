@@ -916,6 +916,7 @@
       keepSessionFresh(sb);
       startReal(sb);
     } },
+      h("img", { class: "login-mark", src: "icons/ping.svg", alt: "", width: "64", height: "64" }),
       h("h1", {}, "Ping"),
       h("p", { class: "promise" }, "Your ERP, filtered for you, every hour."),
       h("p", { class: "who" }, "Sign in (the student this copy belongs to)"),
@@ -1618,7 +1619,7 @@
           f.closed ? h("span", { class: "pill over" }, "Closed") : null,
           f.signin_required ? h("span", { class: "pill plain" }, "sign-in required") : null),
         h("div", { class: "fr-meta" }, f.due_at ? h("span", { class: "num" }, when(f.due_at)) : h("span", { class: "muted" }, "No deadline given"),
-          f.due_at && !filled ? (past ? h("span", { class: "pill cd c-over" }, "over") : countPill(f.due_at)) : null,
+          f.due_at && !filled ? (past ? h("span", { class: `pill cd ${f.closed ? "c-over" : "c-overdue"}` }, "past due") : countPill(f.due_at)) : null,
           filled && moved ? h("span", { class: "pill plain" }, "deadline extended") : null),
         f.title ? h("div", { class: "fr-line" }, f.title) : null,
         f.signin_required ? h("div", { class: "fr-line muted small" }, "This form needs an institute sign-in: Ping can't read it, so open it in your browser. The notice says what it's for.") : null,

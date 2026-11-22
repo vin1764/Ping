@@ -113,3 +113,16 @@ Judgement calls made while working unattended, one line each.
   company wins; a clear new question starts a new topic.
 - **Installed app on an old build.** The shell is cache-first; a new deploy now takes over at once (reload on
   controllerchange, not while typing), so fixes like the docked Latest pill reach the installed app.
+
+## 22 Nov: visual polish
+
+- **Mark.** Of three original marks (docs/design/logo-pulse.svg, logo-bubble.svg, logo-monogram.svg; home-screen mocks in
+  docs/screenshots/logo/), the **bubble** won: a chat bubble with a ping inside says what Ping is (a chat that pings
+  you), and it stays recognisable at 16 px and as a white-only push badge, where the pulse reads as a generic signal
+  icon and the monogram as just a letter. setup/logo.js renders it to every icon (manifest any + maskable, iOS,
+  favicon, push badge) and the header avatar, sign-in and setup page use it.
+- **Colour.** Accent #0e6b5c → #0d6b61 (a little deeper and bluer, calm); dark mode on warm neutrals (#161412 instead
+  of a green-grey #121513); amber for closing soon, red only for under 1 h and a past-due form you haven't filled
+  ("Not eligible" and a failed check are no longer red). Every text pair ≥ 5.3:1 (tests/test_design_contrast.py).
+- **iPhone keeps the old icon** until Ping is removed from the Home Screen and added again (iOS copies the icon when you
+  add it); Android picks up the new manifest icons by itself within about a day.

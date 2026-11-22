@@ -284,3 +284,19 @@ def test_notice_1815_each_company_its_own_form_and_no_link_says_so():
     assert set(by_co) == {("Ather Energy",), ("BlackBuck",), ("LTM",), ("Piramal Finance",)}
     assert by_co[("Piramal Finance",)]["link"] is None and by_co[("Piramal Finance",)]["title"] == forms.NO_LINK
     assert by_co[("LTM",)]["link"] == "https://forms.gle/LtmForm44444"
+
+
+def test_notice_1815_read_by_the_ai_fallback_gets_the_same_rule():
+    """An AI-read notice keeps its stored reading (no 'for' on its forms): the feed applies the rule from its text."""
+    from ping import forms
+    from ping.items import build_items
+    roles = [role(c, "R", apply_end="2026-11-22T20:00:00+05:30") for c in ("Ather Energy", "BlackBuck", "LTM", "Piramal Finance")]
+    idx = CompanyIndex(roles)
+    n = {"id": "2026:1815", "notice_id": 1815, "subject": "Additional requirement", "company": "Multiple Companies",
+         "notice_time": REF.isoformat(), "text": N1815}
+    a = analyze(n, N1815, idx)
+    a["method"] = "ai"
+    a["todos"] = [{k: v for k, v in t.items() if k != "for"} for t in a["todos"]]
+    n["analysis"] = a
+    rows = forms.build(build_items(roles, [n], {}, {"roll": "x"}, REF), fetch=lambda u: u, now=REF)
+    assert sorted(tuple(r["companies"]) for r in rows) == [("Ather Energy",), ("BlackBuck",), ("LTM",), ("Piramal Finance",)]

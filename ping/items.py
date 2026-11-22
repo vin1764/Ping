@@ -181,6 +181,14 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
         # several companies in one notice (a day's test schedule): the file says "you're on it" only for the company
         # whose section you're listed under, and its room / time belong to that company only
         under = listed_under(check, [t.get("company") or t.get("name") or "" for t in targets]) if len(targets) > 1 else None
+        # a notice whose reading came from the AI fallback (kept as it was) has no per-company forms yet: the same
+        # rule here, from its text (each link to the listed companies on its own line)
+        ftodos = [td for td in a.get("todos", []) if td.get("action") == "fill_form" and td.get("link")]
+        if ftodos and all("for" not in td for td in ftodos) and not fix.get("company"):
+            from .notices import link_owners
+            owners = link_owners(text, [td["link"] for td in ftodos], targets)
+            a = {**a, "todos": [{**td, "for": owners.get(td["link"])} if td.get("action") == "fill_form" and td.get("link") else td
+                                for td in a.get("todos", [])]}
         for ti, t in enumerate(targets):
             picked, why = roles_for_target(t, index, kind, text) if t.get("company") else ([], "not in your companies list")
             applied = [r for r in picked if r.get("applied")]

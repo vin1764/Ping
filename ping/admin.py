@@ -617,7 +617,7 @@ def prefs_report(secrets) -> int:
     feed now marks For you, and a check that no demo or eval row is read as yours. Reads only."""
     from .relevance import tag
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
-    rows = store.select("profile", {}, columns="id,is_sample,updated_at,targets,interested_companies,not_interested_companies,list_other_roles,feed_mode,notice_types,reminder_hours,roll,name,cgpa")
+    rows = store.select("profile", {}, columns="id,is_sample,updated_at,targets,interested_companies,not_interested_companies,list_other_roles,feed_mode,notice_types,reminder_hours,roll,name,cgpa,cvs,department,degree,active_backlogs")
     me = next((r for r in rows if r.get("id") == 1), {})
     say("profile rows: " + ", ".join(f"id {r['id']} (sample={r.get('is_sample')}, updated {r.get('updated_at')})" for r in rows))
     say(f"yours (id 1): updated_at {me.get('updated_at')} (also moves when the chat marks messages read)")
@@ -635,13 +635,18 @@ def prefs_report(secrets) -> int:
         say("  no preference change in your chat (the targets were set on the Profile page or during onboarding)")
     # what the feed marks For you now, with the targets above
     roles = store.select("roles", {"is_sample": "is.false"})
+    from .cvs import cvs_text
     from .eligibility import evaluate
-    for_you = [r for r in roles if tag(r, me.get("targets") or "")[0] == "for_you" and evaluate(r, me)["eligible"] is not False]
+    from .relevance import mark_roles
+    cvt = cvs_text(me.get("cvs"))
+    marks = mark_roles(store, roles, me.get("targets") or "", {}, cvt)     # from the cache only: no model call here
+    say(f"marks: {marks}")
+    for_you = [r for r in roles if tag(r, me.get("targets") or "", cvt)[0] == "for_you" and evaluate(r, me)["eligible"] is not False]
     say(f"For you now: {len(for_you)} roles")
     for name in ("aiprise", "astera"):
         for r in roles:
             if name in (r.get("company") or "").lower():
-                t, why = tag(r, me.get("targets") or "")
+                t, why = tag(r, me.get("targets") or "", cvt)
                 say(f"  {r['company']} — {r.get('designation')}: {t} ({why}); best CV {((r.get('relevance') or {}).get('best_cv') or '-')}")
     return 0
 

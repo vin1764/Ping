@@ -673,3 +673,26 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .msg .text .md-list li { margin: 2px 0; white-space: pre-wrap; }
 .msg .text .inline-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .msg .text .stale-note { color: var(--muted); font-size: .9em; }
+
+/* reply to a message: the arrow on a bubble, the quote inside a reply, the preview above the box */
+.msg .reply-btn { position: absolute; top: 4px; right: -40px; width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted); display: grid; place-items: center; cursor: pointer;
+  opacity: 0; transition: opacity .12s; }
+.msg.me .reply-btn { right: auto; left: -40px; }
+.msg .reply-btn svg { width: 16px; height: 16px; fill: currentColor; }
+@media (hover: hover) { .msg:hover > .reply-btn, .msg .reply-btn:focus-visible { opacity: 1; } }
+@media (hover: none) { .msg .reply-btn { right: auto; left: -40px; opacity: var(--swipe, 0); pointer-events: none; } }
+.msg[data-reply] { touch-action: pan-y; }
+.msg[data-reply] .table-wrap, .msg[data-reply] .chips { touch-action: auto; }
+.msg .quote { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; min-height: 0; margin: 2px 0 6px;
+  padding: 5px 10px; border: 0; border-left: 3px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink); text-align: left; font: inherit; font-size: var(--t-sm); cursor: pointer; }
+.q-who { font-weight: 600; color: var(--accent); font-size: var(--t-sm); }
+.q-text { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.reply-preview { display: flex; align-items: stretch; gap: var(--s2); margin-bottom: var(--s2); padding: 6px 6px 6px 0;
+  border-radius: 10px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.reply-preview[hidden] { display: none; }
+.reply-preview .rp-bar { width: 4px; border-radius: 4px 0 0 4px; background: var(--accent); flex: none; }
+.reply-preview .rp-body { display: flex; flex-direction: column; min-width: 0; flex: 1; justify-content: center; }
+.reply-preview .rp-x { flex: none; width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; }
+.msg.flash { animation: hl 1.6s ease-out; }

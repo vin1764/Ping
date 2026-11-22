@@ -633,3 +633,8 @@ begin
     alter publication supabase_realtime add table public.rechecks;
   end if;
 end $rc$;
+
+-- reply to a message: what a chat message answers (a feed message "item:<id>" or a chat bubble "msg:<role>:<ms>")
+-- and the quote shown inside it
+alter table chat_messages add column if not exists reply_to text;
+alter table chat_messages add column if not exists reply_quote jsonb;

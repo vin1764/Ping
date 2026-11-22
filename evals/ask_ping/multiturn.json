@@ -1,31 +1,220 @@
 {
  "about": "Multi-turn and re-check evals (P0, 22 Nov). Each case is a conversation; every turn has its expected route (fact / recheck / open) and the company it must be about. Re-check turns must start a live, read-only ERP fetch for that company and answer with the fetch's time; they never repeat the old verdict as if fresh. No case may expect 'you're not on it'. Run in the page with the model on (ask-ping reachable) and off (ask-ping blocked): setup/multiturn_page_evals.js; the routing alone: tests/js/recheck.test.js.",
  "cases": [
-  {"id": "M1", "turns": [{"q": "check firstclub", "route": "fact", "company": "FirstClub"},
-                         {"q": "check again", "route": "recheck", "company": "FirstClub"}]},
-  {"id": "M2", "turns": [{"q": "check firstclub", "route": "fact", "company": "FirstClub"},
-                         {"q": "check erp for latest updates, don't answer on old data", "route": "recheck", "company": "FirstClub"}]},
-  {"id": "M3", "turns": [{"q": "firstclub shortlist?", "route": "fact", "company": "FirstClub"},
-                         {"q": "I got a call, I think I'm there", "route": "recheck", "company": "FirstClub"}]},
-  {"id": "M4", "turns": [{"q": "what's due tonight", "route": "fact"},
-                         {"q": "and groww?", "route": "fact", "company": "Groww"}]},
-  {"id": "M5", "turns": [{"q": "groww ctc", "route": "fact", "company": "Groww"},
-                         {"q": "ok what's due tonight", "route": "fact", "company": null}]},
-  {"id": "R1", "about": "user disputes the answer: a re-check, not the same answer again",
-   "turns": [{"q": "am I on the firstclub shortlist", "route": "fact", "company": "FirstClub"},
-             {"q": "are you sure? that's wrong", "route": "recheck", "company": "FirstClub"}]},
-  {"id": "R2", "about": "a named company in the re-check wins over the topic",
-   "turns": [{"q": "groww ctc", "route": "fact", "company": "Groww"},
-             {"q": "recheck firstclub", "route": "recheck", "company": "FirstClub"}]}
+  {
+   "id": "M1",
+   "turns": [
+    {
+     "q": "check firstclub",
+     "route": "fact",
+     "company": "FirstClub"
+    },
+    {
+     "q": "check again",
+     "route": "recheck",
+     "company": "FirstClub"
+    }
+   ]
+  },
+  {
+   "id": "M2",
+   "turns": [
+    {
+     "q": "check firstclub",
+     "route": "fact",
+     "company": "FirstClub"
+    },
+    {
+     "q": "check erp for latest updates, don't answer on old data",
+     "route": "recheck",
+     "company": "FirstClub"
+    }
+   ]
+  },
+  {
+   "id": "M3",
+   "turns": [
+    {
+     "q": "firstclub shortlist?",
+     "route": "fact",
+     "company": "FirstClub"
+    },
+    {
+     "q": "I got a call, I think I'm there",
+     "route": "recheck",
+     "company": "FirstClub"
+    }
+   ]
+  },
+  {
+   "id": "M4",
+   "turns": [
+    {
+     "q": "what's due tonight",
+     "route": "fact"
+    },
+    {
+     "q": "and groww?",
+     "route": "fact",
+     "company": "Groww"
+    }
+   ]
+  },
+  {
+   "id": "M5",
+   "turns": [
+    {
+     "q": "groww ctc",
+     "route": "fact",
+     "company": "Groww"
+    },
+    {
+     "q": "ok what's due tonight",
+     "route": "fact",
+     "company": null
+    }
+   ]
+  },
+  {
+   "id": "R1",
+   "about": "user disputes the answer: a re-check, not the same answer again",
+   "turns": [
+    {
+     "q": "am I on the firstclub shortlist",
+     "route": "fact",
+     "company": "FirstClub"
+    },
+    {
+     "q": "are you sure? that's wrong",
+     "route": "recheck",
+     "company": "FirstClub"
+    }
+   ]
+  },
+  {
+   "id": "R2",
+   "about": "a named company in the re-check wins over the topic",
+   "turns": [
+    {
+     "q": "groww ctc",
+     "route": "fact",
+     "company": "Groww"
+    },
+    {
+     "q": "recheck firstclub",
+     "route": "recheck",
+     "company": "FirstClub"
+    }
+   ]
+  }
  ],
  "render": [
-  {"id": "W1", "about": "found", "status": "done", "file": "yes", "must_contain": ["You're on the FirstClub shortlist", "notice 1817", "file read"]},
-  {"id": "W2", "about": "not found in a file read in full", "status": "done", "file": "no",
-   "must_contain": ["couldn't find your roll number in the FirstClub shortlist", "posted", "check the list yourself", "Open list"]},
-  {"id": "W3", "about": "file not read reliably", "status": "done", "file": "unknown",
-   "must_contain": ["couldn't read the FirstClub shortlist reliably", "Open list"]},
-  {"id": "W4", "about": "ERP unreachable: says so, gives the link, no verdict", "status": "unreachable",
-   "must_contain": ["couldn't reach the ERP", "Open list"], "must_not_contain": ["You're on", "couldn't find your roll"]}
+  {
+   "id": "W1",
+   "about": "found",
+   "status": "done",
+   "file": "yes",
+   "must_contain": [
+    "You're on the FirstClub shortlist",
+    "notice 1817",
+    "file read"
+   ]
+  },
+  {
+   "id": "W2",
+   "about": "not found in a file read in full",
+   "status": "done",
+   "file": "no",
+   "must_contain": [
+    "couldn't find your roll number in the FirstClub shortlist",
+    "posted",
+    "check the list yourself",
+    "Open list"
+   ]
+  },
+  {
+   "id": "W3",
+   "about": "file not read reliably",
+   "status": "done",
+   "file": "unknown",
+   "must_contain": [
+    "couldn't read the FirstClub shortlist reliably",
+    "Open list"
+   ]
+  },
+  {
+   "id": "W4",
+   "about": "ERP unreachable: says so, gives the link, no verdict",
+   "status": "unreachable",
+   "must_contain": [
+    "couldn't reach the ERP",
+    "Open list"
+   ],
+   "must_not_contain": [
+    "You're on",
+    "couldn't find your roll"
+   ]
+  }
  ],
- "never": ["you're not on it", "you are not on it", "you're not on the list", "you are not on the list", "not shortlisted"]
+ "never": [
+  "you're not on it",
+  "you are not on it",
+  "you're not on the list",
+  "you are not on the list",
+  "not shortlisted"
+ ],
+ "replies": [
+  {
+   "id": "Y1",
+   "to": "notice:1817:0",
+   "q": "check again",
+   "recheck": "FirstClub",
+   "about": "reply to the FirstClub answer: a live re-check of FirstClub only"
+  },
+  {
+   "id": "Y2",
+   "to": "digest:application:20261122T2000",
+   "q": "which of these haven't I applied to?",
+   "must_contain": [
+    "2 of 3",
+    "Zeta — Business Analyst",
+    "Slice — Product Analyst"
+   ],
+   "must_not_contain": [
+    "Groww"
+   ],
+   "about": "only that digest's roles"
+  },
+  {
+   "id": "Y3",
+   "to": "digest:application:20261122T2000",
+   "q": "which cv for the second one?",
+   "must_contain": [
+    "Zeta — Business Analyst: apply with Analyst CV"
+   ],
+   "about": "the second role in that message"
+  },
+  {
+   "id": "Y4",
+   "to": "notice:1801:0",
+   "q": "where is it?",
+   "must_contain": [
+    "Pine Labs",
+    "room V2",
+    "slot Slot 1"
+   ],
+   "about": "that test's room / slot"
+  },
+  {
+   "id": "Y5",
+   "to": "notice:1790:todo0",
+   "q": "done",
+   "tick": "gform:abc",
+   "must_contain": [
+    "Ticked",
+    "marked as filled"
+   ],
+   "about": "ticks that form, confirmed in one line"
+  }
+ ]
 }

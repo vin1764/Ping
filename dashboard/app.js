@@ -290,15 +290,19 @@
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
     async chat() {
-      const { data, error } = await this.sb.from("chat_messages").select("role,text,created_at").order("created_at").limit(1000);
+      let { data, error } = await this.sb.from("chat_messages").select("role,text,created_at,reply_to,reply_quote").order("created_at").limit(1000);
+      if (error) ({ data, error } = await this.sb.from("chat_messages").select("role,text,created_at").order("created_at").limit(1000));
       if (error) { this.chatOk = false; return store.get("ping-chat", []); }
       return data;
     }
     async addChat(m) {
       if (this.chatOk) {
         // a demo session's messages are demo rows: only that session can read them back
-        const row = { role: m.role, text: m.text, created_at: m.created_at, ...(this.demo ? { is_sample: true } : {}) };
-        const { error } = await this.sb.from("chat_messages").insert(row);
+        const row = { role: m.role, text: m.text, created_at: m.created_at, ...(this.demo ? { is_sample: true } : {}),
+                      ...(m.reply_to ? { reply_to: m.reply_to, reply_quote: m.reply_quote || null } : {}) };
+        let { error } = await this.sb.from("chat_messages").insert(row);
+        // before Admin > apply-sql adds the reply columns: the message without its quote
+        if (error && m.reply_to) ({ error } = await this.sb.from("chat_messages").insert({ role: row.role, text: row.text, created_at: row.created_at, ...(this.demo ? { is_sample: true } : {}) }));
         if (!error) return;
         this.chatOk = false;
       }
@@ -659,7 +663,7 @@
     if (!m?.role || !m.text || !m.created_at) return false;
     const k = msgKey(m.role, m.created_at);
     if (state.chat.some((x) => msgKey(x.role, x.created_at) === k && x.text === m.text)) return false;
-    state.chat.push({ role: m.role, text: m.text, created_at: m.created_at });
+    state.chat.push({ role: m.role, text: m.text, created_at: m.created_at, reply_to: m.reply_to || null, reply_quote: m.reply_quote || null });
     return true;
   }
   function onChat(row) { if (addChatRow(row)) applyLive(); }
@@ -1105,7 +1109,7 @@
 
   function threadEntries() {
     const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
-    const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text }));
+    const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text, quote: quoteOf(m) }));
     // a Check now (with its progress) and an hourly check that brought something new
     const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, liveNow()))
       .map((r) => ({ kind: "run", at: r.shown_at || r.requested_at || r.started_at, run: r }));
@@ -1182,8 +1186,12 @@
     const form = h("form", { onsubmit: (ev) => { ev.preventDefault(); send(input, inner, thread, btn); } }, input, btn);
     // "N new" when the first unread message is below you; "Latest" when you're far up the thread
     const jump = h("button", { type: "button", class: "pill-btn in-composer", id: "jump", hidden: true });
-    const composer = h("div", { class: "composer" }, jump, quick, form);
+    const replyBox = h("div", { class: "reply-preview", hidden: true, role: "group", "aria-label": "Replying to" });
+    input.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && state.replyTo) { ev.preventDefault(); clearReply(); } });
+    const composer = h("div", { class: "composer" }, jump, quick, replyBox, form);
+    state.composer = { replyBox, input, thread, inner };
     mount(thread, composer);
+    wireReplies(thread, inner);
     const syncJump = () => {
       const tr = thread.getBoundingClientRect();
       const fromBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
@@ -1436,8 +1444,16 @@
     return out;
   }
 
-  function textBubble(role, text, at, enter) {
+  // a reply's quote inside the bubble: who and the first line; tapping it goes to the original and flashes it
+  const quoteOf = (m) => (m && m.reply_to ? { to: m.reply_to, sender: m.reply_quote?.sender || "Ping", text: m.reply_quote?.text || "" } : null);
+  function quoteNode(q) {
+    return h("button", { type: "button", class: "quote", "aria-label": `Replying to ${q.sender}: ${q.text}. Show it`,
+      onclick: (ev) => { ev.stopPropagation(); goToMessage(q.to); } },
+      h("span", { class: "q-who" }, q.sender), h("span", { class: "q-text" }, q.text));
+  }
+  function textBubble(role, text, at, enter, quote) {
     return h("div", { class: `msg ${role === "me" ? "me" : "ping"}${enter ? " enter" : ""}`, "data-key": msgKey(role, at), "data-sig": "1" },
+      quote ? quoteNode(quote) : null,
       h("span", { class: "text" }, role === "me" ? text : richText(text)), role === "me" ? null : rolesButton(text),
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
   }
@@ -1453,7 +1469,7 @@
   function renderEntry(e) {
     return e.kind === "item" ? itemBubble(e.it, e.at) : e.kind === "run" ? runBubble(e.run, e.at)
       : e.kind === "quiet" ? h("p", { class: "note-line sysline", role: "status", "data-key": e.key, "data-sig": entrySig(e) }, e.line)
-      : textBubble(e.kind, e.text, e.at);
+      : textBubble(e.kind, e.text, e.at, false, e.quote);
   }
 
   function runBubble(run, at) {
@@ -1854,25 +1870,38 @@
     btn.replaceChildren(h("span", { class: "wait", "aria-hidden": "true" }, "…"));
     const t0 = performance.now();
     const mine = { role: "me", text: q, created_at: new Date().toISOString() };
+    // a reply: the quoted message is the topic (dashboard/reply.js)
+    const rp = state.replyTo;
+    if (rp) { mine.reply_to = rp.key; mine.reply_quote = { sender: rp.sender, text: rp.text }; clearReply(); }
+    const backQuote = { reply_to: msgKey("me", mine.created_at), reply_quote: { sender: "You", text: q.slice(0, 160) } };
     // a FACT question: answered at once from the page's own data, no typing bubble (in the demo, once the roles'
     // details are in: they arrive within a second of opening)
     if (state.details) { state.startDetails?.(); await state.details; }
     // "check again", "are you sure?", "I got a call": the previous question, read again from the ERP now
     const RR = window.PingRules;
-    const rr = RR && state.data ? RR.route(q, previousQuestions(q), factsOf(state.data)) : null;
-    if (rr?.kind === "recheck") return recheckFlow(q, rr, mine, { input, inner, thread, btn });
+    // replying: the quoted message answers some questions by itself ("which of these haven't I applied to?", "which
+    // cv for the second one?", "where is it?", "done" on a form line, "check again"); others are asked about it
+    const P = window.PingReply;
+    const direct = rp && P ? P.answer(q, rp.anchor, { isFilled: (k) => !!FORMS?.isFilled(state.formStatus, k), when }) : null;
+    if (direct?.recheck) return recheckFlow(q, { kind: "recheck", companies: rp.anchor.companies }, mine, { input, inner, thread, btn }, backQuote);
+    const named = rp && RR ? RR.matchCompanies(q, factsOf(state.data), RR.entities(factsOf(state.data))).hits.length : 0;
+    const qRoute = rp && !named && rp.anchor.companies.length ? `${q} ${rp.anchor.companies.map((c) => RR.shortName(c)).join(" ")}` : q;
+    const qServer = rp && P ? P.context(q, rp.anchor) : q;
+    const rr = RR && state.data ? RR.route(qRoute, previousQuestions(q), factsOf(state.data)) : null;
+    if (rr?.kind === "recheck") return recheckFlow(q, rr, mine, { input, inner, thread, btn }, rp ? backQuote : null);
     // forms: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the
     // last ticks it: your own record, never the ERP or the form)
-    const fq = FORMS && state.data?.forms?.length ? FORMS.ask(q, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
+    if (direct?.tick) setTick(direct.tick, true, { quiet: true });
+    const fq = direct ? null : FORMS && state.data?.forms?.length ? FORMS.ask(qRoute, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
     if (fq?.tick) setTick(fq.tick, true, { quiet: true });
-    const local = fq ? { text: fq.text } : localFact(q);
+    const local = direct?.text ? { text: direct.text } : fq ? { text: fq.text } : localFact(qRoute);
     if (local.text) local.text = withStale(local.text, rr);
     if (local.text) {
       state.chat.push(mine);
-      appendToday(inner, textBubble("me", q, mine.created_at, true));
-      const reply = { role: "ping", text: local.text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString() };
+      appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
+      const reply = { role: "ping", text: local.text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString(), ...(rp ? backQuote : {}) };
       state.chat.push(reply);
-      const b = textBubble("ping", reply.text, reply.created_at, true);
+      const b = textBubble("ping", reply.text, reply.created_at, true, quoteOf(reply));
       b.dataset.answeredBy = "page";
       b.dataset.ms = String(Math.round(performance.now() - t0));
       appendToday(inner, b);
@@ -1886,7 +1915,7 @@
       return;
     }
     state.chat.push(mine);
-    appendToday(inner, textBubble("me", q, mine.created_at, true));
+    appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
     const wait = appendToday(inner, h("div", { class: "msg ping typing enter", role: "status", "aria-label": "Ping is typing" },
       h("span", { class: "dot" }), h("span", { class: "dot" }), h("span", { class: "dot" })));
     // a long answer never looks frozen: after 4 s the dots say so
@@ -1903,7 +1932,7 @@
     // the typing bubble shows at least briefly, even for an answer that comes back at once
     const typing = new Promise((r) => setTimeout(r, 600));
     let lost = false, answeredBy = "page";
-    try { answer = helpHere(q) ?? await state.src.ask(q); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = plainly(e); } finally { state.sending -= 1; }
+    try { answer = helpHere(q) ?? await state.src.ask(qServer); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = plainly(e); } finally { state.sending -= 1; }
     if (lost) {                                   // the connection went while asking: this one waits too
       clearTimeout(slow); wait.remove(); state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND());
       state.chat = state.chat.filter((m) => m !== mine);
@@ -1912,14 +1941,14 @@
     }
     await typing;
     clearTimeout(slow);
-    const reply = { role: "ping", text: withStale(answer || "I couldn't come up with an answer.", rr), created_at: new Date().toISOString() };
+    const reply = { role: "ping", text: withStale(answer || "I couldn't come up with an answer.", rr), created_at: new Date().toISOString(), ...(rp ? backQuote : {}) };
     state.chat.push(reply);
     state.waiting = false;
     btn.removeAttribute("aria-busy");
     btn.replaceChildren(ICON_SEND());
     btn.disabled = !input.value.trim();
     if (wait.isConnected) {
-      const b = textBubble("ping", reply.text, reply.created_at, true);
+      const b = textBubble("ping", reply.text, reply.created_at, true, quoteOf(reply));
       b.dataset.answeredBy = answeredBy;
       b.dataset.ms = String(Math.round(performance.now() - t0));
       wait.replaceWith(b);
@@ -1943,6 +1972,107 @@
     if (!about || !["fact", "open"].includes(rr.kind)) return text;
     const note = R.staleNote(factsOf(state.data).lastChecked, liveNow());
     return note ? `${text}\n${note}` : text;
+  }
+
+  // ---------------------------------------------------------------- reply to a message
+  // Phone: swipe a bubble right (or long-press it) to reply. PC: the arrow on a bubble (hover or keyboard), or
+  // right-click / long-press. The quoted message shows above the box (✕ or Esc cancels) and becomes the topic.
+  function sourceOf(key) {
+    if (key.startsWith("item:")) return state.data.items.find((i) => `item:${i.id}` === key) || null;
+    const m = state.chat.find((x) => msgKey(x.role, x.created_at) === key);
+    return m ? { ...m, key } : null;
+  }
+  function startReply(el) {
+    const key = el?.dataset?.key;
+    const P = window.PingReply;
+    if (!key || !P || !state.composer || !(key.startsWith("item:") || key.startsWith("msg:"))) return;
+    const facts = factsOf(state.data);
+    const src = sourceOf(key);
+    const anchor = src ? P.anchorOf(src.role ? src : { ...src, details: src.details || {} }, facts) : null;
+    if (!anchor) return;
+    anchor.key = key;
+    if (!anchor.text) anchor.text = (el.querySelector(".text")?.textContent || "").split("\n")[0].slice(0, 160);
+    state.replyTo = { key, sender: anchor.sender, text: anchor.text, anchor };
+    const { replyBox, input } = state.composer;
+    replyBox.replaceChildren(h("div", { class: "rp-bar", "aria-hidden": "true" }),
+      h("div", { class: "rp-body" }, h("span", { class: "q-who" }, anchor.sender === "You" ? "You" : "Ping"), h("span", { class: "q-text" }, anchor.text)),
+      // pressing ✕ keeps the focus in the box (no layout jump under the finger, the phone's keyboard stays up)
+      h("button", { type: "button", class: "rp-x", "aria-label": "Cancel reply", onpointerdown: (e) => e.preventDefault(), onmousedown: (e) => e.preventDefault(),
+        onclick: () => { clearReply(); input.focus(); } }, "✕"));
+    replyBox.hidden = false;
+    input.placeholder = "Reply…";
+    input.focus();
+  }
+  function clearReply() {
+    state.replyTo = null;
+    if (!state.composer) return;
+    state.composer.replyBox.hidden = true;
+    state.composer.replyBox.replaceChildren();
+    state.composer.input.placeholder = "Ask Ping: what's due tomorrow?";
+  }
+  // the original of a quote: scrolled to and flashed; earlier messages are loaded if it's above the window
+  async function goToMessage(key) {
+    const { inner, thread } = state.composer || {};
+    if (!inner) return;
+    let el = inner.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    for (let i = 0; !el && i < 12; i++) {
+      const more = inner.querySelector(".earlier");
+      if (!more) break;
+      more.click();
+      await new Promise((r) => requestAnimationFrame(r));
+      el = inner.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    }
+    if (!el) { toast("That message isn't in the chat any more."); return; }
+    jumpTo(thread, el);
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1600);
+  }
+  const REPLY_ICON = () => { const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true");
+    const p = document.createElementNS(ns, "path"); p.setAttribute("d", "M10 8V4L3 11l7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"); svg.append(p); return svg; };
+  function wireReplies(thread, inner) {
+    // an arrow on every chat bubble (shown on hover / focus on a PC; touch uses swipe and long-press)
+    const arm = (root) => root.querySelectorAll?.(".msg[data-key]:not([data-reply])").forEach((m) => {
+      const k = m.dataset.key;
+      if (!(k.startsWith("item:") || k.startsWith("msg:")) || m.classList.contains("typing")) return;
+      m.dataset.reply = "1";
+      m.append(h("button", { type: "button", class: "reply-btn", "aria-label": "Reply to this message", title: "Reply",
+        onclick: (ev) => { ev.stopPropagation(); startReply(m); } }, REPLY_ICON()));
+    });
+    arm(inner);
+    new MutationObserver((recs) => recs.forEach((r) => r.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.matches?.(".msg")) arm(n.parentNode || inner); else arm(n); } })))
+      .observe(inner, { childList: true, subtree: true });
+    inner.addEventListener("contextmenu", (ev) => {
+      const m = ev.target.closest(".msg[data-reply]");
+      if (!m || ev.target.closest("a, input, textarea") || String(window.getSelection?.() || "")) return;
+      ev.preventDefault(); startReply(m);
+    });
+    // touch: swipe right to reply (not inside something that scrolls sideways), or hold for half a second
+    let g = null;
+    const sideways = (el) => { for (let n = el; n && n !== inner; n = n.parentElement) if (n.scrollWidth > n.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true; return false; };
+    inner.addEventListener("pointerdown", (ev) => {
+      const m = ev.target.closest(".msg[data-reply]");
+      if (!m || ev.pointerType === "mouse" && ev.button !== 0 || ev.target.closest("button, a, input, summary")) return;
+      g = { m, x: ev.clientX, y: ev.clientY, dx: 0, side: sideways(ev.target), swiping: false,
+            hold: ev.pointerType === "mouse" ? null : setTimeout(() => { if (g && !g.swiping) { navigator.vibrate?.(10); startReply(m); g = null; } }, 500) };
+    });
+    inner.addEventListener("pointermove", (ev) => {
+      if (!g) return;
+      const dx = ev.clientX - g.x, dy = ev.clientY - g.y;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { clearTimeout(g.hold); g.hold = null; }
+      if (g.side || ev.pointerType === "mouse") return;
+      if (!g.swiping && dx > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) g.swiping = true;
+      if (g.swiping) { g.dx = Math.max(0, Math.min(dx, 80)); g.m.style.transform = `translateX(${g.dx}px)`; g.m.style.setProperty("--swipe", String(Math.min(1, g.dx / 56))); }
+    });
+    const end = () => {
+      if (!g) return;
+      clearTimeout(g.hold);
+      const { m, dx, swiping } = g; g = null;
+      if (!swiping) return;
+      m.style.transform = ""; m.style.removeProperty("--swipe");
+      if (dx >= 56) { navigator.vibrate?.(10); startReply(m); }
+    };
+    inner.addEventListener("pointerup", end);
+    inner.addEventListener("pointercancel", end);
   }
 
   // ---------------------------------------------------------------- re-check on demand
@@ -1983,11 +2113,11 @@
                      has_attachment: !!i.details?.pdf, file: i.details?.pdf ? { status: i.details.pdf.status, read_at: i.details.pdf.checked_at, details: i.details.pdf.details } : null }));
     return { status: "done", demo: true, company, result: { company, read_at: factsOf(state.data).lastChecked, notices, changes: [] } };
   }
-  async function recheckFlow(q, rr, mine, { input, inner, thread, btn }) {
+  async function recheckFlow(q, rr, mine, { input, inner, thread, btn }, backQuote = null) {
     const R = window.PingRules;
     const release = () => { state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND()); btn.disabled = !input.value.trim(); };
     state.chat.push(mine);
-    appendToday(inner, textBubble("me", q, mine.created_at, true));
+    appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
     await state.src.addChat(mine).catch(() => {});
     const company = rr.companies[0] || null;
     const name = company ? R.shortName(company) : "";
@@ -2017,9 +2147,9 @@
         state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems();
       }
     }
-    const reply = { role: "ping", text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString() };
+    const reply = { role: "ping", text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString(), ...(backQuote || {}) };
     state.chat.push(reply);
-    const b = textBubble("ping", reply.text, reply.created_at, true);
+    const b = textBubble("ping", reply.text, reply.created_at, true, quoteOf(reply));
     b.dataset.answeredBy = "recheck";
     if (status.isConnected) status.replaceWith(b); else route();
     state.src.addChat(reply).catch(() => {});

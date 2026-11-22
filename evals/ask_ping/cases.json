@@ -1074,6 +1074,63 @@
     ]
    },
    "why": "Mail-only deadlines, soonest first."
+  },
+  {
+   "id": "O1",
+   "category": "open questions (the model)",
+   "question": "compare the slice and eternal roles",
+   "checks": {
+    "must_contain": [
+     "Slice",
+     "Eternal"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "OPEN: a comparison (the model, with the FACTS block)."
+  },
+  {
+   "id": "O2",
+   "category": "open questions (the model)",
+   "question": "should I apply to blackbuck?",
+   "checks": {
+    "must_contain": [
+     "BlackBuck"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "OPEN: advice about one company."
+  },
+  {
+   "id": "O3",
+   "category": "open questions (the model)",
+   "question": "why is axis bank a good fit for me?",
+   "checks": {
+    "must_contain": [
+     "Axis"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "OPEN: 'why'."
+  },
+  {
+   "id": "O4",
+   "category": "open questions (the model)",
+   "question": "tips to prepare for the eternal test",
+   "checks": {
+    "must_contain": [
+     "Eternal"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "OPEN: preparation tips."
   }
  ],
  "check_changes": [

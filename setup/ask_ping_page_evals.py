@@ -39,7 +39,8 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
     from run_ask_ping_evals import score
     out = []
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        # PING_CHROMIUM: a Chromium binary to use instead of Playwright's own download (a machine with its own)
+        browser = p.chromium.launch(executable_path=os.environ.get("PING_CHROMIUM") or None)
         for c in cases:
             ctx = browser.new_context(viewport={"width": 1280, "height": 800})
             page = ctx.new_page()

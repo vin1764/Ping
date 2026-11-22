@@ -95,6 +95,7 @@ answers a wrong password with "Invalid login credentials". The result of the lat
 | secrets in workflow logs | the last 20 runs (17 had logs; 3 were still running), the values of 11 secrets and key-shaped text: nothing found | Admin > `log-scan`, 07:15 IST |
 | secrets in git | no secret value or key-shaped text in tracked files or history (`git log --all -p`), no `.env` ever committed | as above |
 | the banned word | 0 in this repository's tracked files; 0 in every file of the live site, which is the public dashboard repository's only commit (each deploy replaces its history). 7 old commits of this private repository still have it; the public source copy rewrites them | `git grep -i`, curl of each live file |
+| public source copy | Admin > `public-copy` rewrote all 252 commits on GitHub's runner: mailbox, roll (any case, with or without separators) and project address replaced, 7 denylisted names and 6 history-only ten-digit numbers replaced, every old demo snapshot swapped for today's clean one; then 872 text blobs checked (no secret value, key-shaped text, denylisted name, banned word or unknown ten-digit number): passed. Not yet public: there is no public repository to push to (the owner creates it), so it waits as a 1-day private artifact. This repository's history is untouched | Admin > `public-copy`, 07:25 IST |
 | eval traffic on the evals key | every eval and Admin call to a model used GEMINI_API_KEY_EVALS; ask-ping logged `key: "evals"` for them and refused eval requests without the proof (403) | Admin > `functions-check` |
 
 ## Secrets

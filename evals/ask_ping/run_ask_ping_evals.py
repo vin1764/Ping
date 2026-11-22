@@ -100,6 +100,8 @@ class DemoSessions:
 
     def fresh(self) -> str:
         """A new session of its own (an empty chat thread), e.g. for one multi-turn conversation."""
+        if self.ids:
+            self.forget_counts()
         hdr, uid = self._new(self.url, self.key)
         self.ids.append(uid)
         self.used = self.PER_SESSION  # the next single question gets a new session too
@@ -107,6 +109,10 @@ class DemoSessions:
 
     def next_token(self) -> str:
         if self.used >= self.PER_SESSION:
+            # this run's own questions don't count against the demo's hourly limit for everyone (100 an hour): the
+            # counts of its finished sessions are removed as it goes, as they always were at the end
+            if self.ids:
+                self.forget_counts()
             hdr, uid = self._new(self.url, self.key)
             self.token, self.used = hdr["Authorization"].removeprefix("Bearer "), 0
             self.ids.append(uid)

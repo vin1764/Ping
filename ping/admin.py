@@ -486,7 +486,7 @@ def _when(ts) -> str:
 def _source_logs(ref: str, token: str, source: str, function_id, fields: str, limit: int) -> list:
     """Supabase's logs API (ClickHouse SQL): one `logs` table, filtered by source; its docs name the
     column both source_name and source, so try both."""
-    for col in ("source_name", "source"):
+    for col in ("source", "source_name"):
         rows = _logs(ref, token, f"""
             SELECT timestamp, {fields}
             FROM logs
@@ -556,11 +556,13 @@ def functions_check(secrets) -> int:
         except ValueError:
             continue
         if ev.get("event") in ("answered", "no_answer"):
-            k = (ev.get("key") or "(before the split)", ev.get("role") or "?")
+            # a model was called only when something was tried (rules, JD and help answers call none)
+            called = bool(ev.get("tried")) and not ev.get("no_ai")
+            k = (ev.get("key") or "(before the split)", ev.get("role") or "?", "model called" if called else "no model call")
             tally[k] = tally.get(k, 0) + 1
-    say("\nask-ping answers by Gemini key, last 23 h (key, caller: answers):")
-    for (k, who), n in sorted(tally.items()):
-        say(f"  {k}, {who}: {n}")
+    say("\nask-ping answers by Gemini key, last 23 h (key, caller, model called or not: answers):")
+    for (k, who, called), n in sorted(tally.items()):
+        say(f"  {k}, {who}, {called}: {n}")
 
     if os.environ.get("SUPABASE_PUBLISHABLE_KEY"):
         say("\ntest questions from a one-click demo session on the evals key (demo data, same function):")

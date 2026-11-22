@@ -1213,7 +1213,7 @@
     const replyBox = h("div", { class: "reply-preview", hidden: true, role: "group", "aria-label": "Replying to" });
     input.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && state.replyTo) { ev.preventDefault(); clearReply(); } });
     const composer = h("div", { class: "composer" }, jump, quick, replyBox, form);
-    state.composer = { replyBox, input, thread, inner };
+    state.composer = { replyBox, input, thread, inner, ask };
     mount(thread, composer);
     wireReplies(thread, inner);
     const syncJump = () => {
@@ -1529,7 +1529,7 @@
                       role: d.state === "active" ? "status" : null },
       h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping"), h("span", { class: "k2" }, d.kicker),
         d.state === "active" ? h("span", { class: "spin", "aria-hidden": "true" }) : null),
-      h("span", { class: "text title" }, d.line),
+      h("span", { class: "text title" }, ...placeLinks(d.line)),
       d.steps ? h("ol", { class: "steps", "aria-label": "Progress" },
         d.steps.map((st) => h("li", { class: `s-${st.state}`, "aria-current": st.state === "now" ? "step" : null }, st.label))) : null,
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
@@ -2263,11 +2263,23 @@
       notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat,
       isFilled: (it) => FORMS.isFilled(state.formStatus, it.details?.form?.key) });
   }
+  // a line that asks a question ("Tomorrow: 1 deadline"): tapping it asks Ping in the chat
+  function askInChat(text) {
+    const go = () => state.composer?.ask?.(text);
+    if (location.hash.slice(1) && location.hash !== "#chat") {
+      location.hash = "#chat"; setTimeout(go, 60);
+    } else go();
+  }
+  function tomorrowLine(t) {
+    if (!t.tests && !t.deadlines) return h("p", { class: "tomorrow" }, t.text);
+    return h("p", { class: "tomorrow" }, h("button", { type: "button", class: "linklike inline-link",
+      onclick: () => askInChat("What's due tomorrow?") }, `${t.text} ›`));
+  }
   function todayPanel(m) {
     const now = nowDate();
     const head = h("div", { class: "today-head" }, h("h2", {}, "Today"),
       h("span", { class: "muted small" }, now.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" })));
-    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), h("p", { class: "tomorrow" }, m.tomorrow.text));
+    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), tomorrowLine(m.tomorrow));
     const row = (r) => {
       const status = [r.filledAll ? h("span", { class: "pill applied" }, "✓ filled") : null,
         r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
@@ -2283,7 +2295,7 @@
         h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right,
         r.kind === "more" ? null : h("span", { class: "t-caret", "aria-hidden": "true" }, "›"));
     };
-    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), h("p", { class: "tomorrow" }, m.tomorrow.text));
+    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), tomorrowLine(m.tomorrow));
   }
   // a tap on Today: the chat message it came from, else the role, the notice or the company
   function goTo(t) {

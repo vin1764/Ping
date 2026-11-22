@@ -197,11 +197,17 @@ drop policy if exists owner_fix_notices on corrections;
 create policy owner_fix_notices on corrections for all to authenticated
   using (is_ping_owner()) with check (is_ping_owner());
 
+-- feedback said in the chat ("Piramal not relevant", "hide the SDE role at X", "undo"): role-level lists next to the
+-- company lists, and the lists as they were before the last change (what "undo" restores)
+alter table profile add column if not exists hidden_roles text[] default '{}';
+alter table profile add column if not exists shown_roles text[] default '{}';
+alter table profile add column if not exists prefs_undo jsonb;
+
 -- The dashboard may only change these columns:
 revoke update on profile, items from authenticated;
 grant update (roll, name, department, degree, cgpa, active_backlogs, cv_names, interested_companies,
               not_interested_companies, notice_types, reminder_hours, targets, list_other_roles, cvs, onboarding_step, feed_mode, check_every_minutes,
-              check_from, check_to, updated_at) on profile to authenticated;
+              check_from, check_to, updated_at, hidden_roles, shown_roles, prefs_undo) on profile to authenticated;
 grant update (dismissed, done) on items to authenticated;
 grant select on profile, roles, notices, pdf_checks, items, emails, contacts, runs, corrections to authenticated;
 grant insert, update, delete on corrections to authenticated;
@@ -382,6 +388,12 @@ alter table session_prefs add column if not exists degree text;
 alter table session_prefs add column if not exists check_every_minutes int;
 alter table session_prefs add column if not exists check_from text;
 alter table session_prefs add column if not exists check_to text;
+-- a demo session's own feedback lists (never the owner's)
+alter table session_prefs add column if not exists not_interested_companies text[];
+alter table session_prefs add column if not exists interested_companies text[];
+alter table session_prefs add column if not exists hidden_roles text[];
+alter table session_prefs add column if not exists shown_roles text[];
+alter table session_prefs add column if not exists prefs_undo jsonb;
 alter table session_prefs enable row level security;
 revoke all on session_prefs from anon, authenticated;
 grant select, insert, update, delete on session_prefs to authenticated;

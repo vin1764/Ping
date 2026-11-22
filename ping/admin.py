@@ -794,6 +794,28 @@ def forms_report(secrets) -> int:
         if any(s.get("id") == "1815" for s in r.get("sources") or []):
             say(f"notice 1815 -> row {r['key']}: {len(r.get('companies') or [])} companies, due {r.get('due_at')}, "
                 f"{len(r.get('sources') or [])} sources, {len(r.get('deadline_history') or [])} deadline moves")
+    # a notice with a form per company: its rows, each with its own companies, form and tick
+    filled = {t["form_key"] for t in ticks}
+    by_notice: dict = {}
+    for r in rows:
+        for src in r.get("sources") or []:
+            if src.get("type") == "notice":
+                by_notice.setdefault(str(src.get("id")), []).append(r)
+    for nid, rs in sorted(by_notice.items(), key=lambda kv: -len(kv[1])):
+        if len(rs) < 2:
+            continue
+        say(f"notice {nid}: {len(rs)} rows, one per form")
+        for r in sorted(rs, key=lambda r: ", ".join(r.get("companies") or [])):
+            link = r.get("final_url") or r.get("link") or ""
+            say(f"  - {', '.join(r.get('companies') or [])[:80]} | {(r.get('title') or '(no page title)')[:50]} | "
+                f"{'own form link' if link else 'no link'} {r['key'][:40]} | {'ticked' if r['key'] in filled else 'not ticked'}")
+    for r in rows:
+        if any("risa" in (c or "").lower() for c in r.get("companies") or []):
+            say(f"RISA Labs: row {r['key']} with {len(r.get('companies') or [])} companies, Open form -> "
+                f"{'yes' if (r.get('final_url') or r.get('link')) else 'NO LINK'}, {'ticked' if r['key'] in filled else 'not ticked'}")
+    for t in ticks:
+        r = next((x for x in rows if x["key"] == t["form_key"]), None)
+        say(f"tick on {t['form_key'][:40]}: {', '.join((r or {}).get('companies') or ['(no such row)'])[:80]}")
     sig = {}
     for r in rows:
         sig.setdefault((frozenset(c.lower() for c in r.get("companies") or []), r.get("purpose"), r.get("due_at")), []).append(r["key"])

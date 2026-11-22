@@ -909,6 +909,11 @@ def notice_forms(secrets) -> int:
             f"-> {len(mine)} row(s){f', {len(multi)} with several companies' if multi else ''}; no link: {', '.join(nolink) or 'none'}")
         for r in multi:
             say(f"     several companies on one row: {', '.join(r.get('companies') or [])[:120]} | {(r.get('title') or '')[:40]}")
+    every = store.select("forms", {})
+    for name in ("Auro", "Ather", "TATA AIG"):
+        hits = [r for r in every if any(name.lower() in (c or "").lower() for c in r.get("companies") or [])]
+        say(f"all stored rows naming {name}: " + ("; ".join(f"{r['key'][:34]} sample={r.get('is_sample')} companies={len(r.get('companies') or [])}"
+                                                          for r in hits) or "none"))
     for name in ("RISA", "Diageo", "Piramal", "Nomura"):
         hits = [r for r in rows if any(name.lower() in (c or "").lower() for c in r.get("companies") or [])]
         say(f"{name}: " + ("; ".join(f"{', '.join(r.get('companies') or [])[:60]} | {(r.get('title') or '')[:50]} | "

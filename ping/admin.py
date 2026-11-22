@@ -755,14 +755,18 @@ def schedule_status(secrets) -> int:
     q = lambda sql: sa.run_sql(secrets.supabase_url, token, sql)  # noqa: E731
     for j in q("select jobid, jobname, schedule, active from cron.job order by jobname"):
         say(f"job {j['jobname']}: '{j['schedule']}' UTC, active {j['active']}")
+        n = 24 if j["jobname"] == "ping-hourly" else 3    # the hourly job: the last 12 hours of ticks
         for d in q(f"select status, start_time, return_message from cron.job_run_details where jobid = {int(j['jobid'])} "
-                   "order by start_time desc limit 3"):
+                   f"order by start_time desc limit {n}"):
             say(f"   ran {d['start_time']}: {d['status']} {str(d['return_message'])[:80]}")
-    for h in q("select created, status_code, left(content::text, 160) as body from net._http_response order by created desc limit 4"):
-        say(f"call to kick-run {h['created']}: HTTP {h['status_code']} {h['body']}")
+    # kick-run's replies to the hourly ticks (started a run, or why not); the 5-minute push ticks ({"sent": ...}) left
+    # out. pg_net keeps replies for about 6 hours.
+    for h in q("select created, status_code, left(content::text, 160) as body from net._http_response "
+               "where coalesce(content::text, '') not like '%\"sent\"%' order by created desc limit 16"):
+        say(f"kick-run reply {h['created']}: HTTP {h['status_code']} {h['body']}")
     gh = os.environ.get("GITHUB_TOKEN", "")
     r = requests.get(f"https://api.github.com/repos/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/workflows/ping.yml/runs",
-                     params={"per_page": 5}, headers={"Authorization": f"Bearer {gh}"}, timeout=30)
+                     params={"per_page": 20}, headers={"Authorization": f"Bearer {gh}"}, timeout=30)
     for run in r.json().get("workflow_runs", []) if r.ok else []:
         say(f"Ping run {run['id']}: {run['event']}, started {run['run_started_at']}, {run['status']} {run.get('conclusion') or ''}")
     return 0

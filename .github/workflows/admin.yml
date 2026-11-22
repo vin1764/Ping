@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -23,11 +23,17 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
+        with:
+          # public-copy rewrites the whole history: it needs every commit
+          fetch-depth: ${{ inputs.task == 'public-copy' && '0' || '1' }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -q -r requirements.txt
+      - name: git filter-repo (public-copy only)
+        if: inputs.task == 'public-copy'
+        run: pip install -q git-filter-repo==2.47.0
       - name: Install a browser (ask-ping-page only)
         if: inputs.task == 'ask-ping-page' || inputs.task == 'live-page'
         run: pip install -q playwright && python -m playwright install --with-deps chromium > /dev/null
@@ -46,18 +52,29 @@ jobs:
           GEMINI_API_KEY_EVALS: ${{ secrets.GEMINI_API_KEY_EVALS }}
           GITHUB_TOKEN: ${{ github.token }}
           # log-scan only: the values it searches the logs for (masked by GitHub; never printed by Ping)
-          ERP_PASSWORD: ${{ inputs.task == 'log-scan' && secrets.ERP_PASSWORD || '' }}
-          ERP_SECQ_1: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_1 || '' }}
-          ERP_SECQ_2: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_2 || '' }}
-          ERP_SECQ_3: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_3 || '' }}
+          ERP_PASSWORD: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.ERP_PASSWORD || '' }}
+          ERP_SECQ_1: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.ERP_SECQ_1 || '' }}
+          ERP_SECQ_2: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.ERP_SECQ_2 || '' }}
+          ERP_SECQ_3: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.ERP_SECQ_3 || '' }}
           # log-scan: to search the logs for it; mail-coverage: reads the mailbox read-only (headers, then placement mail)
-          MAIL_APP_PASSWORD: ${{ (inputs.task == 'log-scan' || inputs.task == 'mail-coverage') && secrets.MAIL_APP_PASSWORD || '' }}
+          MAIL_APP_PASSWORD: ${{ (inputs.task == 'log-scan' || inputs.task == 'mail-coverage' || inputs.task == 'public-copy') && secrets.MAIL_APP_PASSWORD || '' }}
           # the live Gemini key only to search the logs for it; Admin never calls Gemini with it
-          GEMINI_API_KEY_LIVE: ${{ inputs.task == 'log-scan' && secrets.GEMINI_API_KEY || '' }}
-          PING_GITHUB_TOKEN: ${{ inputs.task == 'log-scan' && secrets.PING_GITHUB_TOKEN || '' }}
-          DASHBOARD_DEPLOY_TOKEN: ${{ inputs.task == 'log-scan' && secrets.DASHBOARD_DEPLOY_TOKEN || '' }}
+          GEMINI_API_KEY_LIVE: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.GEMINI_API_KEY || '' }}
+          PING_GITHUB_TOKEN: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.PING_GITHUB_TOKEN || '' }}
+          DASHBOARD_DEPLOY_TOKEN: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.DASHBOARD_DEPLOY_TOKEN || '' }}
+          # public-copy: where the cleaned history goes (a new, empty public repository the owner made) and a token
+          # that may push to it; without them the cleaned history is uploaded as a private artifact instead
+          PUBLIC_REPO_URL: ${{ inputs.task == 'public-copy' && vars.PUBLIC_REPO_URL || '' }}
+          PUBLIC_REPO_TOKEN: ${{ inputs.task == 'public-copy' && secrets.PUBLIC_REPO_TOKEN || '' }}
         run: |
           python -m ping.admin "$TASK"
+      - name: Upload the cleaned history (public-copy, when there is no public repository to push to)
+        if: inputs.task == 'public-copy' && hashFiles('ping-public.bundle') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ping-public-history
+          path: ping-public.bundle
+          retention-days: 1
       - name: Save the demo data
         if: inputs.task == 'build-demo' || inputs.task == 'demo-refeed' || inputs.task == 'demo-jd' || inputs.task == 'demo-mails'
         env:

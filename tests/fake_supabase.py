@@ -63,6 +63,13 @@ def available() -> bool:
 class FakeSupabase:
     def __init__(self):
         self.anonymous_enabled = True
+        # sessions like Supabase Auth's: an access token that expires, single-use refresh tokens that rotate; a used
+        # one is accepted again only within the reuse window, after that the whole session is revoked
+        self.jwt_exp = 3600
+        self.reuse_seconds = 10
+        self.refresh = {}           # refresh token -> {"session": id, "email", "uid", "anonymous", "used_at"}
+        self.revoked = set()        # session ids
+        self.auth_log = []          # ("refresh", token, outcome) / ("logout", scope) for the tests
         self.dir = tempfile.mkdtemp(prefix="fake-supabase-")
         os.chmod(self.dir, 0o777)
         self.data = os.path.join(self.dir, "data")
@@ -106,8 +113,9 @@ class FakeSupabase:
                 return cur.fetchall() if cur.description else []
 
 
-def _token_for(email: str, uid: str = "", anonymous: bool = False) -> str:
-    claims = {"email": email, "role": "authenticated", "sub": uid, "is_anonymous": anonymous}
+def _token_for(email: str, uid: str = "", anonymous: bool = False, session_id: str = "", exp: int = 0) -> str:
+    claims = {"email": email, "role": "authenticated", "sub": uid, "is_anonymous": anonymous, "session_id": session_id,
+              "exp": exp or int(time.time()) + 3600}
     return "fakejwt." + base64.urlsafe_b64encode(json.dumps(claims).encode()).decode()
 
 
@@ -138,6 +146,9 @@ def _handler(fake: FakeSupabase):
             auth = (self.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
             claims = _claims(auth)
             if claims:
+                if claims.get("exp", 1e12) < time.time():
+                    fake.auth_log.append(("expired token used", self.path.split("?")[0]))
+                    return None, None                 # PostgREST: 401 JWT expired
                 return "authenticated", claims
             key = self.headers.get("apikey")
             if key == SECRET:
@@ -236,12 +247,33 @@ def _handler(fake: FakeSupabase):
                         return self._send(400, {"error": "invalid_grant", "error_description": "Invalid login credentials"})
                     uid = c.execute("update auth.users set last_sign_in_at=now() where email=%s returning id",
                                     (b["email"].lower(),)).fetchone()[0]
-                user = {"id": str(uid), "email": b["email"].lower(), "aud": "authenticated", "role": "authenticated",
-                        "is_anonymous": False}
-                # what supabase-js needs to hold a session: the user, how long the token lasts, a refresh token
-                return self._send(200, {"access_token": _token_for(b["email"].lower(), str(uid)), "token_type": "bearer",
-                                        "expires_in": 3600, "expires_at": int(time.time()) + 3600,
-                                        "refresh_token": "fake-refresh", "user": user})
+                return self._send(200, self._session(b["email"].lower(), str(uid), False, uuid.uuid4().hex))
+            if path == "/auth/v1/token" and q.get("grant_type") == "refresh_token":
+                if role != "anon" and role != "authenticated":
+                    return self._send(401, {"message": "Invalid API key"})
+                tok = (self._body() or {}).get("refresh_token", "")
+                rec = fake.refresh.get(tok)
+                now = time.time()
+                if not rec or rec["session"] in fake.revoked:
+                    fake.auth_log.append(("refresh", tok, "invalid"))
+                    return self._send(400, {"error": "invalid_grant", "error_description": "Invalid Refresh Token: Refresh Token Not Found"})
+                if rec["used_at"] and now - rec["used_at"] > fake.reuse_seconds:
+                    fake.revoked.add(rec["session"])          # reuse outside the window: the session is revoked
+                    fake.auth_log.append(("refresh", tok, "reused"))
+                    return self._send(400, {"error": "invalid_grant", "error_description": "Invalid Refresh Token: Already Used"})
+                rec["used_at"] = rec["used_at"] or now
+                fake.auth_log.append(("refresh", tok, "ok"))
+                return self._send(200, self._session(rec["email"], rec["uid"], rec["anonymous"], rec["session"]))
+            if path == "/auth/v1/logout" and method == "POST":
+                if not claims:
+                    return self._send(401, {"message": "not signed in"})
+                scope = q.get("scope", "global")
+                fake.auth_log.append(("logout", scope, claims.get("sub")))
+                sid = claims.get("session_id")
+                for rec in fake.refresh.values():
+                    if (scope == "global" and rec["uid"] == claims.get("sub")) or rec["session"] == sid:
+                        fake.revoked.add(rec["session"])
+                return self._send(204, None)
             if path == "/auth/v1/user" and method == "GET":
                 if role != "authenticated" or not claims:
                     return self._send(401, {"message": "not signed in"})
@@ -255,9 +287,17 @@ def _handler(fake: FakeSupabase):
                     return self._send(422, {"code": "anonymous_provider_disabled", "msg": "Anonymous sign-ins are disabled"})
                 with fake.conn() as c:
                     uid = c.execute("insert into auth.users (is_anonymous) values (true) returning id").fetchone()[0]
-                return self._send(200, {"access_token": _token_for("", str(uid), True), "token_type": "bearer",
-                                        "user": {"id": str(uid), "is_anonymous": True}})
+                return self._send(200, self._session("", str(uid), True, uuid.uuid4().hex))
             self._send(404, {"message": "not found"})
+
+        def _session(self, email, uid, anonymous, session_id):
+            """A session as supabase-js expects it, with a fresh single-use refresh token."""
+            rt = uuid.uuid4().hex
+            fake.refresh[rt] = {"session": session_id, "email": email, "uid": uid, "anonymous": anonymous, "used_at": None}
+            user = {"id": uid, "email": email or None, "aud": "authenticated", "role": "authenticated", "is_anonymous": anonymous}
+            return {"access_token": _token_for(email, uid, anonymous, session_id, int(time.time()) + fake.jwt_exp), "token_type": "bearer",
+                    "expires_in": fake.jwt_exp, "expires_at": int(time.time()) + fake.jwt_exp, "refresh_token": rt,
+                    "user": user}
 
         # ------------------------------------------------------ data API (tiny PostgREST)
         def _rest(self, method, path, q):

@@ -675,6 +675,63 @@ def auth_config(secrets) -> int:
     return 0 if ok and not after.get("mailer_autoconfirm") else 1
 
 
+SESSION_FIELDS = ("jwt_exp", "sessions_timebox", "sessions_inactivity_timeout", "sessions_single_per_user",
+                  "refresh_token_rotation_enabled", "security_refresh_token_reuse_interval")
+
+
+def auth_sessions(secrets) -> int:
+    """Read-only: how long a sign-in lasts (the Auth session settings) and what happened to the owner's sessions in
+    the last 7 days (Supabase's auth log: sign-ins, token refreshes, refused or reused refresh tokens, sign-outs).
+    Counts and times only; no token, and the owner's email shown as "owner"."""
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    if not token:
+        say("needs SUPABASE_ACCESS_TOKEN")
+        return 2
+    ref = sa.project_ref(secrets.supabase_url)
+    cur = requests.get(f"{API}/v1/projects/{ref}/config/auth", headers={"Authorization": f"Bearer {token}"}, timeout=30)
+    if cur.status_code < 300:
+        c = cur.json()
+        say("Auth session settings: " + ", ".join(f"{k} = {c.get(k)!r}" for k in SESSION_FIELDS))
+    else:
+        say(f"reading the Auth settings failed: HTTP {cur.status_code}")
+    owner = (os.environ.get("MAIL_ADDRESS") or "").strip().lower()
+    rows = []
+    for col in ("source", "source_name"):
+        rows = _logs(ref, token, f"""
+            SELECT timestamp, event_message FROM logs
+            WHERE {col} = 'auth_logs'
+              AND (event_message LIKE '%/token%' OR event_message LIKE '%logout%' OR event_message LIKE '%refresh%'
+                   OR event_message LIKE '%revoked%' OR event_message LIKE '%login%' OR event_message LIKE '%session%')
+            ORDER BY timestamp DESC LIMIT 500""", hours=24 * 7)
+        if rows or not _logs.last_error:
+            break
+    counts: dict[str, int] = {}
+    lines = []
+    for r in rows:
+        try:
+            m = json.loads(r.get("event_message") or "{}")
+        except ValueError:
+            m = {"msg": str(r.get("event_message"))[:120]}
+        who_raw = str(m.get("actor_username") or m.get("email") or m.get("auth_event", {}).get("actor_username") or "").lower()
+        who = "owner" if owner and who_raw == owner else ("anonymous/other" if who_raw or m.get("actor_id") else "?")
+        what = " ".join(str(x) for x in (m.get("action") or m.get("auth_event", {}).get("action") or "", m.get("path") or "",
+                                         m.get("grant_type") or "", m.get("status") or "",
+                                         (m.get("error") or m.get("msg") or "")[:90]) if x)
+        for secret_like in ("refresh_token=", "access_token"):
+            what = what.split(secret_like)[0]
+        key = f"{who}: {what}"
+        counts[key] = counts.get(key, 0) + 1
+        if who == "owner" or any(w in what.lower() for w in ("already used", "revoked", "logout", "invalid refresh")):
+            lines.append(f"  {_when(r.get('timestamp'))}  {key}")
+    say(f"auth log, last 7 days: {len(rows)} matching events")
+    for k, n in sorted(counts.items(), key=lambda x: -x[1])[:40]:
+        say(f"  {n:5}  {k}")
+    say("owner events and every refused / revoked / sign-out event, newest first:")
+    for l in lines[:80]:
+        say(l)
+    return 0
+
+
 def cleanup_demo(secrets) -> int:
     r = requests.post(secrets.supabase_url.rstrip("/") + "/rest/v1/rpc/cleanup_demo_sessions", timeout=60,
                       headers={"apikey": secrets.supabase_key, "Authorization": f"Bearer {secrets.supabase_key}",
@@ -939,7 +996,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
              "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

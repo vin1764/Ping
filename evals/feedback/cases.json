@@ -1,0 +1,283 @@
+{
+ "about": "Feedback said in the chat: a company or one of its roles hidden from For you, or shown again; plainly or as a reply to a message; with typos; undo. Made-up companies shaped like the real ones. Each case: the message, the companies of the message it replies to (if any), and what Ping must do: the hide / show, company or role, and the one line it answers with. Run by tests/js/feedback.test.js (rules, the page) and evals/feedback/run_feedback_evals.py (the deployed function, model on and off).",
+ "roles": [
+  {
+   "id": "r1",
+   "company": "Diago Group",
+   "designation": "GBS Management Trainee",
+   "applied": true
+  },
+  {
+   "id": "r2",
+   "company": "Piramal Finance",
+   "designation": "Credit Risk & AI Analytics Data Scientist (BIU)",
+   "applied": false
+  },
+  {
+   "id": "r3",
+   "company": "Piramal Finance",
+   "designation": "SDE 1 (Technology)",
+   "applied": false
+  },
+  {
+   "id": "r4",
+   "company": "Risa Labs",
+   "designation": "Associate Product Manager",
+   "applied": false
+  },
+  {
+   "id": "r5",
+   "company": "Groww",
+   "designation": "Associate Product Manager",
+   "applied": false
+  },
+  {
+   "id": "r6",
+   "company": "Zeta",
+   "designation": "Business Analyst",
+   "applied": false
+  }
+ ],
+ "reply": {
+  "sender": "Ping",
+  "text": "3 forms due tonight, Mon 23 Nov 20:00: Diago Group, Piramal Finance, Risa Labs",
+  "companies": [
+   "Diago Group",
+   "Piramal Finance",
+   "Risa Labs"
+  ]
+ },
+ "cases": [
+  {
+   "id": "F1",
+   "message": "piamal not relevantt for me",
+   "reply": true,
+   "want": {
+    "action": "hide",
+    "level": "company",
+    "name": "Piramal Finance"
+   },
+   "case": "the 23 Nov message: a reply, two typos"
+  },
+  {
+   "id": "F2",
+   "message": "Groww is not relevant",
+   "want": {
+    "action": "hide",
+    "level": "company",
+    "name": "Groww"
+   },
+   "case": "plain, a company"
+  },
+  {
+   "id": "F3",
+   "message": "not interested in zeta",
+   "want": {
+    "action": "hide",
+    "level": "company",
+    "name": "Zeta"
+   },
+   "case": "not interested in X"
+  },
+  {
+   "id": "F4",
+   "message": "hide risa",
+   "reply": true,
+   "want": {
+    "action": "hide",
+    "level": "company",
+    "name": "Risa Labs"
+   },
+   "case": "hide X, as a reply, short name"
+  },
+  {
+   "id": "F5",
+   "message": "ignore piramal sde",
+   "want": {
+    "action": "hide",
+    "level": "role",
+    "roles": [
+     "r3"
+    ]
+   },
+   "case": "one role of a company"
+  },
+  {
+   "id": "F6",
+   "message": "the data scientist role at piramal is not for me",
+   "want": {
+    "action": "hide",
+    "level": "role",
+    "roles": [
+     "r2"
+    ]
+   },
+   "case": "a role, in a sentence"
+  },
+  {
+   "id": "F7",
+   "message": "not relevant",
+   "reply": true,
+   "want": {
+    "ask": true
+   },
+   "case": "a reply to three companies naming none: one question with buttons, no status dump"
+  },
+  {
+   "id": "F8",
+   "message": "remove grow",
+   "want": {
+    "action": "hide",
+    "level": "company",
+    "name": "Groww"
+   },
+   "case": "remove X, a typo"
+  },
+  {
+   "id": "F9",
+   "message": "show piramal again",
+   "want": {
+    "action": "show",
+    "level": "company",
+    "name": "Piramal Finance"
+   },
+   "case": "show X again"
+  },
+  {
+   "id": "F10",
+   "message": "zeta is relevant",
+   "want": {
+    "action": "show",
+    "level": "company",
+    "name": "Zeta"
+   },
+   "case": "X is relevant"
+  },
+  {
+   "id": "F11",
+   "message": "undo",
+   "want": {
+    "action": "undo"
+   },
+   "case": "undo the last one"
+  },
+  {
+   "id": "F12",
+   "message": "is groww relevant for me?",
+   "want": {
+    "none": true
+   },
+   "case": "a question is a question, not feedback"
+  }
+ ],
+ "live_reply": {
+  "sender": "Ping",
+  "text": "3 forms due tonight, Sat 21 Nov 20:00: Diageo, Navi, Moneyview",
+  "companies": [
+   "Diageo",
+   "Navi Limited",
+   "Moneyview Ltd"
+  ]
+ },
+ "live": [
+  {
+   "id": "L1",
+   "message": "navy not relevantt for me",
+   "reply": true,
+   "want": {
+    "line": "Got it, Navi won't show as For you anymore."
+   },
+   "case": "the 23 Nov message, demo companies: a reply, two typos"
+  },
+  {
+   "id": "L2",
+   "message": "Groww is not relevant",
+   "want": {
+    "line": "Got it, Groww won't show as For you anymore."
+   },
+   "case": "plain, a company"
+  },
+  {
+   "id": "L3",
+   "message": "not interested in moneyview",
+   "want": {
+    "line": "Got it, Moneyview won't show as For you anymore."
+   },
+   "case": "not interested in X"
+  },
+  {
+   "id": "L4",
+   "message": "hide diageo",
+   "reply": true,
+   "want": {
+    "line": "Got it, Diageo won't show as For you anymore."
+   },
+   "case": "hide X, as a reply"
+  },
+  {
+   "id": "L5",
+   "message": "ignore navi sde",
+   "want": {
+    "line": "Got it, Navi — SDE-1 won't show as For you anymore."
+   },
+   "case": "one role"
+  },
+  {
+   "id": "L6",
+   "message": "the data scientist role at moneyview is not for me",
+   "want": {
+    "line": "Got it, Moneyview — Data Scientist won't show as For you anymore."
+   },
+   "case": "a role, in a sentence"
+  },
+  {
+   "id": "L7",
+   "message": "not relevant",
+   "reply": true,
+   "want": {
+    "ask": "Hide which one from For you?"
+   },
+   "case": "a reply naming no company: one question with buttons"
+  },
+  {
+   "id": "L8",
+   "message": "remove grow",
+   "want": {
+    "line": "Got it, Groww won't show as For you anymore."
+   },
+   "case": "remove X, a typo"
+  },
+  {
+   "id": "L9",
+   "message": "show navi again",
+   "want": {
+    "line": "Got it, Navi will show as For you."
+   },
+   "case": "show X again"
+  },
+  {
+   "id": "L10",
+   "message": "slice is relevant",
+   "want": {
+    "line": "Got it, slice will show as For you."
+   },
+   "case": "X is relevant"
+  },
+  {
+   "id": "L11",
+   "message": "undo",
+   "want": {
+    "line": "Undone: slice is back to how it was."
+   },
+   "case": "undo the last one"
+  },
+  {
+   "id": "L12",
+   "message": "is groww relevant for me?",
+   "want": {
+    "not_feedback": true
+   },
+   "case": "a question stays a question"
+  }
+ ]
+}

@@ -118,43 +118,44 @@ def cv_prompt() -> dict:
 
 def ask_ping_prompt() -> dict:
     src = ASK_TS.read_text(encoding="utf-8")
-    models_src = _one(r"const MODELS = \[(.*?)\];", src, "MODELS", re.S)
-    main = _one(r'\|\| "([^"]+)"', models_src, "the main model")
-    lite_default = _one(r'const LITE = Deno\.env\.get\("PING_AI_LITE_MODEL"\) \|\| "([^"]+)"', src, "LITE")
-    # the value the deploy sets on the Supabase function secrets (.github/workflows/dashboard.yml)
-    lite = _one(r'"PING_AI_LITE_MODEL=([^"]+)"', DASH_YML.read_text(encoding="utf-8"), "PING_AI_LITE_MODEL in dashboard.yml")
+    gemini = _one(r'const PRIMARY = Deno\.env\.get\("PING_CHAT_MODEL"\) \|\| "([^"]+)"', src, "PRIMARY")
+    groq = _one(r'const GROQ_MODEL = Deno\.env\.get\("PING_GROQ_MODEL"\) \|\| "([^"]+)"', src, "GROQ_MODEL")
     ms = lambda name: int(_one(rf"const {name} = ([\d_]+);", src, name).replace("_", ""))  # noqa: E731
-    window, pause, lite_ms = ms("PRIMARY_WINDOW_MS"), ms("RETRY_PAUSE_MS"), ms("LITE_MS")
+    window, pause, groq_ms, cap, groq_max = ms("PRIMARY_WINDOW_MS"), ms("RETRY_PAUSE_MS"), ms("GROQ_MS"), ms("CHAT_CAP_MS"), ms("GROQ_MAX_CHARS")
     gen = _one(r"generationConfig: (\{[^}]*\})", src, "generationConfig")
     prompt = _one(r"const prompt = `(.*?)`;\n", src, "the ask-ping prompt", re.S)
     return {
         "title": "Ask Ping (the chat on the dashboard)",
-        "where": "`supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini keys "
-                 "are Supabase function secrets and never reach the browser",
+        "where": "`supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Groq and Gemini "
+                 "keys are Supabase function secrets and never reach the browser",
         "when": "Only OPEN questions typed in the dashboard chat (summaries, \"why\", comparisons, advice, a follow-up with "
                 "nothing new): every message is routed first (`route()` in `supabase/functions/_shared/answer_rules.js`), "
                 "and FACT questions (what's due, tests and rooms, shortlists, CTC and its parts, bond, eligibility, which "
-                "CV, applied, notices, a company's roles, counts), requests to act and \"ok\" are answered by rules with no "
-                "model call. If no model answers, or the reply has a number that isn't in its FACTS, the rules answer "
-                "instead. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.",
+                "CV, applied, notices, a company's roles, counts), feedback (\"X not relevant\", \"undo\"), requests to act "
+                "and \"ok\" are answered by rules with no model call. If no model answers, or the reply has a number that "
+                "isn't in its FACTS, the rules answer instead. Demo sessions: 15 questions per session per hour, 100 per "
+                "hour for all demo sessions together.",
         "input": "`${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: "
-                 "the owner's real data, or the anonymised demo for a demo session). See the template for each part.",
+                 "the owner's real data, or the anonymised demo for a demo session). See the template for each part. "
+                 "Groq gets the same prompt made compact: \"All roles in the companies list\" becomes only the roles of the "
+                 f"companies in the question, the feed its newest 25 lines, and it's sent only if under {groq_max:,} characters.",
         "output": "Plain text, shown as Ping's chat reply. No JSON.",
-        "models": [main, lite],
+        "models": [f"groq/{groq}", gemini],
         "settings": [
-            "endpoint: Gemini `generateContent`; key `GEMINI_API_KEY` for students and demo visitors, `GEMINI_API_KEY_EVALS` "
-            "for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_AI_MODEL` replaces "
-            "the main model",
-            f"order: the main model ({main}) for at most {window // 1000} s in all, once more after {pause} ms when it's "
-            f"busy (429, 5xx, timeout); then the lighter model once with {lite_ms // 1000} s (`PING_AI_LITE_MODEL`, set to "
-            f"{lite} by the deploy; {lite_default} if unset); then the rules answer",
-            f"generation: `{gen}`",
-            "after the reply: every number, time and amount in it must be in the prompt's FACTS part, or the rules "
-            "answer replaces it (logged `model_count_mismatch`)",
+            "Groq: OpenAI-compatible `chat/completions` (`supabase/functions/_shared/openai_compat.ts`); key `GROQ_API_KEY` "
+            "for students and demo visitors, `GROQ_API_KEY_EVALS` for evals (no evals key: evals skip Groq); "
+            "`PING_GROQ_MODEL` replaces the model; reasoning effort low, at most 1,500 tokens out",
+            "Gemini: `generateContent`; key `GEMINI_API_KEY`, or `GEMINI_API_KEY_EVALS` for evals and Admin checks "
+            "(requests that prove they hold it with `x-ping-evals`); `PING_CHAT_MODEL` replaces the model",
+            f"order: Groq once with {groq_ms // 1000} s; then {gemini} for at most {window // 1000} s, once more after "
+            f"{pause} ms when it's busy (429, 5xx, timeout); {cap // 1000} s in all; then the rules answer",
+            f"generation (Gemini): `{gen}`",
+            "after the reply: every number, time and amount in it must be in the prompt's FACTS part, or the next in the "
+            "chain answers, and in the end the rules (logged `model_count_mismatch`)",
+            "logged per answer: which provider and model answered (`model`), every try with its status and time (`tried`)",
         ],
         "prompt": prompt,
     }
-
 
 def render() -> str:
     lines = [

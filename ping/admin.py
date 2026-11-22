@@ -32,6 +32,7 @@
   schedule-setup   schedule the hourly Ping run and the daily demo cleanup inside Supabase (pg_cron + the kick-run
                    function), with a new shared secret; then a dry-run call to prove it's wired up
   schedule-status  the Supabase jobs, their last runs and calls, and the latest Ping runs on GitHub
+  feedback-evals   run evals/feedback ("X not relevant", "show X again", "undo") against the deployed function
   ask-ping-evals   run evals/ask_ping (questions against the deployed function from demo sessions) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
                    hourly schedule again, then show what GitHub reports about it
@@ -553,7 +554,7 @@ def functions_check(secrets) -> int:
     names = sorted(x.get("name", "") for x in requests.get(f"{API}/v1/projects/{ref}/secrets", headers=hdr,
                                                             timeout=30).json())
     say(f"secrets the functions can read on Supabase (names only): {', '.join(names)}")
-    for n in ("GEMINI_API_KEY", "GEMINI_API_KEY_EVALS", "PING_AI_LITE_MODEL"):
+    for n in ("GEMINI_API_KEY", "GEMINI_API_KEY_EVALS", "GROQ_API_KEY", "GROQ_API_KEY_EVALS"):
         say(f"  {n} on the Supabase side: {'yes' if n in names else 'NO'}")
     ask_id = next((i for i, slug in ids.items() if slug == "ask-ping"), None)
 
@@ -609,7 +610,7 @@ def _model_tally(events: list[dict]) -> dict:
         for t in tried:
             parts = str(t).split(":")
             model, what = parts[0], parts[1] if len(parts) > 1 else "?"
-            m = out.setdefault(model, {"calls": 0, "answered": 0, "why": {}})
+            m = out.setdefault(model, {"calls": 0, "answered": 0, "why": {}, "ms": []})
             if what.startswith("empty("):          # a 200 with no text: that call didn't answer
                 m["answered"] -= 1
                 m["why"]["empty"] = m["why"].get("empty", 0) + 1
@@ -618,6 +619,8 @@ def _model_tally(events: list[dict]) -> dict:
             seen.append(model)
             if what == "200":
                 m["answered"] += 1
+                if len(parts) > 2 and parts[2].endswith("ms") and parts[2][:-2].isdigit():
+                    m["ms"].append(int(parts[2][:-2]))
             else:
                 key = "timeout" if "Timeout" in what or "Abort" in what else what
                 m["why"][key] = m["why"].get(key, 0) + 1
@@ -703,7 +706,12 @@ def chat_diagnose(secrets) -> int:
         say(f"\n{key} key: {len(mine)} answers in 24 h, answered by: {by}")
         for model, t in sorted(_model_tally(mine).items()):
             rate = f"{100 * t['answered'] / t['calls']:.0f}%" if t["calls"] else "n/a"
-            say(f"  {model}: {t['calls']} calls, {t['answered']} answered ({rate}); failures: {t['why']}")
+            ms = sorted(t["ms"])
+            med = f", median {ms[len(ms) // 2] / 1000:.1f} s" if ms else ""
+            say(f"  {model}: {t['calls']} calls, {t['answered']} answered ({rate}{med}); failures: {t['why']}")
+        sizes = sorted(e.get("prompt_chars") for e in mine if e.get("prompt_chars"))
+        if sizes:
+            say(f"  prompt size: median {sizes[len(sizes) // 2]:,} characters, largest {sizes[-1]:,}")
     errs: dict = {}
     for e in evs:
         if e.get("event") == "gemini_error":
@@ -1214,6 +1222,12 @@ def schedule_status(secrets) -> int:
     return 0
 
 
+def feedback_evals(secrets) -> int:
+    """evals/feedback: 12 feedback messages against the deployed function, model on and off (evals keys)."""
+    import subprocess
+    return subprocess.run([sys.executable, str(ROOT / "evals" / "feedback" / "run_feedback_evals.py")]).returncode
+
+
 def ask_ping_evals(secrets) -> int:
     import subprocess
     return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "run_ask_ping_evals.py")]).returncode
@@ -1381,7 +1395,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
              "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

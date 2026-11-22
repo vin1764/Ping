@@ -91,15 +91,17 @@ CV text:
 
 ## 4. Ask Ping (the chat on the dashboard)
 
-- **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Gemini keys are Supabase function secrets and never reach the browser
-- **When:** Only OPEN questions typed in the dashboard chat (summaries, "why", comparisons, advice, a follow-up with nothing new): every message is routed first (`route()` in `supabase/functions/_shared/answer_rules.js`), and FACT questions (what's due, tests and rooms, shortlists, CTC and its parts, bond, eligibility, which CV, applied, notices, a company's roles, counts), requests to act and "ok" are answered by rules with no model call. If no model answers, or the reply has a number that isn't in its FACTS, the rules answer instead. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
-- **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part.
+- **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Groq and Gemini keys are Supabase function secrets and never reach the browser
+- **When:** Only OPEN questions typed in the dashboard chat (summaries, "why", comparisons, advice, a follow-up with nothing new): every message is routed first (`route()` in `supabase/functions/_shared/answer_rules.js`), and FACT questions (what's due, tests and rooms, shortlists, CTC and its parts, bond, eligibility, which CV, applied, notices, a company's roles, counts), feedback ("X not relevant", "undo"), requests to act and "ok" are answered by rules with no model call. If no model answers, or the reply has a number that isn't in its FACTS, the rules answer instead. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
+- **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part. Groq gets the same prompt made compact: "All roles in the companies list" becomes only the roles of the companies in the question, the feed its newest 25 lines, and it's sent only if under 22,000 characters.
 - **Expected output:** Plain text, shown as Ping's chat reply. No JSON.
-- **Models, in fallback order:** `gemini-flash-latest` → `gemini-3.1-flash-lite`
-- endpoint: Gemini `generateContent`; key `GEMINI_API_KEY` for students and demo visitors, `GEMINI_API_KEY_EVALS` for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_AI_MODEL` replaces the main model
-- order: the main model (gemini-flash-latest) for at most 10 s in all, once more after 500 ms when it's busy (429, 5xx, timeout); then the lighter model once with 5 s (`PING_AI_LITE_MODEL`, set to gemini-3.1-flash-lite by the deploy; gemini-flash-lite-latest if unset); then the rules answer
-- generation: `{ temperature: 0.2, maxOutputTokens: 4096 }`
-- after the reply: every number, time and amount in it must be in the prompt's FACTS part, or the rules answer replaces it (logged `model_count_mismatch`)
+- **Models, in fallback order:** `groq/openai/gpt-oss-120b` → `gemini-3.1-flash-lite`
+- Groq: OpenAI-compatible `chat/completions` (`supabase/functions/_shared/openai_compat.ts`); key `GROQ_API_KEY` for students and demo visitors, `GROQ_API_KEY_EVALS` for evals (no evals key: evals skip Groq); `PING_GROQ_MODEL` replaces the model; reasoning effort low, at most 1,500 tokens out
+- Gemini: `generateContent`; key `GEMINI_API_KEY`, or `GEMINI_API_KEY_EVALS` for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_CHAT_MODEL` replaces the model
+- order: Groq once with 6 s; then gemini-3.1-flash-lite for at most 10 s, once more after 500 ms when it's busy (429, 5xx, timeout); 15 s in all; then the rules answer
+- generation (Gemini): `{ temperature: 0.2, maxOutputTokens: 4096 }`
+- after the reply: every number, time and amount in it must be in the prompt's FACTS part, or the next in the chain answers, and in the end the rules (logged `model_count_mismatch`)
+- logged per answer: which provider and model answered (`model`), every try with its status and time (`tried`)
 
 **Prompt, verbatim:**
 
@@ -157,6 +159,9 @@ turn: work out the full question from the last question and answer, then answer 
 words of the follow-up and never quote them back. If a follow-up could mean two things, answer the more likely one in
 one line and offer the other in a second line; ask a question back only if neither can be answered. A message that
 starts a new topic ("ok. what's due this week?") is a new question: don't carry the old topic into it.
+Replies: a "[replying to ...]" line after the question is the message the student replied to; it says which companies
+are meant, the question says what is wanted. A statement ("ok", "this one isn't for me", "already did it") is not a
+request for data: answer it in one line and never list the status of every company in the quoted message.
 Ping is read-only: it can never apply, withdraw, accept or decline offers, fill or submit forms, upload or change a CV,
 or change anything on the ERP or anywhere else. ${act
     ? `This message asks Ping to do something: start with "Ping is read-only, so I can't" followed by what was asked,
@@ -188,5 +193,5 @@ FACTS end here.
 Conversation so far, oldest first:
 ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
 
-Question: ${ask}
+Question: ${ask}${replyNote}
 ````

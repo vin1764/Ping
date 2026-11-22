@@ -141,7 +141,8 @@ answers a wrong password with "Invalid login credentials". The result of the lat
 | SUPABASE_ACCESS_TOKEN | GitHub Actions secret | deploys the functions; Admin tasks (SQL, auth settings, logs) | no |
 | GEMINI_API_KEY (the live key) | GitHub Actions secret; Supabase function secret | the hourly run (notice reader fallback, classifier, CV summaries); Ask Ping for the owner and demo visitors | no |
 | GEMINI_API_KEY_EVALS (a second key, its own quota) | GitHub Actions secret; Supabase function secret | every Admin task (Ask Ping and relevance evals, demo-refeed, gemini-check, the page and function checks): Admin's `GEMINI_API_KEY` is this key; calls through ask-ping send `x-ping-evals`, an HMAC of "ping-evals" made with it, and the function then answers with it and logs `key: "evals"`. An eval request without a valid proof is refused (HTTP 403), never answered on the live key | no |
-| PING_AI_LITE_MODEL = `gemini-3.1-flash-lite` (a setting, not a secret) | Supabase function secret, set by the deploy (`dashboard.yml`) | Ask Ping's lighter model: main model with retries, then this once, then the rules answer | yes (the value is in `dashboard.yml`) |
+| GROQ_API_KEY (the live key) | GitHub Actions secret; Supabase function secret (the deploy copies it) | Ask Ping's first model for the owner and demo visitors | no |
+| GROQ_API_KEY_EVALS (a second Groq key) | GitHub Actions secret; Supabase function secret | Ask Ping eval requests (the same `x-ping-evals` proof as Gemini's); without it, evals skip Groq, never use the live key | no |
 | PING_GITHUB_TOKEN | GitHub Actions secret; Supabase function secret | Check now and kick-run (start the Ping workflow) | no |
 | DASHBOARD_DEPLOY_TOKEN | GitHub Actions secret | pushes the built dashboard to the public repo | no |
 | PING_CRON_SECRET | Supabase function secret + Vault (`ping_cron_secret`) | pg_cron's calls to kick-run and send-push | no |
@@ -153,14 +154,24 @@ Checks: `git log --all -p` has no Supabase secret key, access token, Google key 
 Admin > `log-scan` downloads the logs of the last 20 workflow runs and searches them for the values of the
 secrets above and for key-shaped text; it prints counts only.
 
+## What each AI provider receives
+
+Only the function (server side) talks to a model; the browser never holds a model key. Nothing is sent for FACT
+questions, feedback, requests to act or "ok": the rules answer those.
+
+| provider | used for | receives | never receives |
+|---|---|---|---|
+| Groq (`api.groq.com`, `GROQ_API_KEY`) | Ask Ping's OPEN questions, first | the compact chat prompt: the question (and the message it replies to), the last 12 chat messages, your profile fields (department, degree, CGPA, backlogs, targets, interested / hidden companies), the roles of the companies in the question with their details and JD text, deadlines due in the next 7 days, the newest 25 feed lines, your own row in list PDFs (room, slot), the latest 3 notices of the companies asked about | your ERP login, password, security answers, mail password, roll number or name as an identifier, CV files, PDFs, other students' rows |
+| Google Gemini (`GEMINI_API_KEY`) | Ask Ping's OPEN questions when Groq doesn't answer; marking roles For you; the hourly run's notice-reader fallback; CV summaries | the full chat prompt (as above, with every role's line instead of only the asked companies'); for role marks, each role's title, details and JD text with your targets and CV summaries; for the notice fallback, a notice's text; for CV summaries, the text of your CV | the same as Groq: no logins, passwords or other students' rows |
+
 ## Limits and timeouts
 
 | what | limit |
 |---|---|
 | demo questions | 15 per session per hour, 100 per hour for all demo sessions (`demo_take_question()`); a preference change counts as one more |
-| Ask Ping | FACT questions (due, tests, CTC, eligibility, CV, lists, mail, help): answered in the page itself from the data it has loaded (the same rules file), no call and no model; the function answers them instead when a check has finished since the page loaded its messages, or the "For you" marks aren't in yet. Preference changes and OPEN questions go to the function. OPEN questions: the main model 10 s in all with one retry when busy, then the lighter model once with 5 s, then the rules answer; the page's typing bubble says "still thinking…" after 4 s. Every number in a model reply must be in its FACTS or the rules answer replaces it; classification from the chat: 60 s |
+| Ask Ping | FACT questions (due, tests, CTC, eligibility, CV, lists, mail, help): answered in the page itself from the data it has loaded (the same rules file), no call and no model; the function answers them instead when a check has finished since the page loaded its messages, or the "For you" marks aren't in yet. Preference changes and OPEN questions go to the function. Feedback ("X not relevant", "show X again", "undo") is saved by rules, no model. OPEN questions: Groq once (6 s), then Gemini flash-lite (one retry when busy), 15 s in all, then the rules answer; the page's typing bubble says "still thinking…" after 4 s. Every number in a model reply must be in its FACTS or the rules answer replaces it; classification from the chat: 60 s |
 | hourly run, AI | notice reader: at most 20 calls and 300 s a run; classifier: 240 s a run; CV summary: 60 s per model |
-| models, in order | Ask Ping: gemini-flash-latest, then gemini-3.1-flash-lite (`PING_AI_LITE_MODEL`). Role marks and the hourly run: gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-31b-it |
+| models, in order | Ask Ping's chat: Groq `openai/gpt-oss-120b` (6 s), then Gemini `gemini-3.1-flash-lite` (one retry when busy), 15 s in all, then the rules answer. Role marks from the chat: gemini-3.1-flash-lite, gemini-flash-latest, gemini-flash-lite-latest, gemini-3.5-flash-lite, gemma-4-31b-it (one call for every role). The hourly run (notice fallback, classifier, CV summaries): Gemini only |
 | CV upload | PDF only, 5 MB, 3 CVs |
 | push | at most 1 per check (the most urgent new for-you message) plus test-day reminders; never twice for a message; nothing outside the check window; a notification older than 6 h isn't shown (TTL); dead subscriptions (404/410) are removed |
 | JD files and links | ERP JD files: `AdmFilePDF.htm` type JNF/COM only, through the gate. Links in a JD: GET only, public hosts only (no IPs, no ERP or internal names), 3 redirects, 20 s, 12 MB, no cookies, YouTube skipped; a sign-in page counts as unreadable. At most 40 roles with a file or link a run, again only when the role's JD information changes. 40 summaries a run |

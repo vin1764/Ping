@@ -58,12 +58,15 @@
   function postedLine(f) {
     const s = f.sources || [];
     if (s.length < 2) return "";
-    return `posted ${s.length} times: ${s.map((x) => (x.type === "notice" ? `notice ${x.id}` : x.type)).join(", ")}`;
+    const one = (x) => (x.type === "notice" ? `notice ${x.id}` : x.type);
+    const shown = s.length > 3 ? [...s.slice(0, 2).map(one), `+${s.length - 2} more`] : s.map(one);
+    return `posted ${s.length} times: ${shown.join(", ")}`;
   }
   // "deadline moved Sat 21 Nov 20:00 → Sun 22 Nov 20:00"
   function movedLine(f, when) {
     const h = f.deadline_history || [];
     if (!h.length) return "";
+    if (h.length > 2) return `deadline moved ${h.length} times, last ${when(h[h.length - 1].from)} → ${when(h[h.length - 1].to)}`;
     return `deadline moved ${[h[0].from, ...h.map((x) => x.to)].map((v) => when(v)).join(" → ")}`;
   }
 

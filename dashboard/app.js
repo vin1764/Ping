@@ -805,7 +805,7 @@
     const res = OB.answer(o.step, input, o.ctx);
     try {
       await state.src.saveOnboarding(res.save);
-    } catch (e) { o.log.push({ role: "ping", text: `Couldn't save that: ${e.message}`, at: new Date().toISOString() }); return viewOnboarding(); }
+    } catch (e) { o.log.push({ role: "ping", text: isNetErr(e) ? "Couldn't save that: no connection. Tap it again when you're back online." : "Couldn't save that. Tap it again, or Skip and tell me later.", at: new Date().toISOString() }); return viewOnboarding(); }
     if (res.useDemo) { state.onb = null; location.hash = "#chat"; return route(); }
     Object.assign(o.ctx, res.ctxPatch || {}, res.save);
     if (!state.src.demo) Object.assign(state.data.profile, res.save);
@@ -814,7 +814,7 @@
         const out = await state.src.fn("ask-ping", { question: res.askPing });
         o.log.push({ role: "ping", text: out.answer, at: new Date().toISOString() });
         await loadMarks();
-      } catch (e) { o.log.push({ role: "ping", text: `Couldn't save that just now (${e.message}). You can tell me later.`, at: new Date().toISOString() }); }
+      } catch (e) { o.log.push({ role: "ping", text: "Couldn't save that just now. You can tell me later, any time.", at: new Date().toISOString() }); }
     }
     if (res.next === o.step && !res.ctxPatch) {
       o.log.push({ role: "ping", text: "Sorry, I didn't get that. Tap one of the answers, or Skip.", at: new Date().toISOString() });

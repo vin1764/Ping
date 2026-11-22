@@ -123,9 +123,10 @@ def _handler(fake: FakeSupabase):
             pass
 
         def _send(self, code, body):
-            data = json.dumps(body, default=str).encode()
+            data = b"" if code == 204 else json.dumps(body, default=str).encode()   # 204 has no body (as Supabase)
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
 
@@ -235,7 +236,17 @@ def _handler(fake: FakeSupabase):
                         return self._send(400, {"error": "invalid_grant", "error_description": "Invalid login credentials"})
                     uid = c.execute("update auth.users set last_sign_in_at=now() where email=%s returning id",
                                     (b["email"].lower(),)).fetchone()[0]
-                return self._send(200, {"access_token": _token_for(b["email"].lower(), str(uid)), "token_type": "bearer"})
+                user = {"id": str(uid), "email": b["email"].lower(), "aud": "authenticated", "role": "authenticated",
+                        "is_anonymous": False}
+                # what supabase-js needs to hold a session: the user, how long the token lasts, a refresh token
+                return self._send(200, {"access_token": _token_for(b["email"].lower(), str(uid)), "token_type": "bearer",
+                                        "expires_in": 3600, "expires_at": int(time.time()) + 3600,
+                                        "refresh_token": "fake-refresh", "user": user})
+            if path == "/auth/v1/user" and method == "GET":
+                if role != "authenticated" or not claims:
+                    return self._send(401, {"message": "not signed in"})
+                return self._send(200, {"id": claims.get("sub"), "email": claims.get("email"), "aud": "authenticated",
+                                        "role": "authenticated", "is_anonymous": bool(claims.get("is_anonymous"))})
             if path == "/auth/v1/signup" and method == "POST" and not (self._body() or {}).get("email"):
                 # supabase-js signInAnonymously(): a new user with no email, is_anonymous = true
                 if role != "anon":

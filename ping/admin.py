@@ -666,8 +666,13 @@ def chat_diagnose(secrets) -> int:
         ORDER BY timestamp DESC LIMIT 5000""", hours=24)
 
     def ts(x):
-        v = float(x.get("timestamp") or 0)
-        return datetime.fromtimestamp(v / 1e6 if v > 1e14 else v / 1e3, timezone.utc)
+        raw = x.get("timestamp") or 0
+        try:
+            v = float(raw)
+            return datetime.fromtimestamp(v / 1e6 if v > 1e14 else v / 1e3, timezone.utc)
+        except (TypeError, ValueError):
+            t = datetime.fromisoformat(str(raw).replace("Z", "+00:00").replace(" ", "T"))
+            return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
     if at:
         say("\nask-ping requests within 3 min of it (HTTP status, time):")
         for x in sorted(edge, key=ts):

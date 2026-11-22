@@ -54,16 +54,19 @@
 
   // ------------------------------------------------------------ dates (always IST)
   const dt = (v) => (v ? new Date(v) : null);
-  const istDay = (d) => d.toLocaleDateString("en-CA", { timeZone: TZ });
+  // formatters made once (toLocale*String with options builds a new one on every call: slow on a phone)
+  const F_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: TZ });
+  const F_HM = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const F_WD = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short" });
+  const F_DM = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "2-digit", month: "short" });
+  const istDay = (d) => F_DAY.format(d);
   function when(v) {
     const d = dt(v);
     if (!d || isNaN(d)) return "";
     // always with the date, same as Ping's messages ("Sat 21 Nov 20:00")
-    const time = d.toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
-    const wd = d.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "short" });
-    return `${wd} ${d.toLocaleDateString("en-GB", { timeZone: TZ, day: "2-digit", month: "short" })} ${time}`;
+    return `${F_WD.format(d)} ${F_DM.format(d)} ${F_HM.format(d)}`;
   }
-  const clock = (v) => dt(v).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const clock = (v) => F_HM.format(dt(v));
   function dayLabel(v) {
     const d = dt(v), today = istDay(nowDate()), yest = istDay(new Date(nowDate() - 86400000));
     const k = istDay(d);
@@ -293,9 +296,14 @@
     return startReal(sb);
   }
 
+  // the published demo-data.json keeps each distinct "allowed departments" list once (dashboard/build.sh)
+  function unpackDemo(d) {
+    if (Array.isArray(d.allowed_lists)) for (const r of d.roles || []) if (typeof r.allowed === "number") r.allowed = d.allowed_lists[r.allowed];
+    return d;
+  }
   async function startDemo(noBackend) {
     const r = await fetch("demo-data.json", { cache: "no-store" });
-    state.src = new DemoSource(await r.json());
+    state.src = new DemoSource(unpackDemo(await r.json()));
     $("#mode-badge").replaceChildren("Demo", h("span", { class: "long" }, DEMO_CHIP.replace(/^Demo/, "")));
     $("#mode-badge").title = "Anonymised snapshot of a real run, no login";
     $("#mode-badge").hidden = false;
@@ -504,7 +512,8 @@
     const have = new Map([...inner.querySelectorAll("[data-key]")].map((n) => [n.dataset.key, n]));
     const added = [];
     keepPlace(thread, atBottom, () => {
-      const entries = threadEntries();
+      // only what the thread draws: older messages that aren't shown (Show earlier) stay out
+      const entries = threadEntries().filter((e) => !state.threadFrom || dt(e.at) >= dt(state.threadFrom));
       // a check that joined a line of "nothing new" checks: its own bubble goes, the line above it updates
       const keys = new Set(entries.map(entryKey));
       for (const [k, n] of have) if (k.startsWith("run:") && !keys.has(k)) { n.remove(); have.delete(k); }
@@ -897,15 +906,29 @@
     s.append(p); return s; };
   const sendButton = (disabled) => h("button", { class: "btn send", "aria-label": "Send", disabled }, ICON_SEND());
 
+  // the thread draws its latest 60 messages (from the first unread one if that is earlier) and the rest on demand:
+  // a phone shouldn't lay out 300 bubbles to show the last screenful
+  const THREAD_WINDOW = 60;
   function viewChat() {
-    const entries = threadEntries();
-    const { readAt, unread } = unreadOf(entries);
+    const all = threadEntries();
+    const { readAt, unread } = unreadOf(all);
+    let cut = state.showAll ? 0 : Math.max(0, all.length - THREAD_WINDOW);
+    if (unread.length) cut = Math.min(cut, all.indexOf(unread[0]));
+    if (state.jumpItem) { const j = all.findIndex((e) => e.kind === "item" && e.it.id === state.jumpItem); if (j >= 0) cut = Math.min(cut, j); }
+    const entries = all.slice(Math.max(0, cut));
+    state.threadFrom = cut > 0 ? entries[0]?.at || null : null;
     const inner = h("div", { class: "thread-inner" });
     let group = null, lastDay = null, divider = null;
     const snapshot = state.asOf && h("p", { class: "note-line snapshot" }, "Demo: " +
       `an anonymised snapshot of a real run, shown as it was on ${when(state.asOf)}. Fake roll number, name and CGPA; ` +
       "other students and all real mail removed (the 4 mails marked \u201cvia email\u201d are made-up samples).");
-    if (!entries.length) inner.append(h("p", { class: "empty" }, "No messages yet. Ping posts here after its first check (about 10 minutes)."));
+    if (!all.length) inner.append(h("p", { class: "empty" }, "No messages yet. Ping posts here after its first check (about 10 minutes)."));
+    if (cut > 0) inner.append(h("button", { type: "button", class: "pill-btn ghost earlier", onclick: () => {
+      const first = entries[0] && entryKey(entries[0]);
+      state.showAll = true;
+      route();
+      requestAnimationFrame(() => document.querySelector(`[data-key="${CSS.escape(first)}"]`)?.scrollIntoView({ block: "start" }));
+    } }, `Show ${cut} earlier message${cut === 1 ? "" : "s"}`));
     for (const e of entries) {
       const day = dayLabel(e.at);
       // one section per day: its header sticks to the top while you scroll through that day
@@ -1513,7 +1536,9 @@
     if (!t) return;
     if (t.item) {
       const show = () => {
-        const n = document.querySelector(`[data-key="${CSS.escape(`item:${t.item}`)}"]`), thread = $("#thread");
+        let n = document.querySelector(`[data-key="${CSS.escape(`item:${t.item}`)}"]`);
+        if (!n && !state.showAll && $("#thread")) { state.showAll = true; route(); n = document.querySelector(`[data-key="${CSS.escape(`item:${t.item}`)}"]`); }
+        const thread = $("#thread");
         if (!n || !thread) return;
         jumpTo(thread, n);
         n.classList.remove("hl"); void n.offsetWidth; n.classList.add("hl");

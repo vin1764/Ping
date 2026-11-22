@@ -13,8 +13,11 @@
   "use strict";
   const TZ = "Asia/Kolkata";
   const ms = (v) => (v ? new Date(v).getTime() : NaN);
-  const dayOf = (t) => new Date(t).toLocaleDateString("en-CA", { timeZone: TZ });
-  const clock = (t) => new Date(t).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  // one formatter each, made once: toLocale*String(..., options) builds a new one per call (slow on a phone)
+  const DAY = new Intl.DateTimeFormat("en-CA", { timeZone: TZ });
+  const HM = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+  const dayOf = (t) => DAY.format(new Date(t));
+  const clock = (t) => HM.format(new Date(t));
   // display names (dashboard/names.js): the website in brackets goes, the raw ERP name stays in the data
   const NAMES = root.PingNames || (typeof require === "function" ? require("./names.js") : null);
   const cleanName = (s) => (NAMES ? NAMES.cleanName(s) : String(s || "").trim());

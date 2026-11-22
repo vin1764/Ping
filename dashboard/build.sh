@@ -14,6 +14,26 @@ sed "s/__BUILD__/${GITHUB_SHA:-local}/" dashboard/sw.js > _site/sw.js
 # the demo is the anonymised snapshot of a real run (Actions > Admin > build-demo writes it);
 # the made-up sample is only a fallback for a fresh copy of the project that hasn't built one yet
 if [ -s dashboard/demo-data.json ]; then cp dashboard/demo-data.json _site/; else python3 -m ping.sample _site/demo-data.json; fi
+# the published copy is packed: each distinct list of allowed departments once (58 lists for 201 roles; the page
+# unpacks them), only the role details the page reads, no spaces: 6.6 MB -> about 3 MB to parse on a phone.
+python3 - <<'PY'
+import json
+d = json.load(open("_site/demo-data.json", encoding="utf-8"))
+lists, index = [], {}
+for r in d.get("roles", []):
+    md = r.get("more_details")
+    if isinstance(md, dict):                 # the page reads only the fields; the same text twice more is left out
+        r["more_details"] = {"fields": md.get("fields") or {}}
+    if r.get("jd_text") and r.get("jd_text") == r.get("job_description"):
+        r["job_description"] = None          # the page shows jd_text first; no second copy
+    key = json.dumps(r.get("allowed"), sort_keys=True)
+    if key not in index:
+        index[key] = len(lists)
+        lists.append(r.get("allowed"))
+    r["allowed"] = index[key]
+d["allowed_lists"] = lists
+open("_site/demo-data.json", "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+PY
 python3 - <<'PY'
 import json, os
 cfg = {"supabaseUrl": os.environ.get("SUPABASE_URL", ""), "supabaseKey": os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")}

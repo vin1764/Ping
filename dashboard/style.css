@@ -584,3 +584,6 @@ body:has(form.login) main { background-color: var(--wall); background-image: var
 .msg .mail-link a { display: inline-block; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 12px;
   border: 1px solid var(--line-strong); border-radius: 999px; }
 .msg .mail-link a:hover { background: var(--bg); }
+
+/* "Show N earlier messages" at the top of the thread */
+.thread .earlier { position: static; left: auto; transform: none; align-self: center; margin: var(--s2) auto var(--s3); display: flex; }

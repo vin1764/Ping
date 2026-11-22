@@ -515,3 +515,266 @@ Closing round. Commit after each part, then tag v1.0.
 5. Final grep of both repos and all docs for "[banned word]": zero hits in current files. Leave the private repo's history alone.
 6. Tag v1.0, push, confirm the live build hash matches HEAD. Handoff: scores, URL, anything still open.
 `````
+
+## 33. Sat 21 Nov 2026, 23:41 IST (18:11 UTC)
+
+`````text
+UI/UX round. Keep the stack vanilla (static HTML/JS/CSS, no framework), keep every test green, deploy only after tests pass. Commit after each part. Work unattended: log judgement calls in docs/DECISIONS.md.
+
+PART A — First-run onboarding, inside the chat
+1. Trigger: a signed-in user with an empty profile and no messages sees an empty thread and Ping speaks first. Persist progress in the profile (onboarding_step) so a refresh resumes where they left off. Never show a blank chat with a text box and nothing else.
+2. Flow, one question per message, each with tappable quick-reply chips plus a free-text option, and "Skip" always available:
+   a. Welcome (2 lines: what Ping does, that it only reads the ERP) → "How do you want your feed?" chips: [Only what fits me] [Everything from the ERP].
+   b. Department and degree (needed for eligibility) → chips for common degrees, free text for department.
+   c. (Personalised only) "What are you looking for?" with 3–4 example chips that insert text (e.g. "Product & consulting", "Data & analytics", "Finance", "Core engineering") and free text to refine; show the one-line "Saved: …" confirmation after.
+   d. (Personalised only) "Want other roles listed separately so you don't miss anything?" [Yes] [No].
+   e. (Personalised only) "Upload a CV so I can suggest which one to apply with?" inline upload button in the chat bubble, [Later].
+   f. "How often should I check the ERP?" chips [Every hour] [Every 2 hours] [Every 30 min]; and "Between which hours?" default 06:00–01:00 — these write the schedule the kick-run cron actually uses (per profile), not a hardcoded window.
+   g. "When should I remind you before a deadline?" [1 h] [2 h] [4 h] [Day before].
+   h. Close: "Running your first check now…" → trigger Check now → when the feed lands, one short message explaining what the thread will look like (digests, reminders, tests) and that any of this can be changed by just telling Ping.
+3. Everything saved by a chip must be changeable later by chat ("check every 30 minutes", "remind me 4 hours before") through the existing preference flow — extend it for frequency and hours.
+4. Demo: onboarding runs for View demo too, but the first bubble offers [Use the demo profile] which fills everything in one tap and jumps to the feed; judges can still walk the flow if they want.
+5. Evals/tests: the onboarding is a scripted sequence — test each branch, resume after refresh, skip at every step, and that the schedule written by (f) is what pg_cron picks up.
+
+PART B — Visual and interaction design
+1. First write docs/DESIGN.md: a short design spec with one clear direction — a name for it, palette (one accent, neutrals, semantic colours for "for you / applied / closing soon / test"), type scale (a single self-hosted font or a good system stack), spacing scale, radius, message-bubble anatomy per message kind (digest, reminder, test alert, new companies, Ping system note, user message), chips, empty states, light and dark themes following the system with a toggle. Don't produce a generic dark chat template; the thread should feel like a focused inbox for placements.
+2. Chat: typing indicator while Ask Ping answers; "N new" unread pill that scrolls to the divider; sticky day headers; digests as cards with a collapsible Others list and a count; test alerts with a time chip that says "in 2 h" / "over"; "✓ applied" badges; the composer stays above the keyboard on mobile; quick-reply chips row; send button states; message entry animation ≤200 ms, no layout shift.
+3. Navigation: on mobile a bottom bar (Chat · Companies · Profile) instead of a Menu button; on desktop a slim left rail. Companies page: search box, filters [For you] [Applied] [Closing soon] [All], role rows with the "Apply with" label, tap → detail sheet with everything Ping knows about the role (CTC breakdown, eligibility, deadlines, notices, source). Profile page: cards (About you · What I'm looking for · CVs · Schedule & reminders · Account), each editable in place.
+4. Accessibility: contrast ≥ 4.5:1, visible focus rings, 44 px tap targets, labels on every control, reduced-motion respected.
+5. Before/after screenshots at 390×844 and 1280×800 for: onboarding step a, the chat with a digest expanded, Companies with a filter on, the role sheet, Profile. Save in docs/screenshots/ (demo data only). Re-run the Admin page check and the reviewer run on the live site after deploy.
+
+Handoff: status table for A and B, screenshots list, anything open.
+`````
+
+## 34. Sun 22 Nov 2026, 00:17 IST (18:47 UTC)
+
+`````text
+Companies page and role sheet: company is the primary line, role secondary. Company name bold at body size; role one step smaller, regular weight, below it; CTC stays right-aligned on the company line. Same hierarchy in the role detail sheet header and anywhere a role card appears (search results, Closing soon, For you). Clean the company name for display: strip anything in parentheses that is a URL or domain (e.g. "Auro Group([www.AuroIM.com](https://www.AuroIM.com))" → "Auro Group"), trim double spaces, keep the raw ERP name in the data. Screenshot the Companies page at 390 px and 1280 px after the change.
+`````
+
+## 35. Sun 22 Nov 2026, 00:50 IST (19:20 UTC)
+
+`````text
+Bug: in the chat I asked "microsoft cv submission deadline". Gemini returned "busy", the rule-based fallback ran, and it replied with a generic "due in next 3 days" list that never mentioned Microsoft. Fix the following:
+
+1. Gemini resilience: on busy/429/503, retry up to 3 times with backoff (1s, 3s, 6s). If it still fails, try a lighter Gemini model once before falling back to rules.
+
+2. Rule-based fallback must respect the question:
+   - Extract company names by fuzzy-matching words in the message against the companies table (case-insensitive, handle "MS"/"msft" → Microsoft style aliases where cheap).
+   - Detect intent keywords: deadline/due/submit/form/cv, shortlist, test/date/room, which cv.
+   - If a company matched: answer ONLY about that company: its open deadlines (form + CV submission), latest notice, and status. If none found, reply plainly: "No open deadline for Microsoft in the ERP data (last checked <time>). Last Microsoft notice: <title, date>." If the company isn't in the data at all, say that.
+   - Only fall back to the generic "next 3 days" digest when no company and no intent were detected, and label it as such ("I couldn't tell what you meant. Here's what's due soon:").
+
+3. Digest cleanup:
+   - Merge items for the same company + same deadline into one line (e.g. "Meesho (Senior Associate - BM): form + submission by Sun 22 Nov 18:00").
+   - Never output a count without names. For "N deadlines moved/now close at X", list the companies (first 5, then "+N more").
+
+4. Evals: add cases for (a) a specific company with a deadline, (b) a specific company with no deadline, (c) a company not in data, (d) a misspelled company name, each run with the LLM forced off so the fallback path is tested. Run them and show results.
+`````
+
+## 36. Sun 22 Nov 2026, 01:22 IST (19:52 UTC)
+
+`````text
+Login screen: add a "Set this up for yourself" path.
+
+1. Sign-in screen layout, top to bottom: Ping name + one-line promise ("Your ERP, filtered for you, every hour."), the owner sign-in, the View demo button, then a quiet link "Set up Ping for yourself →".
+2. That link opens setup.html in the public dashboard repo (static, same styling, generated from docs/SETUP.md so they can't drift — add that to the build and the drift test). Content, in this order:
+   - What you get (3 bullets) and what it never does (read-only; never applies, never changes anything; your credentials stay in your own GitHub + Supabase, nothing central).
+   - What you need: a GitHub account, a free Supabase project, a free Gemini API key, your ERP login — with the "free tier" note.
+   - Steps (numbered, ~8): fork/clone the source repo, create the Supabase project, add the secrets (list each name and where it goes), run setup/new_student_setup.py once, turn on the schedule, open your dashboard, answer Ping's first questions in the chat, done. Each step one or two lines; the exact commands in code blocks.
+   - Time estimate and "first check lands within the hour".
+   - Troubleshooting: the three things that actually went wrong for me (ERP blank login page; GitHub cron not firing → Supabase cron; Pages custom domain). One line each.
+   - Privacy: what data lives where, that the demo is anonymised sample data.
+3. Source repo link: use the placeholder SOURCE_REPO_URL in one place; until I give you a public repo URL, render it as "Source repo: available on request" with no dead link. Nothing on the page may mention any other product or working name.
+4. Mobile check at 390 px; screenshot to docs/screenshots/.
+`````
+
+## 37. Sun 22 Nov 2026, 01:23 IST (19:53 UTC)
+
+`````text
+Audit the notice-attachment pipeline and report, no changes unless something is broken:
+1. Which attachment types are handled (PDF text, scanned PDF/images via OCR, XLSX/CSV, DOCX, links to Google Drive)? For each unsupported type, what does the student see?
+2. Matching: roll number in all formats the ERP uses (22XY10042, 22XY10042, with spaces/dashes), name-only lists (exact and fuzzy), and a roll number that appears only as part of a longer string. Show the test cases that exist.
+3. Room/slot extraction: when a PDF is a table of roll → room/slot/time, prove the student gets their own row, not the first row or the header, on a messy table (merged cells, two-column layout, page break mid-table). Add a test fixture if none exists.
+4. Negative: a PDF that lists you for a different company's test on the same day; a PDF with 500+ rows (timing).
+5. What the feed message and the Ask Ping answer look like for: on the list with a room; on the list without a room; not on the list.
+Fix anything that fails, then summarise coverage in evals/REPORT.md.
+`````
+
+## 38. Sun 22 Nov 2026, 01:23 IST (19:53 UTC)
+
+`````text
+Two config changes and a re-run.
+1. Set PING_AI_LITE_MODEL to gemini-3.1-flash-lite on the Supabase function secrets. Keep the order: main model with retries → lite model once → rules answer. Document it in SECURITY.md's secrets inventory and PROMPTS.md.
+2. Split Gemini keys: the live function uses GEMINI_API_KEY (Supabase secret); evals, demo-refeed, relevance re-marks and every Admin task use GEMINI_API_KEY_EVALS (GitHub secret). Stop and tell me exactly where to create the second key and which secret name to paste it into; wait until I confirm. Then prove the split: an eval run must not touch the live key (check the function logs show no eval traffic).
+3. After the free quota resets (00:00 Pacific = 13:30 IST), re-run the full Ask Ping evals with the paced runner and record main-model-only and all-cases scores in evals/REPORT.md, ONE_PAGER_FACTS.md and SUBMISSION.md. Add a line in SUBMISSION.md's "what to try" that answers marked "(Gemini busy)" come from ERP data rules, not the model.
+`````
+
+## 39. Sun 22 Nov 2026, 02:07 IST (20:37 UTC)
+
+`````text
+Live updates, no reloads. Commit after each part, deploy when tests pass.
+
+1. Realtime: the dashboard subscribes (Supabase Realtime) to inserts/updates on chat_messages for the signed-in user (and on the demo rows for a demo session), plus the runs table for run status. New Ping messages append to the thread immediately with the unread divider logic; the header's "last checked" updates live. On tab focus/visibility change, refetch anything missed (realtime can drop during sleep). Fallback if the socket fails: poll every 15 s while a run is in progress, every 60 s otherwise. RLS must still hold on the realtime channel — a demo session must not receive the owner's messages; test it.
+
+2. "Check now" as an in-chat process: pressing it posts a Ping message "Checking the ERP now… usually takes 1–2 minutes" with a progress state that updates in place: queued → logging in → reading companies/notices/PDFs → done. On completion it becomes "Done at 12:17 — 2 new items" (or "Done — nothing new since 11:41") and the new digest messages arrive right after it. On failure, the failure-policy message appears instead. The button is disabled while a run is in progress, with the state shown on it. Hourly runs show the same "Done — N new" line only when there is something new; otherwise just the header timestamp changes.
+
+3. Scroll behaviour: if the user is scrolled up when new messages arrive, show a "↓ N new" pill at the bottom that scrolls to the first new message; if they're at the bottom, auto-scroll. Never jump the viewport under a user who is reading.
+
+4. Demo: View demo sessions get the same realtime path (their own chat rows); Check now in demo shows the process using the sample snapshot and finishes with "Demo: sample data, nothing new to fetch".
+
+5. Tests: realtime append,
+`````
+
+## 40. Sun 22 Nov 2026, 02:28 IST (20:58 UTC)
+
+`````text
+JD coverage bug. "summarise JPMC's JD" → "I don't have the JD", but the JD is on the ERP. Fix the pipeline, not the answer.
+
+1. Diagnose on the real ERP (read-only, through the gate): for JP MorganChase and 5 other "JD missing" roles, record exactly where the JD lives — inline field, a detail page/popup per role, a PDF/DOCX attachment on the role, or an external link (Drive, company site). Report the breakdown for all 31 "JD missing" roles.
+2. Fetch it: extend the role parser to follow each of those paths — open the role's detail view, download attachments (reuse the attachment pipeline incl. OCR), and fetch external links when they're public (time-limited, size-capped, never submit anything). Store jd_text, jd_source (inline/attachment/link/detail) and jd_url on the role; refetch only when the role changes. If a link is private or dead, store jd_source = "link-unreadable" with the URL.
+3. Reclassify every role whose JD went from missing to present (the cache key includes role text, so this should be automatic — verify) and drop the "(JD missing)" tag for them.
+4. Ask Ping: "summarise X's JD" / "what's the JD for X" / "what do they want for X" → a short structured summary: role & team, what you'd do (3 bullets), must-have skills, location, eligibility/CG, and anything unusual (bond, shifts, rotation) — ≤120 words, from jd_text only, no invention. If jd_source is link-unreadable: "The JD is a link I can't open: <url>". Add eval cases for all three outcomes, including JPMC on real data if it's reachable through the demo snapshot (otherwise a fixture).
+5. Companies page role sheet: show the JD summary with a "Full JD" expander and the source link.
+6. Run a live check on JPMC and report the before/after count of roles with a usable JD out of 201.
+`````
+
+## 41. Sun 22 Nov 2026, 03:26 IST (21:56 UTC)
+
+`````text
+The UI doesn't feel alive. Do this in two steps.
+
+STEP 1 — Two directions, mocked, no app code changed yet. Build two static mock pages (docs/mocks/a.html, b.html) of the chat home with real demo content and render each at 390×844 and 1280×800 to PNG. Each must have a name, a one-line idea, and differ in palette, type and texture — not just accent colour:
+  A. "Night desk": deep charcoal with warm paper-toned bubbles, one amber accent for anything closing within 3 h, a humanist display face for headings and Ping's name, subtle grain/vignette so the background isn't flat.
+  B. "Signal": near-black with a single electric accent (not teal), cool off-white text, monospaced numerals for times/CTC, hairline dividers, bubbles replaced by left-rail cards with a coloured spine per message kind (digest / reminder / test / system / you).
+  Both must show: a digest card with Others collapsed, a test alert with a live countdown chip, a Ping system note, a user message, the quick-reply chips, the composer, and the header with Ping's status. Send me the four PNGs and stop.
+
+STEP 2 — after I pick, implement that direction across chat, Companies, role sheet, Profile, sign-in and setup page, with these non-negotiables:
+  Presence: Ping's avatar has a state — idle, "checking the ERP…" (soft pulse while a run is in progress), "found 2 new" (brief accent flash) — driven by the runs table in realtime. Header shows "last checked 4 min ago" and ticks.
+  Time: every deadline/test within 24 h shows a live countdown ("in 1 h 56 m"), turning amber under 3 h and red under 1 h; "over" when past.
+  Motion: messages slide/fade in (≤200 ms, respects reduced-motion); typing indicator while Ask Ping answers; chip press and send-button feedback; skeleton loaders instead of "Loading…"; the unread pill eases in.
+  Voice: Ping's system notes read like a person — greet by time of day on first open, "nothing new since 23:11, go sleep" after midnight, "2 close tonight, you've done both ✓" — short, specific, never chirpy. Write a tone guide in docs/DESIGN.md with 10 before/after lines.
+  Hierarchy: one accent, used only for things that need action; everything else neutral. Display titles for long ERP role names ("JPMC — Global Research Analyst") with the full name on the role sheet.
+  Deliver: screenshots at both sizes and a 15-second screen recording (GIF) of: open → Check now → pulse → new message arrives → countdown ticking → typing indicator → answer. Re-run the Admin page check and reviewer run.
+`````
+
+## 42. Sun 22 Nov 2026, 03:35 IST (22:05 UTC)
+
+`````text
+Decision: drop both mocks. Direction = the familiar messaging-app look, done properly, plus a Today panel. Implement directly (no more static mocks); deliver a 20-second GIF because stills can't show what "alive" means here.
+
+CHAT (keep what people already know)
+- Header like a contact: round avatar, name, and a live status line under it that changes: "checked 4 min ago" → "checking the ERP…" (animated dots) → "found 2 new" (2 s) → back. Driven by realtime run state.
+- Bubbles with tails: Ping's dark-grey on the left, yours tinted green on the right, time inside the bubble, date pills ("Today", "Yesterday"), a subtle original wallpaper pattern behind the thread (our own, low-contrast, not copied from any app).
+- Message kinds inside the bubble: a small coloured label line at the top (REMINDER · TEST · NEW · PING), the body, and for digests a "Show 30 more ▸" link that expands in place. Countdown chips ("in 1 h 48 m") tick live, amber <3 h, red <1 h, "over" when past.
+- Motion: new bubbles slide up and fade in (≤180 ms), typing bubble with three dots while Ask Ping answers, send button fills on press, the unread "N new ↓" pill slides in. Respect reduced-motion.
+- Quick-reply chips stay; composer stays above the keyboard on mobile.
+
+TODAY (new)
+- Desktop: a right rail "Today". Mobile: a 4th tab in the bottom bar (Chat · Today · Companies · Profile) with a badge for items still ahead.
+- Content, ordered by time: every test today (company, role, time, room/slot if known, "you're on the list" / "not on the list", countdown); every deadline today (time, "N for you · M applied", the for-you names); shortlists/notices that arrived today (one line each); the next ERP check time. Items that are over move to the bottom, struck through. A tap jumps to the related chat message or opens the role sheet.
+- Tomorrow preview at the bottom: a single line "Tomorrow: 2 tests, 4 deadlines".
+- Empty state with a short human line ("Nothing scheduled today. Next check 14:11.").
+- Demo sessions get the same panel from the sample snapshot.
+
+COMPANIES / PROFILE / SIGN-IN: same visual language (fonts, radii, colours), no redesign beyond consistency. Company-first hierarchy stays.
+
+DELIVER: screenshots at 390×844 and 1280×800 (chat, Today, Companies, role sheet), a 20 s GIF: open → Check now → status line animates → new bubble slides in → countdown tick → ask a question → typing dots → answer. Then Admin page check + reviewer run on the live URL.
+`````
+
+## 43. Sun 22 Nov 2026, 04:01 IST (22:31 UTC)
+
+`````text
+Ask Ping answer routing. Rules first for facts, Gemini for language. Commit per part.
+
+1. Intent router: classify each message (cheap, local) into FACT intents — which CV, due today/tonight/tomorrow/this week, tests today/when/room, shortlisted, CTC/breakdown, eligibility, applied status, preferences, counts of any of these — or OPEN (summaries, "why", comparisons, follow-ups with no clear slot, anything else). FACT intents are answered by answer_rules.js directly, no model call, in <1 s. Follow-ups ("and tomorrow?", "nothing else?") resolve against the last turn first, then route the same way.
+2. OPEN intents go to Gemini with the rules' structured facts attached as context; Gemini may phrase, never compute: every number, time, count and company list in its answer must be copied from the facts block. Post-check: if a number/count in Gemini's reply isn't in the facts, replace the reply with the rules answer for that intent (log it as "model_count_mismatch").
+3. Latency cap: Gemini total wait ≤10 s (one retry), then the lite model once with ≤5 s, then rules. The typing bubble shows "still thinking…" after 4 s so it never looks frozen.
+4. Fix the 17-vs-8 case specifically: add it as an eval (must equal the digest's for-you count) and re-run the fallback evals + the multi-turn set with no_ai to prove FACT intents never depend on the model.
+5. Report: share of the 42 single-question evals now answered by rules vs model, median latency for each, and the live answers for "which cv for blackbuck" and "what's due tonight?".
+`````
+
+## 44. Sun 22 Nov 2026, 04:24 IST (22:54 UTC)
+
+`````text
+Make Ping an installable app with push notifications (PWA + Web Push). Commit per part; keep everything working for people who don't install it.
+
+1. PWA: manifest (name, short name, original icon set incl. maskable, theme colour, standalone display, start_url under /ping-dashboard/), service worker that caches the app shell for instant open and works offline for the last-loaded thread (reads stay; sends queue until online). Add an "Install Ping" prompt in the chat as a Ping message on the 2nd visit (Android: the install event; iOS: a short "Share → Add to Home Screen" instruction with a picture), dismissible, never nagging.
+
+2. Push: VAPID keys (private key as a Supabase secret, public in config.js). Subscription stored per user in a push_subscriptions table (owner-only RLS; demo sessions can't subscribe). Opt-in via a Ping message "Want me to notify you when something's for you?" [Yes] [Not now] — and a Profile toggle. A send-push Supabase function (or a step at the end of the hourly run) sends one notification per new for-you message: title = the message label ("Reminder · closes tonight"), body = the first line, tap opens the thread at that message. Nothing is sent for "nothing new" runs or Others-only changes. Quiet hours honour the student's check window. Rate-limit: max 1 push per run plus test-day reminders.
+
+3. Test-day reminders: for a test the student is listed for, push at the reminder lead time ("Groww test in 2 h · room 304") even if no run happened — schedule it via pg_cron from the item's time.
+
+4. Fallback: email stays as it is for the 3-failed-runs alert; add an option to also email for-you digests, off by default.
+
+5. iOS/Android verification: real-device checks aren't possible here, so prove it with a headless browser: manifest validates, service worker registers, subscription round-trips, a test push is received by a subscribed headless client; and document the manual steps for me to verify on my phone (Android and iPhone) in docs/PUSH.md. Update SECURITY.md (new secret, new table), SETUP.md (VAPID key generation is one command in the setup script), PROMPTS.md if any prompt changes.
+
+Report: install flow screenshots, the push payload example, and what to tap on my phone to verify.
+`````
+
+## 45. Sun 22 Nov 2026, 04:49 IST (23:19 UTC)
+
+`````text
+Make the institute mailbox a first-class source, read-only, privacy-first.
+
+1. Scope: only mails that are about placements — from CDC/placement office addresses, from companies that exist in the ERP list, or containing placement signals (test link, shortlist, interview, form, deadline, pre-placement talk, offer). Everything else is never read beyond headers and never stored. OTP mails are used for login only and never stored or shown. Document the exact filter in SECURITY.md.
+2. Extract per mail: company (matched to the ERP list with the same alias/typo matching), kind (form / test link / interview / shortlist / PPT / offer / announcement), any deadline or date-time, links, and attachments through the existing attachment pipeline (roll-number lists in mailed PDFs count as shortlists). De-duplicate against ERP notices: if the ERP has the same thing, the mail just adds "also mailed to you" and the link; if only the mail has it, it becomes a feed item like any notice.
+3. Feed/Today/Ask Ping: mail-only items appear with a small "via email" tag; forms and test links show the link; deadlines from mail enter digests and the Today panel; "any mails for X", "did I get a test link for Y", "what's due from mail" work. Reminders fire on mail-only deadlines too.
+4. Eligibility and relevance apply as usual; nothing in a mail ever changes applied status (that comes only from the ERP).
+5. Evals: a fixture mailbox with 20 mails (10 placement, 10 noise incl. one OTP, one with a PDF shortlist, one Google Form with a deadline, one duplicate of an ERP notice). Must: store none of the noise, never store the OTP, dedupe the ERP duplicate, extract the form deadline, and find the roll in the PDF. Demo gets 4 anonymised sample mails so View demo shows the "via email" tag.
+6. Report coverage before/after on my real mailbox: how many placement mails in the last 14 days, how many were already on the ERP, how many were mail-only.
+`````
+
+## 46. Sun 22 Nov 2026, 04:57 IST (23:27 UTC)
+
+`````text
+Four fixes from the live chat, commit per item.
+
+1. Ping must know about itself. Add a HELP intent to the router, answered from a small built-in help doc (docs/HELP.md → bundled into the app at build, drift-tested): how to install (platform-aware: Windows/Mac Chrome = ⋮ menu → "Install Ping" or the install icon in the address bar; Android = Install button / ⋮ → Install app; iPhone = Share → Add to Home Screen), how notifications work and how to turn them on, how often it checks and how to change it, what it can and can't do (read-only), how to change preferences, where the data lives. "how to install", "how do I get notifications", "what can you do", "help" all answer from this, never "I don't have any information". Add a "Help" quick-reply chip. Eval cases for 6 help questions.
+
+2. The install message. On my Windows Chrome it showed something, I tapped Done, nothing happened, and no steps appeared. Fix: if the browser's install event hasn't fired, the message shows the manual steps for the detected platform instead of a dead button; the button is "Install" only when it will actually open the browser's install dialog; "Not now" hides it for 7 days, not forever; Profile keeps an "Install Ping" entry with the steps so it's always findable. Test on Chromium with and without the install event.
+
+3. Today panel: remove "Next ERP check" (it belongs in the header status line only). Group same-deadline items: the five "fill the form by Sun 22 Nov 20:00" rows become one row "5 forms due 20:00 — Piramal, SLB, LTM, Auro, …" that expands; keep tests as individual rows. "Additional requirement · several companies" is too vague — show which companies (first 3 + N) and what the requirement is.
+
+4. Chat clutter and text: consecutive "Done — nothing new since …" messages collapse into one thin system line that updates in place ("Checked 03:18 · nothing new since 02:53"), only a real "found N new" gets a bubble. Fix the missing-glyph boxes in JD text (bullets from the ERP/PDF rendering as □): normalise bullet/odd characters when storing jd_text.
+
+Report with a screenshot of the chat and Today after the change.
+`````
+
+## 47. Sun 22 Nov 2026, 05:37 IST (00:07 UTC)
+
+`````text
+Continue the mailbox work to completion, unattended: run Admin › apply-sql now so the hourly run stops saving mails without kind/dates, then finish the parked parts in order — "via email" tags and "also mailed to you" on ERP notices, the Today / Ask Ping / reminder hooks, the 4 anonymised demo mails (anonymiser check must pass), and my real 14-day coverage report (how many placement mails, how many already on the ERP, how many mail-only). Deploy when tests pass, then the Admin page check and reviewer run on the live site. Finish with a status table and the diff summary.
+`````
+
+## 48. Sun 22 Nov 2026, 06:03 IST (00:33 UTC)
+
+`````text
+Fact answers in the browser. Route FACT intents locally: run answer_rules.js in the page against the already-loaded data (roles, items, notices, marks, profile), append the answer immediately, and only call the ask-ping function for OPEN intents. Keep server-side rules as the fallback when the page's data is older than the last run (compare the run id). Save the local Q&A to chat_messages the same way. Target: FACT answers appear in <300 ms with no typing bubble; show the typing bubble only for OPEN. Re-run the single-question evals through the page (Admin ask-ping-page) and report median latency for FACT vs OPEN.
+`````
+
+## 49. Sun 22 Nov 2026, 06:12 IST (00:42 UTC)
+
+`````text
+Public source copy: YES . Final unattended round, ~6 hours. Rules: commit per fix, deploy only after tests pass, keep the live site working at all times (if a deploy breaks it, revert first, fix second), log judgement calls in docs/DECISIONS.md, stop at 11:30 IST at a clean commit with live build = HEAD, and write the handoff. No new features. Order:
+
+1. KEY SPLIT + EVALS. Re-deploy so the evals key reaches Supabase; prove from function logs that eval traffic uses it and none uses the live key. Run every eval set paced: Ask Ping single + multi-turn (main-model-only and all-cases scores), relevance (both personas), mail, fallback, parser, attachments. Fix genuine failures without loosening checks; record all scores in evals/REPORT.md. Run ask-ping-page to completion.
+
+2. QA AS A STRANGER on the live URL at 390×844, 768×1024, 1280×800, light and dark, signed-in (local replica) and View demo: every page and state — onboarding (all branches, skip, refresh-resume), chat (digest expanded, Others, countdown, typing, unread pill, offline banner, queued send), Today (tap-throughs, grouped rows, empty day), Companies (search, each filter, role sheet incl. JD summary, "Apply with"), Profile (every card editable, CV upload to the picker, notifications toggle, install card), sign-in and setup page, help answers. Fix every glitch: overlaps, truncation, misaligned buttons, text too small (<14 px body on mobile), tap targets <44 px, keyboard covering the composer, scroll jumps, focus rings, stuck loaders. Visual regression set in docs/screenshots/final/.
+
+3. PERFORMANCE. Lighthouse on the live URL (mobile): PWA installable, performance ≥90, accessibility ≥95, best practices ≥90; fix what's below. First load under 2 s on a throttled 4G profile; Companies list smooth with 210 roles; FACT answers <300 ms in-page; no layout shift on message arrival. Record numbers in ONE_PAGER_FACTS.md.
+
+4. RELIABILITY. Every failure state has a human message and a way out: function down, realtime down, offline, Gemini busy, demo rate limit hit, ERP refused, 3 failed runs, push permission denied. Verify each by simulation. Confirm every overnight hourly run since 22:11 IST ran on cron and succeeded; investigate any miss. Send a headless push end-to-end once more after all deploys.
+
+5. NEW-STUDENT WALKTHROUGH. On the local replica: fresh project → setup script → first open → onboarding by chat → first check → first digest → preferences change by chat → CV upload → install prompt → push opt-in. Time it; fix any step that needs a manual action; update SETUP.md and the setup page with the measured "time to first feed".
+
+6. COPY PASS. Read every Ping system message, help text, empty state, error, button label and onboarding line against docs/DESIGN.md's tone guide: short, specific, no "the data does not contain", consistent capitalisation and time formats (IST, 24 h), company-first naming, no jargon. Fix in place.
+
+7. SECURITY RE-CHECK. Re-run the RLS proof suite (demo sees 0 real rows in every table, bucket, realtime channel and push subscriptions), secrets inventory and the 20-run log scan, anonymiser final check on all demo copies, grep both repos for the banned word (0). Update SECURITY.md.
+
+8. PUBLIC SOURCE COPY (only if YES above): history rewrite via git filter-repo into a new public repo "ping", every real value from the earlier scan table replaced, demo data clean at every commit, secrets copied, old workflow runs untouched, CI green on the new repo; set SOURCE_REPO_URL in the setup page and SUBMISSION.md; never flip this private repo.
+
+9. DOCS. Everything from the consolidation list (README/architecture, SECURITY, SETUP, PUSH, PROMPTS regenerated, evals index, ONE_PAGER_FACTS with all new numbers, SUBMISSION "what to try", BUILD_PROMPTS appended with times). SUBMISSION.md must be enough for a judge who has 10 minutes.
+
+HANDOFF (last message, by 11:30 IST): status table 1–9, every eval score, Lighthouse numbers, live URL + build hash, the "Needs Vinayak" list (tag v1.1, phone push check, anything else), and the diff summary.
+`````

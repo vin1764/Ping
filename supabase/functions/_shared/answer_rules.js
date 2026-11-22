@@ -637,7 +637,9 @@
     if (wantsDue) list = list.filter((i) => i.due_at && Date.parse(i.due_at) > now)
       .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at));
     else list.sort((a, b) => String(b.first_seen || b.sort_at || "").localeCompare(String(a.first_seen || a.sort_at || "")));
-    const who = hits.length ? hits.map((e) => e.name).join(", ") : "";
+    // the companies asked about that have mail (all of them when none has: "No test link from X")
+    const named = hits.filter((e) => list.some((i) => e.raw.has(i.company) || norm(e.name) === norm(shortName(i.company))));
+    const who = (named.length ? named : hits).map((e) => e.name).join(", ");
     if (!list.length) {
       const what = wantsTest ? "No test link" : wantsDue ? "Nothing due" : "No placement mail";
       return { kind: "mail", companies: hits.map((e) => e.name), text: `${what}${who ? ` from ${who}` : ""} in your mail${wantsTest ? " or on the ERP" : ""} so far (last checked ${checked}). I read placement mail only: from the placement office, companies on your list, test platforms, or with words like test, shortlist, interview, form, offer.` };

@@ -69,6 +69,17 @@ async function ask(p, q, ms = 30000) {
 
   // 6. Realtime (the socket) down: the page says so and catches up on focus (setup/live_page_test.py checks this live)
   check(errs.length === 0, "No page errors through all of it", errs.slice(0, 2).join("; ") || "none");
+
+  // 7. View demo refused (Supabase's anonymous sign-ins per hour used up): a plain message, then the same snapshot
+  //    from the site's own copy
+  const c2 = await b.newContext({ viewport: { width: 390, height: 844 } }); const p2 = await c2.newPage();
+  await p2.route("**/auth/v1/signup**", (r) => r.fulfill({ status: 429, contentType: "application/json",
+    body: JSON.stringify({ code: 429, error_code: "over_request_rate_limit", msg: "Request rate limit reached" }) }));
+  await p2.goto(BASE); await p2.click("#view-demo"); await p2.waitForTimeout(300);
+  const said = (await p2.locator("body").innerText()).replace(/\s+/g, " ").match(/The live demo[^…]*…/)?.[0] || "";
+  const opened = await p2.waitForSelector(".msg.item", { timeout: 30000 }).then(() => true).catch(() => false);
+  check(!!said && !/rate limit/i.test(said) && opened && /demo=1/.test(p2.url()), "View demo sign-in refused (429)", `${said} -> ${p2.url().replace(BASE, "")}`);
+  await c2.close();
   await b.close();
   for (const [s, r, said] of rows) console.log(`${r.padEnd(4)} ${s}\n       "${said}"`);
   console.log(`\n${bad} problem(s)`);

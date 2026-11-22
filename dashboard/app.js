@@ -722,7 +722,13 @@
         e.target.disabled = true;
         msg.textContent = "Opening the demo\u2026";
         const { error } = await sb.auth.signInAnonymously();
-        if (error) { msg.textContent = `The demo couldn't start: ${error.message}`; e.target.disabled = false; return; }
+        if (error) {
+          // too many demo sign-ins this hour (or the sign-in service is down): the same snapshot, from this site's own
+          // copy; only Ask Ping's open questions need the server there
+          msg.textContent = "The live demo is busy right now, so opening the same snapshot from this page instead\u2026";
+          setTimeout(() => { location.href = `${location.pathname}?demo=1#chat`; }, 1200);
+          return;
+        }
         msg.textContent = "";
         location.hash = "#chat";
         startReal(sb);

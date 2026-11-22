@@ -59,20 +59,29 @@ def secret_values() -> dict[str, str]:
     return out
 
 
-def replacements(real_name: str | None) -> list[tuple[str, str]]:
+def roll_pattern(roll: str) -> str:
+    """The roll number in any case, with or without a space, dash or underscore between its parts (22XY10042,
+    22xy10042, 22 XY 10042, 22-XY-10042)."""
+    parts = re.findall(r"[0-9]+|[A-Za-z]+", roll)
+    return r"[\s\-_]?".join(re.escape(x) for x in parts) if parts else re.escape(roll)
+
+
+def replacements(real_name: str | None) -> list[tuple[str, str, str]]:
+    """(what, pattern, replacement): regular expressions, matched without regard to case. The mailbox goes first
+    (it can contain the roll)."""
     from .demo_from_real import FAKE_NAME, FAKE_ROLL
     pairs = []
     roll = os.environ.get("ERP_USER_ID", "").strip()
     mail = os.environ.get("MAIL_ADDRESS", "").strip()
     url = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
-    if roll:
-        pairs.append((roll, FAKE_ROLL))
     if mail:
-        pairs.append((mail, "student@example.com"))
+        pairs.append(("mailbox", re.escape(mail), "student@example.com"))
+    if roll:
+        pairs.append(("roll", roll_pattern(roll), FAKE_ROLL))
     if real_name and len(real_name) > 3:
-        pairs.append((real_name, FAKE_NAME))
+        pairs.append(("name", r"\s+".join(re.escape(w) for w in real_name.split()), FAKE_NAME))
     if url:
-        pairs.append((url, "https://YOUR-PROJECT.supabase.co"))
+        pairs.append(("project address", re.escape(url), "https://YOUR-PROJECT.supabase.co"))
     return pairs
 
 
@@ -89,7 +98,7 @@ def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
     ids_file = target.parent / "demo-blobs.txt"
     ids_file.write_text("\n".join(sorted(old)))
     rules = target.parent / "replacements.txt"
-    lines = [f"literal:{a}==>{b}" for a, b in pairs]
+    lines = [f"regex:(?i){pat}==>{rep}" for _, pat, rep in pairs]
     lines.append(f"regex:(?i){BANNED}==>Ping")
     rules.write_text("\n".join(lines) + "\n", encoding="utf-8")
     callback = (f"ids = set(open({str(ids_file)!r}).read().split())\n"
@@ -128,7 +137,7 @@ def check(target: Path, secrets: dict[str, str]) -> list[str]:
         if BANNED in low:
             leaks["the banned word"] = leaks.get("the banned word", 0) + 1
         for name, v in secrets.items():
-            if v.lower() in low:
+            if v.lower() in low or (name == "ERP_USER_ID" and re.search(roll_pattern(v), text, re.I)):
                 leaks[name] = leaks.get(name, 0) + 1
         for name, rx in KEY_SHAPES.items():
             if re.search(rx, text):
@@ -146,7 +155,8 @@ def main() -> int:
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     real_name = (store.select("profile", {"id": "eq.1"}) or [{}])[0].get("name")
     pairs = replacements(real_name)
-    say(f"replacing {len(pairs)} real values (roll, mailbox, name, project address) and the banned word in every commit")
+    say(f"replacing, in every commit: {', '.join(w for w, _, _ in pairs) or 'nothing found'} (of mailbox, roll, name, "
+        f"project address), and the banned word")
     clean = (ROOT / "dashboard" / "demo-data.json").read_bytes()
     from .demo_from_real import final_check
     if final_check(clean.decode("utf-8")):

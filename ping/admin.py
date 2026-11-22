@@ -759,6 +759,182 @@ def auth_sessions(secrets) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ profile snapshot / restore (judging)
+SNAPSHOT_SQL = """create table if not exists public.profile_snapshots (
+  id bigserial primary key, taken_at timestamptz default now(), profile jsonb not null,
+  push_subscriptions jsonb not null default '[]', files jsonb not null default '[]');
+alter table public.profile_snapshots enable row level security;
+revoke all on public.profile_snapshots from anon, authenticated;
+grant all on public.profile_snapshots to service_role;
+grant usage, select on sequence public.profile_snapshots_id_seq to service_role;"""
+SNAP_DIR = "snapshots"
+
+
+def _rest(secrets, method: str, path: str, **kw):
+    h = {"apikey": secrets.supabase_key, "Authorization": f"Bearer {secrets.supabase_key}", **kw.pop("headers", {})}
+    return requests.request(method, secrets.supabase_url.rstrip("/") + path, headers=h, timeout=60, **kw)
+
+
+def _cv_files(secrets, prefix: str = "") -> dict[str, int]:
+    """{path: size} of the files directly in the cvs bucket (or under prefix); snapshot copies are left out."""
+    r = _rest(secrets, "POST", "/storage/v1/object/list/cvs", json={"prefix": prefix, "limit": 1000})
+    out = {}
+    for o in r.json() if r.ok else []:
+        if o.get("id") is None:                      # a folder (e.g. snapshots/)
+            continue
+        out[(prefix + "/" if prefix else "") + o["name"]] = int((o.get("metadata") or {}).get("size") or 0)
+    return out
+
+
+def _copy(secrets, src: str, dst: str) -> bool:
+    _rest(secrets, "DELETE", "/storage/v1/object/cvs", json={"prefixes": [dst]})
+    return _rest(secrets, "POST", "/storage/v1/object/copy", json={"bucketId": "cvs", "sourceKey": src, "destinationKey": dst}).ok
+
+
+def _profile_digest(p: dict) -> str:
+    """What the snapshot holds, without the text itself: the fields a reviewer could change."""
+    cvs = p.get("cvs") or []
+    return (f"targets {'set' if p.get('targets') else 'empty'} ({len(p.get('targets') or '')} chars), reminder_hours "
+            f"{p.get('reminder_hours')}, list_other_roles {p.get('list_other_roles')}, feed_mode {p.get('feed_mode')}, "
+            f"check every {p.get('check_every_minutes')} min {p.get('check_from')}-{p.get('check_to')}, email_digests "
+            f"{p.get('email_digests')}, CVs {[c.get('label') for c in cvs]} "
+            f"({sum(1 for c in cvs if c.get('summary'))} summarised), cv_names {p.get('cv_names')}")
+
+
+def profile_snapshot(secrets) -> int:
+    """The owner's profile row, push subscriptions and CV files, kept server-side (a table only the service key
+    can read; the files copied inside the private cvs bucket), then read back and compared."""
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    sa.run_sql(secrets.supabase_url, token, SNAPSHOT_SQL)
+    prof = (_rest(secrets, "GET", "/rest/v1/profile", params={"id": "eq.1", "select": "*"}).json() or [None])[0]
+    if not prof:
+        say("no owner profile row (id 1)")
+        return 1
+    push = _rest(secrets, "GET", "/rest/v1/push_subscriptions", params={"select": "*"}).json()
+    ins = _rest(secrets, "POST", "/rest/v1/profile_snapshots", headers={"Prefer": "return=minimal"},
+                json={"profile": prof, "push_subscriptions": push if isinstance(push, list) else []})
+    if ins.status_code >= 300:
+        say(f"saving the snapshot failed: HTTP {ins.status_code} {ins.text[:200]}")
+        return 1
+    sid = _rest(secrets, "GET", "/rest/v1/profile_snapshots", params={"select": "id", "order": "id.desc", "limit": "1"}).json()[0]["id"]
+    files = _cv_files(secrets)
+    copied = []
+    for path, size in files.items():
+        ok = _copy(secrets, path, f"{SNAP_DIR}/{sid}/{path}")
+        copied.append({"path": path, "size": size, "ok": ok})
+    _rest(secrets, "PATCH", "/rest/v1/profile_snapshots", params={"id": f"eq.{sid}"}, json={"files": copied})
+    # read it back
+    back = _rest(secrets, "GET", "/rest/v1/profile_snapshots", params={"id": f"eq.{sid}", "select": "*"}).json()[0]
+    same = json.dumps(back["profile"], sort_keys=True, default=str) == json.dumps(prof, sort_keys=True, default=str)
+    in_snap = _cv_files(secrets, f"{SNAP_DIR}/{sid}")
+    files_ok = all(in_snap.get(f"{SNAP_DIR}/{sid}/{c['path']}") == c["size"] for c in copied)
+    say(f"snapshot {sid} taken {back['taken_at']}")
+    say(f"profile: {_profile_digest(back['profile'])}")
+    say(f"push subscriptions: {len(back['push_subscriptions'])} device(s)")
+    listed = ", ".join(f"{c['path']} {c['size']} B" for c in copied) or "none"
+    say(f"CV files: {len(copied)} copied ({listed})")
+    say(f"read back: profile identical {same}; files present with the same sizes {files_ok}")
+    return 0 if same and files_ok else 1
+
+
+def profile_restore(secrets) -> int:
+    """Back to the latest snapshot, exactly: the profile row, the push subscriptions (devices added since are
+    removed, so a reviewer's phone stops getting the owner's notifications) and the CV files (copied back; files
+    uploaded since are removed)."""
+    snaps = _rest(secrets, "GET", "/rest/v1/profile_snapshots", params={"select": "*", "order": "id.desc", "limit": "1"}).json()
+    if not isinstance(snaps, list) or not snaps:
+        say("no snapshot to restore (run Admin > profile-snapshot first)")
+        return 1
+    snap = snaps[0]
+    sid = snap["id"]
+    prof = dict(snap["profile"])
+    r = _rest(secrets, "POST", "/rest/v1/profile", params={"on_conflict": "id"},
+              headers={"Prefer": "resolution=merge-duplicates,return=minimal"}, json=[prof])
+    say(f"profile row: HTTP {r.status_code}")
+    keep = {p["endpoint"] for p in snap["push_subscriptions"]}
+    now_push = _rest(secrets, "GET", "/rest/v1/push_subscriptions", params={"select": "endpoint"}).json() or []
+    gone = [p["endpoint"] for p in now_push if p["endpoint"] not in keep]
+    for ep in gone:
+        _rest(secrets, "DELETE", "/rest/v1/push_subscriptions", params={"endpoint": f"eq.{ep}"})
+    if snap["push_subscriptions"]:
+        _rest(secrets, "POST", "/rest/v1/push_subscriptions", params={"on_conflict": "endpoint"},
+              headers={"Prefer": "resolution=merge-duplicates,return=minimal"}, json=snap["push_subscriptions"])
+    say(f"push subscriptions: {len(keep)} kept, {len(gone)} added since removed")
+    want = {c["path"] for c in snap["files"]}
+    restored = sum(_copy(secrets, f"{SNAP_DIR}/{sid}/{c['path']}", c["path"]) for c in snap["files"])
+    extra = [p for p in _cv_files(secrets) if p not in want]
+    if extra:
+        _rest(secrets, "DELETE", "/storage/v1/object/cvs", json={"prefixes": extra})
+    say(f"CV files: {restored} of {len(want)} copied back; {len(extra)} uploaded since removed")
+    now = (_rest(secrets, "GET", "/rest/v1/profile", params={"id": "eq.1", "select": "*"}).json() or [{}])[0]
+    diff = [k for k in prof if k != "updated_at" and json.dumps(prof.get(k), sort_keys=True, default=str)
+            != json.dumps(now.get(k), sort_keys=True, default=str)]
+    sizes = _cv_files(secrets)
+    files_ok = all(sizes.get(c["path"]) == c["size"] for c in snap["files"])
+    since = _rest(secrets, "GET", "/rest/v1/chat_messages", params={"select": "id", "created_at": f"gt.{snap['taken_at']}"},
+                  headers={"Prefer": "count=exact", "Range": "0-0"})
+    say(f"profile now: {_profile_digest(now)}")
+    say(f"read back: profile matches the snapshot {not diff}{'' if not diff else ' (differs: ' + ', '.join(diff) + ')'}; "
+        f"CV files match {files_ok}")
+    say(f"chat messages since the snapshot: {since.headers.get('content-range', '?').split('/')[-1]} (kept; not part of the profile)")
+    return 0 if not diff and files_ok else 1
+
+
+def set_dashboard_password(secrets) -> int:
+    """The dashboard login's password, from the GitHub secret DASHBOARD_PASSWORD (masked in logs; never printed
+    here). Then one sign-in with it to prove it works, and that check's session signed out again (this device only).
+    Other sessions are left alone: Admin > end-reviewer-sessions ends the ones started after the latest snapshot."""
+    pw = os.environ.get("DASHBOARD_PASSWORD", "")
+    email = (os.environ.get("DASHBOARD_EMAIL") or os.environ.get("MAIL_ADDRESS") or "").strip().lower()
+    if len(pw) < 12:
+        say("set the GitHub secret DASHBOARD_PASSWORD first (at least 12 characters; see docs/SECURITY.md, Judging)")
+        return 2
+    if not email:
+        say("no login email (DASHBOARD_EMAIL or MAIL_ADDRESS)")
+        return 2
+    users = _rest(secrets, "GET", "/auth/v1/admin/users", params={"per_page": 1000}).json().get("users", [])
+    user = next((u for u in users if (u.get("email") or "").lower() == email), None)
+    if not user:
+        say("the dashboard login isn't in Supabase Auth (run the setup script first)")
+        return 1
+    r = _rest(secrets, "PUT", f"/auth/v1/admin/users/{user['id']}", json={"password": pw})
+    say(f"password updated: HTTP {r.status_code}")
+    if r.status_code >= 300:
+        return 1
+    pub = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+    t = requests.post(secrets.supabase_url.rstrip("/") + "/auth/v1/token", params={"grant_type": "password"}, timeout=30,
+                      headers={"apikey": pub}, json={"email": email, "password": pw})
+    ok = t.status_code == 200
+    say(f"a sign-in with the new password: {'works' if ok else f'FAILED (HTTP {t.status_code})'}")
+    if ok:
+        lo = requests.post(secrets.supabase_url.rstrip("/") + "/auth/v1/logout", params={"scope": "local"}, timeout=30,
+                           headers={"apikey": pub, "Authorization": f"Bearer {t.json()['access_token']}"})
+        say(f"that check's session signed out again (this session only): HTTP {lo.status_code}")
+    return 0 if ok else 1
+
+
+def end_reviewer_sessions(secrets) -> int:
+    """After judging: ends the dashboard login's sessions that started after the latest profile snapshot (the
+    reviewers' devices). Sessions from before it (your own phone and laptop) stay signed in."""
+    token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    email = (os.environ.get("MAIL_ADDRESS") or "").strip().lower()
+    snaps = _rest(secrets, "GET", "/rest/v1/profile_snapshots", params={"select": "taken_at", "order": "id.desc", "limit": "1"}).json()
+    if not isinstance(snaps, list) or not snaps:
+        say("no snapshot: run Admin > profile-snapshot before judging (its time decides which sessions are the reviewers')")
+        return 1
+    since = snaps[0]["taken_at"]
+    q = lambda sql: sa.run_sql(secrets.supabase_url, token, sql)  # noqa: E731
+    who = "(select id from auth.users where lower(email) = " + "'" + email.replace("'", "''") + "')"
+    before = q(f"select count(*) filter (where created_at <= '{since}') as kept, count(*) filter (where created_at > '{since}') as later "
+               f"from auth.sessions where user_id = {who}")
+    say(f"sessions of the dashboard login: {before[0]['kept'] if before else '?'} from before the snapshot ({since}), "
+        f"{before[0]['later'] if before else '?'} started after it")
+    q(f"delete from auth.sessions where user_id = {who} and created_at > '{since}'")
+    after = q(f"select count(*) as n from auth.sessions where user_id = {who} and created_at > '{since}'")
+    say(f"ended the sessions started after the snapshot; left: {after[0]['n'] if after else '?'}")
+    return 0
+
+
 def cleanup_demo(secrets) -> int:
     r = requests.post(secrets.supabase_url.rstrip("/") + "/rest/v1/rpc/cleanup_demo_sessions", timeout=60,
                       headers={"apikey": secrets.supabase_key, "Authorization": f"Bearer {secrets.supabase_key}",
@@ -875,7 +1051,7 @@ def log_scan(secrets) -> int:
     h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     names = ["ERP_USER_ID", "ERP_PASSWORD", "ERP_SECQ_1", "ERP_SECQ_2", "ERP_SECQ_3", "MAIL_ADDRESS", "MAIL_APP_PASSWORD",
              "SUPABASE_SERVICE_KEY", "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY_EVALS", "GEMINI_API_KEY_LIVE", "PING_GITHUB_TOKEN",
-             "DASHBOARD_DEPLOY_TOKEN"]
+             "DASHBOARD_DEPLOY_TOKEN", "DASHBOARD_PASSWORD"]
     values = {}
     for n in names:
         v = os.environ.get(n, "").strip()
@@ -1023,7 +1199,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
              "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

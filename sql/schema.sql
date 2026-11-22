@@ -488,3 +488,14 @@ create index if not exists push_queue_due on push_queue (send_at) where sent_at 
 
 -- also email the for-you messages (off by default; the 3-failed-runs alert is mailed either way)
 alter table profile add column if not exists email_digests boolean default false;
+
+-- ------------------------------------------------------------------ profile snapshots (Admin > profile-snapshot /
+-- profile-restore): the owner's profile row, push subscriptions and the list of CV files copied in the cvs bucket,
+-- so it can be put back exactly after someone else has used the account (judging). Only the service key reaches it.
+create table if not exists public.profile_snapshots (
+  id bigserial primary key, taken_at timestamptz default now(), profile jsonb not null,
+  push_subscriptions jsonb not null default '[]', files jsonb not null default '[]');
+alter table public.profile_snapshots enable row level security;
+revoke all on public.profile_snapshots from anon, authenticated;
+grant all on public.profile_snapshots to service_role;
+grant usage, select on sequence public.profile_snapshots_id_seq to service_role;

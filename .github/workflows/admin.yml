@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, auth-sessions, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
+        options: [apply-sql, build-demo, gemini-check, functions-check, auth-sessions, profile-snapshot, profile-restore, set-dashboard-password, end-reviewer-sessions, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -62,6 +62,10 @@ jobs:
           GEMINI_API_KEY_LIVE: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.GEMINI_API_KEY || '' }}
           PING_GITHUB_TOKEN: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.PING_GITHUB_TOKEN || '' }}
           DASHBOARD_DEPLOY_TOKEN: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.DASHBOARD_DEPLOY_TOKEN || '' }}
+          # set-dashboard-password only: the new password for the dashboard login (a secret you set; masked by
+          # GitHub, never printed by Ping); log-scan searches the logs for it
+          DASHBOARD_PASSWORD: ${{ (inputs.task == 'set-dashboard-password' || inputs.task == 'log-scan') && secrets.DASHBOARD_PASSWORD || '' }}
+          DASHBOARD_EMAIL: ${{ inputs.task == 'set-dashboard-password' && secrets.DASHBOARD_EMAIL || '' }}
           # public-copy: where the cleaned history goes (a new, empty public repository the owner made) and a token
           # that may push to it; without them the cleaned history is uploaded as a private artifact instead
           PUBLIC_REPO_URL: ${{ inputs.task == 'public-copy' && vars.PUBLIC_REPO_URL || '' }}

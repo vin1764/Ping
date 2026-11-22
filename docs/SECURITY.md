@@ -85,6 +85,18 @@ demo_questions and session_prefs; the CV bucket lists 0 objects and refuses a do
 answers a wrong password with "Invalid login credentials". The result of the latest run is in
 `docs/REVIEWER_RUN.md`.
 
+### Re-check of 22 Nov 2026, 07:00-07:30 IST
+
+| check | result | how |
+|---|---|---|
+| row rules from a demo session | all checks passed: 0 real rows in every table above, the CV bucket empty and closed, wrong password refused | Admin > `ask-ping-page`, 07:00 IST |
+| demo rows a demo session can read | profile 1, roles 201, notices 261, pdf_checks 64, items 447, all sample rows (0 real); emails and runs: 0 visible | a fresh anonymous session, REST with its own token |
+| anonymiser on every copy of the demo | clean: the repo's `dashboard/demo-data.json`, the built `demo-data.json` and `demo-details.json`, the same two files on the live site, and the database's demo rows | `final_check()` (no 10-digit number, no "+91", no name from the denylist) |
+| secrets in workflow logs | the last 20 runs (17 had logs; 3 were still running), the values of 11 secrets and key-shaped text: nothing found | Admin > `log-scan`, 07:15 IST |
+| secrets in git | no secret value or key-shaped text in tracked files or history (`git log --all -p`), no `.env` ever committed | as above |
+| the banned word | 0 in this repository's tracked files; 0 in every file of the live site, which is the public dashboard repository's only commit (each deploy replaces its history). 7 old commits of this private repository still have it; the public source copy rewrites them | `git grep -i`, curl of each live file |
+| eval traffic on the evals key | every eval and Admin call to a model used GEMINI_API_KEY_EVALS; ask-ping logged `key: "evals"` for them and refused eval requests without the proof (403) | Admin > `functions-check` |
+
 ## Secrets
 
 | secret | lives in | used by | in git? |

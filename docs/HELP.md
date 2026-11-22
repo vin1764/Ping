@@ -29,11 +29,11 @@ On a Mac in Chrome: open the ⋮ menu → "Install Ping…" (newer Chrome: ⋮ �
 
 ### android
 
-On Android (Chrome): tap "Install" when I offer it, or open the ⋮ menu → "Install app" (some phones say "Add to Home screen" → Install). Then open Ping from your home screen.
+On Android (Chrome): tap "Install" when I offer it, or open the ⋮ menu → "Install app" (some phones say "Add to Home screen" → Install). Then open Ping from your home screen. If you signed in in Chrome before installing, you're already signed in in the app, and you stay signed in.
 
 ### ios
 
-On iPhone or iPad: open this page in Safari, tap Share (the square with an arrow), then "Add to Home Screen" → Add. Open Ping from the Home Screen icon: on iPhone, notifications only work from there.
+On iPhone or iPad: open this page in Safari, tap Share (the square with an arrow), then "Add to Home Screen" → Add. Open Ping from the Home Screen icon: on iPhone, notifications only work from there. Sign in once inside the installed app; it doesn't share Safari's login. After that you stay signed in, and iCloud Keychain can fill the password with Face ID if you ever need it again.
 
 ### other
 

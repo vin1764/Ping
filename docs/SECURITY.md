@@ -12,6 +12,25 @@ Actions > Admin > `ask-ping-page` (`setup/ask_ping_page_test.py`) from a one-cli
 | **server** | the service key (`SUPABASE_SERVICE_KEY` / function secret `PING_SERVICE_KEY`) | bypasses Row Level Security; used only by the hourly run, Admin tasks and the functions |
 | anyone else | the publishable key alone | no policy grants them anything |
 
+### Staying signed in (sessions)
+
+- **Never the password.** The dashboard keeps only Supabase's session: an access token (1 hour) and a single-use
+  refresh token. Password managers (iCloud Keychain, Google Password Manager) may keep the password if you let them;
+  Ping doesn't.
+- **Where:** this device's localStorage under the fixed key `ping-auth`, plus a second copy in IndexedDB
+  (`ping-session`); reading takes the newer one. Never sessionStorage, never a cookie. A "View demo" session has its
+  own key (`ping-demo-auth`) and its own client, so it can't replace or sign out the owner's session.
+- **How long:** until you sign out on that device. Auth settings (Admin > `auth-config` sets them, `auth-sessions`
+  shows them): `sessions_timebox = 0` and `sessions_inactivity_timeout = 0` (no time limit, no inactivity limit),
+  `jwt_exp = 3600`, `refresh_token_rotation_enabled = true`, `security_refresh_token_reuse_interval = 10` (a used refresh
+  token is accepted again only within 10 s, for a retry; after that the whole session is revoked, so an old stolen
+  one is useless).
+- **Refresh:** on opening the app (before deciding whether to show sign-in), before the access token runs out, and
+  when the app comes back to the screen; nothing is refreshed while it's in the background.
+- **Sign out** ends that device's session only (`scope: "local"`). The nightly demo cleanup deletes anonymous users
+  only.
+- **Tested** in WebKit (iPhone) and Chromium (Android) against the local replica: `setup/stay_signed_in.py`.
+
 ## Tables
 
 Row Level Security is on for every table. "Real rows" are rows with `is_sample` false.

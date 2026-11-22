@@ -650,14 +650,27 @@ def auth_config(secrets) -> int:
     # An anonymous sign-in is a sign-up to Supabase, so sign-ups must be allowed for the demo. That's safe for the
     # data: the owner rules only let emails in allowed_users read anything, the demo rules only anonymous
     # sessions, and email sign-ups must confirm their address first (no automatic confirmation).
+    say("before: sessions: " + ", ".join(f"{k} = {cur.get(k)!r}" for k in SESSION_FIELDS))
     r = requests.patch(url, headers=hdr, timeout=30, json={"site_url": live, "uri_allow_list": ",".join(new_list),
                                                            "external_anonymous_users_enabled": True,
                                                            "disable_signup": False, "mailer_autoconfirm": False})
     if r.status_code >= 300:
         say(f"updating the Auth settings failed: HTTP {r.status_code} {r.text[:200]}")
         return 1
+    # Staying signed in for a whole placement season: a session never ends by time or by inactivity (0 = no limit),
+    # only by signing out on that device; access tokens last 1 h and are refreshed by the page; refresh tokens are
+    # single-use and rotate, a used one accepted again only within 10 s (a retry), so a stolen old one is useless.
+    s = requests.patch(url, headers=hdr, timeout=30, json=SESSION_SETTINGS)
+    if s.status_code >= 300:
+        # time-box and inactivity limits are a paid-plan setting; on the free plan they're always "no limit"
+        say(f"session settings: HTTP {s.status_code} {s.text[:160]}; trying without the paid-plan fields")
+        s = requests.patch(url, headers=hdr, timeout=30, json={k: v for k, v in SESSION_SETTINGS.items()
+                                                                if not k.startswith("sessions_")})
+        if s.status_code >= 300:
+            say(f"session settings not changed: HTTP {s.status_code} {s.text[:160]}")
     after = requests.get(url, headers=hdr, timeout=30).json()
     say(f"after:  site_url = {after.get('site_url')}; redirect allow-list = {(after.get('uri_allow_list') or '').split(',')}")
+    say("after:  sessions: " + ", ".join(f"{k} = {after.get(k)!r}" for k in SESSION_FIELDS))
     say(f"after:  anonymous sign-ins {'on' if after.get('external_anonymous_users_enabled') else 'OFF'}, "
         f"new sign-ups {'off' if after.get('disable_signup') else 'on'}, "
         f"email confirmation {'off' if after.get('mailer_autoconfirm') else 'required'}")
@@ -675,6 +688,8 @@ def auth_config(secrets) -> int:
     return 0 if ok and not after.get("mailer_autoconfirm") else 1
 
 
+SESSION_SETTINGS = {"jwt_exp": 3600, "refresh_token_rotation_enabled": True, "security_refresh_token_reuse_interval": 10,
+                    "sessions_timebox": 0, "sessions_inactivity_timeout": 0, "sessions_single_per_user": False}
 SESSION_FIELDS = ("jwt_exp", "sessions_timebox", "sessions_inactivity_timeout", "sessions_single_per_user",
                   "refresh_token_rotation_enabled", "security_refresh_token_reuse_interval")
 

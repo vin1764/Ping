@@ -5,9 +5,13 @@ tokens that rotate, like Supabase Auth).
 
 For each engine:
   1. sign in once (a real <form>, the fields a password manager fills)
-  2. close the app (the browser context), reopen it with the same storage: no sign-in screen, a valid session
-  3. reopen with the access token expired: refreshed silently, no sign-in screen, never a flash of it
-  4. reopen with the token expired and the network not ready for the first try (a phone waking up): no sign-in screen
+  2. close the app (the browser context), reopen it with the same storage: no sign-in screen, a valid session; and the
+     same after the update that moved the session to Ping's own key (a session saved under the old key is kept)
+  3. reopen with the access token expired: refreshed silently, no sign-in screen, never a flash of it; and when the
+     phone lost the localStorage write of that refresh (an installed app closed right after it), the IndexedDB copy
+     carries the new token: still signed in, the replaced token never sent
+  4. reopen with the token expired and the network not ready for the first try (a phone waking up): no sign-in screen;
+     and with the server unreachable for a while: a "trying again" note, never the sign-in form, then back in by itself
   5. in the background past the token's life, then back to the foreground: refreshed, the session survives
   6. a demo session in another app copy signing out doesn't touch the owner's session
   7. the owner's password is in no storage (localStorage, sessionStorage, cookies)
@@ -145,9 +149,14 @@ def main() -> int:
                 check(name, ok, "signed in", "" if ok else page.inner_text("body")[:200])
                 s = stored(page)
                 check(name, bool(s), "the session is in localStorage", s and s["key"])
+                in_idb = page.evaluate("""() => new Promise((res) => { const r = indexedDB.open('ping-session');
+                    r.onsuccess = () => { try { const g = r.result.transaction('kv').objectStore('kv').get('ping-auth');
+                      g.onsuccess = () => res(!!g.result); g.onerror = () => res(false); } catch (e) { res(false); } };
+                    r.onerror = () => res(false); })""")
+                check(name, in_idb, "and a second copy in IndexedDB")
                 sess = page.evaluate("Object.keys(sessionStorage).filter((k) => /auth/.test(k)).length")
                 check(name, sess == 0, "nothing of the session in sessionStorage")
-                state = ctx.storage_state()
+                state = ctx.storage_state(indexed_db=True)
                 blob = json.dumps(state) + page.evaluate("JSON.stringify(sessionStorage)")
                 check(name, PASSWORD not in blob, "the password is in no storage or cookie")
                 ctx.close()
@@ -155,22 +164,49 @@ def main() -> int:
                 # 2. reopen: no sign-in screen
                 ctx, page = open_app(state)
                 check(name, signed_in(page) and not page.evaluate("window.__sawLogin"), "reopened: no sign-in screen, not even a flash")
-                state = ctx.storage_state()
+                state = ctx.storage_state(indexed_db=True)
                 ctx.close()
 
-                # 3. reopen with the access token expired (a day later): refreshed silently
-                def expire(st):
+                # 2b. a session saved by the version before this one (supabase-js's default key) survives the update
+                def rename(st, old_key, new_key):
+                    """The state an earlier version left: the session under supabase-js's default key, localStorage only."""
                     st = json.loads(json.dumps(st))
                     for o in st.get("origins", []):
                         for kv in o.get("localStorage", []):
-                            if "auth" in kv["name"]:
-                                try:
-                                    v = json.loads(kv["value"])
-                                except ValueError:
-                                    continue
-                                if isinstance(v, dict) and v.get("refresh_token"):
-                                    v["expires_at"] = int(time.time()) - 86400
-                                    kv["value"] = json.dumps(v)
+                            if kv["name"] == old_key:
+                                kv["name"] = new_key
+                        o["indexedDB"] = [d for d in o.get("indexedDB", []) if d.get("name") != "ping-session"]
+                    return st
+                ctx, page = open_app(rename(state, "ping-auth", "sb-localhost-auth-token"))
+                ok = signed_in(page) and not page.evaluate("window.__sawLogin")
+                keys = page.evaluate("Object.keys(localStorage).filter((k) => /auth/.test(k))")
+                check(name, ok and keys == ["ping-auth"], "a session from before the update is kept (moved to Ping's own key)", json.dumps(keys))
+                ctx.close()
+
+                # 3. reopen with the access token expired (a day later): refreshed silently
+                def session_records(st):
+                    """Every stored copy of a session in a saved state: localStorage entries and IndexedDB records."""
+                    for o in st.get("origins", []):
+                        for kv in o.get("localStorage", []):
+                            yield kv, "name"
+                        for db in o.get("indexedDB", []):
+                            for store in db.get("stores", []):
+                                for rec in store.get("records", []):
+                                    yield rec, "key"
+
+                def expire(st):
+                    """A day later: every copy of the session (localStorage and IndexedDB) has run out."""
+                    st = json.loads(json.dumps(st))
+                    for rec, key in session_records(st):
+                        if "auth" not in str(rec.get(key)) or not isinstance(rec.get("value"), str):
+                            continue
+                        try:
+                            v = json.loads(rec["value"])
+                        except ValueError:
+                            continue
+                        if isinstance(v, dict) and v.get("refresh_token"):
+                            v["expires_at"] = int(time.time()) - 86400
+                            rec["value"] = json.dumps(v)
                     return st
                 n = len([x for x in fake.auth_log if x[0] == "refresh" and x[2] == "ok"])
                 ctx, page = open_app(expire(state))
@@ -180,7 +216,31 @@ def main() -> int:
                 check(name, ok and refreshed, "token expired: refreshed silently, no sign-in screen")
                 s2 = stored(page)
                 check(name, bool(s2) and s2["expires_at"] > time.time() + 600, "a fresh token is stored")
-                state = ctx.storage_state()
+                state = ctx.storage_state(indexed_db=True)
+                ctx.close()
+
+                # 3b. the phone lost the localStorage write of a refresh: localStorage still has the old, replaced token,
+                #     IndexedDB the new one. Ping must use the new one (sending the old one would be refused).
+                stale = expire(state)              # expired, so this open refreshes; keep its localStorage for later
+                ctx, page = open_app(stale)
+                signed_in(page)
+                page.wait_for_timeout(500)
+                after = ctx.storage_state(indexed_db=True)
+                ctx.close()
+                old_rt = next((json.loads(kv["value"]).get("refresh_token") for o in stale["origins"] for kv in o["localStorage"]
+                               if kv["name"] == "ping-auth"), None)
+                lost = json.loads(json.dumps(after))
+                for o in lost["origins"]:
+                    for kv in o["localStorage"]:
+                        if kv["name"] == "ping-auth":
+                            kv["value"] = next(k["value"] for oo in stale["origins"] for k in oo["localStorage"] if k["name"] == "ping-auth")
+                fake.reuse_seconds = 0              # a replaced token is refused at once, as after the reuse window
+                ctx, page = open_app(lost)
+                ok = signed_in(page) and not page.evaluate("window.__sawLogin")
+                sent_old = [x for x in fake.auth_log if x[0] == "refresh" and x[1] == old_rt and x[2] != "ok"]
+                check(name, ok and not sent_old, "a refresh whose localStorage write was lost: the IndexedDB copy keeps it signed in")
+                fake.reuse_seconds = 10
+                state = ctx.storage_state(indexed_db=True)
                 ctx.close()
 
                 # 4. expired, and the first refresh can't reach the network (a phone waking up)
@@ -195,7 +255,21 @@ def main() -> int:
                 ok = signed_in(page, 30000) and not page.evaluate("window.__sawLogin")
                 check(name, ok, "token expired and the network not ready at first: no sign-in screen",
                       f"{tries['n']} refresh tries")
-                state = ctx.storage_state()
+                state = ctx.storage_state(indexed_db=True)
+
+                ctx.close()
+
+                # 4b. the server unreachable for a while: a "trying again" note, never the sign-in form; back in by itself
+                net = {"down": True}
+                ctx, page = open_app(expire(state), before=lambda req: net["down"] and "/auth/v1/" in req.url)
+                page.wait_for_selector("#reconnecting, form.login, #ask-input", timeout=30000)
+                shown = page.evaluate("document.querySelector('#reconnecting') ? 'reconnecting' : document.querySelector('form.login') ? 'login' : 'app'")
+                check(name, shown == "reconnecting" and not page.evaluate("window.__sawLogin"),
+                      "server unreachable: \"trying again\", no sign-in form", shown)
+                net["down"] = False
+                page.evaluate("window.dispatchEvent(new Event('online'))")
+                check(name, signed_in(page, 30000) and page.locator("form.login").count() == 0, "back online: in, without signing in")
+                state = ctx.storage_state(indexed_db=True)
 
                 # 5. background past the token's life, back to the foreground: refreshed, still signed in
                 n = len([x for x in fake.auth_log if x[0] == "refresh" and x[2] == "ok"])
@@ -211,7 +285,7 @@ def main() -> int:
                 page.wait_for_timeout(2500)
                 refreshed = len([x for x in fake.auth_log if x[0] == "refresh" and x[2] == "ok"]) > n
                 check(name, refreshed and page.locator("form.login").count() == 0, "back from the background: refreshed, still signed in")
-                state = ctx.storage_state()
+                state = ctx.storage_state(indexed_db=True)
                 ctx.close()
 
                 # 6. a demo session signing out elsewhere doesn't touch the owner's session

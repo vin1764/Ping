@@ -301,10 +301,128 @@
     // no connection (or the library didn't load): the last-loaded thread, if there is one
     const snap = await kv.get("snap");
     if ((!navigator.onLine || !window.supabase) && snap) return startOffline(snap);
-    const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) return showLogin(sb);
-    return startReal(sb);
+    migrateSession();
+    const sb = authClient(AUTH_KEY);
+    const owner = await restoreSession(sb, AUTH_KEY);
+    if (owner === "ok") { keepSessionFresh(sb); return startReal(sb); }
+    if (owner === "unreachable") return waitForServer(snap);
+    // no owner session on this device: a View demo session from before, if it's still good
+    if (await hasStored(DEMO_AUTH_KEY)) {
+      const demo = authClient(DEMO_AUTH_KEY);
+      if (await restoreSession(demo, DEMO_AUTH_KEY) === "ok") { keepSessionFresh(demo); return startReal(demo); }
+    }
+    return showLogin(sb);
+  }
+
+  // ------------------------------------------------------------ staying signed in
+  // Sign in once and stay signed in, like a chat app: Supabase keeps a session (a short-lived access token and a
+  // refresh token; never the password) in this device's localStorage under a fixed key, refreshes it before it
+  // runs out, and again whenever the app comes back to the screen (phones suspend installed apps). A View demo
+  // session has its own key and its own client, so it can never replace or sign out the owner's session. Sign-outs
+  // are for this device only.
+  const AUTH_KEY = "ping-auth";
+  const DEMO_AUTH_KEY = "ping-demo-auth";
+  // Where the session lives: localStorage, and a second copy in IndexedDB. Refresh tokens are single-use, so a
+  // refreshed session must reach storage: iPhone writes localStorage to disk lazily, and an installed app closed
+  // right after a refresh can lose that write and wake up next time with a token the server has already replaced
+  // (the auth log of 22 Nov: "Invalid Refresh Token: Refresh Token Not Found", then a password sign-in). IndexedDB
+  // commits each write; reading takes whichever copy is newer.
+  const sessionStore = (() => {
+    let dbp = null;
+    const db = () => dbp || (dbp = new Promise((res, rej) => {
+      const r = indexedDB.open("ping-session", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+    const idb = async (mode, op) => {
+      const d = await db();
+      return new Promise((res, rej) => {
+        const t = d.transaction("kv", mode);
+        const req = op(t.objectStore("kv"));
+        t.oncomplete = () => res(req?.result ?? null);
+        t.onerror = t.onabort = () => rej(t.error);
+      });
+    };
+    const newer = (a, b) => { const e = (v) => { try { return JSON.parse(v)?.expires_at || 0; } catch { return 0; } }; return e(b) > e(a) ? b : a; };
+    return {
+      async getItem(k) {
+        let a = null, b = null;
+        try { a = localStorage.getItem(k); } catch { /* blocked */ }
+        try { b = await idb("readonly", (st) => st.get(k)); } catch { /* no IndexedDB */ }
+        return a && b ? newer(a, b) : a || b || null;
+      },
+      async setItem(k, v) {
+        try { localStorage.setItem(k, v); } catch { /* blocked */ }
+        try { await idb("readwrite", (st) => st.put(v, k)); } catch { /* no IndexedDB */ }
+      },
+      async removeItem(k) {
+        try { localStorage.removeItem(k); } catch { /* blocked */ }
+        try { await idb("readwrite", (st) => st.delete(k)); } catch { /* no IndexedDB */ }
+      },
+    };
+  })();
+  const hasStored = async (key) => !!(await sessionStore.getItem(key));
+  const clients = {};
+  function authClient(key) {
+    if (!clients[key]) clients[key] = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: sessionStore, storageKey: key },
+    });
+    return clients[key];
+  }
+  // sessions saved under supabase-js's default key by earlier versions: moved once, so the update signs nobody out
+  function migrateSession() {
+    try {
+      const old = `sb-${new URL(CFG.supabaseUrl).hostname.split(".")[0]}-auth-token`;
+      const v = localStorage.getItem(old);
+      if (!v) return;
+      const target = JSON.parse(v)?.user?.is_anonymous ? DEMO_AUTH_KEY : AUTH_KEY;
+      if (!localStorage.getItem(target)) sessionStore.setItem(target, v);
+      localStorage.removeItem(old);
+    } catch { /* storage blocked: nothing to move */ }
+  }
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  // "ok": a usable session (refreshed if it had run out); "none": nothing stored, or the server refused it (only
+  // then the sign-in screen); "unreachable": a session is stored but the server can't be reached yet (a phone
+  // waking up): never the sign-in screen for that
+  async function restoreSession(sb, key) {
+    if (!(await hasStored(key))) return "none";
+    for (let i = 0; i < 3; i++) {
+      // supabase-js retries a refresh that can't reach the server for up to 30 s: after 6 s, say so instead
+      let res;
+      try { res = await Promise.race([sb.auth.getSession(), pause(6000).then(() => ({ slow: true }))]); }
+      catch (e) { res = { error: e }; }
+      if (res.data?.session && res.data.session.expires_at * 1000 > Date.now()) return "ok";
+      if (!(await hasStored(key))) return "none";    // supabase-js drops a session the server refused
+      if (res.slow) return "unreachable";
+      await pause(700 * (i + 1));                    // a quick network error: the phone may still be waking up
+    }
+    return (await hasStored(key)) ? "unreachable" : "none";
+  }
+  // back on screen (unlocked, switched back to, restored from the back-forward cache) or back online: refresh now
+  function keepSessionFresh(sb) {
+    const wake = () => {
+      if (document.visibilityState !== "visible") { sb.auth.stopAutoRefresh?.(); return; }
+      sb.auth.startAutoRefresh?.();
+      sb.auth.getSession().catch(() => {});        // refreshes a token that ran out while the app was away
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("pageshow", (e) => { if (e.persisted) wake(); });
+    window.addEventListener("online", wake);
+  }
+  // signed in, but the server can't be reached: the last-loaded thread if there is one, else a plain note that
+  // tries again by itself; never the sign-in form
+  function waitForServer(snap) {
+    if (snap) return startOffline(snap);
+    mountPage(h("div", { class: "login card", id: "reconnecting" },
+      h("h1", {}, "Ping"),
+      h("p", {}, "You're signed in, but Ping's server can't be reached right now. Trying again\u2026"),
+      h("button", { type: "button", class: "btn", onclick: () => location.reload() }, "Try now")));
+    const again = () => location.reload();
+    window.addEventListener("online", again, { once: true });
+    // the refresh supabase-js keeps trying: once it gets through, carry on
+    authClient(AUTH_KEY).auth.onAuthStateChange((ev, session) => { if (session && (ev === "TOKEN_REFRESHED" || ev === "SIGNED_IN")) again(); });
+    setTimeout(again, 20000);
   }
 
   // the published demo-data.json keeps each distinct "allowed departments" list once (dashboard/build.sh)
@@ -359,7 +477,7 @@
         h("p", {}, "This login isn't on Ping's list of allowed users. Ping adds the MAIL_ADDRESS from your " +
           "GitHub secrets on every run; to use another email, add it to the allowed_users table in Supabase."),
         error ? h("p", { class: "muted small" }, plainly(error)) : null,
-        h("button", { class: "btn", onclick: async () => { await sb.auth.signOut(); location.reload(); } }, "Sign out")));
+        h("button", { class: "btn", onclick: async () => { await sb.auth.signOut({ scope: "local" }); location.reload(); } }, "Sign out")));
       return;
     }
     state.src = new SupabaseSource(sb, demo);
@@ -369,7 +487,8 @@
       $("#mode-badge").title = "Anonymised snapshot of a real run: real companies, a made-up student";
       $("#mode-badge").hidden = false;
     }
-    state.exit = { label: demo ? "Exit demo" : "Sign out", run: async () => { await sb.auth.signOut(); location.reload(); } };
+    // this device only: signing out on a laptop never signs the phone out (and a demo session is its own client)
+    state.exit = { label: demo ? "Exit demo" : "Sign out", run: async () => { await sb.auth.signOut({ scope: "local" }); location.replace(location.pathname); } };
     await afterStart();
     // split the lists by the current marks once they arrive, but never while a question is waiting for its answer
     // drawn in place (live), never a full redraw: that would move the chat under someone reading it
@@ -711,14 +830,24 @@
   function status(text) { const el = $("#status"); el.textContent = text; el.hidden = !text; }
 
   function showLogin(sb) {
-    const email = h("input", { type: "email", required: true, autocomplete: "username", placeholder: "you@example.com", id: "login-email" });
-    const pw = h("input", { type: "password", required: true, autocomplete: "current-password", placeholder: "Password", id: "login-pw" });
+    // a real form with the fields password managers know (iCloud Keychain, Google Password Manager): they offer to
+    // save it once and fill it with Face ID or a fingerprint after that. Ping itself never stores the password.
+    const email = h("input", { type: "email", name: "email", required: true, autocomplete: "username", inputmode: "email",
+                               autocapitalize: "none", spellcheck: "false", placeholder: "you@example.com", id: "login-email" });
+    const pw = h("input", { type: "password", name: "password", required: true, autocomplete: "current-password",
+                            placeholder: "Password", id: "login-pw" });
     const msg = h("p", { class: "muted small" });
-    mountPage(h("form", { class: "login card", onsubmit: async (e) => {
+    mountPage(h("form", { class: "login card", method: "post", action: "#chat", autocomplete: "on", onsubmit: async (e) => {
       e.preventDefault();
       msg.textContent = "Signing in…";
       const { error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pw.value });
-      if (error) { msg.textContent = error.message; return; }
+      if (error) { msg.textContent = /invalid login/i.test(error.message) ? "That email and password don't match. Try again." : plainly(error); return; }
+      // Chrome (Android, desktop): ask its password manager to save the login now, so the next sign-in is one tap
+      if (window.PasswordCredential && navigator.credentials?.store) {
+        try { await navigator.credentials.store(new PasswordCredential({ id: email.value.trim(), password: pw.value, name: email.value.trim() })); } catch { /* declined or unsupported */ }
+      }
+      pw.value = "";
+      keepSessionFresh(sb);
       startReal(sb);
     } },
       h("h1", {}, "Ping"),
@@ -726,13 +855,15 @@
       h("p", { class: "who" }, "Sign in (the student this copy belongs to)"),
       h("label", {}, "Email", email),
       h("label", {}, "Password", pw),
-      h("button", { class: "btn" }, "Sign in"),
+      h("button", { class: "btn", type: "submit" }, "Sign in"),
+      h("p", { class: "muted small center stay" }, "You'll stay signed in on this device."),
       msg,
       h("p", { class: "or" }, "or"),
       h("button", { type: "button", class: "btn demo", id: "view-demo", onclick: async (e) => {
         e.target.disabled = true;
         msg.textContent = "Opening the demo\u2026";
-        const { error } = await sb.auth.signInAnonymously();
+        const demo = authClient(DEMO_AUTH_KEY);          // its own session: never the owner's
+        const { error } = await demo.auth.signInAnonymously();
         if (error) {
           // too many demo sign-ins this hour (or the sign-in service is down): the same snapshot, from this site's own
           // copy; only Ask Ping's open questions need the server there
@@ -742,7 +873,8 @@
         }
         msg.textContent = "";
         location.hash = "#chat";
-        startReal(sb);
+        keepSessionFresh(demo);
+        startReal(demo);
       } }, "View demo"),
       h("p", { class: "muted small center" }, "No account needed: a sample student's placement season, read-only."),
       h("p", { class: "center", style: "margin:0" }, h("a", { class: "own", href: "setup.html", id: "setup-link" }, "Set up Ping for yourself \u2192"))));

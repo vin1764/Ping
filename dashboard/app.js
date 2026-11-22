@@ -248,12 +248,12 @@
       return { prefs: out.prefs || {}, marks: new Map(Object.entries(out.marks || {})) };
     }
     async markItem(id, patch) {
-      if (this.demo) throw new Error(READ_ONLY);
+      if (this.demo) return;           // the demo: on this page only (the shared demo rows are read-only)
       const { error } = await this.sb.from("items").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
     }
     async correct(noticeKey, fix) {
-      if (this.demo) throw new Error(READ_ONLY);
+      if (this.demo) return;           // the demo: on this page only
       const { error } = await this.sb.from("corrections").upsert({ notice_id: noticeKey, ...fix });
       if (error) throw new Error(error.message);
     }
@@ -2416,8 +2416,10 @@
   async function fix(it, f) {
     try {
       await state.src.correct(it.details?.notice_key, f);
-      status(state.src.kind === "demo" ? "Saved (demo only)." : "Saved. The next run will use your answer.");
-      if (state.src.kind !== "demo") it.level = "hidden";
+      const demo = state.src.kind === "demo" || state.src.demo;
+      status(demo ? "Noted for this demo session (nothing is saved)." : "Saved. The next run will use your answer.");
+      if (!demo) it.level = "hidden";
+      else if (it.needs_review) { it.needs_review = false; it.title = f.ignore ? "Marked not relevant." : `Noted: it's about ${f.company}.`; }
     } catch (e) { status(`Couldn't save that. ${plainly(e)}`); }
     route();
   }

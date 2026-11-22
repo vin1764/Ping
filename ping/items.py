@@ -211,7 +211,8 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                 venue = f", {a['venue']}" if a.get("venue") else ""
                 mail = " Link in your mail." if mail_links else (" Check your mail for the link." if a.get("email_hint") else "")
                 if pdf_yes:
-                    title = f"You're on the {company} {what}{label_s}.{' Test' + ev if ev else ''}{venue}{room}.{mail}"
+                    more = f"{(' Test' + ev) if ev else ''}{venue}{room}".strip(" ,")
+                    title = f"You're on the {company} {what}{label_s}." + (f" {more[0].upper() + more[1:]}." if more else "") + mail
                 elif t_status == "no":
                     # never an absence ("not on it"): Ping only says it couldn't find your roll number, in a file it read
                     # in full, and asks you to look yourself (the message links the list and says when it was read)

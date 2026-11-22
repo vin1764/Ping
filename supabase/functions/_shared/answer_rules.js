@@ -874,7 +874,10 @@
       const open = n.link ? ` [Open list](${n.link})` : "";
       const src = ` (notice ${n.notice_id}, posted ${when(n.notice_time)}${f.read_at ? `; file read ${at(f.read_at)}` : ""})`;
       let line;
-      if (f.status === "yes") {
+      if ((f.status === "yes" && /^You're on /.test(n.title || "")) || (f.status === "no" && /couldn't find your roll/.test(n.title || ""))) {
+        // the feed message's own words (they carry the role, the test time and the room)
+        line = cleanNames(n.title).replace(/\.+$/, ".") + (f.status === "no" ? " Here it is:" : "");
+      } else if (f.status === "yes") {
         const d = f.details || {};
         const extra = [d.room ? `room ${d.room}` : d.room_or_venue_from_heading ? `room ${d.room_or_venue_from_heading}` : "",
                        d.slot || d.slot_from_heading ? `slot ${d.slot || d.slot_from_heading}` : "", d.time || d.time_from_heading || d.reporting_time || ""].filter(Boolean);

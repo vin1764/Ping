@@ -612,6 +612,40 @@ def ask_ping_page(secrets) -> int:
     return checks or evals
 
 
+def prefs_report(secrets) -> int:
+    """Your saved preferences (profile id 1), when they last changed and by which chat message, which roles the
+    feed now marks For you, and a check that no demo or eval row is read as yours. Reads only."""
+    from .relevance import tag
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    rows = store.select("profile", {}, columns="id,is_sample,updated_at,targets,interested_companies,not_interested_companies,list_other_roles,feed_mode,notice_types,reminder_hours,roll,name,cgpa")
+    me = next((r for r in rows if r.get("id") == 1), {})
+    say("profile rows: " + ", ".join(f"id {r['id']} (sample={r.get('is_sample')}, updated {r.get('updated_at')})" for r in rows))
+    say(f"yours (id 1): updated_at {me.get('updated_at')} (also moves when the chat marks messages read)")
+    say(f"  targets: {me.get('targets')!r}")
+    say(f"  interested companies: {me.get('interested_companies')}; not interested: {me.get('not_interested_companies')}")
+    say(f"  list other roles: {me.get('list_other_roles')}; feed mode: {me.get('feed_mode')}; notice types: {me.get('notice_types')}; reminder {me.get('reminder_hours')} h")
+    say(f"  roll set in profile: {bool(me.get('roll'))} (same as ERP login: {str(me.get('roll') or secrets.erp_user_id).upper() == secrets.erp_user_id.upper()}); CGPA set: {me.get('cgpa') is not None}")
+    # the chat messages that changed preferences: yours, then Ping's "Saved: …" reply
+    chat = store.select("chat_messages", {"is_sample": "is.false", "order": "created_at.desc"}, columns="role,text,created_at")[:400]
+    saved = [m for m in chat if m["role"] == "ping" and re.match(r"^(Saved|Done|Updated|Noted)[:,]", m["text"] or "")]
+    for m in saved[:5]:
+        before = next((x for x in chat if x["role"] == "me" and x["created_at"] <= m["created_at"]), None)
+        say(f"  change {m['created_at']}: you wrote {(before or {}).get('text', '?')[:120]!r} -> Ping: {m['text'][:140]!r}")
+    if not saved:
+        say("  no preference change in your chat (the targets were set on the Profile page or during onboarding)")
+    # what the feed marks For you now, with the targets above
+    roles = store.select("roles", {"is_sample": "is.false"})
+    from .eligibility import evaluate
+    for_you = [r for r in roles if tag(r, me.get("targets") or "")[0] == "for_you" and evaluate(r, me)["eligible"] is not False]
+    say(f"For you now: {len(for_you)} roles")
+    for name in ("aiprise", "astera"):
+        for r in roles:
+            if name in (r.get("company") or "").lower():
+                t, why = tag(r, me.get("targets") or "")
+                say(f"  {r['company']} — {r.get('designation')}: {t} ({why}); best CV {((r.get('relevance') or {}).get('best_cv') or '-')}")
+    return 0
+
+
 def live_page(secrets) -> int:
     """Live updates on the published dashboard (setup/live_page_test.py): a new message appears without a reload,
     the scroll rules, the demo's Check now, catching up without the socket, and the row rules on the Realtime
@@ -1200,7 +1234,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

@@ -108,7 +108,7 @@ def main() -> int:
                 if not page.locator("[data-onboarding]").count():
                     break
                 stepname = page.get_attribute("[data-onboarding]", "data-onboarding")
-                chips = page.locator(".composer .chips .chip")
+                chips = page.locator(".composer .chips .chip, .onb-q .onb-actions .chip")
                 labels = chips.all_inner_texts()
                 if not labels:
                     break
@@ -120,7 +120,7 @@ def main() -> int:
                 page.wait_for_timeout(800)
                 if os.environ.get("WALK_DEBUG"):
                     print("   after", stepname, want, "->", page.get_attribute("[data-onboarding]", "data-onboarding") if page.locator("[data-onboarding]").count() else None,
-                          "|", page.locator(".msg.ping .text").last.inner_text()[:120].replace("\n", " "), "| chips:", page.locator(".composer .chips .chip").all_inner_texts()[:6])
+                          "|", page.locator(".msg.ping .text").last.inner_text()[:120].replace("\n", " "), "| chips:", page.locator(".composer .chips .chip, .onb-q .onb-actions .chip").all_inner_texts()[:6])
             step("3. onboarding in the chat", t0, "; ".join(answered)[:200])
             # 4. the first check (the hourly run, here against the fake ERP) and the first digest on the page
             from fake_erp import FakeErp

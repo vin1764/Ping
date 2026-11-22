@@ -12,6 +12,19 @@ Actions > Admin > `ask-ping-page` (`setup/ask_ping_page_test.py`) from a one-cli
 | **server** | the service key (`SUPABASE_SERVICE_KEY` / function secret `PING_SERVICE_KEY`) | bypasses Row Level Security; used only by the hourly run, Admin tasks and the functions |
 | anyone else | the publishable key alone | no policy grants them anything |
 
+### Judging (reviewers sign in with the owner's login)
+
+Before: `profile-snapshot` (Actions > Admin) keeps the profile row, push subscriptions and CV files server-side
+(`profile_snapshots`, readable by the service key only; the files copied under `snapshots/<id>/` in the private
+bucket). Then a password used nowhere else: save it as the repo secret `DASHBOARD_PASSWORD` and run
+`set-dashboard-password`; it sets the password through Supabase Auth's admin API, proves it with one sign-in and
+signs that check out again; the value is masked in logs and never printed. Your own phone stays signed in
+(sign-outs and new sign-ins elsewhere never end it).
+
+After: a new `DASHBOARD_PASSWORD` and `set-dashboard-password` again; `end-reviewer-sessions` ends the login's
+sessions that started after the snapshot (the reviewers' devices; yours started before it and stay);
+`profile-restore` puts the profile, push subscriptions (a reviewer's device is removed) and CV files back exactly.
+
 ### Staying signed in (sessions)
 
 - **Never the password.** The dashboard keeps only Supabase's session: an access token (1 hour) and a single-use

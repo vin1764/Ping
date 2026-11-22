@@ -8,15 +8,15 @@ const ACCENT = "#0d6b61", INK = "#ffffff", WARM = "#f2b24a";
 const CHOSEN = "bubble";
 // glyphs drawn on a 512 canvas; s = scale for the maskable safe zone
 const GLYPH = {
-  pulse: (c) => `<g fill="none" stroke="${c}" stroke-width="30" stroke-linecap="round"><path d="M168 344a124,124,0,0,1,0-176"/><path d="M344 168a124,124,0,0,1,0,176"/><path d="M116 396a198,198,0,0,1,0-280" opacity=".55"/><path d="M396 116a198,198,0,0,1,0,280" opacity=".55"/></g><circle cx="256" cy="256" r="46" fill="${c}"/>`,
-  bubble: (c, bg) => `<path d="M140 136h232a44 44 0 0 1 44 44v136a44 44 0 0 1-44 44H238l-78 62v-62h-20a44 44 0 0 1-44-44V180a44 44 0 0 1 44-44z" fill="${c}"/><circle cx="256" cy="248" r="28" fill="${bg}"/><g fill="none" stroke="${bg}" stroke-width="20" stroke-linecap="round"><path d="M202 200a9000000000"/><path d="M310 200a9000000000"/></g>`,
-  monogram: (c) => `<path d="M196 382V136h78a82 82 0 0 1 0 164h-78" fill="none" stroke="${c}" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/><circle cx="356" cy="364" r="32" fill="${WARM}"/>`,
+  pulse: (c) => `<g fill="none" stroke="${c}" stroke-width="30" stroke-linecap="round"><path d="M168,344a124,124,0,0,1,0-176"/><path d="M344,168a124,124,0,0,1,0,176"/><path d="M116,396a198,198,0,0,1,0-280" opacity=".55"/><path d="M396,116a198,198,0,0,1,0,280" opacity=".55"/></g><circle cx="256" cy="256" r="46" fill="${c}"/>`,
+  bubble: (c, bg) => `<path d="M140,136h232a44,44,0,0,1,44,44v136a44,44,0,0,1-44,44H238l-78,62v-62h-20a44,44,0,0,1-44-44V180a44,44,0,0,1,44-44z" fill="${c}"/><circle cx="256" cy="248" r="28" fill="${bg}"/><g fill="none" stroke="${bg}" stroke-width="20" stroke-linecap="round"><path d="M202,200a68,68,0,0,0,0,96"/><path d="M310,200a68,68,0,0,1,0,96"/></g>`,
+  monogram: (c) => `<path d="M196,382V136h78a82,82,0,0,1,0,164h-78" fill="none" stroke="${c}" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/><circle cx="356" cy="364" r="32" fill="${WARM}"/>`,
 };
 const icon = (name, { rx = 112, bg = ACCENT, fg = INK, scale = 1, bleed = false } = {}) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${bleed ? `<rect width="512" height="512" fill="${bg}"/>` : `<rect width="512" height="512" rx="${rx}" fill="${bg}"/>`}` +
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0,0,512,512">${bleed ? `<rect width="512" height="512" fill="${bg}"/>` : `<rect width="512" height="512" rx="${rx}" fill="${bg}"/>`}` +
   `<g transform="translate(256 256) scale(${scale}) translate(-256 -256)">${GLYPH[name](fg, bg)}</g></svg>`;
 // the push badge: the glyph alone, white on transparent (Android tints it)
-const badge = (name) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><mask id="m"><rect width="512" height="512" fill="#000"/>` +
+const badge = (name) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0,0,512,512"><defs><mask id="m"><rect width="512" height="512" fill="#000"/>` +
   `<g transform="translate(256 256) scale(1.18) translate(-256 -256)">${GLYPH[name]("#fff", "#000")}</g></mask></defs>` +
   `<rect width="512" height="512" fill="#fff" mask="url(#m)"/></svg>`;
 

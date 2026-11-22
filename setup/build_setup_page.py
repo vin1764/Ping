@@ -141,7 +141,7 @@ def render(doc: str | None = None) -> str:
 </head>
 <body class="doc">
   <header class="top">
-    <a class="brand" href="./"><span class="avatar" aria-hidden="true"><svg viewBox="96 110 320 320"><path class="mk-b" d="M140 136h232a44 44 0 0 1 44 44v136a44 44 0 0 1-44 44H238l-78 62v-62h-20a44 44 0 0 1-44-44V180a44 44 0 0 1 44-44z"/><circle class="mk-c" cx="256" cy="248" r="28"/><path class="mk-a" d="M202 200a9000000000M310 200a9000000000"/></svg></span>
+    <a class="brand" href="./"><span class="avatar" aria-hidden="true"><svg viewBox="96,110,320,320"><path class="mk-b" d="M140,136h232a44,44,0,0,1,44,44v136a44,44,0,0,1-44,44H238l-78,62v-62h-20a44,44,0,0,1-44-44V180a44,44,0,0,1,44-44z"/><circle class="mk-c" cx="256" cy="248" r="28"/><path class="mk-a" d="M202,200a68,68,0,0,0,0,96M310,200a68,68,0,0,1,0,96"/></svg></span>
       <span><strong>Ping</strong><span class="sub">back to sign in</span></span></a>
   </header>
   <main class="page doc-page">

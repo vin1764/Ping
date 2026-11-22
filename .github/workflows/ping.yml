@@ -12,13 +12,17 @@ on:
       mode:
         description: "What to do"
         type: choice
-        options: [run, check, probe, load-sample, remove-sample]
+        options: [run, check, probe, load-sample, remove-sample, diagnose, recheck]
         default: run
       source:
         description: "Who started it (kick-run sends 'schedule': it then counts as a scheduled run)"
         type: choice
         options: [manual, schedule]
         default: manual
+      company:
+        description: "diagnose / recheck: the company to read again from the ERP (read-only)"
+        type: string
+        default: ""
       run_row:
         description: "Check now: the run's row the dashboard is already showing ('queued'); the run fills it in"
         type: string
@@ -57,6 +61,7 @@ jobs:
         env:
           PING_MODE: ${{ inputs.mode || 'run' }}
           PING_RUN_ROW: ${{ inputs.run_row || '' }}
+          PING_COMPANY: ${{ inputs.company || '' }}
           # 'schedule' for GitHub's cron and for kick-run's hourly start, 'manual' for Check now / Run workflow
           PING_TRIGGER: ${{ github.event_name == 'schedule' && 'schedule' || inputs.source || 'manual' }}
           ERP_USER_ID: ${{ secrets.ERP_USER_ID }}

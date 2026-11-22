@@ -19,6 +19,16 @@ async function schedule(): Promise<Schedule> {
   return { every_minutes: p.check_every_minutes, from: p.check_from, to: p.check_to };
 }
 
+// when the last real Ping run started (runs table); undefined when it can't be read (then GitHub's list decides)
+async function lastStarted(): Promise<string | null | undefined> {
+  const key = Deno.env.get("PING_SERVICE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!key) return undefined;
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, key);
+  const { data, error } = await sb.from("runs").select("started_at").order("started_at", { ascending: false }).limit(1);
+  if (error) return undefined;
+  return data?.[0]?.started_at ?? null;
+}
+
 Deno.serve(async (req) => {
   const secret = Deno.env.get("PING_CRON_SECRET");
   if (!secret || req.headers.get("x-ping-cron") !== secret) return json({ error: "not allowed" }, 403);
@@ -38,7 +48,7 @@ Deno.serve(async (req) => {
   }
   const runs = (await list.json()).workflow_runs || [];
   const plan = await schedule();
-  const d = decide(runs, new Date(), undefined, plan);
+  const d = decide(runs, new Date(), undefined, plan, await lastStarted());
   if (!d.start || task === "check") {
     console.log(JSON.stringify({ event: task === "check" ? "kick_check" : "kick_skipped", why: d.why, start: d.start, plan }));
     return json({ started: false, would_start: d.start, why: d.why, schedule: plan });

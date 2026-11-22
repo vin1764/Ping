@@ -832,7 +832,9 @@ class Runner:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m ping.run")
     ap.add_argument("--mode", default=os.environ.get("PING_MODE") or "run",
-                    choices=["run", "check", "probe", "load-sample", "remove-sample"])
+                    choices=["run", "check", "probe", "load-sample", "remove-sample", "diagnose", "recheck"])
+    ap.add_argument("--company", default=os.environ.get("PING_COMPANY") or "",
+                    help="diagnose / recheck: the company to read again from the ERP")
     ap.add_argument("--memory", help="use a local JSON file instead of Supabase (testing)")
     args = ap.parse_args(argv)
     load_dotenv()
@@ -879,6 +881,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "probe":
         from .probe import probe
         return probe(secrets, store if ok else None)
+    if args.mode == "diagnose":
+        from .recheck import diagnose
+        if not args.company:
+            print("diagnose needs --company")
+            return 2
+        return diagnose(Runner(secrets, store, store_ok=ok, trigger=trigger), args.company)
     if not ok and trigger == "schedule":
         # Without a database every hourly run would be a full first run (~7 min of free
         # GitHub minutes and an OTP mail each). Remind instead; manual runs still go ahead.

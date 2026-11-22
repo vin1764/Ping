@@ -38,3 +38,15 @@ def test_the_students_own_schedule_decides():
     assert not decide([], datetime(2026, 11, 21, 7, 41, tzinfo=ist), schedule={"from": "08:00", "to": "22:00"})[0]
     assert decide([], datetime(2026, 11, 21, 0, 41, tzinfo=ist), schedule={"from": "06:00", "to": "01:00"})[0]
     assert not decide([], datetime(2026, 11, 21, 3, 11, tzinfo=ist), schedule={"from": "06:00", "to": "01:00"})[0]
+
+
+def test_a_run_that_only_stood_down_does_not_count():
+    """22 Nov: the 12:58 backup cron stood down (a run had started at 12:41), yet counted as a run, so the 13:41
+    kick skipped and nothing ran until 14:11. Only real runs (the runs table) set the gap now."""
+    from datetime import timedelta
+    stood_down = run(9, "completed", 43)
+    real_start = (NOW - timedelta(minutes=60)).isoformat()
+    assert not decide([stood_down], NOW)[0]                                  # the old rule: skipped
+    assert decide([stood_down], NOW, last_started=real_start)[0]             # the real last run is an hour old
+    assert not decide([stood_down], NOW, last_started=(NOW - timedelta(minutes=20)).isoformat())[0]
+    assert decide([], NOW, last_started=None)[0]

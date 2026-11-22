@@ -24,7 +24,9 @@ export function inWindow(now: Date, from: string, to: string): boolean {
   return f < t ? m >= f && m < t : m >= f || m < t;  // a window past midnight wraps
 }
 
-export function decide(runs: Run[], now: Date, ignoreId?: number, schedule: Schedule = {}):
+// lastStarted: when the last real Ping run started (the runs table). A GitHub run that only stood down (the backup
+// cron finding a run already done) is not a run: counting it once skipped a whole hour (13:41 on 22 Nov).
+export function decide(runs: Run[], now: Date, ignoreId?: number, schedule: Schedule = {}, lastStarted?: string | null):
   { start: boolean; why: string } {
   const s = { ...DEFAULT_SCHEDULE, ...Object.fromEntries(Object.entries(schedule).filter(([, v]) => v != null)) } as
     typeof DEFAULT_SCHEDULE;
@@ -33,7 +35,9 @@ export function decide(runs: Run[], now: Date, ignoreId?: number, schedule: Sche
   const others = runs.filter((r) => r.id !== ignoreId);
   const busy = others.find((r) => BUSY.has(r.status));
   if (busy) return { start: false, why: `a Ping run is ${busy.status.replace("_", " ")} (run ${busy.id})` };
-  const latest = others.map((r) => new Date(r.run_started_at || r.created_at).getTime()).sort((a, b) => b - a)[0];
+  const latest = lastStarted !== undefined
+    ? (lastStarted ? new Date(lastStarted).getTime() : 0)
+    : others.map((r) => new Date(r.run_started_at || r.created_at).getTime()).sort((a, b) => b - a)[0];
   if (latest && now.getTime() - latest < gap * 60_000) {
     return { start: false, why: `a Ping run started ${Math.round((now.getTime() - latest) / 60_000)} min ago (every ${s.every_minutes} min)` };
   }

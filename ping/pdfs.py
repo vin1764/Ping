@@ -407,3 +407,80 @@ def refresh_details(check: dict, roll: str) -> dict:
         det["section"] = check["details"]["section"]      # which section of the file lists you: kept as read
     check["details"] = det
     return check
+
+
+# ---------------------------------------------------------------- inspection (diagnosis; structure only)
+
+def _shape(tok: str) -> str:
+    """"22XY10042" -> "DDLLDDDDD": how a roll number is written, never the roll itself."""
+    return re.sub(r"[A-Z]", "L", re.sub(r"\d", "D", tok.upper()))
+
+
+def _dist(a: str, b: str) -> int:
+    d = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        prev, d[0] = d[0], i
+        for j in range(1, len(b) + 1):
+            cur = min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] != b[j - 1]))
+            prev, d[j] = d[j], cur
+    return d[-1]
+
+
+def inspect(data: bytes, roll: str, name: str = "", content_type: str = "", ocr: bool = True) -> dict:
+    """What a list file is made of and how your roll appears in it, for a diagnosis. Counts and shapes only:
+    nothing about any other student (no rolls, no names, no rows) is returned."""
+    roll = (roll or "").strip().upper()
+    fmt = sniff(data, content_type)
+    out = {"format": fmt, "bytes": len(data), "pages": [], "roll_shapes": {}, "my_roll_shape": _shape(roll),
+           "found": {}, "nearest_roll_distance": None, "error": None}
+    try:
+        doc = _read_pdf(data) if fmt == "pdf" else _read_xlsx(data) if fmt == "xlsx" else None
+    except Exception as e:
+        out["error"] = f"could not open: {type(e).__name__}"
+        return out
+    if doc is None:
+        out["error"] = f"not a PDF or Excel file ({fmt})"
+        return out
+    texts = []
+    for i, p in enumerate(doc["pages"]):
+        t = p["text"]
+        rows = sum(len(tb) for tb in p["tables"])
+        cells = " ".join(" ".join(r) for tb in p["tables"] for r in tb)
+        out["pages"].append({"page": i + 1, "text_chars": len(t.strip()), "images": p.get("images", 0),
+                             "tables": len(p["tables"]), "table_rows": rows,
+                             "roll_like_text": len(set(ROLL_LIKE.findall(t.upper()))),
+                             "roll_like_tables": len(set(ROLL_LIKE.findall(cells.upper())))})
+        texts.append(t + "\n" + cells)
+    if ocr and fmt == "pdf" and any(p["images"] for p in out["pages"]) and _ocr_available():
+        try:
+            o = _ocr_pdf(data)
+            for pg, t in zip(out["pages"], o):
+                pg["ocr_chars"] = len(t.strip())
+                pg["roll_like_ocr"] = len(set(ROLL_LIKE.findall(t.upper())))
+            texts += o
+            out["ocr"] = True
+        except Exception as e:
+            out["ocr_error"] = type(e).__name__
+    allt = "\n".join(texts)
+    up = allt.upper()
+    toks = set(re.findall(r"\b[0-9]{2}[A-Z0-9]{2,3}[A-Z0-9]{4,6}\b", up))
+    shapes: dict[str, int] = {}
+    for tk in toks:
+        shapes[_shape(tk)] = shapes.get(_shape(tk), 0) + 1
+    out["roll_shapes"] = dict(sorted(shapes.items(), key=lambda kv: -kv[1])[:6])
+    if roll:
+        compact_text = re.sub(r"[\s\-./_]", "", up)
+        out["found"] = {
+            "roll_pattern": bool(roll_pattern(roll).search(allt)),
+            "roll_ignoring_spaces": roll in compact_text,
+            "roll_digits_only": bool(re.search(rf"(?<!\d){re.escape(re.sub(r'[^0-9]', '', roll))}(?!\d)", compact_text)),
+            "roll_last5": bool(re.search(rf"(?<!\d){re.escape(roll[-5:])}(?!\d)", up)),
+        }
+        cand = [t for t in toks if len(t) == len(roll)]
+        out["nearest_roll_distance"] = min((_dist(roll, t) for t in cand), default=None)
+    if name:
+        words = set(re.findall(r"[a-z]+", allt.lower()))
+        parts = [p for p in re.split(r"\s+", name.lower()) if len(p) > 1]
+        out["found"]["name_parts"] = f"{sum(p in words for p in parts)}/{len(parts)}"
+    out["roll_like_total"] = len(set(ROLL_LIKE.findall(up)))
+    return out

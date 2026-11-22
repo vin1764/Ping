@@ -1000,11 +1000,13 @@
       onbAnswer({ value: c.value }, c.label);
     } }, c.label);
     // the CV step: the upload control, Later and Skip are in the bubble itself
-    if (!o.done) inner.append(h("div", { class: "msg ping onb-q" }, q.lines.map((l) => h("p", {}, l)),
+    if (o.busy) inner.append(h("div", { class: "msg ping typing", role: "status", "aria-label": "Ping is typing" },
+      h("span", { class: "dot" }), h("span", { class: "dot" }), h("span", { class: "dot" })));
+    else if (!o.done) inner.append(h("div", { class: "msg ping onb-q" }, q.lines.map((l) => h("p", {}, l)),
       q.upload || q.inline ? h("div", { class: "onb-actions" }, q.upload ? onbUpload() : null, ...(q.inline ? q.chips.map(chip) : [])) : null,
       h("span", { class: "time" }, clock(new Date()))));
     const chips = h("div", { class: "chips wrap", role: "group", "aria-label": "Quick replies" },
-      ...(q.inline ? [] : q.chips.map(chip)),
+      ...(q.inline || o.busy ? [] : q.chips.map(chip)),
       o.step === "first_check" ? h("button", { type: "button", class: "chip primary", onclick: () => onbFinish() }, "Go to my feed") : null);
     const send = sendButton(true);
     input.addEventListener("input", () => { send.disabled = !input.value.trim(); });
@@ -1046,23 +1048,34 @@
 
   function onbSay(text) { state.onb.log.push({ role: "ping", text, at: new Date().toISOString() }); viewOnboarding(); }
 
+  // one answer at a time: the answer shows at once with Ping typing under it, the step's buttons go until it's done
+  // (a tap that waited on Ask Ping looked like nothing happened, so it got tapped again)
   async function onbAnswer(input, label) {
     const o = state.onb;
+    if (!o || o.busy) return;
+    o.busy = true;
+    try { await onbAnswerNow(o, input, label); } finally { o.busy = false; }
+    if (state.onb === o && o.step !== "done") viewOnboarding();
+  }
+  async function onbAnswerNow(o, input, label) {
     const q = OB.question(o.step, o.ctx);
     o.log.push({ role: "ping", text: q.lines.join(" "), at: new Date().toISOString() },
                { role: "me", text: label, at: new Date().toISOString() });
+    viewOnboarding();
     const res = OB.answer(o.step, input, o.ctx);
     try {
       await state.src.saveOnboarding(res.save);
-    } catch (e) { o.log.push({ role: "ping", text: isNetErr(e) ? "Couldn't save that: no connection. Tap it again when you're back online." : "Couldn't save that. Tap it again, or Skip and tell me later.", at: new Date().toISOString() }); return viewOnboarding(); }
+    } catch (e) { o.log.push({ role: "ping", text: isNetErr(e) ? "Couldn't save that: no connection. Tap it again when you're back online." : "Couldn't save that. Tap it again, or Skip and tell me later.", at: new Date().toISOString() }); return; }
     if (res.useDemo) { state.onb = null; location.hash = "#chat"; return route(); }
     Object.assign(o.ctx, res.ctxPatch || {}, res.save);
     if (!state.src.demo) Object.assign(state.data.profile, res.save);
     if (res.askPing) {
       try {
-        const out = await state.src.fn("ask-ping", { question: res.askPing });
-        o.log.push({ role: "ping", text: out.answer, at: new Date().toISOString() });
-        await loadMarks();
+        // at most 15 s here: the answer is saved on the server either way, and the walk goes on
+        const out = await Promise.race([state.src.fn("ask-ping", { question: res.askPing }),
+          new Promise((r) => setTimeout(() => r(null), 15000))]);
+        o.log.push({ role: "ping", text: out?.answer || "Noted. Marking the roles that fit takes a moment; you can see or change your targets in Profile › What I'm looking for.", at: new Date().toISOString() });
+        if (out) await loadMarks();
       } catch (e) { o.log.push({ role: "ping", text: "Couldn't save that just now. You can tell me later, any time.", at: new Date().toISOString() }); }
     }
     if (res.next === o.step && !res.ctxPatch) {
@@ -1073,7 +1086,6 @@
     o.step = res.next;
     if (o.step === "first_check") o.since = Date.now();
     if (o.step === "done") return onbFinish();
-    viewOnboarding();
   }
 
   // the last step: start a check (owner), wait until a run has finished, then explain the thread

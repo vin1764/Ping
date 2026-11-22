@@ -573,13 +573,19 @@ def functions_check(secrets) -> int:
 
 
 def ask_ping_page(secrets) -> int:
+    """The live page's checks (setup/ask_ping_page_test.py), then every single-question eval typed into the page
+    (setup/ask_ping_page_evals.py: who answered, time to the reply on screen, the checks), written to
+    evals/ask_ping/PAGE_RUN.md."""
     import subprocess
-    return subprocess.run([sys.executable, str(ROOT / "setup" / "ask_ping_page_test.py"),
+    checks = subprocess.run([sys.executable, str(ROOT / "setup" / "ask_ping_page_test.py"),
                            "slice ctc breakdown", "what's due tomorrow",
                            # follow-ups in the same demo session: the answers must use the conversation
                            "any tests today?", "anything else?", "nothing else?",
                            # the demo profile says what it's looking for: the answer splits For you / Others
                            "what's due tonight that's relevant to me", "which cv for groww"]).returncode
+    say("\n---- single-question evals through the page ----")
+    evals = subprocess.run([sys.executable, str(ROOT / "setup" / "ask_ping_page_evals.py")]).returncode
+    return checks or evals
 
 
 def live_page(secrets) -> int:

@@ -84,13 +84,13 @@ jobs:
           git pull -q --rebase && git push
           gh workflow run dashboard.yml --ref "$GITHUB_REF_NAME" && echo "dashboard deploy started"
       - name: Save the Ask Ping eval report
-        if: inputs.task == 'ask-ping-evals' || inputs.task == 'relevance-evals'
+        if: inputs.task == 'ask-ping-evals' || inputs.task == 'relevance-evals' || inputs.task == 'ask-ping-page'
         run: |
           git config user.name "ping-admin"
           git config user.email "ping-admin@users.noreply.github.com"
-          for f in evals/ask_ping/REPORT.md evals/ask_ping/results.json evals/relevance/REPORT.md; do
+          for f in evals/ask_ping/REPORT.md evals/ask_ping/results.json evals/relevance/REPORT.md evals/ask_ping/PAGE_RUN.md evals/ask_ping/page_results.json; do
             [ -f "$f" ] && git add "$f"
           done
           git diff --cached --quiet && { echo "report unchanged"; exit 0; }
-          git commit -q -m "${{ inputs.task == 'relevance-evals' && 'Relevance evals' || 'Ask Ping evals' }}: report from the latest run"
+          git commit -q -m "${{ inputs.task == 'relevance-evals' && 'Relevance evals' || inputs.task == 'ask-ping-page' && 'Ask Ping through the page' || 'Ask Ping evals' }}: report from the latest run"
           git pull -q --rebase && git push

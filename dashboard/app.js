@@ -146,7 +146,7 @@
         this.q("profile"),
         this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
         // the latest notices, one line each on Today (the full text is read when one is opened)
-        this.sb.from("notices").select("notice_id,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(80)
+        this.sb.from("notices").select("notice_id,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(1000)
           .then((r) => r.data || [], () => []),
       ]);
       // the demo is a snapshot: its profile row carries the time it was taken
@@ -348,6 +348,7 @@
   async function afterStart() {
     try {
       state.data = await state.src.load();
+      stampItems();
       state.chat = await state.src.chat();
       state.readAt = await state.src.readAt();
       if (state.src.kind !== "real") {
@@ -444,7 +445,7 @@
       mergeRuns(await state.src.liveRuns(), true);
       const chat = await state.src.chat();
       for (const m of chat || []) addChatRow(m);
-      if (LIVE.lastFinished(state.data.runs)?.id !== before) state.data.items = withoutHeld(await state.src.items());
+      if (LIVE.lastFinished(state.data.runs)?.id !== before) { state.data.items = withoutHeld(await state.src.items()); stampItems(); }
       applyLive();
     } catch { /* offline for a moment: the next poll or focus tries again */ }
     finally { live.syncing = false; schedulePoll(); }
@@ -465,7 +466,7 @@
     const ended = ["done", "failed"].includes(row.stage) && (!was || !["done", "failed"].includes(was.stage));
     mergeRuns([row]);
     // a run that just finished: read its new messages first, so they arrive right after its "Done" line
-    if (ended && row.stage === "done") state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items));
+    if (ended && row.stage === "done") { state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems(); }
     if (ended && row.stage === "done" && Number(row.new_items) > 0) flash(`found ${row.new_items} new`);
     applyLive();
   }
@@ -832,6 +833,7 @@
       const run = await state.src.latestRun().catch(() => null);
       if (run?.finished_at && (!since || dt(run.finished_at) > since - 60000)) {
         state.data = await state.src.load();
+        stampItems();
         return explain();
       }
       await new Promise((r) => setTimeout(r, 20000));
@@ -1374,7 +1376,28 @@
     btn.disabled = true;
     btn.setAttribute("aria-busy", "true");
     btn.replaceChildren(h("span", { class: "wait", "aria-hidden": "true" }, "…"));
+    const t0 = performance.now();
     const mine = { role: "me", text: q, created_at: new Date().toISOString() };
+    // a FACT question: answered at once from the page's own data, no typing bubble
+    const local = localFact(q);
+    if (local.text) {
+      state.chat.push(mine);
+      appendToday(inner, textBubble("me", q, mine.created_at, true));
+      const reply = { role: "ping", text: local.text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString() };
+      state.chat.push(reply);
+      const b = textBubble("ping", reply.text, reply.created_at, true);
+      b.dataset.answeredBy = "page";
+      b.dataset.ms = String(Math.round(performance.now() - t0));
+      appendToday(inner, b);
+      thread.scrollTop = thread.scrollHeight;
+      state.waiting = false;
+      btn.removeAttribute("aria-busy");
+      btn.replaceChildren(ICON_SEND());
+      btn.disabled = !input.value.trim();
+      // saved the same way as an answer from the function: the question, then the reply
+      state.src.addChat(mine).then(() => state.src.addChat(reply)).catch(() => {});
+      return;
+    }
     state.chat.push(mine);
     appendToday(inner, textBubble("me", q, mine.created_at, true));
     const wait = appendToday(inner, h("div", { class: "msg ping typing enter", role: "status", "aria-label": "Ping is typing" },
@@ -1392,8 +1415,8 @@
     state.sending = (state.sending || 0) + 1;
     // the typing bubble shows at least briefly, even for an answer that comes back at once
     const typing = new Promise((r) => setTimeout(r, 600));
-    let lost = false;
-    try { answer = helpHere(q) ?? await state.src.ask(q); } catch (e) { if (isNetErr(e)) lost = true; answer = e.message; } finally { state.sending -= 1; }
+    let lost = false, answeredBy = "page";
+    try { answer = helpHere(q) ?? await state.src.ask(q); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = e.message; } finally { state.sending -= 1; }
     if (lost) {                                   // the connection went while asking: this one waits too
       clearTimeout(slow); wait.remove(); state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND());
       state.chat = state.chat.filter((m) => m !== mine);
@@ -1409,7 +1432,10 @@
     btn.replaceChildren(ICON_SEND());
     btn.disabled = !input.value.trim();
     if (wait.isConnected) {
-      wait.replaceWith(textBubble("ping", reply.text, reply.created_at, true));
+      const b = textBubble("ping", reply.text, reply.created_at, true);
+      b.dataset.answeredBy = answeredBy;
+      b.dataset.ms = String(Math.round(performance.now() - t0));
+      wait.replaceWith(b);
       thread.scrollTop = thread.scrollHeight;
     } else {
       route();   // the chat was drawn again meanwhile (e.g. the "For you" marks arrived): draw it with the reply
@@ -2012,12 +2038,10 @@
     const r = R.route(question, [], { now: nowDate(), roles: data.roles || [], items: [], notices: [] });
     return r.kind === "help" ? R.routed(r, question, { platform: thisPlatform(), installed: standalone() }).text : null;
   }
-  function answerLocally(question, data) {
-    const R = window.PingRules;
-    if (!R) return "I can't answer that right now. Try again in a minute.";
+  // the same data shape the ask-ping function builds (factsData), from what the page has loaded
+  function factsOf(data) {
     const run = (data.runs || [])[0] || {};
-    // the same shape the ask-ping function builds, so offline answers match the live ones (route + rules)
-    const facts = {
+    return {
       now: nowDate(),
       lastChecked: run.finished_at || run.started_at || data.generated_at || null,
       profile: data.profile || {}, prefs: { listOthers: (state.prefs || data.profile || {}).list_other_roles !== false },
@@ -2032,8 +2056,30 @@
       notices: data.notices || [],
       platform: thisPlatform(), installed: standalone(),
     };
-    const previous = state.chat.filter((m) => m.role === "me" && m.text !== question).map((m) => m.text).reverse().slice(0, 4);
-    return R.routed(R.route(question, previous, facts), question, facts).text;
+  }
+  const previousQuestions = (question) => state.chat.filter((m) => m.role === "me" && m.text !== question).map((m) => m.text).reverse().slice(0, 4);
+  function answerLocally(question, data) {
+    const R = window.PingRules;
+    if (!R) return "I can't answer that right now. Try again in a minute.";
+    const facts = factsOf(data);
+    return R.routed(R.route(question, previousQuestions(question), facts), question, facts).text;
+  }
+
+  // FACT questions are answered here, from the data this page already has, in a few milliseconds; only OPEN ones
+  // (and preference changes, which the function saves) go to the ask-ping function. If a check has finished since
+  // the page loaded its messages, or the "For you" marks aren't in yet, the function answers (its data is current).
+  const lastRunId = () => LIVE.lastFinished(state.data?.runs || [])?.id ?? null;
+  function stampItems() { state.itemsRun = lastRunId(); }
+  function localFact(question) {
+    const R = window.PingRules;
+    if (!R || !state.data) return { why: "no rules" };
+    if (R.prefsLike(question)) return { why: "preferences" };
+    if (lastRunId() !== (state.itemsRun ?? null)) return { why: "stale" };
+    if (targetsOn() && !state.marks?.size && !state.data.roles.some((r) => r.relevance)) return { why: "no marks" };
+    const facts = factsOf(state.data);
+    const r = R.route(question, previousQuestions(question), facts);
+    if (r.kind === "open") return { why: "open" };
+    return { text: R.routed(r, question, facts).text, kind: r.kind };
   }
 
   boot().catch((e) => mountPage(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, e.message))));

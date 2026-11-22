@@ -81,9 +81,25 @@ def main(argv: list[str]) -> int:
         page.on("response", lambda r: "/functions/v1/ask-ping" in r.url and calls.append(r.status))
         # this check runs on the evals Gemini key: its calls to the function carry the proof (ping/evals_key.py)
         sys.path.insert(0, str(ROOT))
-        from ping.evals_key import eval_headers
-        proof = eval_headers()
-        page.route("**/functions/v1/**", lambda route: route.continue_(headers={**route.request.headers, **proof}))
+        # without that key the questions that reach the function go with no_ai (rules only, no model): an Admin task
+        # never uses the live key. FACT questions never reach it: the page answers them itself.
+        if os.environ.get("GEMINI_API_KEY_EVALS", "").strip():
+            from ping.evals_key import eval_headers
+            proof = eval_headers()
+            page.route("**/functions/v1/**", lambda route: route.continue_(headers={**route.request.headers, **proof}))
+        else:
+            import json as _j
+
+            def no_ai(route):
+                try:
+                    d = _j.loads(route.request.post_data or "{}")
+                except ValueError:
+                    d = {}
+                if d.get("question"):
+                    d["no_ai"] = True
+                route.continue_(post_data=_j.dumps(d))
+            page.route("**/functions/v1/ask-ping", no_ai)
+            print("GEMINI_API_KEY_EVALS isn't set: questions that reach the function go with no_ai (no model call)")
         page.on("pageerror", lambda e: print(f"  page error: {e}"))
         page.goto(url)
         page.click("#view-demo")
@@ -146,11 +162,15 @@ def main(argv: list[str]) -> int:
             page.wait_for_function(
                 "n => !document.querySelector('.msg.typing') && "
                 "document.querySelectorAll('.msg.ping:not(.typing)').length > n", arg=before, timeout=200000)
-            reply = page.locator(".msg.ping:not(.typing)").last.locator(".text").inner_text()
+            last = page.locator(".msg.ping:not(.typing)").last
+            reply = last.locator(".text").inner_text()
+            by = last.get_attribute("data-answered-by")
             status = calls[-1] if calls else None
-            bad = status != 200 or "AI not reachable" in reply
+            # FACT questions are answered by the page itself (no call); the rest by ask-ping, which must answer 200
+            bad = (by != "page" and status != 200) or "AI not reachable" in reply
             failures += bad
-            print(f"\nQ: {q}\n   ask-ping answered HTTP {status}{'  <-- PROBLEM' if bad else ''}\nA: {reply}")
+            how = f"answered in the page in {last.get_attribute('data-ms')} ms" if by == "page" else f"ask-ping answered HTTP {status}"
+            print(f"\nQ: {q}\n   {how}{'  <-- PROBLEM' if bad else ''}\nA: {reply}")
         browser.close()
     print(f"\n{'all checks passed on ' + url if not failures else f'{failures} problem(s) on ' + url}")
     return 1 if failures else 0

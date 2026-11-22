@@ -655,6 +655,30 @@
       ...(list.length > 8 ? [`+${list.length - 8} more in the Feed`] : [])].join("\n") };
   }
 
+  // ---------------------------------------------------------------- preferences said in the chat
+  // The page answers FACT questions itself; a message that sets or shows preferences goes to the ask-ping function,
+  // which saves them (supabase/functions/ask-ping/prefs.ts). The same patterns, copied (tests/test_prefs_patterns.py
+  // fails if they drift apart).
+  const PREFS_PATTERNS = {
+    SHOW: /^(?:what\s+(?:are|is)\s+my\s+(?:preferences|targets|settings)|show\s+(?:me\s+)?my\s+(?:preferences|targets|settings)|what\s+am\s+i\s+looking\s+for)\b/i,
+    RESET: /^(?:please\s+)?(?:reset|clear|forget|delete)\s+(?:all\s+)?my\s+(?:preferences|targets|settings)\b/i,
+    REMIND: /\bremind\s+me\s+(\d+(?:\.\d+)?)\s*(h|hrs?|hours?|m|mins?|minutes?)\s+before\b/i,
+    REMIND_DAY: /\bremind\s+me\s+(?:a|one|1)?\s*day\s+before\b|\bremind\s+me\s+the\s+day\s+before\b/i,
+    EVERY: /\bcheck(?:\s+the\s+erp)?\s+(?:every|once\s+every)\s+(?:(\d+)\s*(min|mins|minutes|h|hr|hrs|hour|hours)|(half\s+an?\s+hour|hour|two\s+hours))\b|\bcheck\s+(hourly|half-hourly)\b/i,
+    HOURS: /\b(?:only\s+)?check(?:\s+the\s+erp)?\s+(?:between|from)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s+(?:and|to|-)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i,
+    ALL: /^(?:please\s+)?(?:show\s+me\s+everything|everything\s+from\s+the\s+erp|show\s+all\s+roles|don'?t\s+filter)\b/i,
+    PERSONAL: /^(?:please\s+)?(?:only\s+what\s+fits\s+me|personali[sz]e\s+(?:my\s+)?feed|filter\s+(?:my\s+)?feed)\b/i,
+    LIST_OFF: /\b(?:stop|don'?t|do\s+not|no\s+longer)\s+(?:list(?:ing)?|show(?:ing)?)\s+(?:the\s+)?other\s+roles\b/i,
+    LIST_ON: /^(?:please\s+)?(?:start\s+|keep\s+)?(?:list|show)(?:ing)?\s+(?:the\s+)?other\s+roles\s+(?:separately|again|too)\b/i,
+    SET: /^(?:please\s+)?(?:only\s+show\s+me|show\s+me\s+only|just\s+show\s+me|i(?:'m|\s+am)\s+(?:only\s+)?(?:looking\s+for|interested\s+in)|i\s+only\s+want|my\s+targets?\s+(?:is|are))\s+(.+)$/i,
+    ADD: /^(?:please\s+)?(?:also\s+(?:include|show(?:\s+me)?|add|count)|include|add)\s+(.+)$/i,
+    EXCLUDE: /^(?:please\s+)?(?:(?:don'?t|do\s+not|stop)\s+(?:count(?:ing)?|show(?:ing)?(?:\s+me)?|include|including|list(?:ing)?)|exclude|remove|drop|not\s+interested\s+in|no\s+more)\s+(.+)$/i,
+  };
+  function prefsLike(message) {
+    return String(message || "").split(/(?<=[.!?])\s+|\n+/).map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean)
+      .some((part) => Object.values(PREFS_PATTERNS).some((re) => re.test(part)));
+  }
+
   // ---------------------------------------------------------------- the router
   // Every message, before any model: FACT (answered here, no model call), ACT (a request to do something on the ERP:
   // the read-only answer), ACK ("ok", "thanks") or OPEN (summaries, "why", comparisons, anything else: the model,
@@ -818,7 +842,7 @@
       : !(x.v <= 1 || nums.some((n) => (x.v >= 1e5 ? Math.abs(n - x.v) <= x.v * 0.005 : n === x.v)))).map((x) => x.raw);
   }
 
-  const api = { answer, route, routed, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  const api = { answer, route, routed, prefsLike, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

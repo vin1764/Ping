@@ -134,3 +134,17 @@ here after its first check (about 10 minutes)." / "No roles match. Try All."
 Text contrast ≥ 4.5:1 in both themes; visible 2 px focus rings in `--accent`; 44 px tap targets; a label on every
 control (visible or `aria-label`); `prefers-reduced-motion` turns off every animation; the thread is a `log`
 region so screen readers hear new messages.
+
+
+## Tone (every message, label, empty state and error)
+
+- Short and specific: say what happened and what to do, in one or two sentences. "Nothing due tomorrow (Mon 23 Nov)."
+  not "There are no deadlines in the data for the requested date."
+- Never "the data does not contain", "I don't have any information" or "as an AI": say what is missing and where it
+  would come from ("No Esri notice yet.", "The ERP doesn't publish test scores.").
+- Times in IST, 24-hour, always with the day when it isn't today: "20:00", "Sun 22 Nov 17:00". No "PM", no seconds.
+- Company first, then the role: "Groww (Product Analyst)", "Axon Developers: fill the form by 17:00".
+- Sentence case everywhere ("Check now", "Show 30 more", "Install Ping"); no title case, no shouting.
+- No jargon: no function, server, Supabase, token, RLS, realtime, JSON in anything a student reads. Owner-only setup
+  messages may name a setting, and then say exactly where it is.
+- Errors say what still works: "Ping's assistant couldn't be reached, so this answer comes straight from the ERP data."

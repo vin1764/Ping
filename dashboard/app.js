@@ -239,9 +239,9 @@
       }
       catch (e) {
         if (e.status === 429) return `${e.message}\n\nMeanwhile, from the ERP data: ${answerLocally(q, state.data)}`;
-        const why = e.status === 404 || /fetch/i.test(e.message) ? "the ask-ping server function isn't deployed or reachable"
-          : e.status === 403 ? "your login isn't on the allowed list" : e.message;
-        return answerLocally(q, state.data) + `\n\n(AI not reachable: ${why}. Answered straight from the ERP data.)`;
+        // short and plain: what happened, and that the answer below is still from the ERP data
+        const why = e.status === 403 ? "this login can't ask Ping's assistant" : "Ping's assistant couldn't be reached";
+        return answerLocally(q, state.data) + `\n\n(${why}, so this answer comes straight from the ERP data.)`;
       }
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.

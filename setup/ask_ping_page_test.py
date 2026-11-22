@@ -167,7 +167,7 @@ def main(argv: list[str]) -> int:
             by = last.get_attribute("data-answered-by")
             status = calls[-1] if calls else None
             # FACT questions are answered by the page itself (no call); the rest by ask-ping, which must answer 200
-            bad = (by != "page" and status != 200) or "AI not reachable" in reply
+            bad = (by != "page" and status != 200) or ("AI not reachable" in reply or "couldn't be reached" in reply)
             failures += bad
             how = f"answered in the page in {last.get_attribute('data-ms')} ms" if by == "page" else f"ask-ping answered HTTP {status}"
             print(f"\nQ: {q}\n   {how}{'  <-- PROBLEM' if bad else ''}\nA: {reply}")

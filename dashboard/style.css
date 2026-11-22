@@ -724,3 +724,5 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .onb-q .onb-label { width: 100%; font-size: var(--t-sm); color: var(--muted); }
 .pcard.flash { animation: hl 1.6s ease-out; scroll-margin-top: 12px; }
 .msg .text .inline-link, .msg .text button.inline-link { font: inherit; }
+.nav .nav-btn .theme-mode { font-size: var(--t-xs); font-weight: 400; color: var(--muted); line-height: 1; }
+.nav .nav-btn#theme-btn { gap: 1px; }

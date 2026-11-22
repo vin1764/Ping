@@ -782,7 +782,8 @@
     const theme = $("#theme-btn");
     const label = () => {
       const t = themeNow();
-      theme.querySelector(".theme-label").textContent = t === "system" ? "Auto" : t === "dark" ? "Dark" : "Light";
+      // "Theme", and the mode it's in underneath (Auto / Light / Dark): the button says what it is and what it'll change
+      theme.querySelector(".theme-mode").textContent = t === "system" ? "Auto" : t === "dark" ? "Dark" : "Light";
       theme.setAttribute("aria-label", `Theme: ${t === "system" ? "follows the system" : t}. Change`);
     };
     theme.onclick = () => { setTheme({ system: "light", light: "dark", dark: "system" }[themeNow()]); label(); };
@@ -851,6 +852,9 @@
     store.set("ping-theme", t);
     if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
     else delete document.documentElement.dataset.theme;
+    // the rail's Theme button follows a change made on Profile too
+    const mode = document.querySelector("#theme-btn .theme-mode");
+    if (mode) mode.textContent = t === "system" ? "Auto" : t === "dark" ? "Dark" : "Light";
   }
 
   // the header: "checking the ERP now…" while a run is going, else the last finished check. No banner for a failed

@@ -10,7 +10,9 @@ rm -rf _site && mkdir -p _site
 cp dashboard/index.html dashboard/style.css dashboard/app.js dashboard/onboarding.js dashboard/names.js dashboard/live.js dashboard/today.js dashboard/forms.js dashboard/reply.js supabase/functions/_shared/answer_rules.js supabase/functions/_shared/help.js dashboard/manifest.webmanifest _site/
 # the installable app: icons, and a service worker that knows this build (a new deploy = a new worker and cache)
 mkdir -p _site/icons && cp dashboard/icons/*.png dashboard/icons/*.svg _site/icons/
-sed "s/__BUILD__/${GITHUB_SHA:-local}/" dashboard/sw.js > _site/sw.js
+# the short commit id (7 characters): a full one can hold ten digits in a row, which the public-build guard blocks
+BUILD_ID="${GITHUB_SHA:-local}"; BUILD_ID="${BUILD_ID:0:7}"
+sed "s/__BUILD__/${BUILD_ID}/" dashboard/sw.js > _site/sw.js
 # the demo is the anonymised snapshot of a real run (Actions > Admin > build-demo writes it);
 # the made-up sample is only a fallback for a fresh copy of the project that hasn't built one yet
 if [ -s dashboard/demo-data.json ]; then cp dashboard/demo-data.json _site/; else python3 -m ping.sample _site/demo-data.json; fi

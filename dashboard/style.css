@@ -716,3 +716,11 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .kicker .pill, .fr-head .pill, .fr-meta .pill { align-self: center; }
 .nav a.on { font-weight: 700; }
 .nav a.on svg { background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 14px; margin: -2px -14px; box-sizing: content-box; }
+
+/* onboarding: the CV step's controls inside the bubble */
+.onb-q .onb-actions { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: var(--s2); }
+.onb-q .onb-upload { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.onb-q .onb-upload input#onb-cv-label { flex: 1 1 160px; min-width: 0; }
+.onb-q .onb-label { width: 100%; font-size: var(--t-sm); color: var(--muted); }
+.pcard.flash { animation: hl 1.6s ease-out; scroll-margin-top: 12px; }
+.msg .text .inline-link, .msg .text button.inline-link { font: inherit; }

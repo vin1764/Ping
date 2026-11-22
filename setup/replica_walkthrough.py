@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
-OUT = ROOT / "docs" / "screenshots" / "final"
+OUT = Path(os.environ.get("PING_SHOTS_OUT") or ROOT / "docs" / "screenshots" / "final")
 
 
 def main() -> int:
@@ -112,6 +112,7 @@ def main() -> int:
                 labels = chips.all_inner_texts()
                 if not labels:
                     break
+                page.screenshot(path=str(OUT / f"onb-{stepname}-390.png"))
                 want = next((l for l in labels if l.lower().startswith("skip")), labels[0]) \
                     if stepname in ("targets", "cv", "first_check") else labels[0]
                 chips.filter(has_text=want).first.click()

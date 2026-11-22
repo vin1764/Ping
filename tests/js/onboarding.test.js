@@ -46,8 +46,24 @@ test("targets go through Ask Ping, which saves them and answers 'Saved: ...'", (
   const a = ob.answer("targets", { text: "Data & analytics roles; not SDE" }, {});
   assert.equal(a.askPing, "my targets are Data & analytics roles; not SDE");
   assert.equal(a.next, "others");
+  // an example is one tap: it's sent as the answer (a dead-end before: it only filled the box)
   const q = ob.question("targets", {});
-  assert.ok(q.chips.some((c) => c.insert === "Product & consulting roles"), "chips insert text to edit");
+  const chip = q.chips.find((c) => c.label === "Product & consulting");
+  assert.equal(ob.answer("targets", { value: chip.value }, {}).askPing, "my targets are Product & consulting roles");
+});
+
+test("the demo: one tap to the feed, or walk through; typed answers work at every step", () => {
+  assert.deepEqual(ob.question("welcome", { demo: true }).chips.map((c) => c.label), ["Use the demo profile", "Walk me through it"]);
+  assert.equal(ob.answer("welcome", { value: "__demo" }, { demo: true }).useDemo, true);
+  assert.equal(ob.answer("welcome", { text: "walk me through it" }, { demo: true }).ctxPatch.walk, true);
+  assert.deepEqual(ob.question("welcome", { demo: true, walk: true }).chips.map((c) => c.label), ["Only what fits me", "Everything from the ERP", "Skip"]);
+  const cv = ob.question("cv", { demo: true });
+  assert.ok(cv.inline && !cv.upload && cv.chips[0].label === "Use the demo CVs");
+  assert.ok(ob.question("cv", {}).upload);
+  const typed = { others: "yes please", schedule: "every 2 hours", reminders: "4h", cv: "later", welcome: "everything", first_check: "ok" };
+  for (const [step, text] of Object.entries(typed)) assert.notEqual(ob.answer(step, { text }, {}).next, step, `${step}: "${text}"`);
+  assert.equal(ob.answer("reminders", { text: "a day before" }, {}).save.reminder_hours, 24);
+  assert.equal(ob.answer("cv", { text: "skip" }, {}).skipped, true);
 });
 
 test("'Everything from the ERP' skips the questions about targets, others and CVs", () => {

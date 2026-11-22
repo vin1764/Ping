@@ -955,7 +955,9 @@
       history.replaceState(null, "", "#chat");
     }
     const hash = location.hash.slice(1) || "chat";
-    const page = hash.startsWith("co-") ? "companies" : hash;
+    // "#profile/cvs": a page and a place on it (messages link straight to the card they mean)
+    const [base, sub] = hash.startsWith("co-") ? [hash] : hash.split("/");
+    const page = hash.startsWith("co-") ? "companies" : base;
     document.body.classList.toggle("chat-on", page === "chat");
     document.body.classList.toggle("today-on", page === "today");
     document.querySelectorAll("#nav a").forEach((a) => {
@@ -973,7 +975,7 @@
     if (hash === "today") return viewToday();
     if (hash === "companies") return viewCompanies();
     if (hash === "forms") return viewForms();
-    if (hash === "profile") return viewProfile();
+    if (base === "profile") { viewProfile(); if (sub) focusCard(sub); return; }
     if (state.onb) return viewOnboarding();
     return viewChat();
   }
@@ -986,40 +988,56 @@
     inner.append(h("div", { class: "day" }, o.resumed && !o.log.length ? "Welcome back: let's finish setting up" : "Getting started"));
     o.log.forEach((m, i) => inner.append(textBubble(m.role, m.text, m.at, i >= (o.shown || 0))));
     o.shown = o.log.length;
-    if (!o.done) inner.append(h("div", { class: "msg ping onb-q" }, q.lines.map((l) => h("p", {}, l)),
-      q.upload ? onbUpload() : null, h("span", { class: "time" }, clock(new Date()))));
+    // typing works at every step (a typed "yes", "every hour", "later" counts as tapping it)
     const input = h("input", { id: "onb-input", autocomplete: "off", maxlength: "300", enterkeyhint: "send",
-      placeholder: q.free || "Tap an answer above", "aria-label": q.free || "Answer", disabled: !q.free });
+      placeholder: q.free || "Tap an answer or type it", "aria-label": q.free || "Answer" });
+    const chip = (c) => h("button", { type: "button", class: `chip${c.primary ? " primary" : ""}`, onclick: () => {
+      if (c.insert) { input.value = c.insert; input.focus(); send.disabled = false; return; }
+      onbAnswer({ value: c.value }, c.label);
+    } }, c.label);
+    // the CV step: the upload control, Later and Skip are in the bubble itself
+    if (!o.done) inner.append(h("div", { class: "msg ping onb-q" }, q.lines.map((l) => h("p", {}, l)),
+      q.upload || q.inline ? h("div", { class: "onb-actions" }, q.upload ? onbUpload() : null, ...(q.inline ? q.chips.map(chip) : [])) : null,
+      h("span", { class: "time" }, clock(new Date()))));
     const chips = h("div", { class: "chips wrap", role: "group", "aria-label": "Quick replies" },
-      q.chips.map((c) => h("button", { type: "button", class: `chip${c.primary ? " primary" : ""}`, onclick: () => {
-        if (c.insert) { input.disabled = false; input.value = c.insert; input.focus(); return; }
-        onbAnswer({ value: c.value }, c.label);
-      } }, c.label)),
+      ...(q.inline ? [] : q.chips.map(chip)),
       o.step === "first_check" ? h("button", { type: "button", class: "chip primary", onclick: () => onbFinish() }, "Go to my feed") : null);
+    const send = sendButton(true);
+    input.addEventListener("input", () => { send.disabled = !input.value.trim(); });
     const form = h("form", { onsubmit: (ev) => { ev.preventDefault(); const t = input.value.trim(); if (t) onbAnswer({ text: t }, t); } },
-      input, sendButton(!q.free));
+      input, send);
     const thread = h("div", { class: "thread", id: "thread", role: "log", "aria-label": "Getting started", "aria-live": "polite" }, inner);
     mount(thread, h("div", { class: "composer" }, chips, form));
     requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
     if (o.step === "first_check" && !o.done) onbFirstCheck();
   }
 
+  // pick a PDF, name it (the label I use when I say which CV to apply with), save
   function onbUpload() {
+    const box = h("div", { class: "onb-upload" });
     const file = h("input", { type: "file", accept: "application/pdf", id: "onb-cv", class: "visually-hidden",
-      onchange: async () => {
+      onchange: () => {
         const f = file.files?.[0];
         if (!f) return;
         if (f.type !== "application/pdf" || f.size > 5 * 1024 * 1024) { onbSay("A PDF up to 5 MB, please."); return; }
-        try {
-          const { error } = await state.src.sb.storage.from("cvs").upload("cv1.pdf", f, { upsert: true, contentType: "application/pdf" });
-          if (error) throw new Error(error.message);
-          const cvs = [{ label: "CV 1", path: "cv1.pdf", uploaded_at: new Date().toISOString() }, ...((state.data.profile.cvs || []).slice(1))];
-          await state.src.saveOnboarding({ cvs, cv_names: cvs.map((c) => c.label) });
-          state.data.profile.cvs = cvs;
-          onbAnswer({ value: "uploaded" }, `Uploaded ${f.name}`);
-        } catch (e) { onbSay(`Couldn't upload it. ${plainly(e)}`); }
+        const label = h("input", { id: "onb-cv-label", maxlength: "40", value: f.name.replace(/\.pdf$/i, "").slice(0, 40), "aria-label": "Name this CV" });
+        const save = h("button", { type: "button", class: "btn small", onclick: async () => {
+          const name = label.value.trim() || "CV 1";
+          save.disabled = true; save.textContent = "Uploading…";
+          try {
+            const { error } = await state.src.sb.storage.from("cvs").upload("cv1.pdf", f, { upsert: true, contentType: "application/pdf" });
+            if (error) throw new Error(error.message);
+            const cvs = [{ label: name, path: "cv1.pdf", uploaded_at: new Date().toISOString() }, ...((state.data.profile.cvs || []).slice(1))];
+            await state.src.saveOnboarding({ cvs, cv_names: cvs.map((c) => c.label) });
+            state.data.profile.cvs = cvs;
+            onbAnswer({ value: "uploaded" }, `Uploaded ${f.name} as “${name}”`);
+          } catch (e) { save.disabled = false; save.textContent = "Save CV"; onbSay(`Couldn't upload it. ${plainly(e)}`); }
+        } }, "Save CV");
+        box.replaceChildren(h("label", { class: "onb-label", for: "onb-cv-label" }, `Name for ${f.name}`), label, save);
+        label.focus();
       } });
-    return h("label", { class: "btn upload", for: "onb-cv" }, "Upload a CV (PDF)", file);
+    box.append(h("label", { class: "btn small upload", for: "onb-cv" }, "Upload CV"), file);
+    return box;
   }
 
   function onbSay(text) { state.onb.log.push({ role: "ping", text, at: new Date().toISOString() }); viewOnboarding(); }
@@ -1044,8 +1062,10 @@
       } catch (e) { o.log.push({ role: "ping", text: "Couldn't save that just now. You can tell me later, any time.", at: new Date().toISOString() }); }
     }
     if (res.next === o.step && !res.ctxPatch) {
-      o.log.push({ role: "ping", text: "Sorry, I didn't get that. Tap one of the answers, or Skip.", at: new Date().toISOString() });
+      o.log.push({ role: "ping", text: "Sorry, I didn't get that. Tap one of the answers, type it another way, or Skip.", at: new Date().toISOString() });
     }
+    // after the CV step (uploaded, the demo's, later or skipped): where CVs live from now on, with a link there
+    if (o.step === "cv" && res.next !== "cv") o.log.push({ role: "ping", text: OB.CV_LATER, at: new Date().toISOString() });
     o.step = res.next;
     if (o.step === "first_check") o.since = Date.now();
     if (o.step === "done") return onbFinish();
@@ -1339,10 +1359,10 @@
         store.set("ping-push-ask", "yes");
         chips.replaceChildren();
         const r = await enablePush().catch((e) => ({ ok: false, why: plainly(e) }));
-        text.textContent = r.ok ? "Done: this phone gets a notification when something's for you. Profile > Notifications to send a test or turn it off."
-          : r.why === "blocked" ? "Your browser blocked notifications for Ping. You can allow them in its site settings, then turn them on in Profile."
+        text.replaceChildren(...placeLinks(r.ok ? "Done: this phone gets a notification when something's for you. Profile > Notifications to send a test or turn it off."
+          : r.why === "blocked" ? "Your browser blocked notifications for Ping. Allow them in this site's settings (the lock or ⓘ next to the address), then turn them on in Profile > Notifications."
           : r.why === "not now" ? "Notifications stay off for now. You can turn them on any time in Profile > Notifications."
-          : `Notifications didn't turn on. ${r.why} You can try again in Profile > Notifications.`;
+          : `Notifications didn't turn on. ${r.why} You can try again in Profile > Notifications.`));
       } }, "Yes"),
       h("button", { type: "button", class: "chip", onclick: () => { store.set("ping-push-ask", "not now"); bubble.remove(); } }, "Not now"));
     const bubble = h("div", { class: "msg ping sys push-ask enter", role: "group", "aria-label": "Notifications" },
@@ -1407,18 +1427,45 @@
   function navUnread(n) { const d = $("#nav-unread"); if (!d) return; d.textContent = n > 99 ? "99+" : String(n); d.hidden = !n;
     d.parentElement.setAttribute("aria-label", n ? `Chat, ${n} new` : "Chat"); }
 
+  // A place in the app named in a message is a link to it, and "Check now" is the button itself: "Profile >
+  // Notifications", "the Profile page (My CVs)", "in Profile", "the Forms tab", "the Today panel", "Check now".
+  const CARD = { "about you": "about", "targets": "looking", "what i'm looking for": "looking", "interested / not interested companies": "looking",
+    "feed": "looking", "other roles": "looking", "my cvs": "cvs", "cvs": "cvs", "schedule & reminders": "schedule", "notifications": "push",
+    "install ping": "install", "account": "account" };
+  const PLACE_RE = new RegExp(["Profile\\s*(?:→|›|>)\\s*(About you|Targets|What I'm looking for|Interested / Not interested companies|Feed|Other roles|My CVs|CVs|Schedule & reminders|Notifications|Install Ping|Account)",
+    "(?:the )?Profile page(?: \\((My CVs)\\))?", "\\bin Profile\\b", "(?:the )?Forms tab", "(?:the )?Today (?:tab|panel)", "(?:the )?Companies (?:tab|page)", "\\bCheck now\\b"].join("|"), "g");
+  function placeLinks(str) {
+    const out = [];
+    let last = 0, m;
+    PLACE_RE.lastIndex = 0;
+    while ((m = PLACE_RE.exec(str))) {
+      if (m.index > last) out.push(str.slice(last, m.index));
+      const t = m[0];
+      if (/^Check now$/.test(t)) out.push(h("button", { type: "button", class: "linklike inline-link", "data-check-now": true, onclick: () => checkNow() }, t));
+      else {
+        const href = m[1] ? `#profile/${CARD[m[1].toLowerCase()]}` : m[2] ? "#profile/cvs" : /Profile/.test(t) ? "#profile"
+          : /Forms/.test(t) ? "#forms" : /Today/.test(t) ? "#today" : "#companies";
+        out.push(h("a", { href, class: "inline-link" }, t));
+      }
+      last = PLACE_RE.lastIndex;
+    }
+    if (last < str.length) out.push(str.slice(last));
+    return out;
+  }
+
   // Ping's answers as rich text: "- " lines become a list, **bold** bold, [Open list](https://…) a link (opens in the
   // browser), and an "ERP data from 12:41 (…)" line gets a Check now button. Never literal ** or "- " in a bubble.
   function richText(text) {
     const inline = (str) => {
-      const parts = [], re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*/g;
+      const parts = [], re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|#[a-z][\w/-]*)\)|\*\*([^*]+)\*\*/g;
       let last = 0, m;
       while ((m = re.exec(str))) {
-        if (m.index > last) parts.push(str.slice(last, m.index));
-        parts.push(m[1] ? h("a", { href: m[2], target: "_blank", rel: "noopener", class: "inline-link" }, m[1]) : h("strong", {}, m[3]));
+        if (m.index > last) parts.push(...placeLinks(str.slice(last, m.index)));
+        parts.push(m[1] ? (m[2].startsWith("#") ? h("a", { href: m[2], class: "inline-link" }, m[1])
+          : h("a", { href: m[2], target: "_blank", rel: "noopener", class: "inline-link" }, m[1])) : h("strong", {}, m[3]));
         last = re.lastIndex;
       }
-      if (last < str.length) parts.push(str.slice(last));
+      if (last < str.length) parts.push(...placeLinks(str.slice(last)));
       return parts;
     };
     const out = [];
@@ -1670,6 +1717,13 @@
   const shortTime = (v) => { const d = dt(v); const k = istDay(d);
     return k === istDay(nowDate()) ? clock(v) : `${d.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" })} ${clock(v)}`; };
 
+  // the attached list of a notice whose verdict asks you to look yourself (not found / not read reliably)
+  function listLink(it) {
+    const d = it.details || {}, st = d.pdf?.status || it.pdf_status;
+    if (!it.notice_id || !(st === "no" || st === "unknown") || !/check (the list|it) yourself|couldn't read/i.test(it.title || "")) return null;
+    const year = String(d.notice_key || "").replace(/^sample:/, "").split(":")[0];
+    return year ? `https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=${encodeURIComponent(year)}&id=${it.notice_id}` : null;
+  }
   function itemBubble(it, at) {
     const past = isPast(it);
     const kind = msgKind(it), d = it.details || {};
@@ -1701,6 +1755,9 @@
       listBlock(it),
       mlink && !past ? h("div", { class: "mail-link" }, h("a", { href: mlink, target: "_blank", rel: "noopener",
         onclick: (ev) => ev.stopPropagation() }, linkText(mlink))) : null,
+      // "check the list yourself" / "couldn't read it": the list itself, right there (opens the ERP in the browser)
+      listLink(it) ? h("div", { class: "mail-link" }, h("a", { href: listLink(it), target: "_blank", rel: "noopener",
+        onclick: (ev) => ev.stopPropagation() }, "Open list ↗")) : null,
       h("div", { class: "foot" }, h("span", { class: "expand" }, open ? "Less ▴" : "Details ▾"), h("span", { class: "time" }, clock(at))));
     const toggle = (ev) => {
       if (ev.target.closest("a, button, .more, summary, details")) return;
@@ -1772,8 +1829,8 @@
     if (!gaps.length || state.src?.kind === "demo") return null;
     const what = gaps.length === 1 ? gaps[0] : `${gaps.slice(0, -1).join(", ")} and ${gaps[gaps.length - 1]}`;
     return h("div", { class: "msg ping sys profile-gap", role: "note" },
-      h("span", { class: "text" }, `Add your ${what} in Profile and I'll check what you're eligible for.`),
-      h("a", { class: "linklike", href: "#profile" }, "Open Profile"));
+      h("span", { class: "text" }, `Add your ${what} and I'll check what you're eligible for.`),
+      h("a", { class: "act-btn small", href: "#profile/about" }, "Open Profile"));
   }
   function profileDot() {
     const a = document.querySelector('#nav a[data-route="profile"]');
@@ -2442,7 +2499,13 @@
       const limit = state.roleLimit || 60;
       count.textContent = `${shown.length} role${shown.length === 1 ? "" : "s"} · ${new Set(shown.map((r) => r.company)).size} companies`;
       out.replaceChildren(...(shown.length ? shown.slice(0, limit).map(roleRow)
-        : [h("p", { class: "empty" }, q ? `No roles match “${state.companyQuery}”. Try All.` : "Nothing here right now. Try All.")]),
+        : [h("p", { class: "empty" }, q ? `No roles match “${state.companyQuery}”. ` : "Nothing here right now. ",
+            // the way out, right there: clear the search / show every role
+            h("button", { type: "button", class: "linklike", onclick: () => {
+              if (q) { state.companyQuery = ""; const box = $("#company-search"); if (box) box.value = ""; }
+              else state.roleFilter = "all";
+              draw();
+            } }, q ? "Clear the search" : "Show all roles"))]),
         shown.length > limit ? h("button", { type: "button", class: "btn ghost", onclick: () => { state.roleLimit = limit + 100; draw(); } },
           `Show ${Math.min(100, shown.length - limit)} more`) : null);
     }
@@ -2750,6 +2813,16 @@
   }
   const everyText = (m) => (Number(m) === 30 ? "Every 30 minutes" : Number(m) === 120 ? "Every 2 hours" : "Every hour");
 
+  // a card on Profile, scrolled to and flashed ("Profile › My CVs" in a message opens it there)
+  function focusCard(key) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`pc-${key}`);
+      if (!el) return;
+      el.scrollIntoView({ block: "start", behavior: motion() });
+      el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    });
+  }
+
   function viewProfile() {
     const p = profileValues();
     const demo = !!state.src.demo || state.src.kind === "demo";
@@ -2840,7 +2913,7 @@
       { note: "You can also just tell Ping in the chat: \"only show me finance roles\", \"also include data roles\"." });
 
     const cvs = h("section", { class: "card pcard", id: "pc-cvs", "aria-labelledby": "pc-cvs-h" },
-      h("div", { class: "pcard-head" }, h("h2", { id: "pc-cvs-h" }, "CVs")), cvBlock(p));
+      h("div", { class: "pcard-head" }, h("h2", { id: "pc-cvs-h" }, "My CVs")), cvBlock(p));
 
     const sched = card("schedule", "Schedule & reminders",
       kv([["Checks the ERP", everyText(p.check_every_minutes)], ["Between", `${p.check_from || "06:00"} and ${p.check_to || "01:00"} IST`],
@@ -2904,7 +2977,8 @@
           } else { status.textContent = " Choose a PDF."; return; }
           await state.src.saveProfile({ cvs: next.filter(Boolean), cv_names: next.filter(Boolean).map((x) => x.label) });
           p.cvs = next.filter(Boolean);
-          status.textContent = " Saved. Ping reads it on the next check (Account > Check now) and then says which CV to apply with.";
+          status.replaceChildren(" Saved. Ping reads it on the next check and then says which CV to apply with. ",
+            h("button", { type: "button", class: "linklike", "data-check-now": true, onclick: () => checkNow() }, "Check now"));
         } catch (e) { status.textContent = ` Couldn't upload it. ${plainly(e)}`; }
       } }, c.path ? "Replace" : "Upload");
       return h("div", { class: "cv-slot" }, label, demo ? null : file, demo ? null : upload,

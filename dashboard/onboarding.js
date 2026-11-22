@@ -42,12 +42,19 @@
     const skip = { label: "Skip", value: "__skip" };
     switch (step) {
       case "welcome":
-        return {
+        // the demo: straight to the feed in one tap, or the questions a student gets
+        if (ctx.demo && !ctx.walk) return {
           lines: ["Hi, I'm Ping. Every hour I read your placement ERP (companies, notices and the PDFs that name you) and tell you only what's about you.",
+                  "This is a demo with a made-up student. Jump straight to the feed, or see how a student sets me up?"],
+          chips: [{ label: "Use the demo profile", value: "__demo", primary: true }, { label: "Walk me through it", value: "__walk" }],
+          free: null,
+        };
+        return {
+          lines: [ctx.walk ? "Here's what a student answers the first time (in the demo nothing is saved to anyone's profile)."
+                           : "Hi, I'm Ping. Every hour I read your placement ERP (companies, notices and the PDFs that name you) and tell you only what's about you.",
                   "I only read: I never apply, submit or change anything on the ERP.",
                   "How do you want your feed?"],
-          chips: [...(ctx.demo ? [{ label: "Use the demo profile", value: "__demo", primary: true }] : []),
-                  { label: "Only what fits me", value: "personal" }, { label: "Everything from the ERP", value: "all" }, skip],
+          chips: [{ label: "Only what fits me", value: "personal" }, { label: "Everything from the ERP", value: "all" }, skip],
           free: null,
         };
       case "education":
@@ -59,17 +66,20 @@
         };
       case "targets":
         return {
-          lines: ["What are you looking for? Tap an example to start, then edit it and send."],
-          chips: [...TARGET_EXAMPLES.map((t) => ({ label: t, insert: `${t} roles` })), skip],
+          lines: ["What are you looking for? Tap one, or type it in your own words."],
+          chips: [...TARGET_EXAMPLES.map((t) => ({ label: t, value: `${t} roles` })), skip],
           free: "In your own words: the roles you want, and any you don't",
         };
       case "others":
         return { lines: ["Want the other roles listed separately, so you don't miss anything?"],
                  chips: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }, skip], free: null };
       case "cv":
-        return { lines: [ctx.demo ? "Upload a CV so I can suggest which one to apply with? (The demo student already has three made-up CVs.)"
+        // the upload control, Later and Skip sit in the bubble itself (inline); the demo uses its made-up CVs
+        return { lines: [ctx.demo ? "Pick the CV I should suggest roles from? The demo student has three made-up CVs ready."
                                   : "Upload a CV so I can suggest which one to apply with? PDF, up to 5 MB; only you can see it."],
-                 chips: [{ label: "Later", value: "later" }, skip], free: null, upload: !ctx.demo };
+                 chips: [...(ctx.demo ? [{ label: "Use the demo CVs", value: "democvs", primary: true }] : []),
+                         { label: "Later", value: "later" }, skip],
+                 free: null, upload: !ctx.demo, inline: true };
       case "schedule":
         return { lines: ["How often should I check the ERP?"],
                  chips: [{ label: "Every hour", value: "60" }, { label: "Every 2 hours", value: "120" },
@@ -92,6 +102,32 @@
     }
   }
 
+  // a typed answer -> the chip it means ("yes", "every hour", "2h", "day before", "later", "demo"…), or null
+  function typedChoice(step, text, ctx) {
+    const t = String(text || "").toLowerCase().replace(/[^a-z0-9: ]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!t) return null;
+    if (/^(skip|skip it|no thanks|not now|pass|nah)$/.test(t)) return "__skip";
+    if (step === "welcome") {
+      if (ctx.demo && !ctx.walk) return /demo|use|jump|feed|quick|go/.test(t) ? "__demo" : /walk|set ?up|show|how|through/.test(t) ? "__walk" : null;
+      return /everything|all|every thing|dont filter|don t filter/.test(t) ? "all" : /fit|me|personal|only|mine|filter/.test(t) ? "personal" : null;
+    }
+    if (step === "others") return /^(y|yes|yeah|yep|sure|ok|okay|list them|please)\b/.test(t) ? "yes" : /^(n|no|nope|don t|dont)\b/.test(t) ? "no" : null;
+    if (step === "cv") return /later|not now|after/.test(t) ? "later" : ctx.demo && /demo|use|yes/.test(t) ? "democvs" : null;
+    if (step === "schedule") {
+      if (/\b30\b|half/.test(t)) return "30";
+      if (/\b(2|two)\s*(h|hr|hrs|hour|hours)\b|\b120\b/.test(t)) return "120";
+      if (/\b(1|one|an|every)\s*(h|hr|hour)\b|hourly|\b60\b|^hour$|every hour/.test(t)) return "60";
+      return null;
+    }
+    if (step === "reminders") {
+      if (/day|24/.test(t)) return "24";
+      const m = /(?:^|\D)(1|2|4|one|two|four)(?:\D|$)/.exec(t);
+      return m ? { one: "1", two: "2", four: "4" }[m[1]] || m[1] : null;
+    }
+    if (step === "first_check") return "__go";
+    return null;
+  }
+
   const hhmm = (h, m) => `${String(Number(h) % 24).padStart(2, "0")}:${m || "00"}`;
 
   // an answer -> what to save and where to go. input: {value} from a chip, {text} typed, or {skip: true}
@@ -104,9 +140,16 @@
       return Object.assign({ save: Object.assign({}, save, { onboarding_step: n }), next: n }, extra || {});
     };
     if ((input && input.skip) || v === "__skip") return go({}, { skipped: true });
+    // typed answers work at every step: a typed word that names one of the answers counts as tapping it
+    if (text && !v) {
+      const m = typedChoice(step, text, ctx);
+      if (m === "__skip") return go({}, { skipped: true });
+      if (m) return answer(step, { value: m }, ctx);
+    }
     switch (step) {
       case "welcome":
         if (v === "__demo") return { save: { onboarding_step: "done" }, next: "done", useDemo: true };
+        if (v === "__walk") return { save: {}, next: step, ctxPatch: { walk: true } };
         if (v === "personal" || v === "all") return go({ feed_mode: v });
         if (text) return go({ feed_mode: /everything|all|don'?t filter/i.test(text) ? "all" : "personal" });
         return { save: {}, next: step };
@@ -126,13 +169,13 @@
       }
       case "targets":
         // saved through Ask Ping ("my targets are ..."): it marks the roles and answers with one "Saved: ..." line
-        if (text) return go({}, { askPing: `my targets are ${text}` });
+        if (text || v) return go({}, { askPing: `my targets are ${text || v}` });
         return { save: {}, next: step };
       case "others":
         if (v === "yes" || v === "no") return go({ list_other_roles: v === "yes" });
         return { save: {}, next: step };
       case "cv":
-        if (v === "later" || v === "uploaded") return go({});
+        if (v === "later" || v === "uploaded" || v === "democvs") return go({}, { cvDone: v });
         return { save: {}, next: step };
       case "schedule":
         if (["30", "60", "120"].includes(v)) return go({ check_every_minutes: Number(v) });
@@ -167,7 +210,10 @@
     "• Shortlists, tests and room lists that name you get their own message, with the time.",
     "Want something different? Just tell me, e.g. \"check every 30 minutes\", \"remind me 4 hours before\" or \"only show me finance roles\"."];
 
-  const api = { ORDER, next, shouldRun, startStep, question, answer, DEMO_DONE, CLOSING, DEGREES, TARGET_EXAMPLES };
+  // where CVs live afterwards, said once after the CV step (a link that opens that card)
+  const CV_LATER = "You can change these anytime in [Profile › My CVs](#profile/cvs).";
+
+  const api = { ORDER, next, shouldRun, startStep, question, answer, typedChoice, DEMO_DONE, CLOSING, CV_LATER, DEGREES, TARGET_EXAMPLES };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingOnboarding = api;
 })(typeof window !== "undefined" ? window : globalThis);

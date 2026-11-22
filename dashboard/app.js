@@ -901,7 +901,7 @@
     let group = null, lastDay = null, divider = null;
     const snapshot = state.asOf && h("p", { class: "note-line snapshot" }, "Demo: " +
       `an anonymised snapshot of a real run, shown as it was on ${when(state.asOf)}. Fake roll number, name and CGPA; ` +
-      "other students and all mail removed.");
+      "other students and all real mail removed (the 4 mails marked \u201cvia email\u201d are made-up samples).");
     if (!entries.length) inner.append(h("p", { class: "empty" }, "No messages yet. Ping posts here after its first check (about 10 minutes)."));
     for (const e of entries) {
       const day = dayLabel(e.at);
@@ -1223,8 +1223,8 @@
     // a form / test / meeting link from the mail right on the message
     const viaMail = d.via === "email", mailed = !viaMail && d.mail?.note;
     const mlink = viaMail ? d.mail?.link || d.todo?.link : mailed ? d.mail?.link : null;
-    const linkText = (u) => /forms\.gle|docs\.google\.com\/forms|forms\.office|typeform|jotform/i.test(u) ? "Open form ↗"
-      : /meet\.google|zoom\.us|teams\.microsoft|webex/i.test(u) ? "Join ↗" : /hackerrank|hackerearth|mettl|codility|test|assess/i.test(u) ? "Open test ↗" : "Open link ↗";
+    const linkText = (u) => /forms\.gle|docs\.google\.com\/forms|forms\.office|typeform|jotform|\/forms\//i.test(u) ? "Open form ↗"
+      : /meet\.google|zoom\.us|teams\.microsoft|webex|\/interview\//i.test(u) ? "Join ↗" : /hackerrank|hackerearth|mettl|codility|test|assess/i.test(u) ? "Open test ↗" : "Open link ↗";
     const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
       tabindex: "0", "aria-expanded": String(open), "data-kind": kind, "data-key": `item:${it.id}`, "data-sig": itemSig(it) },
       h("div", { class: "kicker" }, h("span", { class: "k" }, label),

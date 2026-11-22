@@ -1,7 +1,7 @@
 {
  "about": "Ask Ping evals: questions against the anonymised demo data (what the one-click demo shows), each with deterministic checks. Expected values were written by reading dashboard/demo-data.json, not by running the model.",
  "snapshot_as_of": "2026-11-21T17:32:18+05:30",
- "demo_data_sha256": "beb2fd7b713df5583edc5862178fb38d4de51b1febf1d070e9c47fedc28c9d9e",
+ "demo_data_sha256": "c7baf7d9635ca8891ecda5c5d9f3f77cfb438dd427cdb76a4b3bcd7a7a14b34f",
  "check_rules": {
   "must_contain": "every entry must appear in the answer (case-insensitive); an entry 'a|b|c' passes if any alternative appears",
   "must_not_contain": "no entry may appear (case-insensitive)",
@@ -1027,6 +1027,53 @@
     ]
    },
    "why": "How often it checks and how to change it."
+  },
+  {
+   "id": "ML1",
+   "category": "placement mail (demo sample mails)",
+   "question": "any mails for axon developers?",
+   "checks": {
+    "must_contain": [
+     "fill the form",
+     "via email",
+     "https://example.com/forms/ping-demo-details"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "The demo's sample form mail: its message with the link."
+  },
+  {
+   "id": "ML2",
+   "category": "placement mail (demo sample mails)",
+   "question": "did I get a test link for accenture japan",
+   "checks": {
+    "must_contain": [
+     "online test",
+     "https://assess.example.com/test/ping-demo"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "The demo's sample test-link mail."
+  },
+  {
+   "id": "ML3",
+   "category": "placement mail (demo sample mails)",
+   "question": "what's due from mail",
+   "checks": {
+    "must_contain": [
+     "Due from your mail",
+     "Axon",
+     "Accenture Japan"
+    ],
+    "must_not_contain": [
+     "I don't have any information"
+    ]
+   },
+   "why": "Mail-only deadlines, soonest first."
   }
  ],
  "check_changes": [

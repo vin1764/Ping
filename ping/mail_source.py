@@ -62,7 +62,7 @@ WEAK = re.compile(r"\bforms?\b|deadline|\boffer\b|registration|last date|\bdue\b
 CONTEXT = re.compile(r"intern(?:ship)?|\bjob\b|\broles?\b|hiring|campus|\bcv\b|resume|candidate|"
                      r"selection|recruit|\bdrive\b|\bctc\b|stipend|profile", re.I)
 
-FORM_LINK = re.compile(r"forms\.gle|docs\.google\.com/forms|forms\.office\.com|forms\.microsoft|typeform\.com|"
+FORM_LINK = re.compile(r"forms\.gle|/forms/|docs\.google\.com/forms|forms\.office\.com|forms\.microsoft|typeform\.com|"
                        r"jotform|zoho\.\w+/forms|airtable\.com/shr", re.I)
 TEST_LINK = re.compile(r"|".join(TEST_PLATFORMS) + r"|/test|/assess|assessment|/exam|quiz", re.I)
 MEET_LINK = re.compile(r"meet\.google\.com|zoom\.us|teams\.microsoft|webex", re.I)

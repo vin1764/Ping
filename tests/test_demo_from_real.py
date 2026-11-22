@@ -99,3 +99,29 @@ def test_banned_word_is_replaced_and_fails_the_build():
     out = scrub(f"gut {w}, {w.capitalize()}s and {w}ive calls")
     assert w not in out.lower() and out == "gut intuition, Intuitions and intuitive calls"
     assert final_check({"x": f"an automation {w}"}) and not final_check({"x": out})
+
+
+def test_the_demo_gets_four_made_up_mails_via_email_and_passes_the_checks():
+    """The real mailbox never goes into the demo; four made-up sample mails do, through the same feed code."""
+    import json
+    import sys
+    from datetime import datetime, timedelta
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evals" / "mail"))
+    from fixture import ROLES
+    from ping.config import IST
+    from ping.demo_from_real import build_from_store
+    from ping.store import MemoryStore
+    st = MemoryStore()
+    now = datetime.now(IST)
+    roles = [{**r, "apply_end": (now + timedelta(days=2)).isoformat()} for r in ROLES]
+    st.upsert("profile", [{"id": 1, "roll": "21QQ30001", "name": "Real Person", "cgpa": 9.1}])
+    st.upsert("roles", roles)
+    st.upsert("emails", [{"id": "real", "subject": "a real mail", "sender": "x <hr@realco.in>", "rules_version": 1}])
+    data = build_from_store(st, "21QQ30001", "real.person@inst.ac.in")
+    mail = [it for it in data["items"] if (it.get("details") or {}).get("via") == "email"]
+    assert len(mail) == 4 and all(it["level"] != "hidden" for it in mail)
+    assert {it["category"] for it in mail} == {"todo", "test", "info"}
+    assert len(data["emails"]) == 4 and all(e["is_sample"] and e["id"].startswith("sample:") for e in data["emails"])
+    assert "a real mail" not in json.dumps(data) and "realco" not in json.dumps(data)
+    assert verify(data, "21QQ30001", "real.person@inst.ac.in", "Real Person") == []

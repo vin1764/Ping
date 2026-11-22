@@ -7,7 +7,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check]
+        options: [apply-sql, build-demo, gemini-check, functions-check, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -50,7 +50,8 @@ jobs:
           ERP_SECQ_1: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_1 || '' }}
           ERP_SECQ_2: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_2 || '' }}
           ERP_SECQ_3: ${{ inputs.task == 'log-scan' && secrets.ERP_SECQ_3 || '' }}
-          MAIL_APP_PASSWORD: ${{ inputs.task == 'log-scan' && secrets.MAIL_APP_PASSWORD || '' }}
+          # log-scan: to search the logs for it; mail-coverage: reads the mailbox read-only (headers, then placement mail)
+          MAIL_APP_PASSWORD: ${{ (inputs.task == 'log-scan' || inputs.task == 'mail-coverage') && secrets.MAIL_APP_PASSWORD || '' }}
           # the live Gemini key only to search the logs for it; Admin never calls Gemini with it
           GEMINI_API_KEY_LIVE: ${{ inputs.task == 'log-scan' && secrets.GEMINI_API_KEY || '' }}
           PING_GITHUB_TOKEN: ${{ inputs.task == 'log-scan' && secrets.PING_GITHUB_TOKEN || '' }}
@@ -58,7 +59,7 @@ jobs:
         run: |
           python -m ping.admin "$TASK"
       - name: Save the demo data
-        if: inputs.task == 'build-demo' || inputs.task == 'demo-refeed' || inputs.task == 'demo-jd'
+        if: inputs.task == 'build-demo' || inputs.task == 'demo-refeed' || inputs.task == 'demo-jd' || inputs.task == 'demo-mails'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

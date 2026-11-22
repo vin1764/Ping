@@ -189,7 +189,83 @@ def _fake_row(header: list | None, row: list | None) -> list | None:
     return out
 
 
-def _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll):
+def sample_mails(roles: list[dict], now: datetime) -> list[dict]:
+    """Four made-up placement mails for the demo (the real mailbox never goes into it), so View demo shows how mail
+    looks: a form with a deadline, a test link to complete by a time, an interview slot, a placement-office note.
+    Companies are ones on the snapshot's list; senders and links are example.com; nothing comes from a real mail."""
+    from datetime import timedelta
+    from .mail_source import RULES_VERSION
+    open_roles = sorted({r["company"] for r in roles if not r.get("applied") and r.get("apply_end")
+                         and str(r["apply_end"]) > now.isoformat()})
+    applied = sorted({r["company"] for r in roles if r.get("applied")})
+    pool = open_roles + [c for c in applied if c not in open_roles] + sorted({r["company"] for r in roles})
+    picks, firsts = [], set()
+    for c in dict.fromkeys(pool):                  # three different companies ("Accenture Japan" and "Accenture
+        first = (c.split() or [""])[0].lower()     # Solutions" would read as one)
+        if first not in firsts:
+            picks.append(c)
+            firsts.add(first)
+        if len(picks) == 3:
+            break
+    while len(picks) < 3:
+        picks.append(f"Sample Company {len(picks) + 1}")
+    at = lambda h: (now - timedelta(hours=h)).isoformat()  # noqa: E731
+    day = lambda d, hh, mm=0: (now + timedelta(days=d)).replace(hour=hh, minute=mm, second=0, microsecond=0).isoformat()  # noqa: E731
+    rows = [
+        {"id": "demo-mail-1", "received_at": at(5), "sender": "Campus Hiring <campus@example.com>", "company": picks[0],
+         "subject": f"{picks[0]}: fill the candidate details form", "kind": "form",
+         "snippet": "Please fill the candidate details form before the assessment.",
+         "links": ["https://example.com/forms/ping-demo-details"], "main_link": "https://example.com/forms/ping-demo-details",
+         "due_at": day(5, 17), "event_at": None, "when_text": "Deadline: 5:00 PM", "pdf": None,
+         "kept_because": "company", "rules_version": RULES_VERSION},
+        {"id": "demo-mail-2", "received_at": at(4), "sender": "Assessments <invites@assess.example.com>", "company": picks[1],
+         "subject": f"Invitation: {picks[1]} online assessment", "kind": "test",
+         "snippet": "You have been invited to the online assessment. Complete it before the deadline.",
+         "links": ["https://assess.example.com/test/ping-demo"], "main_link": "https://assess.example.com/test/ping-demo",
+         "due_at": day(6, 23, 59), "event_at": None, "when_text": "Complete it by 11:59 PM", "pdf": None,
+         "kept_because": "company:assessment", "rules_version": RULES_VERSION},
+        {"id": "demo-mail-3", "received_at": at(3), "sender": "Talent Team <talent@example.com>", "company": picks[2],
+         "subject": f"Interview schedule - {picks[2]}", "kind": "interview",
+         "snippet": "Your interview slot is confirmed. The joining link is below.",
+         "links": ["https://example.com/interview/ping-demo"], "main_link": "https://example.com/interview/ping-demo",
+         "due_at": None, "event_at": day(3, 11), "when_text": "11:00 AM", "pdf": None,
+         "kept_because": "company:interview", "rules_version": RULES_VERSION},
+        {"id": "demo-mail-4", "received_at": at(2), "sender": "Placement Office <placement-office@example.com>", "company": None,
+         "subject": "Placement season: dress code and reporting guidelines", "kind": "announcement",
+         "snippet": "Please read the reporting guidelines for test days.", "links": [], "main_link": None,
+         "due_at": None, "event_at": None, "when_text": None, "pdf": None,
+         "kept_because": "placement_office", "rules_version": RULES_VERSION},
+    ]
+    return [{**r, "is_sample": True} for r in rows]
+
+
+def add_sample_mails(data: dict) -> dict:
+    """The four sample mails added to an existing snapshot (demo-data.json), at its own time, without rebuilding it
+    from real data: the same feed code makes their messages. Idempotent: earlier sample mails are replaced."""
+    from .eligibility import evaluate
+    from .items import _mail_item, open_for_me_at
+    from .matching import CompanyIndex
+    now = datetime.fromisoformat(data["generated_at"])
+    roles = data["roles"]
+    profile = data["profile"]
+    mails = sample_mails(roles, now)
+    index = CompanyIndex(roles)
+    elig = {r["id"]: evaluate(r, profile) for r in roles}
+    items = [it for it in data["items"] if (it.get("details") or {}).get("via") != "email"]
+    for m in mails:
+        it = _mail_item(m, roles, elig, profile, now, index, open_for_me_at(roles, elig, profile, now))
+        it.update({"id": _prefix(it["id"]), "is_sample": True, "dismissed": False, "done": False,
+                   "first_seen": m["received_at"], "role_ids": [_prefix(x) for x in it.get("role_ids") or []]})
+        items.append(it)
+    data["items"] = items
+    data["emails"] = [{**m, "id": _prefix(m["id"])} for m in mails]
+    data["about"] = ("Anonymised snapshot of a real Ping run: real companies, roles, pay, deadlines and notice "
+                     "wording; fake roll number, name and CGPA; other students' details and all real mail removed (the 4 "
+                     "mails shown are made-up samples).")
+    return data
+
+
+def _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll, emails=None):
     """Rebuild the feed with today's rules (same code as the hourly run), keeping when each
     message was first posted so the chat reads in the right order."""
     from datetime import timedelta
@@ -206,7 +282,7 @@ def _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll):
         if (n.get("analysis") or {}).get("method") != "ai" and (n.get("text") or n.get("preview")):
             n["analysis"] = analyze(n, n.get("text") or n.get("preview"), index, real_roll, profile.get("name") or "")
     items = build_items(roles, [n for n in notices if n.get("analysis")], {c["notice_id"]: c for c in checks},
-                        profile, now)
+                        profile, now, emails or [])
     starts = {r["id"]: r.get("apply_start") for r in roles}
     for it in items:
         old = stored_items.get(it["id"]) or {}
@@ -235,7 +311,9 @@ def build_from_store(store, real_roll: str, mail: str) -> dict:
     notices = store.select("notices", REAL)
     checks = store.select("pdf_checks", REAL)
     stored_items = {i["id"]: i for i in store.select("items", REAL)}
-    items = _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll)
+    # the real mailbox never goes into the demo: four made-up sample mails do, through the same feed code
+    emails = sample_mails(roles, datetime.now(IST))
+    items = _fresh_items(roles, notices, checks, real_profile, stored_items, real_roll, emails)
     runs = sorted(store.select("runs", REAL), key=lambda r: r.get("started_at") or "", reverse=True)[:1]
 
     for r in roles:
@@ -257,7 +335,9 @@ def build_from_store(store, real_roll: str, mail: str) -> dict:
         for k in ("notice_key", "update_of", "updated_by"):
             if d.get(k):
                 d[k] = _prefix(d[k])
-        d.pop("mail_links", None)
+        if d.get("via") != "email":            # the sample mails' links are example.com; real mail links never come
+            d.pop("mail_links", None)
+            d.pop("mail", None)
         d["contacts"] = []
         if isinstance(d.get("pdf"), dict):
             d["pdf"]["my_row"] = _fake_row(d["pdf"].get("header"), d["pdf"].get("my_row"))
@@ -279,12 +359,13 @@ def build_from_store(store, real_roll: str, mail: str) -> dict:
         "notice_types": real_profile.get("notice_types") or ["PLACEMENT"], "is_sample": True,
     }
     data = {"profile": profile, "roles": roles, "notices": notices, "pdf_checks": checks, "items": items,
-            "emails": [], "contacts": [], "runs": run}
+            "emails": [{**e, "id": _prefix(e["id"])} for e in emails], "contacts": [], "runs": run}
     data = Scrubber(real_roll, real_name, mail).walk(data)
     data["generated_at"] = datetime.now(IST).isoformat()
     data["profile"]["updated_at"] = data["generated_at"]  # a demo session reads the snapshot time from here
     data["about"] = ("Anonymised snapshot of a real Ping run: real companies, roles, pay, deadlines and notice "
-                     "wording; fake roll number, name and CGPA; other students' details and all mail removed.")
+                     "wording; fake roll number, name and CGPA; other students' details and all real mail removed (the 4 "
+                     "mails shown are made-up samples).")
     return data
 
 
@@ -343,9 +424,23 @@ def load_to_db(store, data: dict) -> dict:
     # the demo's "now": a demo session reads the snapshot time from the profile's updated_at
     store.upsert("profile", [{**data["profile"], "updated_at": data["profile"].get("updated_at") or data["generated_at"]}])
     for table, key in (("roles", "id"), ("notices", "id"), ("pdf_checks", "notice_id"), ("items", "id"),
-                       ("runs", "id")):
-        rows = data[table]
+                       ("runs", "id"), ("emails", "id")):
+        rows = data.get(table) or []
         if rows:
             store.upsert(table, rows, key=key)
         counts[table] = len(rows)
     return counts
+
+
+if __name__ == "__main__":
+    # python -m ping.demo_from_real add-mails   (adds the 4 sample mails to dashboard/demo-data.json, checked)
+    import sys
+    from pathlib import Path
+    if sys.argv[1:] == ["add-mails"]:
+        path = Path(__file__).resolve().parents[1] / "dashboard" / "demo-data.json"
+        data = add_sample_mails(json.loads(path.read_text(encoding="utf-8")))
+        problems = final_check(data)
+        if problems:
+            sys.exit("NOT written: " + "; ".join(problems))
+        path.write_text(json.dumps(data, default=str, ensure_ascii=False), encoding="utf-8")
+        print(f"added {len(data['emails'])} sample mails; check passed")

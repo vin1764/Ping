@@ -424,6 +424,13 @@ def _mail_item(m: dict, roles: list[dict], elig: dict, profile: dict, now: datet
             "title": clip(title), "details": details, "sort_at": m.get("received_at")}
 
 
+def open_for_me_at(roles, elig, profile, now):
+    """open_for_me outside build_items (the demo's sample mails): eligible, not applied, deadline ahead."""
+    not_int = profile.get("not_interested_companies") or []
+    return lambda r: (not r.get("applied") and elig[r["id"]]["eligible"] is not False and _dt(r.get("apply_end")) is not None
+                      and _dt(r.get("apply_end")) > now and not _in(r["company"], not_int))
+
+
 def _sender_name(sender: str) -> str:
     name = re.sub(r"<[^>]*>", "", sender).strip().strip('"').strip()
     return name if name and "@" not in name else ""

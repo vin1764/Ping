@@ -20,6 +20,8 @@ jobs:
           cache: pip
       - run: pip install -q -r requirements-dev.txt
       - run: python -m pytest -q
+      # the mailbox as a source on the 20-mail fixture mailbox (evals/mail/REPORT.md)
+      - run: python evals/mail/run_mail_evals.py
       # the page's and Ask Ping's shared JS (rules, router, Today, live updates, onboarding, names)
       - uses: actions/setup-node@v5
         with:

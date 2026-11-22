@@ -827,12 +827,80 @@ def rearm_schedule(secrets) -> int:
     return 0 if wf.get("state") == "active" else 1
 
 
+def demo_mails(secrets) -> int:
+    """The four made-up sample mails in the demo snapshot (dashboard/demo-data.json) and in the demo rows a one-click
+    demo session reads, so View demo shows "via email". Nothing from the real mailbox is used."""
+    from .demo_from_real import add_sample_mails
+    out = ROOT / "dashboard" / "demo-data.json"
+    data = add_sample_mails(json.loads(out.read_text(encoding="utf-8")))
+    problems = final_check(data)
+    if problems:
+        say("NOT written, the check found: " + "; ".join(problems))
+        return 1
+    out.write_text(json.dumps(data, default=str, ensure_ascii=False), encoding="utf-8")
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    counts = load_to_db(store, data)
+    live = {t: store.select(t, {"is_sample": "is.true"}) for t in ("items", "emails")}
+    mail_items = [i for i in live["items"] if (i.get("details") or {}).get("via") == "email"]
+    left = final_check(live)
+    say(f"demo rows written: {counts}; sample mails in the database: {len(live['emails'])}, their messages: "
+        f"{len(mail_items)} ({sum(1 for i in mail_items if i['level'] != 'hidden')} shown); anonymising check of what a "
+        f"demo session reads: " + ("clean" if not left else "NOT CLEAN: " + "; ".join(left)))
+    return 0 if not left and len(mail_items) == 4 else 1
+
+
+def mail_coverage(secrets) -> int:
+    """Placement mail of the last 14 days on the real mailbox, read-only, nothing stored: how many placement mails,
+    how many the ERP already had (a notice says the same), how many are mail-only; and what the old filter kept.
+    Prints counts, dates, kinds and company names only (never a subject, a sender or any text)."""
+    from datetime import timedelta
+    from collections import Counter
+    from . import mail_source
+    from .mailbox import Mailbox
+    from .matching import CompanyIndex
+    if not (secrets.mail_address and secrets.mail_app_password):
+        say("no MAIL_ADDRESS / MAIL_APP_PASSWORD")
+        return 1
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    roles = store.select("roles", REAL)
+    notices = [n for n in store.select("notices", REAL) if n.get("analysis")]
+    prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
+    index = CompanyIndex(roles)
+    now = datetime.now(IST)
+    since = now - timedelta(days=14)
+    mb = Mailbox(secrets.mail_address, secrets.mail_app_password)
+    heads = mb.heads_after(since)
+    # the old scan, on the same headers: a listed company's full name in subject/sender, or cdc/placement/erp in the sender
+    old_kept = sum(1 for h in heads if "otp" not in h.subject.lower() and (index.scan_text(f"{h.subject} {h.sender}")
+                   or any(w in h.sender.lower() for w in ("cdc", "placement", "erp"))))
+    extra = tuple(x.strip() for x in os.environ.get("PING_PLACEMENT_SENDERS", "").split(",") if x.strip())
+    rows, st = mail_source.scan(mb, since, index, prof.get("roll") or secrets.erp_user_id or "", prof.get("name") or "", extra)
+    mb.close()
+    twins = {r["id"]: mail_source.erp_twin(r, notices) for r in rows}
+    on_erp = [r for r in rows if twins[r["id"]]]
+    only = [r for r in rows if not twins[r["id"]]]
+    s = st.as_dict()
+    say(f"last 14 days ({since:%d %b} to {now:%d %b %H:%M} IST): {s['headers_seen']} mails (headers only)")
+    say(f"  placement mails: {len(rows)} (kept because: {dict(s['kept_because'])}); OTP mails skipped: {s['otp_skipped']}")
+    say(f"  not placement, never read beyond headers: {s['headers_seen'] - s['bodies_read']} ({dict(s['dropped'])})")
+    say(f"  already on the ERP (a notice says the same): {len(on_erp)}")
+    say(f"  mail-only: {len(only)}  by kind {dict(Counter(r['kind'] for r in only))}; with a deadline or time "
+        f"{sum(1 for r in only if r['due_at'] or r['event_at'])}; with a form/test link {sum(1 for r in only if r['main_link'])}; "
+        f"attachments read {s['attachments_read']}, your roll found in {sum(1 for r in rows if (r.get('pdf') or {}).get('status') == 'yes')}")
+    say(f"  before (the old scan, same 14 days): {old_kept} mails kept, shown only when about a company you applied to")
+    say("  per mail (date · kind · company · on the ERP):")
+    for r in sorted(rows, key=lambda r: r["received_at"]):
+        say(f"    {r['received_at'][:16].replace('T', ' ')} · {r['kind']} · {r['company'] or '(placement office / no listed company)'}"
+            f" · {'yes' if twins[r['id']] else 'mail-only'}")
+    return 0
+
+
 def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

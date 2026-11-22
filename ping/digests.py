@@ -137,6 +137,26 @@ def _for_you(members: list[dict]) -> str:
     return f" — {sum(m.get('tag') == 'for_you' for m in members)} for you"
 
 
+def _left_title(pending: list[dict], applied: int, due_text: str, list_others: bool, prefix: str = "") -> str:
+    """What's left to do, first: '1 for you to apply by tonight, Sat 21 Nov 20:00 (Groww); 11 others not applied.
+    You've done 11.' The applied ones are said once, at the end (never in a reminder)."""
+    tagged = any(m.get("tag") in ("for_you", "other") for m in pending)
+    fy = [m for m in pending if m.get("tag") == "for_you"] if tagged else pending
+    ot = [m for m in pending if m.get("tag") != "for_you"] if tagged else []
+    if fy:
+        head = f"{len(fy)}{' for you' if tagged else ''} to apply by {due_text}"
+        names, extra = fy, (f"; {len(ot)} other{'s' if len(ot) != 1 else ''} not applied" if ot and list_others else "")
+    else:
+        head = (f"{_plural(len(ot), 'other role')} to apply by {due_text}" if list_others
+                else f"None for you to apply by {due_text}")
+        names, extra = (ot if list_others else []), ""
+    done = f". You've done {applied}." if applied and not prefix else ""
+    cos = list(dict.fromkeys(m["company"] for m in names))
+    if not cos:
+        return f"{prefix}{head}{extra}{done}"
+    return _named(lambda n: f"{prefix}{head} ({n}){extra}{done}", cos)
+
+
 ERP_MISSING = ("role details not read yet",)     # the ERP hasn't given this role's criteria (yet)
 
 
@@ -279,9 +299,7 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 m = ms[0]
                 title = f"{m['company']} {m['label']} closes {when(due, sent)}. You haven't applied."
             else:
-                title = _named(lambda names: f"{_plural(len(ms), 'application')} ({names}) close {when(due, sent)} — you've applied to "
-                               f"{applied if applied else 'none'}{' of them' if applied and applied < len(ms) else ''}"
-                               f"{_for_you(pending)}", [m["company"] for m in ms])
+                title = _left_title(pending, applied, when(due, sent), list_others)
             det = {"kind": "application", "batch": bk, "role": "digest", "members": ids,
                    "list": split_rows(pending, list_others) + ([{"head": f"Applied ({applied})", "collapsed": True,
                            "rows": [role_row({**m, "note": "", "tag": "done"}) for m in ms if m.get("applied")]}]
@@ -321,8 +339,7 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
         if previous.get(rid):
             emit(dict(previous[rid]))
         elif pending and due - timedelta(hours=reminder_h) <= now < due and sent < due - timedelta(hours=reminder_h):
-            title = _named(lambda names: f"Reminder: {_plural(len(pending), 'application')} you haven't applied to ({names}) "
-                           f"close{'s' if len(pending) == 1 else ''} {when(due, now)}{_for_you(pending)}", [m["company"] for m in pending])
+            title = _left_title(pending, 0, when(due, now), list_others, prefix="Reminder: ")
             emit({"id": rid, "level": "show", "category": "digest", "company": None,
                   "role_ids": [m["id"] for m in pending], "notice_id": None, "due_at": due.isoformat(),
                   "event_at": None, "pdf_status": None, "needs_review": False, "title": title[:160],

@@ -1,0 +1,203 @@
+{
+ "about": "One deadline (Sat 21 Nov 20:00), 23 roles: 1 for you not applied, 11 others not applied, 11 applied. The Today row, the sheet header and chips, the badge (tests/js/today.test.js) and the chat digest (tests/test_digests.py) must give the same numbers.",
+ "now": "2026-11-21T13:00:00+05:30",
+ "roles": [
+  {
+   "id": "r0",
+   "company": "Groww",
+   "designation": "APM",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": true
+  },
+  {
+   "id": "o0",
+   "company": "Other00",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o1",
+   "company": "Other01",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o2",
+   "company": "Other02",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o3",
+   "company": "Other03",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o4",
+   "company": "Other04",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o5",
+   "company": "Other05",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o6",
+   "company": "Other06",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o7",
+   "company": "Other07",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o8",
+   "company": "Other08",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o9",
+   "company": "Other09",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "o10",
+   "company": "Other10",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": false,
+   "for_you": false
+  },
+  {
+   "id": "a0",
+   "company": "Done00",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a1",
+   "company": "Done01",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a2",
+   "company": "Done02",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a3",
+   "company": "Done03",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a4",
+   "company": "Done04",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a5",
+   "company": "Done05",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a6",
+   "company": "Done06",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a7",
+   "company": "Done07",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a8",
+   "company": "Done08",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a9",
+   "company": "Done09",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  },
+  {
+   "id": "a10",
+   "company": "Done10",
+   "designation": "Analyst",
+   "effective_deadline": "2026-11-21T20:00:00+05:30",
+   "applied": true,
+   "for_you": true
+  }
+ ],
+ "want": {
+  "row": "1 for you to apply by 20:00",
+  "row_sub": "11 others not applied",
+  "badge": 1,
+  "sheet": "12 not applied \u00b7 1 for you",
+  "chips": {
+   "notapplied": 12,
+   "foryou": 1,
+   "all": 23
+  },
+  "digest": "1 for you to apply by tonight, Sat 21 Nov 20:00 (Groww); 11 others not applied. You've done 11.",
+  "done_line": "Done today: 11 applied \u2713"
+ }
+}

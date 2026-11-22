@@ -20,7 +20,7 @@ import requests
 
 from .config import IST
 
-FOR_YOU_N = re.compile(r"—\s*(\d+)\s+for you\b")
+FOR_YOU_N = re.compile(r"(?:—\s*)?\b(\d+)\s+for you\b")
 
 
 def _when(iso: str | None, now: datetime) -> str:

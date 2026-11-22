@@ -730,3 +730,7 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 /* Forms: one notice with a form per company: its rows under the notice's heading */
 .forms-group { display: grid; gap: var(--s2); padding-left: var(--s3); border-left: 2px solid var(--line); }
 .forms-group .fg-head { margin-top: var(--s2); }
+/* Today: what's done collapses into one line at the bottom */
+.today-done { margin-top: var(--s3); border-top: 1px solid var(--line); padding-top: var(--s2); }
+.today-done > summary { cursor: pointer; color: var(--muted); font-size: .9rem; padding: var(--s2) 0; }
+.today-done[open] > summary { margin-bottom: var(--s2); }

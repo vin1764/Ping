@@ -1925,11 +1925,9 @@
     const ids = (d.list || []).flatMap((g) => (g.rows || []).map((r) => r.id)).filter(Boolean);
     const roles = [...new Set(ids)].map((id) => roleById().get(id)).filter(Boolean);
     const due = it.due_at ? +dt(it.due_at) : 0;
-    const mine = roles.filter((r) => !r.applied && targetsOn() && markOf(r)?.relevant).length, applied = roles.filter((r) => r.applied).length;
-    const title = due && roles.every((r) => +dt(deadlineOf(r)) === due)
-      ? TODAY.sheetTitle({ n: roles.length, at: due, now: liveNow(), mine, applied })
-      : [`${roles.length} roles`, mine ? `${mine} for you` : "", applied ? `${applied} applied` : ""].filter(Boolean).join(" · ");
-    openActSheet({ title, sub: retitle(it), cards: roles.map((r) => roleCard(r, { chat: it.id })), filters: true });
+    const cards = roles.map((r) => roleCard(r, { chat: it.id }));
+    const t = TODAY.sheetTitle({ cards, at: due || Date.now(), now: liveNow() });
+    openActSheet({ title: t.title, sub: due && roles.every((r) => +dt(deadlineOf(r)) === due) ? t.sub : `${retitle(it)} · ${cards.length} in all`, cards, filters: true });
   }
 
   function itemDetails(it) {
@@ -2308,6 +2306,7 @@
   function todayModel() {
     return TODAY.build({ items: state.data.items.filter((it) => !it.dismissed), roles: state.data.roles,
       notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat,
+      split: targetsOn() || hasPins(), listOthers: ({ ...(state.data.profile || {}), ...(state.prefs || {}) }).list_other_roles !== false,
       isFilled: (it) => FORMS.isFilled(state.formStatus, it.details?.form?.key) });
   }
   // a line that asks a question ("Tomorrow: 1 deadline"): tapping it asks Ping in the chat
@@ -2326,13 +2325,13 @@
     const now = nowDate();
     const head = h("div", { class: "today-head" }, h("h2", {}, "Today"),
       h("span", { class: "muted small" }, now.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" })));
-    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), tomorrowLine(m.tomorrow));
     const row = (r) => {
       const status = [r.filledAll ? h("span", { class: "pill applied" }, "✓ filled") : null,
         r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
         : r.status === "off" ? h("span", { class: "pill plain" }, "roll not found: check the list") : null,
         r.via === "email" ? h("span", { class: "pill via" }, "via email") : null].filter(Boolean);
-      const right = r.kind === "notice" || r.kind === "more" ? null : r.over ? h("span", { class: "pill cd c-over" }, "over")
+      const right = r.kind === "notice" || r.kind === "more" ? null : r.done || r.filledAll ? h("span", { class: "pill applied" }, "✓ done")
+        : r.over ? h("span", { class: "pill cd c-over" }, "over")
         : r.due ? countPill(r.due) : null;
       const body = [h("span", { class: "t-title" }, r.title, status), r.sub ? h("span", { class: "t-sub" }, r.sub) : null,
                     r.names ? h("span", { class: "t-names" }, r.names) : null];
@@ -2342,7 +2341,11 @@
         h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right,
         r.kind === "more" ? null : h("span", { class: "t-caret", "aria-hidden": "true" }, "›"));
     };
-    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), tomorrowLine(m.tomorrow));
+    // "Done today: 11 applied ✓ · 2 forms filled ✓": one collapsed line, the done rows inside
+    const doneLine = () => m.doneLine ? h("details", { class: "today-done" }, h("summary", {}, m.doneLine),
+      h("div", { class: "today-list" }, m.done.map(row))) : null;
+    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), doneLine(), tomorrowLine(m.tomorrow));
+    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), doneLine(), tomorrowLine(m.tomorrow));
   }
   // a tap on Today: the chat message it came from, else the role, the notice or the company
   function goTo(t) {
@@ -2371,8 +2374,10 @@
     formsBadge();
     const m = todayModel();
     const badge = $("#nav-today");
-    if (badge) { badge.textContent = String(m.ahead); badge.hidden = !m.ahead;
-      badge.parentElement.setAttribute("aria-label", m.ahead ? `Today, ${m.ahead} still ahead` : "Today"); }
+    // the badge: what's left to do today (roles for you not applied, forms not ticked, tests ahead), the same numbers
+    // as the rows
+    if (badge) { badge.textContent = String(m.left); badge.hidden = !m.left;
+      badge.parentElement.setAttribute("aria-label", m.left ? `Today, ${m.left} left to do` : "Today"); }
     const rail = $("#today-rail");
     if (rail) rail.replaceChildren(todayPanel(m));
     const page = $("#today-page");
@@ -2610,7 +2615,7 @@
   function roleCard(r, extra = {}) {
     const m = markOf(r), due = deadlineOf(r);
     return { role: r, company: cleanName(r.company), roleName: r.designation, due, at: due ? +dt(due) : 0, kind: "application",
-             applied: !!r.applied, mine: targetsOn() ? !!m?.relevant : null, reason: m?.relevant ? m.reason || "" : "",
+             applied: !!r.applied, mine: pinOf(r) ?? (targetsOn() ? !!m?.relevant : null), reason: m?.relevant ? m.reason || "" : "",
              cv: m?.relevant ? m.best_cv || "" : "", forms: [], noticeId: null, pdf: null, chat: null, ...extra };
   }
   function itemCardOf(it) {
@@ -2680,7 +2685,7 @@
       return;
     }
     const sheet = $("#sheet");
-    let filter = "all";
+    let filter = filters ? "notapplied" : "all";         // what's left to do first; applied roles only under All
     const body = h("div", { class: "sheet-body act-body" });
     const chip = (key, label) => h("button", { type: "button", class: "chip", "aria-pressed": String(filter === key), "data-filter": key,
       onclick: () => { filter = key; draw(); } }, label, h("span", { class: "n" }, TODAY.filterCards(cards, key).length));
@@ -2713,8 +2718,9 @@
     const items = (r.itemIds || []).map((id) => state.data.items.find((i) => i.id === id)).filter(Boolean);
     if (r.kind === "deadline") {
       const roles = (r.roleIds || []).map((id) => roleById().get(id)).filter(Boolean);
-      return openActSheet({ title: TODAY.sheetTitle({ n: roles.length, at: r.at, now: liveNow(), mine: r.mine, applied: r.applied }),
-        cards: roles.map((x) => roleCard(x, { chat: r.digestId })), filters: true });
+      const cards = roles.map((x) => roleCard(x, { chat: r.digestId }));
+      const t = TODAY.sheetTitle({ cards, at: r.at, now: liveNow() });
+      return openActSheet({ title: t.title, sub: t.sub, cards, filters: true });
     }
     if (r.kind === "todo" && r.forms) {                 // forms: the Forms list at that deadline
       state.formsAt = r.at; state.formsOnly = "all"; state.formsQuery = "";

@@ -40,25 +40,27 @@ test("countdowns: format and colour", () => {
   assert.strictEqual(T.countdown(at(60 * 50), NOW).text, "in 2 days");
 });
 
-test("today, in time order; what's over at the bottom; notices one line each; no 'Next ERP check' row", () => {
+test("today, in time order: what's left to do; what's over or done in one line at the bottom; no 'Next ERP check' row", () => {
   const d = day();
-  const kinds = d.rows.map((r) => `${r.kind}:${r.title}${r.over ? " (over)" : ""}`);
-  assert.deepStrictEqual(kinds, [
-    "notice:HPCL · submit CV", "test:Groww test", "todo:BlackBuck", "deadline:4 applications close",
-    "test:Meesho test (over)", "deadline:1 application closes (over)"]);
+  const kinds = d.rows.map((r) => `${r.kind}:${r.title}`);
+  assert.deepStrictEqual(kinds, ["notice:HPCL · submit CV", "test:Groww test", "todo:BlackBuck", "deadline:2 for you to apply by 20:00"]);
+  assert.deepStrictEqual(d.done.map((r) => `${r.kind}:${r.title}`), ["test:Meesho test", "deadline:1 for you to apply by 12:00"]);
+  assert.strictEqual(d.doneLine, "Done today: 1 applied ✓ · 1 test over · 1 closed without applying");
   const groww = d.rows.find((r) => r.title === "Groww test");
   assert.strictEqual(groww.sub, "Associate Product Manager · 15:00 · room NR 121");
   assert.strictEqual(groww.status, "on");
   assert.deepStrictEqual(groww.target, { item: "t1" });
-  assert.strictEqual(d.rows.find((r) => r.title === "Meesho test").status, "off");     // a list says you're not on it
+  assert.strictEqual(d.done.find((r) => r.title === "Meesho test").status, "off");     // a list that doesn't name you (over: in the Done line)
   assert.ok(!d.rows.some((r) => /NexusOne/.test(r.title)));                          // not about you
   const dl = d.rows.find((r) => r.kind === "deadline" && !r.over);
-  assert.strictEqual(dl.sub, "20:00 · 2 for you · 1 applied");
+  assert.strictEqual(dl.sub, "1 other not applied");                                  // other roles are listed (default)
+  assert.strictEqual(day({ listOthers: false }).rows.find((r) => r.kind === "deadline").sub, "");
   assert.strictEqual(dl.names, "Auro Group, Axis Bank");                              // display names
   assert.deepStrictEqual(dl.target, { item: "d1" });                                  // the digest that lists them
   assert.ok(!d.rows.some((r) => r.kind === "check"));                               // the header says the next check
   assert.strictEqual(d.nextCheck, Date.parse("2026-11-21T14:11:00+05:30"));
   assert.strictEqual(d.ahead, 3);                                                     // test, form, deadline
+  assert.strictEqual(d.left, 4);                                                      // 1 test + 1 form + 2 roles for you
   assert.strictEqual(d.tomorrow.text, "Tomorrow: 1 test, 1 deadline");
   assert.ok(!d.empty);
 });
@@ -67,6 +69,7 @@ test("an empty day says so", () => {
   const d = T.build({ items: [], roles: [], notices: [], runs, now: NOW });
   assert.ok(d.empty);
   assert.strictEqual(d.emptyText, "Nothing scheduled today.");
+  assert.strictEqual(d.doneLine, "");
   assert.strictEqual(d.tomorrow.text, "Tomorrow: nothing scheduled yet");
   assert.strictEqual(d.ahead, 0);
 });
@@ -144,16 +147,18 @@ test("card order: for you and not applied first (soonest first), applied next, o
   assert.deepEqual(others.map((c) => c.company), ["O"]);
   const cards = [{ mine: true }, { mine: true, applied: true }, { mine: false }];
   assert.equal(T.filterCards(cards, "notapplied").length, 2);
-  assert.equal(T.filterCards(cards, "foryou").length, 2);
+  assert.equal(T.filterCards(cards, "foryou").length, 1);                   // applied roles only under All
   assert.equal(T.filterCards(cards, "all").length, 3);
 });
 
-test("sheet title: '55 applications close today 20:00 · 3 for you · 9 applied'", () => {
+test("sheet header: '12 not applied · 1 for you', the same numbers as the chips", () => {
   const now = Date.parse("2026-11-21T12:00:00+05:30");
-  assert.equal(T.sheetTitle({ n: 55, at: Date.parse("2026-11-21T20:00:00+05:30"), now, mine: 3, applied: 9 }),
-               "55 applications close today 20:00 · 3 for you · 9 applied");
-  assert.equal(T.sheetTitle({ n: 1, at: Date.parse("2026-11-22T17:00:00+05:30"), now, mine: 0, applied: 0 }),
-               "1 application closes tomorrow 17:00");
+  const cards = [{ mine: true }, ...Array(11).fill({ mine: false }), ...Array(11).fill({ mine: true, applied: true })];
+  const t = T.sheetTitle({ cards, at: Date.parse("2026-11-21T20:00:00+05:30"), now });
+  assert.deepEqual(t, { title: "12 not applied · 1 for you", sub: "Applications close today 20:00 · 23 in all" });
+  assert.deepEqual(T.sheetCounts(cards), { notApplied: 12, forYou: 1, all: 23, split: true });
+  // no marks (no targets): no "for you" part
+  assert.equal(T.sheetTitle({ cards: [{ mine: null }], at: Date.parse("2026-11-22T17:00:00+05:30"), now }).title, "1 not applied");
 });
 
 test("Today rows carry what they stand for (role ids, item ids, the notice)", () => {
@@ -166,7 +171,7 @@ test("Today rows carry what they stand for (role ids, item ids, the notice)", ()
   assert.equal(d.total, 2);
 });
 
-test("form rows count your ticks: '3 forms due 20:00 · 2 filled', all ticked = done", () => {
+test("form rows count what's left: '1 form due 20:00' when 2 of 3 are ticked; all ticked = done", () => {
   const now = Date.parse("2026-11-21T12:00:00+05:30");
   const due = "2026-11-21T20:00:00+05:30";
   const f = (id, k) => ({ id, category: "todo", company: `Co${id}`, title: `Co${id}: fill the form by 20:00.`, due_at: due, level: "show",
@@ -174,12 +179,17 @@ test("form rows count your ticks: '3 forms due 20:00 · 2 filled', all ticked = 
   const items = [f("a", "ka"), f("b", "kb"), f("c", "kc")];
   let m = T.build({ items, now, isFilled: (it) => ["ka", "kb"].includes(it.details.form.key) });
   const row = m.rows.find((r) => r.kind === "todo");
-  assert.equal(row.title, "3 forms due 20:00 · 2 filled");
+  assert.equal(row.title, "1 form due 20:00");
+  assert.equal(row.names, "Coc");
   assert.equal(row.forms, true);
   assert.equal(m.ahead, 1);
+  assert.equal(m.left, 1);
   m = T.build({ items, now, isFilled: () => true });
-  assert.equal(m.rows.find((r) => r.kind === "todo").filledAll, true);
+  assert.ok(!m.rows.some((r) => r.kind === "todo"));
+  assert.equal(m.done.find((r) => r.kind === "todo").filledAll, true);
   assert.equal(m.ahead, 0);
+  assert.equal(m.doneLine, "Done today: 3 forms filled ✓");
+  assert.ok(m.empty && /^All done for today\./.test(m.emptyText));
 });
 
 test("notice rows say what to do; a notice about a deadline that's already a row joins it", () => {
@@ -198,4 +208,38 @@ test("notice rows say what to do; a notice about a deadline that's already a row
   const d = T.build({ items: [], roles, notices: [ext], runs, now: NOW });
   assert.ok(!d.rows.some((r) => r.kind === "notice"));
   assert.match(d.rows.find((r) => r.kind === "deadline").sub, /extended by a notice \(11:30\)/);
+});
+
+test("a deadline with everything applied leaves Today; 'All done for today. Next deadline: …'", () => {
+  const now = Date.parse("2026-11-21T12:00:00+05:30");
+  const roles = [{ id: "a", company: "A", effective_deadline: "2026-11-21T20:00:00+05:30", applied: true },
+                 { id: "b", company: "B", effective_deadline: "2026-11-21T20:00:00+05:30", applied: true },
+                 { id: "c", company: "C", effective_deadline: "2026-11-23T20:00:00+05:30" }];
+  const m = T.build({ roles, now, split: false });
+  assert.deepEqual(m.rows, []);
+  assert.equal(m.doneLine, "Done today: 2 applied ✓");
+  assert.ok(m.empty);
+  assert.equal(m.emptyText, "All done for today. Next deadline: Mon 23 Nov, 20:00.");
+  assert.equal(m.left, 0);
+});
+
+test("one snapshot, the same numbers: Today row, badge, sheet header, chips (the digest: tests/test_digests.py)", () => {
+  const S = require("../fixtures/today_snapshot.json");
+  const now = Date.parse(S.now);
+  const m = T.build({ roles: S.roles, now, isMine: (r) => r.for_you, split: true, listOthers: true });
+  const row = m.rows.find((r) => r.kind === "deadline");
+  assert.equal(row.title, S.want.row);
+  assert.equal(row.sub, S.want.row_sub);
+  assert.equal(m.left, S.want.badge);
+  assert.equal(m.doneLine, S.want.done_line);
+  // the sheet's cards, as the page makes them (roleCard: mine from the marks, applied)
+  const cards = S.roles.map((r) => ({ mine: r.for_you, applied: r.applied }));
+  assert.equal(T.sheetTitle({ cards, at: row.at, now }).title, S.want.sheet);
+  for (const [f, n] of Object.entries(S.want.chips)) assert.equal(T.filterCards(cards, f).length, n, f);
+  // everything applied: the deadline leaves Today
+  const allDone = S.roles.map((r) => ({ ...r, applied: true }));
+  const m2 = T.build({ roles: allDone, now, isMine: (r) => r.for_you });
+  assert.ok(!m2.rows.some((r) => r.kind === "deadline"));
+  assert.equal(m2.doneLine, "Done today: 23 applied ✓");
+  assert.equal(m2.left, 0);
 });

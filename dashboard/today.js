@@ -83,7 +83,9 @@
     });
   }
 
-  function deadlines(roles, day, isMine, items, inChat) {
+  // a deadline row counts what's left: the roles you haven't applied to ("1 for you to apply by 20:00", "11 others
+  // not applied" only when other roles are listed). Everything applied: the row is done (the "Done today" line).
+  function deadlines(roles, day, isMine, items, inChat, { split = true, listOthers = true } = {}) {
     const groups = new Map();
     for (const r of roles || []) {
       const t = ms(r.effective_deadline || r.apply_end);
@@ -91,21 +93,26 @@
       if (!groups.has(t)) groups.set(t, []);
       groups.get(t).push(r);
     }
+    const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
     return [...groups.entries()].map(([t, rs]) => {
-      const mine = rs.filter((r) => !r.applied && isMine(r)), applied = rs.filter((r) => r.applied);
-      const names = [...new Set(mine.map((r) => cleanName(r.company)))].sort((a, b) => a.localeCompare(b));
+      const open = rs.filter((r) => !r.applied), applied = rs.filter((r) => r.applied);
+      const mine = split ? open.filter(isMine) : open, others = split ? open.filter((r) => !isMine(r)) : [];
+      const showOthers = split && listOthers && others.length > 0;
+      const shown = mine.length ? mine : showOthers ? others : [];
+      const names = [...new Set(shown.map((r) => cleanName(r.company)))].sort((a, b) => a.localeCompare(b));
       // the digest that lists this batch, so a tap opens the message that has every role
       const digest = (items || []).find((it) => inChat(it) && ["application", "deadline"].includes(it.details?.kind)
         && ms(it.due_at) === t);
-      const parts = [mine.length ? `${mine.length} for you` : "", applied.length ? `${applied.length} applied` : "",
-                     !mine.length && !applied.length ? `${rs.length} role${rs.length === 1 ? "" : "s"}` : ""].filter(Boolean);
-      return { kind: "deadline", at: t, due: new Date(t).toISOString(),
-               title: rs.length === 1 ? "1 application closes" : `${rs.length} applications close`, sub: `${clock(t)} · ${parts.join(" · ")}`,
+      const title = !open.length ? `${plural(applied.length, "application")} done` : mine.length
+        ? `${mine.length}${split ? " for you" : ""} to apply by ${clock(t)}` : showOthers ? `${plural(others.length, "other role")} to apply by ${clock(t)}` : "";
+      return { kind: "deadline", at: t, due: new Date(t).toISOString(), title,
+               sub: mine.length && showOthers ? `${plural(others.length, "other")} not applied` : !mine.length && showOthers ? "none for you" : "",
                names: names.length > 4 ? `${names.slice(0, 4).join(", ")} +${names.length - 4}` : names.join(", "),
-               mine: mine.length, roleIds: rs.map((r) => r.id), applied: applied.length, total: rs.length,
+               mine: mine.length, others: others.length, notApplied: open.length, roleIds: rs.map((r) => r.id), applied: applied.length,
+               total: rs.length, left: mine.length, done: !open.length, quiet: open.length > 0 && !mine.length && !showOthers,
                digestId: digest ? digest.id : null,
                target: digest ? { item: digest.id } : mine.length === 1 || rs.length === 1 ? { role: (mine[0] || rs[0]).id } : { companies: true } };
-    });
+    }).filter((r) => !r.quiet);
   }
 
   const todoWhat = (it) => (/fill the form/i.test(it.title || "") || it.details?.todo?.action === "fill_form" ? "form"
@@ -113,6 +120,7 @@
   function todos(items, day, inChat, isFilled = () => false) {
     const one = (it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do", via: it.details?.via || null,
                            itemIds: [it.id], forms: todoWhat(it) === "form", filledAll: todoWhat(it) === "form" && isFilled(it),
+                           filled: todoWhat(it) === "form" && isFilled(it) ? 1 : 0, left: todoWhat(it) === "form" && isFilled(it) ? 0 : 1,
                            sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
                            target: inChat(it) ? { item: it.id } : { company: it.company } });
     const list = (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day
@@ -128,9 +136,12 @@
       const names = [...new Set(its.map((it) => shortName(it.company)).filter(Boolean))];
       const digest = (items || []).find((x) => inChat(x) && x.category === "digest" && x.details?.kind === "form" && ms(x.due_at) === t);
       const filled = what === "form" ? its.filter(isFilled).length : 0;
+      const left = its.length - filled;
+      // what's left: the forms not ticked yet ("2 forms due 20:00"); all ticked: done
       return { kind: "todo", group: true, at: t, due: new Date(t).toISOString(), itemIds: its.map((it) => it.id), what,
-               forms: what === "form", filled, filledAll: filled > 0 && filled === its.length,
-               title: `${its.length} ${what}s due ${clock(t)}${filled ? ` · ${filled} filled` : ""}`, sub: "", names: listNames(names, 4),
+               forms: what === "form", filled, filledAll: filled > 0 && filled === its.length, left,
+               title: `${left || its.length} ${what}${(left || its.length) === 1 ? "" : "s"} due ${clock(t)}`, sub: "",
+               names: listNames(left ? [...new Set(its.filter((it) => !isFilled(it)).map((it) => shortName(it.company)).filter(Boolean))] : names, 4),
                children: its.map(child).sort((a, b) => a.title.localeCompare(b.title)),
                target: digest ? { item: digest.id } : null };
     });
@@ -215,11 +226,13 @@
   }
 
   function build({ items = [], roles = [], notices: nlist = [], runs = [], profile = {}, now = Date.now(),
-                   isMine = () => true, inChat = () => true, isFilled = () => false } = {}) {
+                   isMine = () => true, inChat = () => true, isFilled = () => false, split = true, listOthers = true } = {}) {
     const day = dayOf(now), tomorrow = dayOf(now + 86400000);
-    // a form row you've ticked in full is done: it stays on the list, but isn't "still ahead"
-    const timed = [...tests(items, day, inChat), ...deadlines(roles, day, isMine, items, inChat), ...todos(items, day, inChat, isFilled)]
-      .map((r) => ({ ...r, over: r.at <= now || !!r.filledAll }));
+    // Today = what you still have to act on. Done (everything applied, every form ticked) or over (the time has passed,
+    // a test that's over) goes into one "Done today" line at the bottom
+    const timed = [...tests(items, day, inChat).map((r) => ({ ...r, left: 1 })), ...deadlines(roles, day, isMine, items, inChat, { split, listOthers }),
+                   ...todos(items, day, inChat, isFilled)]
+      .map((r) => ({ ...r, over: r.at <= now || !!r.filledAll || !!r.done }));
     // a notice about a deadline that's already a row (the 20:00 applications, the 20:00 forms) joins that row
     // instead of appearing twice: the row says the notice moved or set it
     const news = [];
@@ -227,7 +240,7 @@
       const same = r.dueAt && timed.find((t) => t.at === r.dueAt && ((r.list === "apply" && t.kind === "deadline") || (r.list === "form" && t.kind === "todo")));
       if (same) {
         same.noticeIds = [...(same.noticeIds || []), r.noticeId];
-        same.sub = `${same.sub}${/notice/.test(same.sub) ? "" : ` · ${/extended/i.test(r.title) ? "extended by a notice" : "per a notice"} (${r.sub.replace("posted ", "")})`}`;
+        if (!/notice/.test(same.sub)) same.sub = [same.sub, `${/extended/i.test(r.title) ? "extended by a notice" : "per a notice"} (${r.sub.replace("posted ", "")})`].filter(Boolean).join(" · ");
         continue;
       }
       news.push({ ...r, over: false });
@@ -236,15 +249,29 @@
     const ahead = timed.filter((r) => !r.over);
     const done = timed.filter((r) => r.over).sort((a, b) => a.at - b.at);
     const rows = [...ahead, ...news].sort((a, b) => a.at - b.at);
+    // "Done today: 11 applied ✓ · 2 forms filled ✓ · 1 test over": applied and ticked things, said once
+    const nApplied = timed.filter((r) => r.kind === "deadline").reduce((n, r) => n + (r.applied || 0), 0);
+    const nFilled = timed.filter((r) => r.kind === "todo").reduce((n, r) => n + (r.filled || 0), 0);
+    const nTests = done.filter((r) => r.kind === "test").length;
+    const nClosed = done.filter((r) => r.kind === "deadline" && !r.done).reduce((n, r) => n + (r.left || 0), 0);
+    const pl = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+    const doneParts = [nApplied ? `${nApplied} applied ✓` : "", nFilled ? `${pl(nFilled, "form")} filled ✓` : "",
+                       nTests ? `${pl(nTests, "test")} over` : "", nClosed ? `${nClosed} closed without applying` : ""].filter(Boolean);
+    // the next deadline after today, for "All done for today. Next deadline: …"
+    const nextAt = Math.min(...(roles || []).filter((r) => !r.applied && (!split || isMine(r)))
+      .map((r) => ms(r.effective_deadline || r.apply_end)).filter((t) => t > now && dayOf(t) !== day), Infinity);
+    const NEXT = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    const nextText = Number.isFinite(nextAt) ? ` Next deadline: ${NEXT.format(new Date(nextAt)).replace(/,? (\d\d:\d\d)$/, ", $1")}.` : "";
     const tTests = tests(items, tomorrow, inChat).length;
     const tDead = (roles || []).filter((r) => { const t = ms(r.effective_deadline || r.apply_end);
       return t > 0 && dayOf(t) === tomorrow && !r.applied && isMine(r); }).length
       + todos(items, tomorrow, inChat, isFilled).filter((r) => !r.filledAll).reduce((n, r) => n + (r.children ? r.children.length - (r.filled || 0) : 1), 0);
     const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
     return {
-      rows: [...rows, ...done], ahead: ahead.length, nextCheck: next,
-      empty: !timed.length && !news.length,
-      emptyText: "Nothing scheduled today.",
+      rows, done, ahead: ahead.length, left: ahead.reduce((n, r) => n + (r.left || 0), 0), nextCheck: next,
+      doneLine: doneParts.length ? `Done today: ${doneParts.join(" · ")}` : "",
+      empty: !ahead.length && !news.length,
+      emptyText: done.length ? `All done for today.${nextText}` : `Nothing scheduled today.${nextText}`,
       tomorrow: { tests: tTests, deadlines: tDead,
                   text: tTests || tDead ? `Tomorrow: ${[tTests ? plural(tTests, "test") : "", tDead ? plural(tDead, "deadline") : ""]
                     .filter(Boolean).join(", ")}` : "Tomorrow: nothing scheduled yet" },
@@ -278,16 +305,20 @@
     const sorted = [...cards].sort(by);
     return { top: sorted.filter((c) => rank(c) < 2), others: sorted.filter((c) => rank(c) === 2) };
   }
-  // which cards a filter chip keeps: "notapplied" | "foryou" | "all"
-  const filterCards = (cards, f) => cards.filter((c) => f === "all" || (f === "foryou" ? c.mine !== false : !c.applied));
-  // "55 applications close today 20:00 · 3 for you · 9 applied"
-  function sheetTitle({ n, at, now, mine, applied, word = "application", verb = "close" }) {
+  // which cards a filter chip keeps: "notapplied" | "foryou" (not applied and for you) | "all" (applied only here)
+  const filterCards = (cards, f) => cards.filter((c) => f === "all" || (f === "foryou" ? c.mine !== false && !c.applied : !c.applied));
+  // the sheet's numbers, the same ones the chips show
+  const sheetCounts = (cards) => ({ notApplied: filterCards(cards, "notapplied").length, forYou: filterCards(cards, "foryou").length,
+                                    all: cards.length, split: cards.some((c) => c.mine === true || c.mine === false) });
+  // header "12 not applied · 1 for you"; under it "Applications close today 20:00 · 23 in all"
+  function sheetTitle({ cards, at, now, word = "application", verb = "close" }) {
+    const c = sheetCounts(cards);
     const day = dayOf(at) === dayOf(now) ? "today" : dayOf(at) === dayOf(now + 86400000) ? "tomorrow" : dayOf(at);
-    const head = `${n} ${word}${n === 1 ? "" : "s"} ${verb}${n === 1 ? "s" : ""} ${day} ${clock(at)}`;
-    return [head, mine ? `${mine} for you` : "", applied ? `${applied} applied` : ""].filter(Boolean).join(" · ");
+    return { title: [`${c.notApplied} not applied`, c.split ? `${c.forYou} for you` : ""].filter(Boolean).join(" · "),
+             sub: `${word[0].toUpperCase()}${word.slice(1)}s ${verb} ${day} ${clock(at)} · ${c.all} in all` };
   }
 
-  const api = { build, countdown, nextCheck, clock, dayOf, cleanName, shortName, erpLink, formLinks, orderCards, filterCards, sheetTitle };
+  const api = { build, countdown, nextCheck, clock, dayOf, cleanName, shortName, erpLink, formLinks, orderCards, filterCards, sheetCounts, sheetTitle };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingToday = api;
 })(typeof window !== "undefined" ? window : globalThis);

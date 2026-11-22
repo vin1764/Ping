@@ -53,7 +53,8 @@ def test_same_deadline_becomes_one_digest():
     digests = [v for v in visible(items).values() if v["category"] == "digest"]
     assert len(digests) == 1, [d["title"] for d in digests]
     d = digests[0]
-    assert d["title"].startswith("3 applications (Alpha, Beta, Gamma) close tomorrow, Sat 21 Nov 20:00 — you've applied to 1 of them")
+    # what's left first, the applied one said once at the end
+    assert d["title"] == "2 to apply by tomorrow, Sat 21 Nov 20:00 (Alpha, Beta). You've done 1.", d["title"]
     rows = [r["text"] for g in d["details"]["list"] for r in g["rows"]]
     assert rows == ["Alpha — Role 1", "Beta — Role 2", "Gamma — Role 3"]
     # this check is 4 hours late for it (the batch came within 24 hours at Fri 20:00): the digest is dated then
@@ -76,7 +77,7 @@ def test_digest_once_reminder_once_nothing_else():
     assert DUE - timedelta(hours=24) <= messages[0][0] < DUE - timedelta(hours=23)
     assert DUE - timedelta(hours=2) <= messages[1][0] < DUE - timedelta(hours=1)
     rem = final["digest:application:20261121T2000:reminder"]
-    assert rem["title"] == "Reminder: 2 applications you haven't applied to (Alpha, Beta) close tonight, Sat 21 Nov 20:00"
+    assert rem["title"] == "Reminder: 2 to apply by tonight, Sat 21 Nov 20:00 (Alpha, Beta)"
     # after the deadline both stay in the history, marked as past
     assert final["digest:application:20261121T2000"]["details"]["hidden_because"] == "deadline gone"
 
@@ -91,7 +92,7 @@ def test_reminder_lists_only_unapplied_and_follows_the_profile_setting():
     assert len(when) == 1 and DUE - timedelta(hours=5) <= when[0] < DUE - timedelta(hours=4)
     rem = final["digest:application:20261121T2000:reminder"]
     assert [r["text"] for g in rem["details"]["list"] for r in g["rows"]] == ["Alpha — Role 1"]
-    assert rem["title"].startswith("Reminder: 1 application you haven't applied to (Alpha) closes tonight")
+    assert rem["title"].startswith("Reminder: 1 to apply by tonight"), rem["title"]
 
 
 def test_no_reminder_when_everything_is_applied():
@@ -175,3 +176,20 @@ def test_messages_saved_under_the_old_key_format_are_kept_not_repeated():
     assert final["digest:application:202611212000"]["level"] == "hidden"
     assert [i for ids in (ids for _, ids in sent) for i in ids if i != "digest:application:20261121T2000"] == \
         ["digest:application:20261121T2000:reminder"]
+
+
+def test_the_digest_says_what_is_left_with_the_same_numbers_as_today():
+    """tests/fixtures/today_snapshot.json: the chat digest gives the numbers the Today row, the sheet and the badge give
+    (tests/js/today.test.js)."""
+    import json
+    from pathlib import Path
+    from ping.digests import _left_title, when
+    s = json.loads((Path(__file__).parent / "fixtures" / "today_snapshot.json").read_text())
+    now = datetime.fromisoformat(s["now"])
+    due = datetime.fromisoformat(s["roles"][0]["effective_deadline"])
+    pending = [{"company": r["company"], "tag": "for_you" if r["for_you"] else "other"} for r in s["roles"] if not r["applied"]]
+    applied = sum(r["applied"] for r in s["roles"])
+    assert _left_title(pending, applied, when(due, now), True) == s["want"]["digest"]
+    # list-others off: the others aren't counted; a reminder never mentions what's done
+    assert _left_title(pending, applied, when(due, now), False) == "1 for you to apply by tonight, Sat 21 Nov 20:00 (Groww). You've done 11."
+    assert _left_title(pending, applied, when(due, now), True, prefix="Reminder: ").endswith("11 others not applied")

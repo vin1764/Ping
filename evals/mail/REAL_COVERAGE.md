@@ -62,3 +62,12 @@ The hourly run stores all 8 on its first scan with the new rules (it looks back 
   each merged into the ERP notice that says the same.
 - Of the 3 placement-office mails classified as forms without a listed company, 2 matched an ERP notice and 1 is
   mail-only (09 Nov).
+
+## The first hourly run with the new rules (2026-11-22 05:55 IST, started by hand)
+
+`mailbox : 376 mails (headers only), 59 placement mails kept and read, 76 OTP mails skipped; in the feed: 53 also on
+the ERP, 6 mail-only`. It ran after Admin > apply-sql, so the mails were saved with their kind, dates, link and
+attachment check, and the rows the old scan had stored were deleted. Two more mails had arrived since the coverage
+run (one of them this run's own OTP). The feed counts 53 / 6 where the coverage task counted 51 / 8 because the run
+re-reads every stored notice with today's rules before matching mail to it; the coverage task matched against the
+notices as stored.

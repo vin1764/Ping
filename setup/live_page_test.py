@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "setup"))
 
-TOKEN_JS = """() => { for (const k of Object.keys(localStorage)) if (/^sb-.*-auth-token$/.test(k))
+TOKEN_JS = """() => { for (const k of Object.keys(localStorage)) if (/^(ping-demo-auth|ping-auth|sb-.*-auth-token)$/.test(k))
                 return JSON.parse(localStorage.getItem(k)).access_token; return null; }"""
 NO_SOCKET = """window.WebSocket = class { constructor() { this.readyState = 3;
   setTimeout(() => { this.onerror && this.onerror(new Event('error')); this.onclose && this.onclose({ code: 1006, reason: 'blocked' }); }, 30); }

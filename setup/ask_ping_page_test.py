@@ -118,8 +118,8 @@ def main(argv: list[str]) -> int:
         print(f"View demo: landed on {page.evaluate('location.pathname + location.hash')}, chip '{chip}', "
               f"{bubbles} messages from Ping in the chat")
         failures += not (chip.startswith("Demo") and bubbles > 0)
-        # the session the page holds (supabase-js keeps it in localStorage)
-        token = page.evaluate("""() => { for (const k of Object.keys(localStorage)) if (/^sb-.*-auth-token$/.test(k))
+        # the session the page holds (localStorage: ping-demo-auth for the demo session, ping-auth for the owner)
+        token = page.evaluate("""() => { for (const k of Object.keys(localStorage)) if (/^(ping-demo-auth|ping-auth|sb-.*-auth-token)$/.test(k))
                                    return JSON.parse(localStorage.getItem(k)).access_token; return null; }""")
         cfg = page.evaluate("window.PING_CONFIG")
         import requests

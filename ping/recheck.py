@@ -37,6 +37,11 @@ def diagnose(runner, company: str, log=print) -> int:
     """Report only; nothing is written."""
     profile = runner.profile()
     roll, name = profile["roll"], profile.get("name") or ""
+    erp_id = (runner.secrets.roll or "").upper()
+    raw = (runner.store.select("profile") or [{}])[0] if runner.store_ok else {}
+    log(f"roll searched for: shape {re.sub(r'[0-9]', 'D', re.sub(r'[A-Z]', 'L', roll))}, "
+        f"same as your ERP login id: {roll == erp_id}; profile.roll set: {bool(raw.get('roll'))}, "
+        f"profile.roll == ERP id: {str(raw.get('roll') or '').upper() == erp_id}; profile updated_at: {raw.get('updated_at')}")
     stored = {n["id"]: n for n in runner.store.select("notices", REAL) if company_matches(n, company)}
     checks = {c["notice_id"]: c for c in runner.store.select("pdf_checks", REAL) if c["notice_id"] in stored}
     items = [it for it in runner.store.select("items") if compact(company) in compact(it.get("company") or "")]
@@ -79,12 +84,16 @@ def diagnose(runner, company: str, log=print) -> int:
                 log(f"    attachment not downloaded: {type(e).__name__}")
                 continue
             info = inspect(data, roll, name, ctype)
+            if erp_id and erp_id != roll:
+                alt = inspect(data, erp_id, "", ctype, ocr=False)
+                log(f"      with your ERP login id instead: {alt['found']}, nearest {alt['nearest_roll_distance']}")
             res = check_attachment(data, roll, name, ctype)
             log(f"    file: {info['format']} {info['bytes']} bytes, content-type {ctype!r}, error={info['error']}")
             for p in info["pages"]:
                 log(f"      page {p['page']}: {p}")
             log(f"      roll shapes in the file: {info['roll_shapes']} (yours: {info['my_roll_shape']}); "
-                f"roll-like total {info.get('roll_like_total')}; nearest same-length roll is {info['nearest_roll_distance']} edit(s) from yours")
+                f"roll-like total {info.get('roll_like_total')}; nearest same-length roll is {info['nearest_roll_distance']} edit(s) from yours; "
+                f"rolls ending in your last five digits: {info.get('same_last5')}")
             log(f"      your roll: {info['found']}")
             log(f"      today's checker says: {res['status']} by={res['matched_by']} scanned={res['scanned']} "
                 f"ocr={res['ocr']} roll-like={res['roll_like_count']} error={res['error']} section={bool(res.get('section'))}")

@@ -413,7 +413,7 @@ def refresh_details(check: dict, roll: str) -> dict:
 
 def _shape(tok: str) -> str:
     """"22XY10042" -> "DDLLDDDDD": how a roll number is written, never the roll itself."""
-    return re.sub(r"[A-Z]", "L", re.sub(r"\d", "D", tok.upper()))
+    return re.sub(r"\d", "D", re.sub(r"[A-Z]", "L", tok.upper()))
 
 
 def _dist(a: str, b: str) -> int:
@@ -478,6 +478,11 @@ def inspect(data: bytes, roll: str, name: str = "", content_type: str = "", ocr:
         }
         cand = [t for t in toks if len(t) == len(roll)]
         out["nearest_roll_distance"] = min((_dist(roll, t) for t in cand), default=None)
+        # tokens that end in your roll's last five digits: how they differ from yours, position by position
+        # ("=" same, "x" different), never the token itself
+        tail = [t for t in toks if t.endswith(roll[-5:])]
+        out["same_last5"] = [{"shape": _shape(t), "diff": "".join("=" if i < len(roll) and roll[i] == c else "x" for i, c in enumerate(t)),
+                              "edits": _dist(roll, t)} for t in tail][:3]
     if name:
         words = set(re.findall(r"[a-z]+", allt.lower()))
         parts = [p for p in re.split(r"\s+", name.lower()) if len(p) > 1]

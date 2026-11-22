@@ -211,7 +211,7 @@ def test_link_owners_reads_a_form_per_company():
     from ping.notices import link_owners
     text = ("Additional requirement. 1. RISA Labs: https://forms.gle/RisaA1 2. Diageo and Finaro: https://forms.gle/DiagB2 "
             "3. Pira Finance https://forms.gle/PiraC3")
-    t = [{"name": "RISA Labs"}, {"name": "Diageo"}, {"name": "Finaro"}, {"name": "Pira Finance"}]
+    t = [{"name": n, "company": n} for n in ("RISA Labs", "Diageo", "Finaro", "Pira Finance")]
     own = link_owners(text, ["https://forms.gle/RisaA1", "https://forms.gle/DiagB2", "https://forms.gle/PiraC3"], t)
     assert own == {"https://forms.gle/RisaA1": [0], "https://forms.gle/DiagB2": [1, 2], "https://forms.gle/PiraC3": [3]}
     # one form for everyone: every company gets it

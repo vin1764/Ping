@@ -273,6 +273,22 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                 produced = True
 
             # -- to-dos: forms / submissions (one notice can mean several)
+            # a notice that gives companies their own forms, none of them this company's: its own row says so
+            # ("form link not found in the notice"), never folded into another company's form
+            owned = [td for td in a.get("todos", []) if td["action"] == "fill_form" and td.get("for") is not None]
+            if owned and not fix.get("company") and not any(ti in td["for"] for td in owned):
+                first = owned[0]
+                due0 = first.get("due")
+                lvl0 = "hidden" if not applied and not open_roles else (level if level != "hidden" else "show")
+                if due0 and _dt(due0) <= now and lvl0 != "always":
+                    lvl0 = "hidden"
+                items.append({**base, "id": f"{nid}:nolink", "level": lvl0, "category": "todo", "due_at": due0,
+                              "title": clip(f"{company}{label_s}: fill the form by {fmt_when(_dt(due0), now)}. The form link isn't in "
+                                            "the notice: check it yourself." if due0 else
+                                            f"{company}{label_s}: a form. The form link isn't in the notice: check it yourself."),
+                              "details": {**det, "todo": {"action": "fill_form", "link": None, "due": due0, "no_link": True}},
+                              "sort_at": due0})
+                produced = True
             for k, todo in enumerate(a.get("todos", [])):
                 if todo["action"] == "apply":
                     continue  # the role item already says "apply by", with this notice's deadline if later

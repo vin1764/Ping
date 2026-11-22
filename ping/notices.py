@@ -127,9 +127,10 @@ def role_phrases(text: str) -> list[str]:
 
 
 def link_owners(text: str, forms: list[str], targets: list[dict]) -> dict[str, list[int] | None]:
-    """Which companies each form link belongs to, when a notice lists several companies with their own forms
-    ("RISA Labs: <link>", "<link> for Diageo"): {link: [target index, ...]}. A notice with one form, or a layout where
-    the links can't be told apart, gives None for every link (each company gets every form, as before)."""
+    """Which listed companies each form link belongs to, when a notice gives several companies their own forms
+    ("RISA Labs: <link>", "<link> for Diageo"): {link: [target index, ...]}. A link whose own line names no listed
+    company gets [] (a form for a company that isn't in your list: not yours). A notice with one form, or a layout
+    where most links can't be placed, gives None for every link (each company gets every form, as before)."""
     out: dict[str, list[int] | None] = {f: None for f in forms}
     if len(forms) < 2 or len(targets) < 2:
         return out
@@ -139,30 +140,32 @@ def link_owners(text: str, forms: list[str], targets: list[dict]) -> dict[str, l
         return out
     npos = []
     for i, t in enumerate(targets):
-        names = [t.get("name") or "", t.get("company") or ""]
-        hits = [low.find(n.lower()) for n in names if n and len(n) >= 2]
-        hits = [h for h in hits if h >= 0]
-        if hits:
-            npos.append((min(hits), i))
+        if not t.get("company"):
+            continue                      # not in your companies list: it can't own a form of yours
+        for n in {t.get("name") or "", t.get("company") or ""}:
+            if n and len(n) >= 2:
+                k = low.find(n.lower())
+                while k >= 0:
+                    npos.append((k, i))
+                    k = low.find(n.lower(), k + 1)
     if not npos:
         return out
     order = sorted(range(len(forms)), key=lambda k: lpos[k])
 
-    def assign(before: bool) -> dict[str, list[int]] | None:
+    def assign(before: bool) -> dict[str, list[int]]:
         got: dict[str, list[int]] = {}
         for j, k in enumerate(order):
+            end = lambda x: lpos[x] + len(forms[x])      # noqa: E731 (a link's own letters never name a company)
             if before:     # "Company: link": the names between the previous link and this one
-                lo = lpos[order[j - 1]] if j else -1
-                hi = lpos[k]
+                lo, hi = (end(order[j - 1]) if j else -1), lpos[k]
             else:          # "link (Company)": the names between this link and the next one
-                lo = lpos[k]
-                hi = lpos[order[j + 1]] if j + 1 < len(order) else len(low) + 1
-            got[forms[k]] = [i for p, i in npos if lo < p < hi]
-        if all(got.values()) and sum(len(v) for v in got.values()) == len(npos):
-            return got
-        return None
-    best = assign(True) or assign(False)
-    return best if best else out
+                lo, hi = end(k), (lpos[order[j + 1]] if j + 1 < len(order) else len(low) + 1)
+            got[forms[k]] = sorted({i for p, i in npos if lo < p < hi})
+        return got
+    best = max((assign(True), assign(False)), key=lambda g: sum(1 for v in g.values() if v))
+    placed = sum(1 for v in best.values() if v)
+    # most links placed, and no company split over two links' sections by accident: trust it
+    return best if placed * 2 >= len(forms) else out
 
 
 def analyze(notice: dict, text: str, index: CompanyIndex, roll: str = "", name: str = "",

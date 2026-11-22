@@ -116,6 +116,9 @@ def _dt(v) -> datetime | None:
         return None
 
 
+NO_LINK = "Form link not found in the notice: check it yourself"
+
+
 def postings(items: list[dict]) -> list[dict]:
     """One posting per form to-do (a notice's, or a mail's): its company, every form link it gives, its sources, its
     deadline. A notice that asks several companies' applicants to fill forms is several to-dos of ONE notice: they
@@ -142,7 +145,7 @@ def postings(items: list[dict]) -> list[dict]:
                     "due": todo.get("due") or it.get("due_at"), "text": text,
                     "purpose": purpose_of(d.get("subject") or "", it.get("title") or "", todo.get("due_text") or ""),
                     "sources": sources, "role_ids": it.get("role_ids") or [], "at": (sources[0]["at"] if sources else it.get("first_seen")),
-                    "level": it.get("level"), "is_sample": bool(it.get("is_sample"))})
+                    "level": it.get("level"), "is_sample": bool(it.get("is_sample")), "no_link": bool(todo.get("no_link"))})
     return out
 
 
@@ -234,7 +237,8 @@ def build(items: list[dict], previous: dict[str, dict] | None = None, merges: li
             parent[max(ra, rb)] = min(ra, rb)       # the earliest posting stays the root
     first_by: dict[tuple, int] = {}
     for i, p in enumerate(posts):
-        marks = [("link", k) for k in p["keys"]] or [("src", s["type"], s["id"]) for s in p["sources"]]
+        # no link: the same notice's linkless postings of the same company (another company's is its own row)
+        marks = [("link", k) for k in p["keys"]] or [("src", s["type"], s["id"], _company_key(p["company"])) for s in p["sources"]]
         for k in marks:
             if k in first_by:
                 union(first_by[k], i)
@@ -378,7 +382,8 @@ def _row(g: dict, prev: dict | None, page: dict | None, now: datetime) -> dict:
     first = posts[0] if posts else {}
     return {"key": g["key"], "company": companies[0] if len(companies) == 1 else ("several companies" if companies else ""),
             "companies": companies, "purpose": purposes[-1] if purposes else "form",
-            "title": page.get("title") or None, "description": page.get("description") or None,
+            "title": page.get("title") or (NO_LINK if not g.get("link") and any(p.get("no_link") for p in posts) else None),
+            "description": page.get("description") or None,
             "question_count": page.get("question_count"), "closed": bool(page.get("closed")),
             "signin_required": bool(page.get("signin_required")),
             "due_at": due, "deadline_history": history, "link": g.get("link"), "final_url": g.get("final_url"),

@@ -882,6 +882,28 @@ def notice_forms(secrets) -> int:
             prev = pos + len(f)
         missing = [t for t in targets if t and t not in named_anywhere]
         say(f"  companies named next to no link: {', '.join(missing) or 'none'}")
+    # every notice of the last 14 days that names several companies and has a form link: what the Forms list holds now
+    from datetime import timedelta, timezone
+    from .forms import NO_LINK
+    since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+    say("\nmulti-company notices with forms, last 14 days (links found -> rows -> companies with no link):")
+    for n in sorted(store.select("notices", {**REAL, "notice_time": f"gte.{since}"}), key=lambda n: n.get("notice_time") or ""):
+        a = n.get("analysis") or {}
+        listed = [t.get("company") for t in a.get("targets") or [] if t.get("company")]
+        flinks = [t for t in a.get("todos") or [] if t.get("action") == "fill_form"]
+        if len(listed) < 2 or not flinks:
+            continue
+        mine = [r for r in rows if any(str(x.get("id")) == str(n["notice_id"]) for x in r.get("sources") or [] if x.get("type") == "notice")]
+        nolink = [", ".join(r.get("companies") or []) for r in mine if r.get("title") == NO_LINK]
+        multi = [r for r in mine if len(r.get("companies") or []) > 1]
+        say(f"  notice {n['notice_id']} ({(n.get('notice_time') or '')[:10]}): {len(flinks)} form link(s), {len(listed)} listed companies "
+            f"-> {len(mine)} row(s){f', {len(multi)} with several companies' if multi else ''}; no link: {', '.join(nolink) or 'none'}")
+        for r in multi:
+            say(f"     several companies on one row: {', '.join(r.get('companies') or [])[:120]} | {(r.get('title') or '')[:40]}")
+    for name in ("RISA", "Diageo", "Piramal", "Nomura"):
+        hits = [r for r in rows if any(name.lower() in (c or "").lower() for c in r.get("companies") or [])]
+        say(f"{name}: " + ("; ".join(f"{', '.join(r.get('companies') or [])[:60]} | {(r.get('title') or '')[:50]} | "
+                                    f"{'own link' if (r.get('final_url') or r.get('link')) else 'no link'}" for r in hits) or "no row"))
     return 0
 
 

@@ -248,3 +248,39 @@ def test_ai_moves_to_the_next_model_when_one_is_retired_or_busy(monkeypatch):
     assert out["companies"] == [{"name": "Acme"}]
     assert [a.split(":")[0] for a in ai.stats["attempts"]] == ["a", "b"]
     assert "high demand" in ai.stats["attempts"][1]
+
+
+# 23 Nov, notice 1815 (anonymised): one notice, a form per company on its own line, some forms for companies that
+# aren't in the student's list, and a listed company with no link at all
+N1815 = ("Additional requirement. All candidates who are applying for the roles below are required to fill the form "
+         "of the company by 8:00 PM, 22nd November, 2026.\n"
+         "1. ATHER ENERGY (Profile: All) Link: https://forms.gle/AtherForm1111\n"
+         "2. BLACKBUCK (Profile: Associate Manager) Link: https://forms.gle/BbuckForm2222\n"
+         "3. WATERFORD LABS (Profile: Analyst) Link: https://forms.gle/WfordForm3333\n"
+         "4. LTM (Profile: Graduate Engineer Trainee) Link: https://forms.gle/LtmForm44444\n"
+         "5. NOVA HEALTH (Profile: Analyst) Link: https://forms.gle/NovaForm55555\n"
+         "6. PIRAMAL FINANCE (Profile: Data Scientist)\n")
+
+
+def test_notice_1815_each_company_its_own_form_and_no_link_says_so():
+    from ping import forms
+    from ping.items import build_items
+    roles = [role("Ather Energy", "Engineer", apply_end="2026-11-22T20:00:00+05:30"),
+             role("BlackBuck", "Associate Manager", apply_end="2026-11-22T20:00:00+05:30"),
+             role("LTM", "Graduate Engineer Trainee", apply_end="2026-11-22T20:00:00+05:30"),
+             role("Piramal Finance", "Data Scientist", apply_end="2026-11-22T20:00:00+05:30")]
+    idx = CompanyIndex(roles)
+    n = {"id": "2026:1815", "notice_id": 1815, "subject": "Additional requirement", "company": "Multiple Companies",
+         "notice_time": REF.isoformat(), "text": N1815}
+    n["analysis"] = analyze(n, N1815, idx)
+    own = {t["link"]: t.get("for") for t in n["analysis"]["todos"] if t["action"] == "fill_form"}
+    names = [t["company"] for t in n["analysis"]["targets"]]
+    assert {l: [names[i] for i in v] for l, v in own.items()} == {
+        "https://forms.gle/AtherForm1111": ["Ather Energy"], "https://forms.gle/BbuckForm2222": ["BlackBuck"],
+        "https://forms.gle/WfordForm3333": [], "https://forms.gle/LtmForm44444": ["LTM"], "https://forms.gle/NovaForm55555": []}
+    items = build_items(roles, [n], {}, {"roll": "x"}, REF)
+    rows = forms.build(items, fetch=lambda u: u, now=REF)
+    by_co = {tuple(r["companies"]): r for r in rows}
+    assert set(by_co) == {("Ather Energy",), ("BlackBuck",), ("LTM",), ("Piramal Finance",)}
+    assert by_co[("Piramal Finance",)]["link"] is None and by_co[("Piramal Finance",)]["title"] == forms.NO_LINK
+    assert by_co[("LTM",)]["link"] == "https://forms.gle/LtmForm44444"

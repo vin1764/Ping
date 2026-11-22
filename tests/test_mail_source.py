@@ -147,3 +147,15 @@ def test_old_mail_rows_are_deleted_when_the_rules_change():
                          {"id": "new", "subject": "Groww test", "rules_version": 1, "is_sample": False}])
     st.delete("emails", {"rules_version": "is.null", "is_sample": "is.false"})
     assert sorted(r["id"] for r in st.select("emails")) == ["demo", "new"]
+
+
+def test_reminders_fire_on_mail_only_deadlines(feed):
+    from ping.push import mail_reminders, reminders
+    items, _, _ = feed
+    from fixture import PROFILE
+    rows = mail_reminders(list(items.values()), PROFILE, NOW)
+    pine = next(r for r in rows if "Pine Labs" in r["body"])
+    assert pine["title"].startswith("Form · due") and pine["send_at"] == "2026-11-22T15:00:00+05:30"   # 2 h before 17:00
+    assert any(r["body"].startswith("Atlassian: complete the online test by 23:59") for r in rows)
+    # a mail interview with a time is a test: the test-day reminder covers it
+    assert any("Navi" in r["body"] for r in reminders(list(items.values()), PROFILE, NOW))

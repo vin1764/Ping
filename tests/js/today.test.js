@@ -103,3 +103,15 @@ test("a notice for several companies says which (first 3 + N) and what it asks",
   assert.strictEqual(r.sub, "11:00 · fill a form by 16:00");
   assert.ok(!/several companies/.test(r.sub + r.names));
 });
+
+test("mail-only items on Today carry 'via email'; a mail interview is called one", () => {
+  const its = [{ id: "m1", company: "Navi", category: "test", level: "always", event_at: "2026-11-21T16:00:00+05:30", title: "Navi interview: Sat 21 Nov 16:00.",
+                 details: { via: "email", kind: "interview" } },
+               { id: "m2", company: "Pine Labs", category: "todo", level: "show", due_at: "2026-11-21T17:00:00+05:30", title: "Pine Labs: fill the form by Sat 21 Nov 17:00.",
+                 details: { via: "email", todo: { action: "fill_form" } } }];
+  const d = T.build({ items: its, roles: [], notices: [], runs, now: NOW });
+  const iv = d.rows.find((r) => r.kind === "test");
+  assert.strictEqual(iv.title, "Navi interview");
+  assert.strictEqual(iv.via, "email");
+  assert.strictEqual(d.rows.find((r) => r.kind === "todo").via, "email");
+});

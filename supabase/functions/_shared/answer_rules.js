@@ -170,6 +170,8 @@
     if (has(/\b(bond|take ?home|joining|bonus\w*|esops?|stocks?|retention|relocation|base salary|break ?(down|up)|brekdown)\b/)) out.add("pay");
     if (has(/\bcut ?offs?\b|\bcgpa\b|\bcg\b|\b(departments?|branch\w*|degrees?)\b.*\b(apply|allowed|eligible|can)\b|\bwho can apply\b/)) out.add("eligible");
     if (has(/\b(notices?|announcements?|circulars?)\b/)) out.add("notice");
+    // placement mail: "any mails for X", "did I get a test link for Y", "what's due from mail"
+    if (has(/\b(e ?mails?|mails?|mailed|inbox|via email)\b/) || has(/\b(test|assessment|oa|interview|meeting) links?\b/)) out.add("mail");
     if (has(/\b(what|which) roles\b|\broles? (does|do|at|in)\b|\bopenings?\b|\bpositions?\b/) && !out.has("deadline")) out.add("roles");
     if (has(/\b(located|location|based (in|at)|which city|office)\b/)) out.add("location");
     else if (has(/\bwhere\b/)) out.add("test");
@@ -540,6 +542,7 @@
     const { hits, used } = m0;
     const intents = spec ? new Set(spec.intents) : intentsOf(question);
     const range = spec ? spec.range : timeRange(question, now);
+    if (intents.has("mail") && !intents.has("contact")) return mailAnswer(question, data, hits, intents, range, checked);
 
     if (hits.length) {
       return { kind: "company", companies: hits.map((e) => e.name),
@@ -618,13 +621,45 @@
       (soon.length ? cap(soon).join("\n") : `- nothing in the next 3 days (last checked ${checked})`) };
   }
 
+  // ---------------------------------------------------------------- placement mail
+  // Messages from your mail: "via email" (only the mail has it) and ERP messages the mail repeated ("also mailed").
+  const TEST_URL = /hackerrank|hackerearth|mettl|codility|codesignal|imocha|shl\.|talview|hirepro|amcat|cocubes|glider|testgorilla|hirevue|\/test|assess/i;
+  const mailOf = (i) => i.via === "email" || i.details?.via === "email" ? "via email" : (i.mail || i.details?.mail)?.note ? "also on the ERP" : null;
+  const linkOf = (i) => (i.mail || i.details?.mail)?.link || (i.todo || i.details?.todo)?.link || null;
+  function mailAnswer(question, data, hits, intents, range, checked) {
+    const now = data.now.getTime(), q = norm(question);
+    const wantsTest = /\b(test|assessment|oa)\b/.test(q), wantsDue = intents.has("deadline") || /\b(due|deadline|pending|to do|todo)\b/.test(q);
+    let list = (data.items || []).filter((i) => mailOf(i));
+    if (hits.length) list = list.filter((i) => hits.some((e) => e.raw.has(i.company) || norm(e.name) === norm(shortName(i.company))));
+    else list = list.filter((i) => i.level !== "hidden");
+    if (wantsTest) list = list.filter((i) => i.category === "test" || ["test", "interview"].includes(i.kind) ||
+      (i.todo || i.details?.todo)?.action === "take_test" || TEST_URL.test(linkOf(i) || ""));
+    if (wantsDue) list = list.filter((i) => i.due_at && Date.parse(i.due_at) > now)
+      .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at));
+    else list.sort((a, b) => String(b.first_seen || b.sort_at || "").localeCompare(String(a.first_seen || a.sort_at || "")));
+    const who = hits.length ? hits.map((e) => e.name).join(", ") : "";
+    if (!list.length) {
+      const what = wantsTest ? "No test link" : wantsDue ? "Nothing due" : "No placement mail";
+      return { kind: "mail", companies: hits.map((e) => e.name), text: `${what}${who ? ` from ${who}` : ""} in your mail${wantsTest ? " or on the ERP" : ""} so far (last checked ${checked}). I read placement mail only: from the placement office, companies on your list, test platforms, or with words like test, shortlist, interview, form, offer.` };
+    }
+    const line = (i) => {
+      const t = String(i.title || "").replace(/\.$/, "");
+      const link = linkOf(i);
+      return `- ${t}${i.due_at && !/ by /.test(t) ? ` (due ${when(i.due_at)})` : ""} · ${mailOf(i)}${link ? `\n  ${link}` : ""}`;
+    };
+    const head = wantsTest ? `Test link${list.length === 1 ? "" : "s"}${who ? ` for ${who}` : ""}:` : wantsDue ? "Due from your mail:"
+      : `Placement mail${who ? ` about ${who}` : ""} (newest first):`;
+    return { kind: "mail", companies: hits.map((e) => e.name), text: [head, ...list.slice(0, 8).map(line),
+      ...(list.length > 8 ? [`+${list.length - 8} more in the Feed`] : [])].join("\n") };
+  }
+
   // ---------------------------------------------------------------- the router
   // Every message, before any model: FACT (answered here, no model call), ACT (a request to do something on the ERP:
   // the read-only answer), ACK ("ok", "thanks") or OPEN (summaries, "why", comparisons, anything else: the model,
   // with these facts). Follow-ups ("and slice?", "and tomorrow?", "nothing else?") are resolved against the last turn
   // first, then routed the same way.
   const FACT = ["whichcv", "deadline", "test", "shortlist", "pay", "eligible", "applied", "notice", "roles", "location", "score",
-                "contact", "foryou", "jd"];
+                "contact", "foryou", "jd", "mail"];
   const ACK = /^(ok(ay)?|k|kk|thanks?|thank you|thx|ty|cool|great|nice|got it|alright|fine|sure|perfect|noted|done)[\s.!]*$/i;
   const OPEN = /\b(why|how come|explain|compare|comparison|versus|vs|better|difference|differ|should i|recommend|suggest\w*|advice|advise|tips?|prepare|preparation|tell me (more )?about|what do you think|worth|pros|cons|opinion|which (one|company|role|offer) (is|should|would))\b/;
   const ELSE = /\b(nothing|anything|what|something|any|whats) else\b|\bany ?more\b|\bothers?\s*$|^else$/;

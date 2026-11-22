@@ -4,7 +4,7 @@
  *
  * build({ items, roles, notices, runs, profile, now, isMine, inChat }) ->
  *   { rows: [{ kind: "test" | "deadline" | "todo" | "notice" | "more", at, over, title, sub, names, status, due, target,
- *              children }], ahead, tomorrow: { tests, deadlines, text }, nextCheck, empty, emptyText }
+ *              children, via: "email" | null }], ahead, tomorrow: { tests, deadlines, text }, nextCheck, empty, emptyText }
  *   Forms / to-dos due at the same time are one row ("5 forms due 20:00") whose children are the single ones; tests
  *   stay one row each. The next ERP check isn't a row: the header's status line says it (nextCheck is still returned).
  *   isMine(role): the role is one you'd apply to (eligible and "for you"); inChat(item): it is a chat message.
@@ -72,7 +72,8 @@
       const st = pdfStatus(it);
       const place = [row.room ? `room ${row.room}` : "", row.slot ? `slot ${row.slot}` : "", !row.room && d.venue ? d.venue : ""]
         .filter(Boolean).join(" · ");
-      return { kind: "test", at: ms(it.event_at), due: it.event_at, title: `${cleanName(it.company)} test`,
+      return { kind: "test", at: ms(it.event_at), due: it.event_at, via: d.via || null,
+               title: `${cleanName(it.company)} ${d.kind === "interview" ? "interview" : "test"}`,
                sub: [roleOfTitle(it.title), clock(ms(it.event_at)), place].filter(Boolean).join(" · "),
                status: st === "yes" ? "on" : st === "no" ? "off" : null,
                target: inChat(it) ? { item: it.id } : { company: it.company } };
@@ -104,9 +105,9 @@
   }
 
   const todoWhat = (it) => (/fill the form/i.test(it.title || "") || it.details?.todo?.action === "fill_form" ? "form"
-    : /submit/i.test(it.title || "") ? "submission" : "to-do");
+    : it.details?.todo?.action === "take_test" ? "test" : /submit/i.test(it.title || "") ? "submission" : "to-do");
   function todos(items, day, inChat) {
-    const one = (it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do",
+    const one = (it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do", via: it.details?.via || null,
                            sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
                            target: inChat(it) ? { item: it.id } : { company: it.company } });
     const list = (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day

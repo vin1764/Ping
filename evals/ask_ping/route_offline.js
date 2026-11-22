@@ -22,7 +22,8 @@ function data(asOf) {
       cv: r.relevance?.relevant ? r.relevance?.best_cv || null : null,
       pay: r.more_details?.fields || {}, jd_location: r.jd_summary?.location || null })),
     items: demo.items.filter((i) => !i.dismissed).map((i) => ({ ...i, hidden_because: i.details?.hidden_because,
-      subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time })),
+      subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time,
+      via: i.details?.via, mail: i.details?.mail, todo: i.details?.todo })),
     notices: demo.notices,
   };
 }

@@ -293,7 +293,7 @@ class Runner:
             return
         new = getattr(self, "new_messages", [])
         try:
-            rows = push.reminders(items, profile, self.now)
+            rows = push.reminders(items, profile, self.now) + push.mail_reminders(items, profile, self.now)
             if rows:
                 sent = {r["id"] for r in self.store.select("push_queue", {"kind": "eq.reminder", "sent_at": "not.is.null"})}
                 rows = [r for r in rows if r["id"] not in sent]

@@ -133,6 +133,29 @@ def reminders(items: list[dict], profile: dict, now: datetime) -> list[dict]:
     return out
 
 
+def mail_reminders(items: list[dict], profile: dict, now: datetime) -> list[dict]:
+    """push_queue rows for deadlines only your mail has (a form, a test link to complete by a time): sent at the
+    reminder lead time before the deadline, like the ERP's own deadline reminders."""
+    lead = timedelta(hours=float(profile.get("reminder_hours") or 2))
+    out = []
+    for it in items:
+        d = it.get("details") or {}
+        if d.get("via") != "email" or it.get("level") == "hidden" or it.get("dismissed") or it.get("done") or not it.get("due_at"):
+            continue
+        at = datetime.fromisoformat(str(it["due_at"]).replace("Z", "+00:00"))
+        if at <= now:
+            continue
+        action = (d.get("todo") or {}).get("action")
+        what = "Form" if action == "fill_form" else "Test" if action == "take_test" else "Deadline"
+        company = it.get("company") or "From your mail"
+        body = f"{company}: " + ("fill the form" if action == "fill_form" else "complete the online test" if action == "take_test"
+                                 else first_line(it, 120)) + f" by {at.astimezone(IST).strftime('%H:%M')}"
+        out.append({"id": f"reminder:{it['id']}", "kind": "reminder", "title": f"{what} · due {_when(it['due_at'], now)}",
+                    "body": body, "url": f"./#m-{quote(str(it['id']), safe='')}", "tag": f"reminder:{it['id']}"[:120],
+                    "event_at": at.isoformat(), "send_at": max(at - lead, now).isoformat()})
+    return out
+
+
 def email_text(new_items: list[dict], now: datetime, dashboard: str) -> tuple[str, str] | None:
     """Subject and body of the optional for-you email (profile.email_digests)."""
     mine = [it for it in new_items if is_for_you(it)]

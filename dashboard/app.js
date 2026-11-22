@@ -1460,8 +1460,9 @@
       h("span", { class: "muted small" }, now.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" })));
     if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), h("p", { class: "tomorrow" }, m.tomorrow.text));
     const row = (r) => {
-      const status = r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
-        : r.status === "off" ? h("span", { class: "pill over" }, "not on the list") : null;
+      const status = [r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
+        : r.status === "off" ? h("span", { class: "pill over" }, "not on the list") : null,
+        r.via === "email" ? h("span", { class: "pill via" }, "via email") : null].filter(Boolean);
       const right = r.kind === "notice" || r.kind === "more" ? null : r.over ? h("span", { class: "pill cd c-over" }, "over")
         : r.due ? countPill(r.due) : null;
       const body = [h("span", { class: "t-title" }, r.title, status), r.sub ? h("span", { class: "t-sub" }, r.sub) : null,
@@ -2026,7 +2027,8 @@
                  cv: m?.relevant ? m.best_cv : null, pay: r.more_details?.fields || {}, jd_location: r.jd_summary?.location || null };
       }),
       items: (data.items || []).filter((i) => !i.dismissed).map((i) => ({ ...i, hidden_because: i.details?.hidden_because,
-        subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time })),
+        subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time,
+        via: i.details?.via, mail: i.details?.mail, todo: i.details?.todo })),
       notices: data.notices || [],
       platform: thisPlatform(), installed: standalone(),
     };

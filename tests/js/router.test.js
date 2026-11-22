@@ -104,3 +104,23 @@ test("help questions route to help, with the asker's platform for installing", (
   assert.equal(R.platformOf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari", 5), "ios");   // an iPad
   assert.equal(R.platformOf("Mozilla/5.0 (Linux; Android 14) Chrome/131 Mobile"), "android");
 });
+
+// ---- placement mail: "any mails for X", "did I get a test link for Y", "what's due from mail"
+test("mail questions are answered from the mail messages, with their links", () => {
+  const now = "2026-11-20T10:00:00+05:30";
+  const items = [
+    { id: "mail:a", company: "Pine Labs", category: "todo", level: "show", due_at: "2026-11-22T17:00:00+05:30",
+      title: "Pine Labs: fill the form by Sun 22 Nov 17:00.", via: "email", mail: { link: "https://forms.gle/x" }, todo: { action: "fill_form", link: "https://forms.gle/x" } },
+    { id: "mail:b", company: "Atlassian", category: "todo", level: "always", due_at: "2026-11-25T23:59:00+05:30",
+      title: "Atlassian: take the online test by Wed 25 Nov 23:59.", via: "email", mail: { link: "https://www.hackerrank.com/tests/atl" }, todo: { action: "take_test" } },
+    { id: "notice:x:0", company: "Groww", category: "test", level: "always", event_at: "2026-11-23T15:00:00+05:30",
+      title: "Groww test (PA) Mon 23 Nov 15:00.", mail: { note: "also mailed to you", link: "https://www.hackerrank.com/tests/groww" } }];
+  const roles = ["Pine Labs", "Atlassian", "Groww", "Navi"].map((c, i) => ({ id: `r${i}`, company: c, designation: "Analyst" }));
+  const d = { now, roles, items, notices: [], lastChecked: now };
+  const ask = (q) => { const r = R.route(q, [], d); assert.strictEqual(r.kind, "fact", q); return R.routed(r, q, d).text; };
+  assert.match(ask("any mails for pine labs?"), /fill the form by Sun 22 Nov 17:00 · via email\n  https:\/\/forms\.gle\/x/);
+  assert.match(ask("did I get a test link for groww"), /Groww test .* · also on the ERP\n  https:\/\/www\.hackerrank\.com\/tests\/groww/);
+  assert.match(ask("did i get a test link for navi"), /^No test link from Navi/);
+  const due = ask("whats due from mail");
+  assert.ok(due.indexOf("Pine Labs") < due.indexOf("Atlassian") && !/Groww/.test(due));
+});

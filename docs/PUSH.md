@@ -14,6 +14,8 @@ something is for you. Nothing changes for anyone who doesn't install it: the sam
     messages about other roles only send nothing. If several are for you, the one notification says "(+2 more for you)";
   - **test-day reminders**: for a test a list says you're on, at your reminder lead time ("Groww test at 15:00 ·
     room 304 (in 2 h)"), sent by Supabase's scheduler even if no check runs then;
+  - **mail-only deadlines**: a form or a "complete the test by" that only your placement mail has (no ERP notice
+    says it) gets the same reminder at your lead time ("Form · due tomorrow 17:00", "Pine Labs: fill the form by 17:00");
   - **never in your quiet hours**: outside your check window (Profile > Schedule, default 06:00 to 01:00 IST);
   - tapping one opens the chat **at that message** (it flashes).
 - **Optional email** of the same for-you messages (Profile > Notifications > "Also email me", off by default). The

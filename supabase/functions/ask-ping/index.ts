@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
   const [allItems, allNotices, lastRun] = await Promise.all([
     sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
       "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
-      "notice_time:details->>notice_time,pdf:details->pdf").eq("dismissed", false)
+      "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,sort_at").eq("dismissed", false)
       .order("first_seen", { ascending: false }).limit(1000),
     sb.from("notices").select("notice_id,company,subject,notice_time").order("notice_time", { ascending: false }).limit(1000),
     sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1),

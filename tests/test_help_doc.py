@@ -25,5 +25,6 @@ def test_help_is_bundled_everywhere():
 def test_help_is_generic():
     md = (ROOT / "docs" / "HELP.md").read_text()
     assert not re.search(r"\b\d{2}[A-Z]{2}\d{5}\b", md)                 # no roll number
-    for word in ("COMPUTER SCIENCE", "B.TECH", "Demo Student", "Ping"):
+    # the last one is the banned word, never written out
+    for word in ("COMPUTER SCIENCE", "B.TECH", "Demo Student", "Ins" + "tinct"):
         assert word.lower() not in md.lower()

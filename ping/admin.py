@@ -882,6 +882,15 @@ def notice_forms(secrets) -> int:
             prev = pos + len(f)
         missing = [t for t in targets if t and t not in named_anywhere]
         say(f"  companies named next to no link: {', '.join(missing) or 'none'}")
+        # the feed items this notice made, per company: what the Forms list is built from
+        its = [i for i in store.select("items", {"notice_id": f"eq.{nid}"}) if not i.get("is_sample")]
+        say(f"  items from this notice: {len(its)}")
+        for i in sorted(its, key=lambda i: (i.get("company") or "", i["id"])):
+            d = i.get("details") or {}
+            td = d.get("todo") or {}
+            say(f"     {i['id'][-22:]} {i.get('company')!s:28.28} {i.get('category'):8} {i.get('level'):7} "
+                f"link={key_of(td['link'])[:24] if td.get('link') else '-':24} form={((d.get('form') or {}).get('key') or '-')[:24]:24} "
+                f"hidden: {d.get('hidden_because') or '-'}")
     # every notice of the last 14 days that names several companies and has a form link: what the Forms list holds now
     from datetime import timedelta, timezone
     from .forms import NO_LINK

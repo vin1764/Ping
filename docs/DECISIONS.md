@@ -158,7 +158,8 @@ Judgement calls made while working unattended, one line each.
   link for a company outside the list belongs to no one; a listed company with no link gets its own "form link
   not found" row. P15 of the forms fixture expected the old merge (a different link, same companies + purpose) and
   now expects its own row. An over-merged row's key (and tick) stays with the form whose page title it showed.
-- **The tick on the merged "Additional requirement" row**: form_status holds no tick for the owner's login (Admin >
-  forms-report: 0 rows), so there was nothing to carry; the LTM row is unticked. Tick it again in Forms.
+- **The tick on the merged "Additional requirement" row**: its key was the LTM link's (the earliest), and that
+  tick row reads filled=false since 22:54 (unticked), so there was nothing to carry; every split row starts
+  unticked, and the ticks made since (RISA Labs, Diageo) sit on those exact links.
 - **Public copy**: force-pushed (it holds only the generated copy), marked as a template when the token allows;
   Ping and Dashboard workflows are green with no secrets (they say "not set up yet" / build without publishing).

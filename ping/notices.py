@@ -142,7 +142,16 @@ def link_owners(text: str, forms: list[str], targets: list[dict]) -> dict[str, l
     for i, t in enumerate(targets):
         if not t.get("company"):
             continue                      # not in your companies list: it can't own a form of yours
-        for n in {t.get("name") or "", t.get("company") or ""}:
+        # the name as the notice writes it may be shorter than the companies list's ("Auro Group" for
+        # "Auro Group(www.AuroIM.com)"): also without the bracket, and its first distinctive word
+        names = set()
+        for raw in (t.get("name") or "", t.get("company") or ""):
+            base = re.sub(r"\s*\([^)]*\)", "", raw).strip()
+            names |= {raw, base}
+            first = next((w for w in re.split(r"[\s,.]+", base) if len(w) >= 4), "")
+            if first and first.lower() not in ("private", "limited", "india", "group", "technologies"):
+                names.add(first)
+        for n in names:
             if n and len(n) >= 2:
                 k = low.find(n.lower())
                 while k >= 0:

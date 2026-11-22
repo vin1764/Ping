@@ -235,3 +235,12 @@ def test_the_form_page_title_says_whose_form_it_is():
     shown = [i for i in items if i["level"] != "hidden"]
     assert len(shown) == 9 + 1 + 2 * 9                     # each company its own form; 9 and 10 named in no title keep all
     assert all(i["details"].get("hidden_because") == "another company's form in the same notice" for i in items if i["level"] == "hidden")
+
+
+def test_link_owners_finds_a_shorter_name_in_the_notice():
+    """23 Nov: the list says 'Auro Group(www.AuroIM.com)', the notice 'Auro Group': Auro's form is still Auro's."""
+    from ping.notices import link_owners
+    text = "1. AURO GROUP (Profile: X) Link: https://forms.gle/AuroA1\n2. FINARB (Profile: Y) Link: https://forms.gle/FinB2"
+    t = [{"name": "Auro Group(www.AuroIM.com)", "company": "Auro Group(www.AuroIM.com)"}, {"name": "Finarb", "company": "Finarb"}]
+    assert link_owners(text, ["https://forms.gle/AuroA1", "https://forms.gle/FinB2"], t) == {
+        "https://forms.gle/AuroA1": [0], "https://forms.gle/FinB2": [1]}

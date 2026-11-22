@@ -216,3 +216,22 @@ def test_link_owners_reads_a_form_per_company():
     assert own == {"https://forms.gle/RisaA1": [0], "https://forms.gle/DiagB2": [1, 2], "https://forms.gle/PiraC3": [3]}
     # one form for everyone: every company gets it
     assert link_owners("Fill https://forms.gle/One1 RISA Labs Diageo", ["https://forms.gle/One1"], t[:2]) == {"https://forms.gle/One1": None}
+
+
+def test_the_form_page_title_says_whose_form_it_is():
+    """23 Nov: a notice gave 13 companies 13 links with no way to tell them apart in the text; each form's title names
+    its company ('RISA LABS | Preference Form'). The row gets that company only; the others' to-dos for it are hidden."""
+    items = notice_1815(own=False)
+    keys = [forms.key_of(l) for l in LINKS]
+    names = ["Lattice Co | Additional Details Form", "ICOR LOMBARD | Additional Details Form", "AMARIX | Preference Form",
+             "Teal General Insurance | Additional Details", "Pira Finance | Preference Form", "Jovis | Additional Details Form",
+             "Aster Energy | Additional Details Form", "Aura Group | Preference Form", "Finaro | Preference Form"]
+    pages = {k: {"title": t} for k, t in zip(keys, names)}
+    rows = forms.build(items, pages=pages, fetch=lambda u: u, now=NOW)
+    by_link = {r["link"]: r for r in rows}
+    assert [by_link[l]["companies"] for l in LINKS] == [[c] for c in CO[:9]]
+    assert sorted(by_link[LINKS[0]]["item_ids"]) == ["mail:m1815", "notice:1815:0:todo0"]
+    forms.mark_items(items, rows, set())
+    shown = [i for i in items if i["level"] != "hidden"]
+    assert len(shown) == 9 + 1 + 2 * 9                     # each company its own form; 9 and 10 named in no title keep all
+    assert all(i["details"].get("hidden_because") == "another company's form in the same notice" for i in items if i["level"] == "hidden")

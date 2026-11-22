@@ -172,6 +172,24 @@ def similarity(a: dict, b: dict) -> float:
 KNOWN = ("gform", "msform", "zoho", "typeform", "jotform")
 
 
+def named_in_title(title: str | None, companies: list[str]) -> set[str]:
+    """The companies (as _company_key) a form page's title names: 'Blackbuck | Additional Details Form' -> BlackBuck.
+    A notice that lists 13 companies and 13 links doesn't say whose link is whose; the form's own title does."""
+    t = _norm(title or "")
+    if not t:
+        return set()
+    tc, words = t.replace(" ", ""), set(t.split())
+    out = set()
+    for c in companies:
+        k = _company_key(c)
+        if not k:
+            continue
+        first = next((w for w in k.split() if len(w) >= 3), "")
+        if (len(k.replace(" ", "")) >= 3 and k.replace(" ", "") in tc) or (len(first) >= 4 and first in words):
+            out.add(k)
+    return out
+
+
 def _dtv(v):
     return _dt(v) or datetime.max.replace(tzinfo=timezone.utc)
 
@@ -300,6 +318,14 @@ def build(items: list[dict], previous: dict[str, dict] | None = None, merges: li
         else:
             key = f"item:{ps[0]['item_id']}"
         page = next((pages[k] for k in keys if k in pages), None)
+        # one form link given to every company of a notice: the form's page title says whose it is; the other
+        # companies' to-dos for this link are someone else's form (mark_items hides them)
+        foreign: list[str] = []
+        cos = {_company_key(p["company"]) for p in ps if _company_key(p["company"])}
+        named = named_in_title((page or {}).get("title"), [p["company"] for p in ps]) if keys and len(cos) > 1 else set()
+        if named and named < cos:
+            foreign = [p["item_id"] for p in ps if _company_key(p["company"]) not in named]
+            ps = [p for p in ps if _company_key(p["company"]) in named]
         g = {"key": key, "posts": ps, "link": ps[0]["link"], "final_url": finals.get(keys[0]) if keys else None,
              "links": [finals.get(k) or k for k in keys]}
         prev = dict(before[0]) if before else None
@@ -314,6 +340,7 @@ def build(items: list[dict], previous: dict[str, dict] | None = None, merges: li
         used.add(key)
         r = _row(g, prev, page, now)
         r["form_keys"] = keys
+        r["foreign_item_ids"] = foreign
         rows.append(r)
     return sorted(rows, key=lambda r: (r["due_at"] or "9999", r["company"]))
 
@@ -399,6 +426,14 @@ def mark_items(items: list[dict], rows: list[dict], filled: set[str]) -> None:
     for r in rows:
         for iid in r["item_ids"]:
             by_item[iid] = r
+    # a company's to-do for another company's form (one notice gave everyone every link): not yours to fill
+    # (only for a company that has its own form: one whose form no title names keeps its to-dos and reminders)
+    foreign = {iid for r in rows for iid in r.get("foreign_item_ids") or []} - set(by_item)
+    has_own = {_company_key(it.get("company") or "") for it in items if it["id"] in by_item}
+    for it in items:
+        if it["id"] in foreign and _company_key(it.get("company") or "") in has_own:
+            it["level"] = "hidden"
+            it.setdefault("details", {})["hidden_because"] = "another company's form in the same notice"
     for it in items:
         r = by_item.get(it["id"])
         if not r:

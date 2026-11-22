@@ -790,6 +790,12 @@ def forms_report(secrets) -> int:
     say(f"forms rows: {len(rows)}; for several companies: {sum(1 for r in rows if len(r.get('companies') or []) > 1)}; "
         f"rows with a merge prompt: {sum(1 for r in rows if r.get('looks_like'))}; pending merge choices: {len(store.select('form_merges', {'is_demo': 'is.false'}))}")
     say(f"ticks: {len(ticks)}, on rows that exist: {sum(1 for t in ticks if t['form_key'] in keys)}")
+    every = store.select("form_status", {})
+    say(f"form_status rows in all: {len(every)} (yours: {sum(1 for t in every if not t.get('is_demo'))}, ticked "
+        f"{sum(1 for t in every if not t.get('is_demo') and t.get('filled'))}; demo sessions': {sum(1 for t in every if t.get('is_demo'))})")
+    for t in every:
+        if not t.get("is_demo"):
+            say(f"  yours: {t['form_key'][:48]} filled={t.get('filled')} at {t.get('filled_at') or t.get('updated_at')}")
     for r in rows:
         if any(s.get("id") == "1815" for s in r.get("sources") or []):
             say(f"notice 1815 -> row {r['key']}: {len(r.get('companies') or [])} companies, due {r.get('due_at')}, "

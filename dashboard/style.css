@@ -628,3 +628,8 @@ dialog.sheet.act .sheet-head .close { display: none; }
 .show-more { min-height: 44px; }
 .open-roles { display: block; margin-top: var(--s2); min-height: 44px; text-align: left; }
 .today-row .t-caret { color: var(--muted); }
+/* "Latest ↓" / "N new ↓": in the composer, in the quick questions' place, never over a message */
+.pill-btn.in-composer { position: static; transform: none; display: flex; width: max-content; margin: 0 auto var(--s2); box-shadow: none; }
+.pill-btn.in-composer[hidden] { display: none; }
+/* narrow phones: a little room for the status line next to the demo chip */
+@media (max-width: 420px) { .top .badge { padding: 4px 7px; } }

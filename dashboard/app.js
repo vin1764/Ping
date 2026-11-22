@@ -1104,6 +1104,8 @@
       group.append(renderEntry(e));
     }
     if (snapshot && !divider) (group || inner).append(snapshot);
+    const gap = profileGapNote();
+    if (gap) (group || inner).append(gap);
     const thread = h("div", { class: "thread", id: "thread", role: "log", "aria-label": "Messages", "aria-live": "polite" }, inner);
     const input = h("input", { id: "ask-input", autocomplete: "off", maxlength: "300", enterkeyhint: "send",
       placeholder: "Ask Ping: what's due tomorrow?", "aria-label": "Message Ping" });
@@ -1117,29 +1119,30 @@
       } }, c.label)));
     const form = h("form", { onsubmit: (ev) => { ev.preventDefault(); send(input, inner, thread, btn); } }, input, btn);
     // "N new" when the first unread message is below you; "Latest" when you're far up the thread
-    const jump = h("button", { type: "button", class: "pill-btn", id: "jump", hidden: true });
+    const jump = h("button", { type: "button", class: "pill-btn in-composer", id: "jump", hidden: true });
     const composer = h("div", { class: "composer" }, jump, quick, form);
     mount(thread, composer);
     const syncJump = () => {
       const tr = thread.getBoundingClientRect();
       const fromBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
-      jump.style.bottom = `${composer.offsetHeight + 12}px`;
       if (live.newCount && fromBottom < 80) {           // you've scrolled down to what arrived: it's read
         live.newCount = 0;
         live.firstNew = null;
         markRead();
       }
       if (live.newCount && live.firstNew?.isConnected) {
-        jump.textContent = `↓ ${live.newCount} new`; jump.className = "pill-btn"; jump.hidden = false;
+        jump.textContent = `↓ ${live.newCount} new`; jump.className = "pill-btn in-composer"; jump.hidden = false;
         const first = live.firstNew;
         jump.onclick = () => jumpTo(thread, first);
       } else if (divider && divider.getBoundingClientRect().top > tr.bottom - 8) {
-        jump.textContent = `${unread.length} new ↓`; jump.className = "pill-btn"; jump.hidden = false;
+        jump.textContent = `${unread.length} new ↓`; jump.className = "pill-btn in-composer"; jump.hidden = false;
         jump.onclick = () => jumpTo(thread, divider);
       } else if (fromBottom > thread.clientHeight) {
-        jump.textContent = "Latest ↓"; jump.className = "pill-btn ghost"; jump.hidden = false;
+        jump.textContent = "Latest ↓"; jump.className = "pill-btn ghost in-composer"; jump.hidden = false;
         jump.onclick = () => jumpTo(thread, null);
       } else jump.hidden = true;
+      // the pill sits in the composer, in the quick questions' place (same height): above the box, over no message
+      if (quick.hidden !== !jump.hidden) quick.hidden = !jump.hidden;
     };
     thread.addEventListener("scroll", syncJump, { passive: true });
     live.newCount = 0;
@@ -1482,6 +1485,31 @@
   const roleById = () => (roleMap && roleMap.src === state.data.roles ? roleMap.map
     : (roleMap = { src: state.data.roles, map: new Map(state.data.roles.map((r) => [r.id, r])) }).map);
 
+  // CGPA, degree and department missing from the profile: one note in the thread and a dot on Profile (older
+  // digests carried the same sentence under each one; it's taken out of them here)
+  const profileGapFree = (note) => String(note || "").replace(/\s*Add your [^.]*on the Profile page to check eligibility\.\s*/g, " ").trim();
+  function profileGaps() {
+    const p = state.data?.profile || {};
+    return [p.cgpa == null || p.cgpa === "" ? "CGPA" : "", !p.degree ? "degree" : "", !p.department ? "department" : ""].filter(Boolean);
+  }
+  function profileGapNote() {
+    const gaps = profileGaps();
+    if (!gaps.length || state.src?.kind === "demo") return null;
+    const what = gaps.length === 1 ? gaps[0] : `${gaps.slice(0, -1).join(", ")} and ${gaps[gaps.length - 1]}`;
+    return h("div", { class: "msg ping sys profile-gap", role: "note" },
+      h("span", { class: "text" }, `Add your ${what} in Profile and I'll check what you're eligible for.`),
+      h("a", { class: "linklike", href: "#profile" }, "Open Profile"));
+  }
+  function profileDot() {
+    const a = document.querySelector('#nav a[data-route="profile"]');
+    if (!a) return;
+    let dot = a.querySelector(".dot");
+    if (!dot) { dot = h("span", { class: "dot", "aria-hidden": "true" }); a.append(dot); }
+    const n = state.src?.kind === "demo" ? 0 : profileGaps().length;
+    dot.hidden = !n;
+    a.setAttribute("aria-label", n ? "Profile, details missing" : "Profile");
+  }
+
   function listBlock(it) {
     const d0 = it.details || {};
     const d = { ...d0, list: resplit(d0) };
@@ -1502,7 +1530,8 @@
       }
       return h("div", { class: "grp" }, g.head ? h("div", { class: "gh" }, g.head) : null, rows);
     });
-    return h("div", { class: "list" }, groups, d.note ? h("div", { class: "why" }, d.note) : null,
+    const note = profileGapFree(d.note);
+    return h("div", { class: "list" }, groups, note ? h("div", { class: "why" }, note) : null,
       d.source ? h("div", { class: "src" }, d.source) : null);
   }
 
@@ -1725,6 +1754,7 @@
   }
   function renderToday() {
     if (!state.data || !TODAY) return;
+    profileDot();
     const m = todayModel();
     const badge = $("#nav-today");
     if (badge) { badge.textContent = String(m.ahead); badge.hidden = !m.ahead;

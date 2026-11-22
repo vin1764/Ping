@@ -150,10 +150,10 @@ def test_eligibility_note_counts_only_roles_without_criteria():
     items = run(roles, DUE - timedelta(hours=20))
     d = [v for v in visible(items).values() if v["category"] == "digest"][0]
     assert d["details"]["note"] == "Eligibility not verified for Gamma Role 3 (the ERP gives no criteria yet)."
-    # a profile without department/degree: one line, no count
+    # a profile without department/degree: not said under each digest (the page says it once, with a dot on Profile)
     items2 = run(roles[:2], DUE - timedelta(hours=20), profile={"department": None, "degree": None})
     d2 = [v for v in visible(items2).values() if v["category"] == "digest"][0]
-    assert d2["details"]["note"] == "Add your degree and department on the Profile page to check eligibility."
+    assert "Profile" not in (d2["details"].get("note") or "")
 
 
 def test_messages_saved_under_the_old_key_format_are_kept_not_repeated():

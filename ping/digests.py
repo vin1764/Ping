@@ -149,10 +149,8 @@ def _unverified_line(members: list[dict]) -> str:
         out.append(f"Eligibility not verified for {unk[0]['company']} {unk[0]['label']} (the ERP gives no criteria yet).")
     elif unk:
         out.append(f"Eligibility not verified for {len(unk)} of these (the ERP gives no criteria yet).")
-    gaps = {f for m in members for f in m.get("flags") or [] if f.endswith("in Profile")}
-    if gaps:
-        what = " and ".join(sorted({"your CGPA" if "CGPA" in f else "your degree and department" for f in gaps}))
-        out.append(f"Add {what} on the Profile page to check eligibility.")
+    # a gap in your own profile (CGPA, degree, department) is said once by the page, with a dot on Profile, not
+    # under every digest
     return " ".join(out)
 
 

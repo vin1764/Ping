@@ -34,10 +34,13 @@ KEY_SHAPES = {
     "supabase access token": r"sbp_[A-Za-z0-9]{30,}",
     "google key": r"AIza[0-9A-Za-z_\-]{30,}",
     "github token": r"(?:ghp|gho|ghs|ghu|github_pat)_[A-Za-z0-9_]{30,}",
+    "groq key": r"gsk_[A-Za-z0-9]{40,}",
+    "private key block": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
 }
 SECRET_ENVS = ["ERP_USER_ID", "ERP_PASSWORD", "ERP_SECQ_1", "ERP_SECQ_2", "ERP_SECQ_3", "MAIL_ADDRESS", "MAIL_APP_PASSWORD",
                "SUPABASE_SERVICE_KEY", "SUPABASE_ACCESS_TOKEN", "GEMINI_API_KEY_EVALS", "GEMINI_API_KEY_LIVE",
-               "PING_GITHUB_TOKEN", "DASHBOARD_DEPLOY_TOKEN"]
+               "PING_GITHUB_TOKEN", "DASHBOARD_DEPLOY_TOKEN", "GROQ_API_KEY", "GROQ_API_KEY_EVALS", "DASHBOARD_PASSWORD",
+               "PUBLIC_REPO_TOKEN"]
 
 
 def run(*a, cwd=None, check=True) -> str:
@@ -239,9 +242,20 @@ def main() -> int:
     if url and token:
         push = url.replace("https://", f"https://x-access-token:{token}@")
         main_branch = run("git", "symbolic-ref", "--short", "HEAD", cwd=target).strip()
-        subprocess.run(["git", "push", "--quiet", push, f"{main_branch}:main"], cwd=target, check=True,
+        head = run("git", "rev-parse", "--short", main_branch, cwd=target).strip()
+        # the public repository holds only this generated copy: a rebuild replaces it (--force)
+        subprocess.run(["git", "push", "--quiet", "--force", push, f"{main_branch}:main"], cwd=target, check=True,
                        capture_output=True)
-        say(f"pushed {main_branch} to {url} as main")
+        m = re.match(r"https://github\.com/([^/]+)/([^/.]+)", url)
+        where = f"{m.group(1)} / {m.group(2)}" if m else "(not a github.com address)"
+        say(f"pushed {main_branch} (rewritten head {head}) to the public repository {where} as main")
+        if m:
+            # "Use this template" on the public repository (needs Administration: write on the token)
+            import requests
+            r = requests.patch(f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}", timeout=30,
+                               headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                               json={"is_template": True})
+            say(f"template repository: {'yes' if r.ok and r.json().get('is_template') else f'not set (HTTP {r.status_code}): turn it on in its Settings > General > Template repository'}")
     else:
         out = ROOT / "ping-public.bundle"
         run("git", "bundle", "create", str(out), "--all", cwd=target)

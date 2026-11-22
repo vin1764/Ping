@@ -22,6 +22,8 @@ jobs:
     env:
       PUBLIC_REPO: ${{ github.repository_owner }}/ping-dashboard
       PAGES_URL: https://${{ github.repository_owner }}.github.io/ping-dashboard/
+      # a fresh copy with no secrets still builds and runs the guard; only publishing waits for the token
+      CAN_PUBLISH: ${{ secrets.DASHBOARD_DEPLOY_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -39,7 +41,11 @@ jobs:
           ERP_USER_ID: ${{ secrets.ERP_USER_ID }}
           MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
         run: python setup/check_public_build.py _site
+      - name: "Not published: no DASHBOARD_DEPLOY_TOKEN yet"
+        if: env.CAN_PUBLISH != 'true'
+        run: echo "::notice::Built and checked; not published (no DASHBOARD_DEPLOY_TOKEN secret yet, see docs/SETUP.md)."
       - name: Push the built files to the public repo
+        if: env.CAN_PUBLISH == 'true'
         env:
           TOKEN: ${{ secrets.DASHBOARD_DEPLOY_TOKEN }}
         run: |
@@ -54,6 +60,7 @@ jobs:
           git push -q --force "https://x-access-token:${TOKEN}@github.com/${PUBLIC_REPO}.git" main
           echo "pushed build ${GITHUB_SHA::7} to ${PUBLIC_REPO}"
       - name: Switch on GitHub Pages (main, root) and wait until this build is live
+        if: env.CAN_PUBLISH == 'true'
         env:
           TOKEN: ${{ secrets.DASHBOARD_DEPLOY_TOKEN }}
         run: |

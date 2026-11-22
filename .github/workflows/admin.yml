@@ -64,11 +64,14 @@ jobs:
           DASHBOARD_DEPLOY_TOKEN: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.DASHBOARD_DEPLOY_TOKEN || '' }}
           # set-dashboard-password only: the new password for the dashboard login (a secret you set; masked by
           # GitHub, never printed by Ping); log-scan searches the logs for it
-          DASHBOARD_PASSWORD: ${{ (inputs.task == 'set-dashboard-password' || inputs.task == 'log-scan') && secrets.DASHBOARD_PASSWORD || '' }}
+          DASHBOARD_PASSWORD: ${{ (inputs.task == 'set-dashboard-password' || inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.DASHBOARD_PASSWORD || '' }}
+          # public-copy: their values are searched for in every blob (never printed)
+          GROQ_API_KEY: ${{ inputs.task == 'public-copy' && secrets.GROQ_API_KEY || '' }}
+          GROQ_API_KEY_EVALS: ${{ inputs.task == 'public-copy' && secrets.GROQ_API_KEY_EVALS || '' }}
           DASHBOARD_EMAIL: ${{ inputs.task == 'set-dashboard-password' && secrets.DASHBOARD_EMAIL || '' }}
           # public-copy: where the cleaned history goes (a new, empty public repository the owner made) and a token
           # that may push to it; without them the cleaned history is uploaded as a private artifact instead
-          PUBLIC_REPO_URL: ${{ inputs.task == 'public-copy' && vars.PUBLIC_REPO_URL || '' }}
+          PUBLIC_REPO_URL: ${{ inputs.task == 'public-copy' && (vars.PUBLIC_REPO_URL || secrets.PUBLIC_REPO_URL) || '' }}
           PUBLIC_REPO_TOKEN: ${{ inputs.task == 'public-copy' && secrets.PUBLIC_REPO_TOKEN || '' }}
         run: |
           python -m ping.admin "$TASK"

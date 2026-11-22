@@ -8,7 +8,7 @@ Actions > Admin > `ask-ping-page` (`setup/ask_ping_page_test.py`) from a one-cli
 | who | how they sign in | what decides it |
 |---|---|---|
 | **owner** | email + password on the dashboard | `is_ping_owner()`: the login's email is in `allowed_users` (the hourly run puts `MAIL_ADDRESS` there) |
-| **demo session** | the checks' and eval runners' anonymous sign-in (`?anon-demo=1`; not on the sign-in screen) | `is_ping_demo()`: the token says `is_anonymous` |
+| **demo session** | View demo on the sign-in screen (and the checks' `?anon-demo=1`): an anonymous sign-in | `is_ping_demo()`: the token says `is_anonymous` |
 | **server** | the service key (`SUPABASE_SERVICE_KEY` / function secret `PING_SERVICE_KEY`) | bypasses Row Level Security; used only by the hourly run, Admin tasks and the functions |
 | anyone else | the publishable key alone | no policy grants them anything |
 

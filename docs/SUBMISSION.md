@@ -1,6 +1,7 @@
 # Ping: submission
 
-**Live:** https://vin1764.github.io/ping-dashboard/ → sign in with the credentials in the submission note.
+**Live:** https://vin1764.github.io/ping-dashboard/ → sign in with the credentials in the submission note, or tap
+**View demo** under the sign-in (an anonymised snapshot of a real run, read-only).
 
 Ping reads one student's placement ERP every hour (the companies list, the notice board, the PDFs attached to
 notices) and the placement mail in their institute mailbox, keeps only what concerns that student, and tells them
@@ -10,7 +11,7 @@ reminders) is put back after judging.
 
 ## 10 minutes: what to try
 
-1. **Sign in** with the credentials in the submission note. The thread is today's: digests per closing time with
+1. **Sign in** with the credentials in the submission note (or **View demo** for the anonymised snapshot). The thread is today's: digests per closing time with
    **For you** first (each with the CV to apply with) and Others collapsed; **Today** on the right (on a phone, the
    Today tab) with countdowns that tick.
 2. **Ask a fact**: `what's due tonight?`, `<company> ctc breakdown`, `which cv for <company>`. These are answered in

@@ -138,7 +138,7 @@ def main() -> int:
                 check(name, form["form"] == "FORM" and form["user"] == "email" and form["pw"] == "password" and form["submit"],
                       "sign-in is a real form a password manager fills", json.dumps(form))
                 check(name, form["note"], "\"You'll stay signed in\" under the button")
-                check(name, page.locator("#view-demo").count() == 0, "no demo button on the sign-in screen")
+                check(name, page.locator("#view-demo").count() == 1, "View demo under the sign-in")
                 page.fill("#login-email", EMAIL)
                 page.fill("#login-pw", PASSWORD)
                 page.click("form.login button[type=submit]")

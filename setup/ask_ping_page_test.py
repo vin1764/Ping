@@ -69,9 +69,9 @@ def main(argv: list[str]) -> int:
         page.wait_for_function("() => /match|invalid|credentials|error/i.test(document.querySelector('#login-msg')?.innerText || '')",
                                timeout=30000)
         msg = page.locator("#login-msg").inner_text()
-        no_demo = page.locator("#view-demo").count() == 0
-        owner_ok = has_email == 1 and has_pw == 1 and "don't match" in msg.lower() and no_demo
-        print(f"no demo button on the sign-in screen: {no_demo}")
+        demo_btn = page.locator("#view-demo").inner_text().strip() if page.locator("#view-demo").count() else ""
+        owner_ok = has_email == 1 and has_pw == 1 and "don't match" in msg.lower() and demo_btn == "View demo"
+        print(f"View demo under the sign-in: {demo_btn == 'View demo'}")
         failures += not owner_ok
         print(f"owner sign-in screen: email field {has_email}, password field {has_pw}; a wrong password gets "
               f"'{msg}'{'' if owner_ok else '  <-- PROBLEM'}")

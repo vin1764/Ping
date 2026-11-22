@@ -174,6 +174,9 @@ def demo_refeed(secrets) -> int:
         it["id"] = "sample:" + plain(it["id"])
         it.update({"is_sample": True, "dismissed": False, "done": False})
     data["profile"], data["items"] = profile, items
+    # the four sample mails and the forms list, with today's code, on the rebuilt feed (as demo-mails does)
+    from .demo_from_real import add_forms, add_sample_mails
+    data = add_forms(add_sample_mails(data))
     problems = final_check(data)
     if problems:
         say("NOT written, the check found: " + "; ".join(problems))

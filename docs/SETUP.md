@@ -5,7 +5,7 @@ dashboard (built from this file at every deploy, so the two always say the same 
 
 ## Reviewing Ping?
 
-Sign in on the [dashboard](https://vin1764.github.io/ping-dashboard/) with the credentials in the submission note. The rest of this page is for setting up a copy of your own.
+Sign in on the [dashboard](https://vin1764.github.io/ping-dashboard/) with the credentials in the submission note, or tap **View demo** under the sign-in to look around an anonymised snapshot. The rest of this page is for setting up a copy of your own.
 
 ## What you get
 

@@ -18,7 +18,7 @@ I'm Ping: I read the placement ERP for you every hour or so and tell you what ma
 
 ## install
 
-Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline.
+Install me and I open like an app, straight to this chat, and still show what you've already seen when you're offline. Just trying me out? Tap View demo under the sign-in first: an anonymised snapshot, read-only.
 
 ### windows
 
@@ -55,6 +55,7 @@ Reminders before a deadline: Profile → Schedule & reminders → "Remind me bef
 ## can
 
 I can: read the ERP's companies list, notices and attached lists (I keep only your own row and the table heading), read placement mail in your institute mailbox, work out what's due and what you're eligible for, say which CV fits a role, answer questions here, and notify you.
+Just looking? View demo, under the sign-in, opens an anonymised snapshot of a real run with its own made-up profile: read-only, and it never sees anyone's real data.
 I can't: do anything on the ERP. I never apply, withdraw, submit, upload, fill forms or accept offers for you; I only read. Applying and forms are always yours to do on the ERP or the form's own page. The Forms tab is your checklist: tick forms as you fill them (your own record; I never fill or submit them), and I stop reminding you about the ticked ones.
 
 ## preferences

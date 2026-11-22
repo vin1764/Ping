@@ -12,11 +12,11 @@ chat, like WhatsApp:
 
 It **only reads**. It cannot apply, submit, upload or accept anything (see [Safety](#safety)).
 
-**Live dashboard:** https://vin1764.github.io/ping-dashboard/ (sign in; reviewers use the credentials in the
-submission note). How it gets there: see [Live dashboard](#live-dashboard).
+**Live dashboard:** https://vin1764.github.io/ping-dashboard/ (sign in, or tap **View demo** under the sign-in).
+How it gets there: see [Live dashboard](#live-dashboard).
 
-**Demo data:** an anonymous, read-only session on the live dashboard, for the automated checks and eval runners only
-(they open the page with `?anon-demo=1`; nothing links to it, and the sign-in screen has no demo button). It is an anonymised snapshot of a real run on
+**Demo data:** **View demo** on the sign-in screen opens an anonymous, read-only session on the live dashboard (the
+checks and eval runners open it with `?anon-demo=1`). It is an anonymised snapshot of a real run on
 21 Nov 2026: real companies, roles, pay, deadlines and notice wording; fake roll
 number, name and CGPA; every other student's name, roll number and phone number
 and everything from the mailbox removed. It shows the feed as it was at that
@@ -78,7 +78,7 @@ with your login.
 message, then "back online" when it works. Credentials refused: one email and chat message at once and the
 schedule pauses until you start a run yourself. See [When Ping needs you](#when-ping-needs-you).
 
-**The demo path.** The checks' demo session (`?anon-demo=1`) signs in anonymously; database rules give that session only the anonymised demo
+**The demo path.** View demo (and the checks' `?anon-demo=1`) signs in anonymously; database rules give that session only the anonymised demo
 rows (a made-up student over a real snapshot), its own chat, its own preferences and a rate limit (15
 questions an hour). It can't start a run, read real rows, or reach the CV bucket. See
 [docs/SECURITY.md](docs/SECURITY.md).
@@ -369,7 +369,7 @@ text and your targets, never your name, roll number, CGPA or mail.
   queued, logging in, reading companies / notices / PDFs, then "Done at 12:17 — 2 new
   items" or "Done — nothing new since 11:41", or why it couldn't finish. Scrolled up
   while reading? Nothing moves; a "↓ N new" pill takes you to what arrived.
-- **The demo session** (`?anon-demo=1`, for the checks and eval runners; not on the sign-in screen): an anonymous
+- **The demo session** (**View demo** on the sign-in screen; `?anon-demo=1` for the checks and eval runners): an anonymous
   session on the anonymised snapshot, with a "Demo - sample data, read-only" chip; its chat is kept for that
   session. `?demo=1` opens the same snapshot from a file, without the database. Both
   show the snapshot as it was when it was taken (a note above the unread messages says so).

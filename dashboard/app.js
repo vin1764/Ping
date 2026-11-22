@@ -894,7 +894,6 @@
 
   function status(text) { const el = $("#status"); el.textContent = text; el.hidden = !text; }
 
-  const ANON_DEMO = new URLSearchParams(location.search).get("anon-demo") === "1";
   function showLogin(sb) {
     // a real form with the fields password managers know (iCloud Keychain, Google Password Manager): they offer to
     // save it once and fill it with Face ID or a fingerprint after that. Ping itself never stores the password.
@@ -925,10 +924,10 @@
       h("button", { class: "btn", type: "submit" }, "Sign in"),
       h("p", { class: "muted small center stay" }, "You'll stay signed in on this device."),
       msg,
-      // the anonymous demo session: only for the checks and eval runners (Admin > live-page, ask-ping-page, evals),
-      // which open the page with ?anon-demo=1; it's linked from nowhere, and reviewers sign in like the owner
-      ANON_DEMO ? h("p", { class: "or" }, "or") : null,
-      ANON_DEMO ? h("button", { type: "button", class: "btn demo", id: "view-demo", onclick: async (e) => {
+      // View demo: an anonymous demo session (its own session key, the demo rows only; never the owner's session or
+      // profile). ?anon-demo=1 (the checks and eval runners) opens the same thing.
+      h("p", { class: "or" }, "or"),
+      h("button", { type: "button", class: "btn demo", id: "view-demo", onclick: async (e) => {
         e.target.disabled = true;
         msg.textContent = "Opening the demo\u2026";
         const demo = authClient(DEMO_AUTH_KEY);          // its own session: never the owner's
@@ -944,7 +943,7 @@
         location.hash = "#chat";
         keepSessionFresh(demo);
         startReal(demo);
-      } }, "Open the demo session") : null,
+      } }, "View demo"),
       h("p", { class: "center", style: "margin:0" }, h("a", { class: "own", href: "setup.html", id: "setup-link" }, "Set up Ping for yourself \u2192"))));
   }
 

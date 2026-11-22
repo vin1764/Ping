@@ -70,18 +70,19 @@ Numbers only, each with where it comes from. Collected 21 Nov 2026; updated 22 N
 | "For you" marks for the page | 2.4 s (197 roles, from the cache) | live call, 21 Nov 14:34 UTC |
 | preference change incl. re-marking 197 roles in one Gemini call | 30.2 s | live call, 21 Nov 14:34 UTC |
 
-## Performance (22 Nov, live site)
+## Performance (22 Nov 07:20 IST, live site, build 53ed8f7)
 
 | what | value | source |
 |---|---|---|
-| Lighthouse, mobile, landing page | performance 100, accessibility 100, best practices 100 (FCP 0.8 s, LCP 1.8 s, TBT 0 ms, CLS 0) | Lighthouse 12.2.1 on https://vin1764.github.io/ping-dashboard/ |
-| Lighthouse, mobile, the demo (`?demo=1`) | performance 89, accessibility 100, best practices 100 (FCP 0.9 s, LCP 3.6 s, TBT 120 ms, CLS 0); before the fixes of 22 Nov: 55 / 96 / 100 (TBT 1,360 ms) | same, build 8ba9236; before: build a3c4358 |
-| first load on 4G (9 Mbps, 170 ms) with a phone's CPU (4x slower), cold cache | landing page usable in 1.2 s; the demo's chat with its messages in 1.8 s | `setup/perf_check.js` |
-| FACT answer, typed into the page | median 16 ms on screen (65 of 65 under 300 ms), 162 ms with a phone's CPU; no typing bubble | `evals/ask_ping/PAGE_RUN.md`, `setup/perf_check.js` |
-| OPEN answer (the model) | median 17.6 s on screen: the main model timed out or was busy (503), the lighter model answered in 1-2 s | `evals/ask_ping/PAGE_RUN.md`, Admin > functions-check |
-| Companies, all 201 roles | first 60 drawn in 0.23 s, all 201 in 0.48 s; scrolling 61 frames/s, 0 frames over 50 ms (phone CPU) | `setup/perf_check.js` |
+| Lighthouse, mobile, landing page | performance 100, accessibility 100, best practices 100 (FCP 0.8 s, LCP 1.9 s, TBT 0 ms, CLS 0) | Lighthouse 12.2.1 on https://vin1764.github.io/ping-dashboard/ |
+| Lighthouse, mobile, the demo (`?demo=1`) | performance 96 and 91 (two runs), accessibility 100, best practices 100 (FCP 0.8 s, LCP 2.7-2.8 s, TBT 80-240 ms, CLS 0). Earlier on 22 Nov: 85-89 (LCP 3.7 s, held by the demo data file), and 55 / 96 / 100 before the first fixes (TBT 1,360 ms) | same; earlier: builds dc68e04, 8ba9236, a3c4358 |
+| installable (PWA) | yes: manifest, 192 / 512 / maskable icons, service worker active, served by it after a reload, opens offline with its thread; a push shown as a notification opens the thread at that message (a real push subscription can't be made headless) | `setup/pwa_check.js`, `docs/PWA_CHECK.txt` |
+| first load on 4G (9 Mbps, 170 ms) with a phone's CPU (4x slower), cold cache | landing page usable in 0.9-1.2 s; the demo's chat with its messages in 1.5-1.8 s | `setup/perf_check.js`, two runs |
+| FACT answer, typed into the page | median 16 ms on screen (65 of 65 under 300 ms, desktop CPU); 107-279 ms with a phone's CPU, asked the moment the chat appears (the demo's role details are still arriving); no typing bubble | `evals/ask_ping/PAGE_RUN.md`, `setup/perf_check.js` |
+| OPEN answer (the model) | median 9.4 s on screen (5 of 5 pass): the main model was out of quota on the evals key, the lighter one answered | `evals/ask_ping/PAGE_RUN.md`, Admin > gemini-check |
+| Companies, all 201 roles | first 60 drawn in 0.19-0.24 s, all 201 in 0.58-0.61 s; scrolling 61 frames/s, 0 frames over 50 ms (phone CPU) | `setup/perf_check.js` |
 | layout shift when a message arrives | 0.000 | `setup/perf_check.js` |
-| the demo's data as published | 3.0 MB (334 KB gzipped), was 6.6 MB (582 KB) | `dashboard/build.sh` |
+| the demo's data as published | 125 KB gzipped before the chat shows (`demo-data.json`), then 194 KB of JD text, pay details and JD summaries (`demo-details.json`) fetched after the first paint; the whole snapshot was 582 KB gzipped in one file before 22 Nov | `dashboard/build.sh` |
 
 ## Placement mail (22 Nov, the real mailbox, last 14 days)
 

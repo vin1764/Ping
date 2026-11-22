@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import hashlib
 import os
 import re
@@ -900,7 +901,9 @@ def main(argv: list[str] | None = None) -> int:
         if not args.company:
             print("recheck needs --company")
             return 2
-        recheck(Runner(secrets, store, store_ok=ok, trigger="manual"), args.company, os.environ.get("PING_RUN_ROW") or None)
+        res = recheck(Runner(secrets, store, store_ok=ok, trigger="manual"), args.company, os.environ.get("PING_RUN_ROW") or None)
+        # what the page will show is built from this (your own lists' verdicts; nobody else's data is in it)
+        print("RECHECK_RESULT " + json.dumps(res, default=str))
         store.save()
         return 0
     if args.mode == "diagnose":

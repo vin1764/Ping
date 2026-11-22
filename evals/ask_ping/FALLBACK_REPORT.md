@@ -1,6 +1,6 @@
 # Ask Ping without the AI: fallback evals
 
-_Run on 22 Nov 2026 01:50 IST against the deployed `ask-ping` function (build 28631be) from one-click demo sessions, snapshot time 21 Nov 17:32 IST, with `no_ai: true` so every answer comes from the rules (`supabase/functions/_shared/answer_rules.js`), exactly what a student gets when Gemini is busy. Re-run: `python evals/ask_ping/run_ask_ping_evals.py --only F`._
+_Run on 22 Nov 2026 07:38 IST (first run 01:50 IST, also 8 of 8) against the deployed `ask-ping` function (build 14a73c4) from one-click demo sessions, snapshot time 21 Nov 17:32 IST, with `no_ai: true` so every answer comes from the rules (`supabase/functions/_shared/answer_rules.js`), exactly what a student gets when Gemini is busy. Re-run: `python evals/ask_ping/run_ask_ping_evals.py --only F`._
 
 **8 of 8 passed.**
 

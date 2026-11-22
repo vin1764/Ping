@@ -20,7 +20,15 @@
     const t = String(text == null ? "" : text), i = t.indexOf(" — ");
     return i > 0 ? cleanName(t.slice(0, i)) + t.slice(i) : cleanName(t);
   }
-  const api = { cleanName, cleanRowText };
+  // on screen, a shouted multi-word name in title case, its short acronyms kept ("FUTURES FIRST" -> "Futures First",
+  // "TATA AIG" -> "Tata AIG"); a one-word name stays as the ERP writes it ("AIRAMATRIX", "BLUESTONE")
+  const ACRONYMS = new Set("ICICI HDFC IDFC HSBC HPCL BPCL IOCL ONGC NTPC BHEL GAIL SAIL KPMG NVIDIA EXL BNY UBS DBS ITC TVS JSW EY".split(" "));
+  function displayName(name) {
+    const s = cleanName(name), words = s.split(" ");
+    if (words.length < 2 || s !== s.toUpperCase() || !/[A-Z]{4,}/.test(s)) return s;
+    return words.map((w) => (w.length <= 3 || /\d/.test(w) || ACRONYMS.has(w.replace(/[^A-Z]/g, "")) ? w : w[0] + w.slice(1).toLowerCase())).join(" ");
+  }
+  const api = { cleanName, cleanRowText, displayName };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingNames = api;
 })(typeof window !== "undefined" ? window : globalThis);

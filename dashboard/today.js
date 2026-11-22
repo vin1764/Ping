@@ -20,7 +20,7 @@
   const clock = (t) => HM.format(new Date(t));
   // display names (dashboard/names.js): the website in brackets goes, the raw ERP name stays in the data
   const NAMES = root.PingNames || (typeof require === "function" ? require("./names.js") : null);
-  const cleanName = (s) => (NAMES ? NAMES.cleanName(s) : String(s || "").trim());
+  const cleanName = (s) => (NAMES ? (NAMES.displayName || NAMES.cleanName)(s) : String(s || "").trim());
   // "Piramal" for "Piramal Capital & Housing Finance Ltd", "TATA AIG" for "TATA AIG General Insurance": a list of names
   const LEGALISH = /\b(private|pvt|limited|ltd|inc|llp|llc|plc|co|company|corp|corporation|technologies|technology|services|solutions|group|global|labs|systems|software|india|general|insurance|capital|housing|finance|financial|bank|consulting|developers|energy|the|and)\b\.?/gi;
   const shortName = (s) => {
@@ -161,6 +161,34 @@
     return [...new Set(names)];
   }
 
+  // what a notice asks, said as what to do ("deadlines extended to 20:00", "submit CV by 20:00"), with the time it's
+  // about and which list it belongs with (applications or forms), so the row reads as an action, not a subject line
+  function noticeWhat(n) {
+    const a = n.analysis || {}, kind = n.kind || a.kind, subj = String(n.subject || "");
+    const todos = (n.todos || a.todos || []).filter((t) => t && t.action);
+    const due = (act) => todos.find((t) => (!act || t.action === act) && t.due)?.due || null;
+    const at = (v) => (v ? clock(ms(v)) : "");
+    if (kind === "deadline_extended" || /extend|extension/i.test(subj)) {
+      const d = due("apply") || due();
+      return { many: d ? `Deadlines extended to ${at(d)}` : "Deadlines extended", one: d ? `deadline extended to ${at(d)}` : "deadline extended", due: d, list: "apply" };
+    }
+    if (/\bcv\b|resume/i.test(subj)) {
+      const d = due("submit") || due("apply");
+      return { many: d ? `Submit CV by ${at(d)}` : "Submit CV", one: d ? `submit CV by ${at(d)}` : "submit CV", due: d, list: "apply" };
+    }
+    if (due("fill_form")) return { many: `Fill a form by ${at(due("fill_form"))}`, one: `fill the form by ${at(due("fill_form"))}`, due: due("fill_form"), list: "form" };
+    if (due("submit")) return { many: `Submit by ${at(due("submit"))}`, one: `submit by ${at(due("submit"))}`, due: due("submit"), list: "form" };
+    if (due("accept_offer")) return { many: `Accept offers by ${at(due("accept_offer"))}`, one: `accept the offer by ${at(due("accept_offer"))}`, due: null };
+    const KIND = { apply_open: ["Open for applications", "open for applications"], test: ["Tests", "test"], test_rooms: ["Test rooms out", "test rooms out"],
+                   shortlist: ["Shortlists out", "shortlist out"], result: ["Results out", "results out"], ppt: ["Pre-placement talks", "pre-placement talk"],
+                   schedule: ["Schedule", "schedule"] };
+    if (KIND[kind]) {
+      const d = kind === "apply_open" ? due("apply") : null;
+      return { many: KIND[kind][0] + (d ? ` until ${at(d)}` : ""), one: KIND[kind][1] + (d ? ` until ${at(d)}` : ""), due: d, list: d ? "apply" : null };
+    }
+    return null;
+  }
+
   const NOTICE_MAX = 6;
   function notices(list, day, items, inChat) {
     const today = (list || []).filter((n) => n.notice_time && dayOf(ms(n.notice_time)) === day)
@@ -168,17 +196,18 @@
     const rows = today.slice(0, NOTICE_MAX).map((n) => {
       const nid = n.notice_id ?? n.id;
       const it = (items || []).find((x) => x.notice_id === nid && inChat(x));
-      // a notice for several companies says what it is first ("CV Submission"), then "several companies"
+      const what = noticeWhat(n);
+      const posted = `posted ${clock(ms(n.notice_time))}`;
+      const base = { kind: "notice", at: ms(n.notice_time), noticeId: nid, itemIds: it ? [it.id] : [], target: it ? { item: it.id } : { notice: nid },
+                     dueAt: what?.due ? ms(what.due) : null, list: what?.list || null };
       const many = /multiple|several|various/i.test(n.company || "");
-      if (!many) return { kind: "notice", at: ms(n.notice_time), title: cleanName(n.company), noticeId: nid, itemIds: it ? [it.id] : [],
-                          sub: `${clock(ms(n.notice_time))} · ${n.subject || "Notice"}`, target: it ? { item: it.id } : { notice: nid } };
-      // several companies: say which (first 3 + N) and what it asks, not "several companies"
+      // one company: "ICICI Lombard · deadline extended to 20:00"
+      if (!many) return { ...base, title: `${cleanName(n.company)} · ${what ? what.one : n.subject || "notice"}`, sub: posted };
+      // several: "Deadlines extended to 20:00 · 18 companies", then which ones
       const names = noticeCompanies(n), asks = noticeAsks(n);
       const who = names.length ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ")) : "several companies";
-      return { kind: "notice", at: ms(n.notice_time), title: n.subject || "Notice", noticeId: nid, itemIds: it ? [it.id] : [],
-               companies: names, asks,
-               sub: `${clock(ms(n.notice_time))}${asks ? ` · ${asks}` : ""}`, names: who,
-               target: it ? { item: it.id } : { notice: nid } };
+      const count = names.length ? ` · ${names.length} compan${names.length === 1 ? "y" : "ies"}` : "";
+      return { ...base, title: `${what ? what.many : n.subject || "Notice"}${count}`, companies: names, asks, sub: posted, names: who };
     });
     if (today.length > NOTICE_MAX) rows.push({ kind: "more", at: ms(today[NOTICE_MAX].notice_time),
       title: `+${today.length - NOTICE_MAX} more notices today`, sub: "", target: { feed: true } });
@@ -191,7 +220,18 @@
     // a form row you've ticked in full is done: it stays on the list, but isn't "still ahead"
     const timed = [...tests(items, day, inChat), ...deadlines(roles, day, isMine, items, inChat), ...todos(items, day, inChat, isFilled)]
       .map((r) => ({ ...r, over: r.at <= now || !!r.filledAll }));
-    const news = notices(nlist, day, items, inChat).map((r) => ({ ...r, over: false }));
+    // a notice about a deadline that's already a row (the 20:00 applications, the 20:00 forms) joins that row
+    // instead of appearing twice: the row says the notice moved or set it
+    const news = [];
+    for (const r of notices(nlist, day, items, inChat)) {
+      const same = r.dueAt && timed.find((t) => t.at === r.dueAt && ((r.list === "apply" && t.kind === "deadline") || (r.list === "form" && t.kind === "todo")));
+      if (same) {
+        same.noticeIds = [...(same.noticeIds || []), r.noticeId];
+        same.sub = `${same.sub}${/notice/.test(same.sub) ? "" : ` · ${/extended/i.test(r.title) ? "extended by a notice" : "per a notice"} (${r.sub.replace("posted ", "")})`}`;
+        continue;
+      }
+      news.push({ ...r, over: false });
+    }
     const next = nextCheck(runs, profile, now);
     const ahead = timed.filter((r) => !r.over);
     const done = timed.filter((r) => r.over).sort((a, b) => a.at - b.at);

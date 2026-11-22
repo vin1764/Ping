@@ -44,7 +44,7 @@ test("today, in time order; what's over at the bottom; notices one line each; no
   const d = day();
   const kinds = d.rows.map((r) => `${r.kind}:${r.title}${r.over ? " (over)" : ""}`);
   assert.deepStrictEqual(kinds, [
-    "notice:HPCL", "test:Groww test", "todo:BlackBuck", "deadline:4 applications close",
+    "notice:HPCL · submit CV", "test:Groww test", "todo:BlackBuck", "deadline:4 applications close",
     "test:Meesho test (over)", "deadline:1 application closes (over)"]);
   const groww = d.rows.find((r) => r.title === "Groww test");
   assert.strictEqual(groww.sub, "Associate Product Manager · 15:00 · room NR 121");
@@ -98,9 +98,10 @@ test("a notice for several companies says which (first 3 + N) and what it asks",
     analysis: { kind: "form", targets: ["Piramal Capital", "1. SLB", "LTM", "Auro Group", "Axis Bank"].map((x) => ({ name: x, company: x.replace(/^1\. /, "") })),
                 todos: [{ action: "apply", due: "2026-11-21T16:00:00+05:30" }, { action: "fill_form", due: "2026-11-21T16:00:00+05:30" }] } };
   const r = T.build({ items: [], roles: [], notices: [n], runs, now: NOW }).rows.find((x) => x.kind === "notice");
-  assert.strictEqual(r.title, "Additional requirement");
+  // what to do, not the subject line: "Fill a form by 16:00 · 5 companies"
+  assert.strictEqual(r.title, "Fill a form by 16:00 · 5 companies");
   assert.strictEqual(r.names, "Piramal, SLB, LTM +2");
-  assert.strictEqual(r.sub, "11:00 · fill a form by 16:00");
+  assert.strictEqual(r.sub, "posted 11:00");
   assert.ok(!/several companies/.test(r.sub + r.names));
 });
 
@@ -179,4 +180,22 @@ test("form rows count your ticks: '3 forms due 20:00 · 2 filled', all ticked = 
   m = T.build({ items, now, isFilled: () => true });
   assert.equal(m.rows.find((r) => r.kind === "todo").filledAll, true);
   assert.equal(m.ahead, 0);
+});
+
+test("notice rows say what to do; a notice about a deadline that's already a row joins it", () => {
+  const ext = { notice_id: "21", company: "Multiple Companies", subject: "Date extension", notice_time: "2026-11-21T11:30:00+05:30",
+    analysis: { kind: "deadline_extended", targets: ["ICICI LOMBARD", "FUTURES FIRST", "Zeta"].map((x) => ({ name: x, company: x })),
+                todos: [{ action: "apply", due: "2026-11-21T20:00:00+05:30" }] } };
+  const one = { notice_id: "22", company: "ICICI LOMBARD", subject: "Date extension", notice_time: "2026-11-21T11:40:00+05:30",
+    analysis: { kind: "deadline_extended", todos: [{ action: "apply", due: "2026-11-21T21:00:00+05:30" }] } };
+  const cv = { notice_id: "23", company: "Multiple Companies", subject: "CV Submission", notice_time: "2026-11-21T11:50:00+05:30",
+    analysis: { kind: "apply_open", targets: ["A1", "B2"].map((x) => ({ name: x, company: x })), todos: [{ action: "apply", due: "2026-11-21T22:00:00+05:30" }] } };
+  const rows = T.build({ items: [], roles: [], notices: [ext, one, cv], runs, now: NOW }).rows.filter((r) => r.kind === "notice");
+  assert.deepStrictEqual(rows.map((r) => r.title), ["Deadlines extended to 20:00 · 3 companies", "ICICI Lombard · deadline extended to 21:00",
+                                                    "Submit CV by 22:00 · 2 companies"]);
+  // the same 20:00 deadline as the applications row: one row, which says the notice extended it
+  const roles = [{ id: "r1", company: "Zeta", designation: "Analyst", effective_deadline: "2026-11-21T20:00:00+05:30", applied: false }];
+  const d = T.build({ items: [], roles, notices: [ext], runs, now: NOW });
+  assert.ok(!d.rows.some((r) => r.kind === "notice"));
+  assert.match(d.rows.find((r) => r.kind === "deadline").sub, /extended by a notice \(11:30\)/);
 });

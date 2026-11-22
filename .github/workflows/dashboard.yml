@@ -107,6 +107,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_EVALS: ${{ secrets.GEMINI_API_KEY_EVALS }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_API_KEY_EVALS: ${{ secrets.GROQ_API_KEY_EVALS }}
           PING_GITHUB_TOKEN: ${{ secrets.PING_GITHUB_TOKEN }}
           PUBLISHABLE: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -120,8 +122,9 @@ jobs:
           [ -n "$GEMINI_API_KEY" ] && ARGS+=("GEMINI_API_KEY=$GEMINI_API_KEY")
           # evals and Admin checks: their own key (ask-ping uses it only for requests that prove they hold it)
           [ -n "$GEMINI_API_KEY_EVALS" ] && ARGS+=("GEMINI_API_KEY_EVALS=$GEMINI_API_KEY_EVALS")
-          # Ask Ping when Gemini is busy: main model with retries, then this lighter model once, then the rules answer
-          ARGS+=("PING_AI_LITE_MODEL=gemini-3.1-flash-lite")
+          # Ask Ping's chat: Groq first (its own live and evals keys), then Gemini flash-lite, then the rules answer
+          [ -n "$GROQ_API_KEY" ] && ARGS+=("GROQ_API_KEY=$GROQ_API_KEY")
+          [ -n "$GROQ_API_KEY_EVALS" ] && ARGS+=("GROQ_API_KEY_EVALS=$GROQ_API_KEY_EVALS")
           [ -n "$PING_GITHUB_TOKEN" ] && ARGS+=("PING_GITHUB_TOKEN=$PING_GITHUB_TOKEN")
           [ -n "$PUBLISHABLE" ] && ARGS+=("PING_PUBLISHABLE_KEY=$PUBLISHABLE")
           # server-side only: ask-ping reads/writes the "For you" cache (role_marks) and a first-run profile row

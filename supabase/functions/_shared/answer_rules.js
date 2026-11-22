@@ -694,7 +694,7 @@
   // first, then routed the same way.
   const FACT = ["whichcv", "deadline", "test", "shortlist", "pay", "eligible", "applied", "notice", "roles", "location", "score",
                 "contact", "foryou", "jd", "mail"];
-  const ACK = /^(ok(ay)?|k|kk|thanks?|thank you|thx|ty|cool|great|nice|got it|alright|fine|sure|perfect|noted|done)[\s.!]*$/i;
+  const ACK = /^(ok(ay)?|k|kk|thanks?|thank you|thx|ty|cool|great|nice|got it|alright|fine|sure|perfect|noted|done|never ?mind|no thanks|nope|leave it|keep it)[\s.!]*$/i;
   const OPEN = /\b(why|how come|explain|compare|comparison|versus|vs|better|difference|differ|should i|recommend|suggest\w*|advice|advise|tips?|prepare|preparation|tell me (more )?about|what do you think|worth|pros|cons|opinion|which (one|company|role|offer) (is|should|would))\b/;
   const ELSE = /\b(nothing|anything|what|something|any|whats) else\b|\bany ?more\b|\bothers?\s*$|^else$/;
   const FOLLOW = /^(and|but|also|then|so|plus|what about|how about|same for|same|same with|and for)\b/;
@@ -940,7 +940,157 @@
       : !(x.v <= 1 || nums.some((n) => (x.v >= 1e5 ? Math.abs(n - x.v) <= x.v * 0.005 : n === x.v)))).map((x) => x.raw);
   }
 
-  const api = { answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  // ---------------------------------------------------------------- feedback: "X not relevant", "show X again"
+  // Said plainly or as a reply, with typos ("piamal not relevantt for me"): a company, or one of its roles, hidden from
+  // For you (or shown again). Decided here by rules, so it works with the model down; the ask-ping function saves it
+  // (profile lists: not_interested_companies, interested_companies, hidden_roles, shown_roles) and the page, the
+  // digests, Today, Forms and reminders follow. Never a model call, never a status dump.
+  const FB_HIDE = /\bnot\s+(?:very\s+|that\s+|really\s+|at\s+all\s+)?(?:rel[ea]?v[ae]?n\w*|rele\w*|int(?:e)?r(?:e)?st\w*|for\s+me|my\s+(?:thing|type|cup)|needed|useful)|\birr?el[ea]?v[ae]?n\w*|\bno\s+longer\s+int\w*|\buninterest\w*|\bnot\s+keen\b|^\s*(?:please\s+|pls\s+)?(?:ignore|hide|remove|skip|drop|mute)\b|\b(?:don'?t|do\s+not|dont)\s+(?:show|want|care|need|list)\b/i;
+  const FB_SHOW = /\b(?:is|are|it'?s|seems?)\s+(?:actually\s+|quite\s+|very\s+)?rel[ea]?v[ae]?n\w*|\brel[ea]?v[ae]?n\w*\s+(?:to|for)\s+me\b|\b(?:is|are)\s+for\s+me\b|\bshow\b.*\bagain\b|\bunhide\b|\bbring\b.*\bback\b|\b(?:i'?m|i\s+am)\s+(?:actually\s+)?int(?:e)?r(?:e)?st\w*\s+in\b|^\s*(?:please\s+)?(?:show|include)\s+\w/i;
+  const FB_UNDO = /^\s*(?:undo|undo\s+(?:that|it|the\s+last(?:\s+one)?)|revert(?:\s+that)?)[\s.!]*$/i;
+  const QUESTION = /\?\s*$|^\s*(?:is|are|am|was|which|what|whats|why|how|when|where|who|should|do|does|did|can|could|will|would)\b/i;
+  const FB_FILLER = /\b(?:not|no|longer|very|that|really|at|all|irr?el\w*|rel\w*|int\w*|uninterest\w*|keen|for|me|my|thing|type|cup|needed|useful|ignore|hide|remove|skip|drop|mute|don'?t|dont|do|show|want|care|need|list|again|unhide|bring|back|i'?m|i|am|is|are|it'?s|it|seems?|actually|quite|please|pls|include|the|this|that|these|those|them|one|ones|company|companies|anymore|any|more|to|in|of|please|also|just|ok|okay)\b/gi;
+  // a cheap first look (no data): might this be feedback?
+  function feedbackLike(message) {
+    const raw = String(message || "").trim();
+    return !!raw && raw.length <= 300 && (FB_UNDO.test(raw) || (!QUESTION.test(raw) && (FB_HIDE.test(raw) || FB_SHOW.test(raw))));
+  }
+  const ROLEWORDS = (s) => norm(s).split(" ").filter((w) => w.length >= 2 && !LEGAL.has(w) && !["and", "the", "of", "for", "role", "roles", "i", "ii", "1", "2"].includes(w));
+
+  // -> null (not feedback) | { action: "undo" } | { action: "hide"|"show", level: "company"|"role", company, roles:[{id,label}] }
+  //    | { action, ask: { text, chips: [{label, send}] } } when the company isn't clear
+  function feedbackOf(message, data, opts = {}) {
+    const raw = String(message || "").trim();
+    if (!raw || raw.length > 300) return null;
+    if (FB_UNDO.test(raw)) return { action: "undo" };
+    if (QUESTION.test(raw)) return null;
+    const hide = FB_HIDE.test(raw), show = !hide && FB_SHOW.test(raw);
+    if (!hide && !show) return null;
+    const action = hide ? "hide" : "show";
+    const ents = entities(data);
+    const anchor = (opts.anchorCompanies || []).filter(Boolean);
+    const rest = raw.replace(FB_FILLER, " ").replace(/[^\w&.\- ]+/g, " ").replace(/\s+/g, " ").trim();
+    let hits = rest ? matchCompanies(rest, data, ents).hits : [];
+    if (anchor.length) {
+      const inAnchor = (e) => anchor.some((a) => keyWords(a).join(" ") === e.key || norm(shortName(a)) === norm(e.name) || [...e.raw].includes(a));
+      const scoped = hits.filter(inAnchor);
+      if (scoped.length) hits = scoped;
+      else if (rest) {
+        // a looser match against the quoted message's companies only ("piamal" -> Piramal Finance)
+        const toks = tokensOf(rest).filter((t) => t.length >= 4 && !STOP.has(t));
+        const loose = ents.filter(inAnchor).filter((e) => toks.some((t) => e.words.some((w) => w.length >= 4 && (editClose(t, w) || w.startsWith(t.slice(0, 4))))));
+        if (loose.length) hits = loose;
+      }
+      if (!hits.length && !rest) hits = ents.filter(inAnchor);
+    }
+    // no company yet: a short typo of one ("grow" -> Groww), when exactly one company fits
+    if (!hits.length && rest) {
+      const toks = tokensOf(rest).filter((t) => t.length >= 4 && !STOP.has(t));
+      const near = (t, w) => w.length >= 4 && (w.startsWith(t) || t.startsWith(w) || editClose(t, w) ||
+        (Math.abs(t.length - w.length) <= 1 && Math.min(t.length, w.length) >= 4 && lev1(t, w)));
+      const loose = ents.filter((e) => e.roles && toks.some((t) => e.words.some((w) => near(t, w))));
+      if (loose.length === 1) hits = loose;
+    }
+    // a statement with no company: about the previous turn's company, else ask which
+    if (!hits.length && opts.previousCompanies?.length) hits = ents.filter((e) => opts.previousCompanies.includes(e.name));
+    if (!hits.length && !anchor.length && rest && tokensOf(rest).every((t) => STOP.has(t) || ROLE_HINT.test(t))) return null;    // "not interested in sde roles": a preference about role types
+    if (hits.length !== 1) {
+      const pool = (hits.length ? hits : anchor.length ? ents.filter((e) => anchor.some((a) => [...e.raw].includes(a) || norm(shortName(a)) === norm(e.name))) : []).slice(0, 5);
+      if (!pool.length) return hits.length || anchor.length || rest ? { action, ask: { text: `Which company should I ${action === "hide" ? "hide from" : "show again in"} For you? For example: "${action === "hide" ? "hide" : "show"} ${ents[0]?.name || "Groww"}".`, chips: [] } } : null;
+      return { action, ask: { text: `${action === "hide" ? "Hide" : "Show"} which one ${action === "hide" ? "from" : "in"} For you?`,
+        chips: [...pool.map((e) => ({ label: e.name, send: `${action} ${e.name}` })), { label: "None", send: "never mind" }] } };
+    }
+    const e = hits[0];
+    // a role of that company named too ("piramal sde not relevant"): that role only
+    const words = new Set(tokensOf(rest).filter((t) => !e.words.includes(t) && !(e.key.includes(t))));
+    const roles = (data.roles || []).filter((r) => e.raw.has(r.company));
+    const named = words.size ? roles.filter((r) => { const rw = ROLEWORDS(r.designation || ""); return rw.some((w) => words.has(w)) && rw.length; }) : [];
+    if (named.length && named.length < roles.length) {
+      return { action, level: "role", company: [...e.raw][0], name: e.name, roles: named.map((r) => ({ id: r.id, label: `${e.name} — ${r.designation}` })) };
+    }
+    return { action, level: "company", company: [...e.raw].find((c) => roles.some((r) => r.company === c)) || [...e.raw][0], name: e.name, roles: [] };
+  }
+  // one edit apart (insert, delete or replace one letter)
+  function lev1(a, b) {
+    if (a === b) return true;
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0, j = 0, edits = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++edits > 1) return false;
+      if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+    }
+    return edits + (a.length - i) + (b.length - j) <= 1;
+  }
+  const ROLE_HINT = /^(sde|swe|analyst|analytics|data|product|consulting|consultant|finance|quant|core|software|engineer\w*|developer|design\w*|marketing|sales|ops|operations|hr|research\w*|scientist|management|trainee|manager|banking|strategy|roles?)$/;
+
+  // the four lists after a hide / show (company names as the companies list writes them; role ids)
+  const cmp = (s) => norm(String(s || "")).replace(/ /g, "");
+  const sameCo = (a, b) => { const x = cmp(a), y = cmp(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
+  function applyFeedback(lists, fb, roles) {
+    const L = { not_interested_companies: [...(lists.not_interested_companies || [])], interested_companies: [...(lists.interested_companies || [])],
+                hidden_roles: [...(lists.hidden_roles || [])], shown_roles: [...(lists.shown_roles || [])] };
+    const coRoles = (roles || []).filter((r) => sameCo(r.company, fb.company)).map((r) => String(r.id));
+    if (fb.level === "company") {
+      if (fb.action === "hide") {
+        if (!L.not_interested_companies.some((c) => sameCo(c, fb.company))) L.not_interested_companies.push(fb.company);
+        L.interested_companies = L.interested_companies.filter((c) => !sameCo(c, fb.company));
+        L.shown_roles = L.shown_roles.filter((id) => !coRoles.includes(String(id)));
+      } else {
+        const was = L.not_interested_companies.some((c) => sameCo(c, fb.company)) || L.hidden_roles.some((id) => coRoles.includes(String(id)));
+        L.not_interested_companies = L.not_interested_companies.filter((c) => !sameCo(c, fb.company));
+        L.hidden_roles = L.hidden_roles.filter((id) => !coRoles.includes(String(id)));
+        // "show X again" after a hide: back to how Ping judges it; "X is relevant": always For you
+        if (!was && !L.interested_companies.some((c) => sameCo(c, fb.company))) L.interested_companies.push(fb.company);
+      }
+    } else {
+      const ids = fb.roles.map((r) => String(r.id));
+      if (fb.action === "hide") {
+        L.hidden_roles = [...new Set([...L.hidden_roles.map(String), ...ids])];
+        L.shown_roles = L.shown_roles.filter((id) => !ids.includes(String(id)));
+      } else {
+        const was = L.hidden_roles.some((id) => ids.includes(String(id)));
+        L.hidden_roles = L.hidden_roles.filter((id) => !ids.includes(String(id)));
+        if (!was) L.shown_roles = [...new Set([...L.shown_roles.map(String), ...ids])];
+      }
+    }
+    return L;
+  }
+  // one line, with its Undo button ([Undo](#ask:undo): the page draws it as a button that sends "undo")
+  function feedbackLine(fb) {
+    const what = fb.level === "role" ? fb.roles.map((r) => r.label).join(", ") : fb.name;
+    return fb.action === "hide" ? `Got it, ${what} won't show as For you anymore. [Undo](#ask:undo)`
+      : `Got it, ${what} will show as For you. [Undo](#ask:undo)`;
+  }
+  // For you, as you've said it: true / false, or null (Ping's own marks decide)
+  function pinned(role, lists) {
+    if (!role || !lists) return null;
+    const id = String(role.id);
+    if ((lists.hidden_roles || []).map(String).includes(id)) return false;
+    if ((lists.shown_roles || []).map(String).includes(id)) return true;
+    if ((lists.not_interested_companies || []).some((c) => sameCo(c, role.company))) return false;
+    if ((lists.interested_companies || []).some((c) => sameCo(c, role.company))) return true;
+    return null;
+  }
+  // "My preferences": the lists in words
+  function describeLists(lists, roles) {
+    const label = (id) => { const r = (roles || []).find((x) => String(x.id) === String(id)); return r ? `${shortName(r.company)} — ${r.designation}` : null; };
+    const hid = [...(lists.not_interested_companies || []).map(shortName), ...(lists.hidden_roles || []).map(label).filter(Boolean)];
+    const shw = [...(lists.interested_companies || []).map(shortName), ...(lists.shown_roles || []).map(label).filter(Boolean)];
+    return [hid.length ? `hidden from For you: ${hid.join(", ")}` : "hidden from For you: none",
+            shw.length ? `always For you: ${shw.join(", ")}` : ""].filter(Boolean).join("; ");
+  }
+  // a reply that is a statement Ping can't place, with the model down: one short question, never a status dump
+  function clarify(message, anchorCompanies, data) {
+    const ents = entities(data);
+    const named = matchCompanies(message, data, ents).hits.filter((e) => anchorCompanies.some((a) => [...e.raw].includes(a) || norm(shortName(a)) === norm(e.name)));
+    if (named.length === 1) return { text: `Hide ${named[0].name} from For you? [Yes](#ask:${encodeURIComponent(`hide ${named[0].name}`)}) [No](#ask:never%20mind)` };
+    const names = anchorCompanies.map(shortName).slice(0, 4);
+    if (!names.length) return null;
+    return { text: `I'm not sure what you'd like me to do with that. Hide one of these from For you? ${names.map((n) => `[${n}](#ask:${encodeURIComponent(`hide ${n}`)})`).join(" ")} [No](#ask:never%20mind)` };
+  }
+
+  const api = { feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -245,7 +245,7 @@
     // "For you" marks for the current targets, from the server's cache (the page never sees the cache itself)
     async marks() {
       const out = await this.fn("ask-ping", { marks: true });
-      return { prefs: out.prefs || {}, marks: new Map(Object.entries(out.marks || {})) };
+      return { prefs: out.prefs || {}, marks: new Map(Object.entries(out.marks || {})), lists: out.lists || null };
     }
     async markItem(id, patch) {
       if (this.demo) return;           // the demo: on this page only (the shared demo rows are read-only)
@@ -273,18 +273,26 @@
     // "check FirstClub again": one company read again from the ERP (read-only); a demo session gets the snapshot's reading
     async recheck(company, question) { return this.demo ? { demo: true } : this.fn("check-now", { task: "recheck", company, question }); }
     async recheckRow(id) { const { data } = await this.sb.from("rechecks").select("*").eq("id", id).limit(1); return data?.[0] || null; }
-    async ask(q) {
+    async ask(q, reply) {
       // the demo is a snapshot: "tomorrow" is the day after it, as everywhere else on the page
       const asOf = this.demo && state.asOf ? new Date(state.asOf).toISOString() : undefined;
+      const R = window.PingRules;
       try {
-        const out = await this.fn("ask-ping", { question: q, as_of: asOf });
+        const out = await this.fn("ask-ping", { question: q, as_of: asOf, ...(reply ? { reply } : {}) });
         if (out.prefs_changed) state.prefsChanged = true;
+        if (out.lists) { state.lists = { ...(state.lists || {}), ...out.lists }; state.marksVersion = (state.marksVersion || 0) + 1; }
         return out.answer;
       }
       catch (e) {
+        // feedback ("X not relevant") is saved by the function: without it, say so, never answer something else
+        if (R?.feedbackLike(q)) return isNetErr(e) || e.status >= 500 ? "I couldn't save that just now. Try again in a moment."
+          : `I couldn't save that (${plainly(e)}).`;
         if (e.status === 429) return `${e.message}\n\nMeanwhile, from the ERP data: ${answerLocally(q, state.data)}`;
+        // a reply that is a statement: one short question, never the status of every company it quotes
+        if (reply && !/\?\s*$/.test(q) && R?.clarify) { const c = R.clarify(q, reply.companies || [], factsOf(state.data)); if (c) return c.text; }
         // short and plain: what happened, and that the answer below is still from the ERP data
-        const why = e.status === 403 ? "this login can't ask Ping's assistant" : "Ping's assistant couldn't be reached";
+        const why = e.status === 403 ? "this login can't ask Ping's assistant" : e.status === 400 ? "Ping's assistant couldn't take that message"
+          : "Ping's assistant couldn't be reached";
         return answerLocally(q, state.data) + `\n\n(${why}, so this answer comes straight from the ERP data.)`;
       }
     }
@@ -1473,11 +1481,14 @@
   // browser), and an "ERP data from 12:41 (…)" line gets a Check now button. Never literal ** or "- " in a bubble.
   function richText(text) {
     const inline = (str) => {
-      const parts = [], re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|#[a-z][\w/-]*)\)|\*\*([^*]+)\*\*/g;
+      const parts = [], re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|#ask:[^)\s]+|#[a-z][\w/-]*)\)|\*\*([^*]+)\*\*/g;
       let last = 0, m;
       while ((m = re.exec(str))) {
         if (m.index > last) parts.push(...placeLinks(str.slice(last, m.index)));
-        parts.push(m[1] ? (m[2].startsWith("#") ? h("a", { href: m[2], class: "inline-link" }, m[1])
+        // "[Undo](#ask:undo)", "[Yes](#ask:hide%20Groww)": a button that sends that message in the chat
+        parts.push(m[1] && m[2].startsWith("#ask:") ? h("button", { type: "button", class: "chip ask-chip", "data-ask": m[2].slice(5),
+            onclick: (ev) => { ev.stopPropagation(); askInChat(decodeURIComponent(m[2].slice(5))); } }, m[1])
+          : m[1] ? (m[2].startsWith("#") ? h("a", { href: m[2], class: "inline-link" }, m[1])
           : h("a", { href: m[2], target: "_blank", rel: "noopener", class: "inline-link" }, m[1])) : h("strong", {}, m[3]));
         last = re.lastIndex;
       }
@@ -1826,7 +1837,9 @@
   // again by the current marks
   function resplit(d) {
     const marks = state.marks, targets = state.prefs?.targets;
-    if (!marks || !marks.size || !targets || !["application", "listing"].includes(d.kind)) return d.list || [];
+    if (!["application", "listing"].includes(d.kind) || ((!marks || !marks.size || !targets) && !hasPins())) return d.list || [];
+    const relOf = (id) => { const r = roleById().get(id) || { id }; const pin = pinOf(r);
+      return pin !== null ? { relevant: pin, reason: pin ? "You said it's for you" : "" } : (marks?.size && targets ? marks.get(id) : { relevant: true }); };
     const out = [];
     const sections = new Map();
     for (const g of d.list || []) {
@@ -1837,11 +1850,11 @@
     }
     const listOthers = state.prefs?.list_other_roles !== false;
     for (const [prefix, rows] of sections) {
-      const mine = rows.filter((r) => marks.get(r.id)?.relevant).map((r) => {
-        const m = marks.get(r.id);
+      const mine = rows.filter((r) => relOf(r.id)?.relevant).map((r) => {
+        const m = relOf(r.id);
         return { ...r, note: [m.reason, m.best_cv ? `Apply with: ${m.best_cv}` : ""].filter(Boolean).join(" · ") };
       });
-      const others = rows.filter((r) => !marks.get(r.id)?.relevant).map((r) => ({ ...r, note: "" }));
+      const others = rows.filter((r) => !relOf(r.id)?.relevant).map((r) => ({ ...r, note: "" }));
       const h = (s) => (prefix ? `${prefix} · ${s}` : s);
       if (mine.length) out.unshift({ head: h("For you"), rows: mine });
       if (others.length) out.push(listOthers ? { head: h(`Others (${others.length})`), collapsed: true, rows: others }
@@ -1986,19 +1999,21 @@
     // replying: the quoted message answers some questions by itself ("which of these haven't I applied to?", "which
     // cv for the second one?", "where is it?", "done" on a form line, "check again"); others are asked about it
     const P = window.PingReply;
-    const direct = rp && P ? P.answer(q, rp.anchor, { isFilled: (k) => !!FORMS?.isFilled(state.formStatus, k), when }) : null;
+    // feedback ("piramal not relevant", "show Zeta again", "undo"): the function saves it; never answered here
+    const feedback = !!RR?.feedbackLike(q);
+    const direct = rp && P && !feedback ? P.answer(q, rp.anchor, { isFilled: (k) => !!FORMS?.isFilled(state.formStatus, k), when }) : null;
     if (direct?.recheck) return recheckFlow(q, { kind: "recheck", companies: rp.anchor.companies }, mine, { input, inner, thread, btn }, backQuote);
     const named = rp && RR ? RR.matchCompanies(q, factsOf(state.data), RR.entities(factsOf(state.data))).hits.length : 0;
     const qRoute = rp && !named && rp.anchor.companies.length ? `${q} ${rp.anchor.companies.map((c) => RR.shortName(c)).join(" ")}` : q;
-    const qServer = rp && P ? P.context(q, rp.anchor) : q;
-    const rr = RR && state.data ? RR.route(qRoute, previousQuestions(q), factsOf(state.data)) : null;
+    const replyCtx = rp ? { sender: rp.anchor.sender, text: rp.anchor.text, companies: rp.anchor.companies } : null;
+    const rr = RR && state.data && !feedback ? RR.route(qRoute, previousQuestions(q), factsOf(state.data)) : null;
     if (rr?.kind === "recheck") return recheckFlow(q, rr, mine, { input, inner, thread, btn }, rp ? backQuote : null);
     // forms: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the
     // last ticks it: your own record, never the ERP or the form)
     if (direct?.tick) setTick(direct.tick, true, { quiet: true });
-    const fq = direct ? null : FORMS && state.data?.forms?.length ? FORMS.ask(qRoute, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
+    const fq = direct || feedback ? null : FORMS && state.data?.forms?.length ? FORMS.ask(qRoute, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
     if (fq?.tick) setTick(fq.tick, true, { quiet: true });
-    const local = direct?.text ? { text: direct.text } : fq ? { text: fq.text } : localFact(qRoute);
+    const local = direct?.text ? { text: direct.text } : fq ? { text: fq.text } : feedback ? {} : localFact(qRoute);
     if (local.text) local.text = withStale(local.text, rr);
     if (local.text) {
       state.chat.push(mine);
@@ -2036,7 +2051,7 @@
     // the typing bubble shows at least briefly, even for an answer that comes back at once
     const typing = new Promise((r) => setTimeout(r, 600));
     let lost = false, answeredBy = "page";
-    try { answer = helpHere(q) ?? await state.src.ask(qServer); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = plainly(e); } finally { state.sending -= 1; }
+    try { answer = helpHere(q) ?? await state.src.ask(q, replyCtx); answeredBy = "server"; } catch (e) { if (isNetErr(e)) lost = true; answer = plainly(e); } finally { state.sending -= 1; }
     if (lost) {                                   // the connection went while asking: this one waits too
       clearTimeout(slow); wait.remove(); state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND());
       state.chat = state.chat.filter((m) => m !== mine);
@@ -2278,7 +2293,8 @@
   async function loadMarks() {
     if (!state.src?.marks) return;
     try {
-      const { prefs, marks } = await state.src.marks();
+      const { prefs, marks, lists } = await state.src.marks();
+      if (lists) state.lists = lists;
       state.marks = marks;
       state.marksVersion = (state.marksVersion || 0) + 1;     // the lists split differently: redraw them in place
       state.prefs = prefs;
@@ -2288,7 +2304,7 @@
   }
 
   // ------------------------------------------------------------ Today (dashboard/today.js builds it)
-  const isMine = (r) => r.eligible !== false && (targetsOn() ? !!markOf(r)?.relevant : true);
+  const isMine = (r) => r.eligible !== false && (pinOf(r) ?? (targetsOn() ? !!markOf(r)?.relevant : true));
   function todayModel() {
     return TODAY.build({ items: state.data.items.filter((it) => !it.dismissed), roles: state.data.roles,
       notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat,
@@ -2486,13 +2502,21 @@
   const deadlineOf = (r) => r.effective_deadline || r.apply_end;
 
   // the "For you" mark of a role: the current marks (targets said in the chat) or the last run's
-  const markOf = (r) => (state.marks?.size ? state.marks.get(r.id) : r.relevance) || null;
+  // what you said in the chat ("X not relevant", "show Y again") wins over Ping's own marks
+  const listsNow = () => state.lists || state.data?.profile || {};
+  const pinOf = (r) => window.PingRules?.pinned ? window.PingRules.pinned(r, listsNow()) : null;
+  const hasPins = () => { const L = listsNow(); return ["not_interested_companies", "interested_companies", "hidden_roles", "shown_roles"].some((k) => (L[k] || []).length); };
+  const markOf = (r) => {
+    const pin = pinOf(r);
+    if (pin !== null) return { relevant: pin, reason: pin ? "You said it's for you" : "You hid it from For you" };
+    return (state.marks?.size ? state.marks.get(r.id) : r.relevance) || null;
+  };
   const targetsOn = () => {
     const p = { ...(state.data.profile || {}), ...(state.prefs || {}) };
     return !!p.targets && p.feed_mode !== "all";
   };
   const isOpen = (r) => { const d = dt(deadlineOf(r)); return !!d && d > nowDate(); };
-  const forYou = (r) => r.eligible !== false && isOpen(r) && !r.applied && (targetsOn() ? !!markOf(r)?.relevant : true);
+  const forYou = (r) => r.eligible !== false && isOpen(r) && !r.applied && (pinOf(r) ?? (targetsOn() ? !!markOf(r)?.relevant : true));
   const closingSoon = (r) => !r.applied && r.eligible !== false && isOpen(r) && dt(deadlineOf(r)) - nowDate() < 48 * 3600000;
   const FILTERS = [["for_you", "For you", forYou], ["applied", "Applied", (r) => !!r.applied], ["soon", "Closing soon", closingSoon],
                    ["all", "All", () => true]];

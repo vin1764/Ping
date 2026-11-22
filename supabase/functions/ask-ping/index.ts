@@ -10,24 +10,35 @@ import { asksToAct, glance, stripRefusal, todayNote, wantsLists } from "./wordin
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
+import { chatComplete } from "../_shared/openai_compat.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
 const Rules = (globalThis as any).PingRules;
 
+// Gemini, for the big-context jobs (re-marking every role when your targets change: one call for all of them,
+// cached in role_marks). flash-lite first: flash-latest answered 0 of 7 calls on 23 Nov.
 // Google retires model names (gemini-2.5-flash: "no longer available to new users", Nov 2026), and the
 // free tier is sometimes overloaded (503) or slow, so try a few names in turn.
 // The first model often answers 429 on the free tier; each model has its own quota. Chosen from the names this key
 // can call (Admin > gemini-check, 21 Nov 2026); gemini-2.0-flash, gemini-2.5-flash-lite and gemma-3-27b-it answered 404.
-const MODELS = [Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash-lite",
-                "gemini-3.1-flash-lite", "gemma-4-31b-it"];
-// Latency cap for OPEN questions: the main model gets at most 10 s in all (one retry if it's busy), then the lighter
-// model once with at most 5 s, then the answer is built from the data by rules (never a "busy" error in the chat).
-const PRIMARY = MODELS[0];
-const LITE = Deno.env.get("PING_AI_LITE_MODEL") || "gemini-flash-lite-latest";
+const MODELS = ["gemini-3.1-flash-lite", Deno.env.get("PING_AI_MODEL") || "gemini-flash-latest", "gemini-flash-lite-latest",
+                "gemini-3.5-flash-lite", "gemma-4-31b-it"];
+// Latency cap for OPEN questions: the chat's main model gets at most 10 s in all (one retry if it's busy), then the
+// other model once with at most 5 s, then the answer is built from the data by rules (never a "busy" error).
+// 23 Nov: on the live key gemini-flash-latest answered 0 of 7 calls in 24 h (timeouts, 503, 429 quota) and
+// gemini-3.1-flash-lite 5 of 5 (Admin > chat-diagnose), so the light model leads and the other is the fallback.
+// The chat's chain (23 Nov): Groq first (when its key is set), then Gemini flash-lite, then the rules; 15 s in all.
+// Groq: openai/gpt-oss-120b, its best production model with published free limits (1,000 requests and 200K tokens a
+// day, 8K tokens a minute), so it gets a compact prompt (the facts for this question, not every role).
+const PRIMARY = Deno.env.get("PING_CHAT_MODEL") || "gemini-3.1-flash-lite";
+const GROQ_URL = "https://api.groq.com/openai/v1";
+const GROQ_MODEL = Deno.env.get("PING_GROQ_MODEL") || "openai/gpt-oss-120b";
+const GROQ_MS = 6_000;
+const GROQ_MAX_CHARS = 22_000;       // about 5,500 tokens: with the answer, under the 8K tokens a minute
+const CHAT_CAP_MS = 15_000;
 const PRIMARY_WINDOW_MS = 10_000;
 const RETRY_PAUSE_MS = 500;
-const LITE_MS = 5_000;
 const busy = (status: number) => status === 429 || status >= 500;
 
 const HISTORY_TURNS = 12;      // messages of the thread sent along (both sides): the last 6 turns
@@ -93,6 +104,8 @@ Deno.serve(async (req) => {
     key = evalsKey;
     keyName = "evals";
   }
+  // Groq: its own live and evals keys, like Gemini (an eval never uses the live key; no evals key: no Groq in evals)
+  const groqKey = keyName === "evals" ? Deno.env.get("GROQ_API_KEY_EVALS") || "" : Deno.env.get("GROQ_API_KEY") || "";
   if (!key) return json({ error: "GEMINI_API_KEY is not set for this function" }, 500);
   const body = await req.json().catch(() => ({}));
 
@@ -115,6 +128,28 @@ Deno.serve(async (req) => {
     const o: any = own.data?.[0] || {};
     for (const k of FIELDS.split(",")) if (o[k] != null) (prefs as any)[k] = o[k];
   }
+  // Your feedback lists (hidden / always-shown companies and roles): the owner's profile, or for a demo session its
+  // own copy on top of the demo profile's
+  const LISTS = "not_interested_companies,interested_companies,hidden_roles,shown_roles,prefs_undo";
+  const emptyLists = { not_interested_companies: [], interested_companies: [], hidden_roles: [], shown_roles: [], prefs_undo: null } as any;
+  const listsOf = (o: any) => Object.fromEntries(LISTS.split(",").map((k) => [k, o?.[k] ?? emptyLists[k]]));
+  let baseLists = await sb.from("profile").select(LISTS).limit(1);
+  if (baseLists.error) baseLists = await sb.from("profile").select("not_interested_companies,interested_companies").limit(1) as any;
+  let fbLists: any = listsOf(baseLists.data?.[0]);
+  if (role === "demo") {
+    const own = await sb.from("session_prefs").select(LISTS).limit(1);
+    const o: any = own.data?.[0] || {};
+    for (const k of LISTS.split(",")) if (o[k] != null) fbLists[k] = o[k];
+  }
+  const saveLists = async (next: any) => {
+    if (role === "owner") {
+      const up = await sb.from("profile").update(next).eq("id", 1).select("id");
+      return up.error?.message || (up.data?.length ? "" : "no profile row");
+    }
+    const up = await sb.from("session_prefs").upsert({ owner_id: uid, ...next, updated_at: new Date().toISOString() });
+    return up.error?.message || "";
+  };
+
   const classifiable = async () => (await sb.from("roles")
     .select("id,company,designation,job_description,jd_text,more_details,eligible").limit(400)).data?.filter((r: any) => r.eligible !== false) || [];
 
@@ -123,10 +158,17 @@ Deno.serve(async (req) => {
     const split = prefs.targets && prefs.feed_mode !== "all";
     const roles = split ? await classifiable() : [];
     const { marks } = split ? await markRoles(roles, prefs.targets!, [], "", 0, cvs) : { marks: new Map() };
-    return json({ prefs, marks: Object.fromEntries(marks) });
+    const { prefs_undo: _u, ...shown } = fbLists;
+    return json({ prefs, marks: Object.fromEntries(marks), lists: shown });
   }
   const question = String(body?.question || "");
   if (!question || question.length > 500) return json({ error: "ask a question (max 500 characters)" }, 400);
+  // a reply: the message it quotes travels on its own (it never counts against the question's length)
+  const reply = body?.reply && typeof body.reply === "object" ? {
+    sender: String(body.reply.sender || "Ping").slice(0, 20), text: String(body.reply.text || "").slice(0, 400),
+    companies: (Array.isArray(body.reply.companies) ? body.reply.companies : []).map((c: unknown) => String(c).slice(0, 120)).slice(0, 20),
+  } : null;
+  const isQuestion = /\?\s*$|^\s*(?:is|are|am|was|which|what|whats|why|how|when|where|who|should|do|does|did|can|could|will|would|any|anything)\b/i.test(question);
   // The demo is a snapshot; "tomorrow" means the day after the snapshot, like on the page.
   const asOf = role === "demo" && body?.as_of && !isNaN(Number(new Date(body.as_of))) ? new Date(body.as_of) : new Date();
 
@@ -146,18 +188,63 @@ Deno.serve(async (req) => {
     }
   }
 
+  // "piramal not relevant", "hide Groww", "show Zeta again", "undo": by rules (works with the model down), saved,
+  // one line back with an Undo button
+  if (Rules.feedbackLike(question)) {
+    const fbRoles = (await sb.from("roles").select("id,company,designation").limit(400)).data || [];
+    const prevQ = (await sb.from("chat_messages").select("role,text").order("created_at", { ascending: false }).limit(4)).data || [];
+    const fbData = { roles: fbRoles, items: [], notices: [] };
+    const prevCos = prevQ.filter((m: any) => m.role === "me" && m.text.trim() !== question.trim()).slice(0, 1)
+      .flatMap((m: any) => Rules.matchCompanies(m.text, fbData).hits.map((e: any) => e.name));
+    const fb = Rules.feedbackOf(question, fbData, { anchorCompanies: reply?.companies || [], previousCompanies: prevCos });
+    if (fb) {
+      const said = (answer: string, extra: Record<string, unknown> = {}) => {
+        console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", route: "feedback", action: fb.action,
+          level: fb.level || null, asked: !!fb.ask, ms: Date.now() - t0 }));
+        return json({ answer, model: "rules", route: "feedback", ...extra });
+      };
+      if (fb.action === "undo") {
+        const u = fbLists.prefs_undo;
+        if (!u?.lists) return said("Nothing to undo.");
+        const err = await saveLists({ ...u.lists, prefs_undo: null });
+        if (err) return json({ error: `couldn't undo that (${err})` }, 500);
+        return said(`Undone: ${u.what} is back to how it was.`, { lists: u.lists, prefs_changed: true });
+      }
+      if (fb.ask) {
+        const chips = fb.ask.chips.map((c: any) => `[${c.label}](#ask:${encodeURIComponent(c.send)})`).join(" ");
+        return said(chips ? `${fb.ask.text} ${chips}` : fb.ask.text);
+      }
+      const before = { not_interested_companies: fbLists.not_interested_companies || [], interested_companies: fbLists.interested_companies || [],
+                       hidden_roles: fbLists.hidden_roles || [], shown_roles: fbLists.shown_roles || [] };
+      const next = Rules.applyFeedback(before, fb, fbRoles);
+      const what = fb.level === "role" ? fb.roles.map((r: any) => r.label).join(", ") : fb.name;
+      const err = await saveLists({ ...next, prefs_undo: { lists: before, what } });
+      if (err) {
+        console.error(JSON.stringify({ event: "feedback_save_failed", role, error: err }));
+        return json({ error: `couldn't save that (${err})` }, 500);
+      }
+      return said(Rules.feedbackLine(fb), { lists: next, prefs_changed: true });
+    }
+  }
+
   // Preferences said in the chat: saved, the roles re-marked, then any question in the same message is answered.
   const parsed = parsePrefs(question, prefs);
   let saved = "";
   if (parsed.kind === "show") {
-    const line = `Your preferences${role === "demo" ? " (this demo session only)" : ""}: ${describe(prefs)}.`;
+    const allRoles = (await sb.from("roles").select("id,company,designation").limit(400)).data || [];
+    const line = `Your preferences${role === "demo" ? " (this demo session only)" : ""}: ${describe(prefs)}; ${Rules.describeLists(fbLists, allRoles)}.` +
+      (fbLists.not_interested_companies?.length || fbLists.hidden_roles?.length || fbLists.interested_companies?.length || fbLists.shown_roles?.length
+        ? " Say \"reset\" to clear them all, or \"show X again\" for one." : "");
     if (!parsed.rest) return json({ answer: line, model: "rules", prefs });
     saved = line;
   } else if (parsed.kind !== "none") {
     const next: Prefs = { ...prefs, ...parsed.changes };
     let err = "";
     if (role === "owner") {
-      const up = await sb.from("profile").update(parsed.changes).eq("id", 1).select("id");
+      // reset: the hidden / always-shown companies and roles go too
+      const changes = parsed.kind === "reset" ? { ...parsed.changes, not_interested_companies: [], interested_companies: [],
+        hidden_roles: [], shown_roles: [], prefs_undo: null } : parsed.changes;
+      const up = await sb.from("profile").update(changes).eq("id", 1).select("id");
       if (up.error || !up.data?.length) {
         // a brand-new setup may have no profile row yet: the first message can be the preferences
         const svc = service();
@@ -197,6 +284,9 @@ Deno.serve(async (req) => {
     if (!parsed.rest) return json({ answer: saved, model: "rules", prefs, prefs_changed: true });
   }
   const ask = parsed.kind === "none" ? question : parsed.rest;
+  // a reply: the quoted message scopes which companies are meant; the message itself decides what's asked
+  const replyNote = reply ? `\n[replying to ${reply.sender}'s message: "${reply.text}"${reply.companies.length
+    ? `; about: ${reply.companies.map((c: string) => Rules.shortName(c)).join(", ")}` : ""}]` : "";
 
   // The thread so far, from the database (never from the page): this login's last messages, oldest first.
   // The owner reads its own thread; a demo session only its own messages (database rules). The page saves the
@@ -261,7 +351,7 @@ Deno.serve(async (req) => {
     lastChecked: run?.finished_at || run?.started_at || (role === "demo" ? asOf.toISOString() : null),
     profile: { ...(profile.data?.[0] || {}) }, prefs: { listOthers: prefs.list_other_roles !== false },
     roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline,
-      for_you: hasTargets ? rmarks.get(r.id)?.relevant === true : undefined,
+      for_you: Rules.pinned(r, fbLists) ?? (hasTargets ? rmarks.get(r.id)?.relevant === true : undefined),
       cv: rmarks.get(r.id)?.relevant ? rmarks.get(r.id)?.best_cv || null : null, jd_location: r.jd_summary?.location || null })),
     items: allItems.data || [],
     notices: allNotices.data || [],
@@ -270,7 +360,12 @@ Deno.serve(async (req) => {
   };
   // the questions before this one, newest first (follow-ups resolve against them)
   const previous = [...kept].reverse().filter((m) => m.role === "me").map((m) => m.text);
-  const routed = Rules.route(ask, previous, factsData);
+  // a question in a reply that names no company is about the quoted message's companies; a statement is routed on
+  // its own words (never "a company" -> a status dump of everything quoted)
+  const named = Rules.matchCompanies(ask, factsData).hits.length;
+  const askRoute = reply && isQuestion && !named && reply.companies.length
+    ? `${ask} ${reply.companies.map((c: string) => Rules.shortName(c)).join(" ")}` : ask;
+  const routed = Rules.route(askRoute, previous, factsData);
   // the details a FACT answer about a company needs (pay, bond, departments, backlogs), for those companies only
   const withDetails = async (hits: any[]) => {
     const raw = [...new Set(hits.flatMap((e: any) => [...e.raw]))];
@@ -329,6 +424,8 @@ Deno.serve(async (req) => {
   const prof = { ...(profile.data?.[0] || {}), ...prefs } as any;
   // reasons stay in the feed; the chat only needs yes / no
   const forYou = (r: any) => {
+    const pin = Rules.pinned(r, fbLists);
+    if (pin !== null) return pin ? "yes (you said so)" : "no (you hid it)";
     const m = rmarks.get(r.id);
     if (!hasTargets || !m) return "not classified";
     return m.relevant ? `yes${m.best_cv ? `; apply with ${m.best_cv}` : ""}` : "no";
@@ -429,6 +526,9 @@ turn: work out the full question from the last question and answer, then answer 
 words of the follow-up and never quote them back. If a follow-up could mean two things, answer the more likely one in
 one line and offer the other in a second line; ask a question back only if neither can be answered. A message that
 starts a new topic ("ok. what's due this week?") is a new question: don't carry the old topic into it.
+Replies: a "[replying to ...]" line after the question is the message the student replied to; it says which companies
+are meant, the question says what is wanted. A statement ("ok", "this one isn't for me", "already did it") is not a
+request for data: answer it in one line and never list the status of every company in the quoted message.
 Ping is read-only: it can never apply, withdraw, accept or decline offers, fill or submit forms, upload or change a CV,
 or change anything on the ERP or anywhere else. ${act
     ? `This message asks Ping to do something: start with "Ping is read-only, so I can't" followed by what was asked,
@@ -460,7 +560,7 @@ FACTS end here.
 Conversation so far, oldest first:
 ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
 
-Question: ${ask}`;
+Question: ${ask}${replyNote}`;
 
   const done = (answer: string, model: string, extra: Record<string, unknown> = {}) =>
     json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, ...extra, ...(saved ? { prefs, prefs_changed: true } : {}) });
@@ -492,30 +592,62 @@ Question: ${ask}`;
       return { busy: true };                       // a timeout or a dropped connection: worth another try
     }
   };
+  // Groq: the compact prompt (the full one without the long lists), through the OpenAI-compatible client
+  const compactPrompt = (() => {
+    const own = (l: string) => names.some((n) => l.startsWith(`- ${n} |`));
+    let c = prompt
+      .replace(`All roles in the companies list:\n${roleLines.join("\n") || "(empty)"}`,
+               `Roles of the companies in the question:\n${roleLines.filter(own).join("\n") || "(none named; the lists above cover what's due)"}`)
+      .replace(`Feed (things for this student):\n${feed.join("\n") || "(empty)"}`,
+               `Feed (the newest 25 things for this student):\n${feed.slice(0, 25).join("\n") || "(empty)"}`);
+    if (c.length > GROQ_MAX_CHARS && blocks.length > 6000) c = c.replace(blocks, `${blocks.slice(0, 6000)}\n(… more in the app's Today panel)`);
+    return c.length <= GROQ_MAX_CHARS ? c : null;
+  })();
+  const callGroq = async (limit: number): Promise<{ answer?: string; busy: boolean }> => {
+    const name = `groq/${GROQ_MODEL}`;
+    if (!compactPrompt) { tried.push(`${name}:skipped(prompt too big)`); return { busy: false }; }
+    const r = await chatComplete({ baseUrl: GROQ_URL, key: groqKey, model: GROQ_MODEL, prompt: compactPrompt, timeoutMs: limit,
+                                   maxTokens: 1500, extra: /gpt-oss/.test(GROQ_MODEL) ? { reasoning_effort: "low", include_reasoning: false } : {} });
+    tried.push(`${name}:${r.status || r.error}:${r.ms}ms`);
+    if (r.status !== 200) {
+      if (r.status) console.error(JSON.stringify({ event: "groq_error", model: name, status: r.status, body: r.error }));
+      return { busy: !r.status || busy(r.status) };
+    }
+    const answer = act ? r.text : stripRefusal(r.text);
+    if (!answer) { tried.push(`${name}:empty(${r.finish})`); return { busy: false }; }
+    return { answer, busy: false };
+  };
   // FACTS: the prompt between its two markers (the instructions' examples and the conversation don't count)
   const factsText = prompt.slice(prompt.indexOf("FACTS start here."), prompt.indexOf("FACTS end here."));
   const noAi = body?.no_ai === true;               // the evals test the rules path on its own
+  let mismatch = false;
   if (!noAi) {
     const start = Date.now();
-    for (let i = 0; i < 2; i++) {                   // the main model: one try, one retry, 10 s in all
+    // 1. Groq, once, at most 6 s
+    if (groqKey) {
+      const g = await callGroq(GROQ_MS);
+      if (g.answer) { const ok = answered(g.answer, `groq/${GROQ_MODEL}`); if (ok) return ok; }
+    }
+    // 2. Gemini flash-lite: one try, one retry if it's busy, within what's left of the 15 s
+    const geminiStart = Date.now();
+    for (let i = 0; i < 2; i++) {
       if (i) await new Promise((r) => setTimeout(r, RETRY_PAUSE_MS));
-      const left = PRIMARY_WINDOW_MS - (Date.now() - start);
+      const left = Math.min(PRIMARY_WINDOW_MS - (Date.now() - geminiStart), CHAT_CAP_MS - (Date.now() - start));
       if (left < 1_500) break;
       const res = await call(PRIMARY, left);
-      if (res.answer) return answered(res.answer, PRIMARY);
+      if (res.answer) { const ok = answered(res.answer, PRIMARY); if (ok) return ok; break; }
       if (!res.busy) break;                        // retired or refused: retrying won't help
     }
-    const res = await call(LITE, LITE_MS);        // the lighter model once, 5 s
-    if (res.answer) return answered(res.answer, LITE);
     console.error(JSON.stringify({ event: "no_answer", key: keyName, role, tried, prompt_chars: prompt.length, ms: Date.now() - t0 }));
   }
+  // a model's answer, or null when it has a number that isn't in the facts (the next in the chain, then the rules)
   function answered(answer: string, model: string) {
     const bad = Rules.unsupportedNumbers(answer, factsText, ask);
     if (bad.length) {
-      // a number the model made up (or worked out): the rules answer instead
       console.log(JSON.stringify({ event: "model_count_mismatch", key: keyName, role, model, numbers: bad.slice(0, 8), route: routed.kind,
         why: routed.why, ms: Date.now() - t0 }));
-      return rulesReply("model_count_mismatch");
+      mismatch = true;
+      return null;
     }
     console.log(JSON.stringify({ event: "answered", key: keyName, role, model, tried, history: kept.length, act,
       items: items.data?.length ?? 0, roles: roles.data?.length ?? 0, detail_roles: detail.data?.length ?? 0,
@@ -523,12 +655,20 @@ Question: ${ask}`;
     return done(answer, model);
   }
 
-  return rulesReply(noAi ? "no_ai" : "model_busy");
+  return rulesReply(noAi ? "no_ai" : mismatch ? "model_count_mismatch" : "model_busy");
 
   // No model answer (busy, switched off, or a number it made up): the rules answer for what the router made of the
   // question (a follow-up: the last question's companies and intent); nothing understood: says so, then what's due
   // soon. Same code as the dashboard's offline answers.
   function rulesReply(reason: string) {
+    // a reply that is a statement Ping can't place: one short question with buttons, never every quoted company's status
+    if (reply && !isQuestion && reply.companies.length && routed.kind === "open") {
+      const c = Rules.clarify(ask, reply.companies, factsData);
+      if (c) {
+        console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", reason, route: "clarify", tried, ms: Date.now() - t0 }));
+        return done(c.text, "rules", { fallback: true, kind: "clarify", reason });
+      }
+    }
     const ruled = routed.spec && (routed.spec.intents?.length || routed.spec.hits?.length)
       ? Rules.answer(ask, factsData, routed.spec) : Rules.answer(ask, factsData);
     console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", reason, route: routed.kind, kind: ruled.kind,

@@ -52,6 +52,21 @@ def _in(company: str, names: list[str]) -> bool:
     return any(compact(n) and (compact(n) == c or compact(n) in c or c in compact(n)) for n in names or [])
 
 
+def pinned(role: dict, profile: dict) -> bool | None:
+    """For you as you've said it in the chat (answer_rules.js pinned): a hidden or shown role, then a hidden or
+    always-shown company; None when Ping's own marks decide."""
+    rid = str(role.get("id"))
+    if rid in {str(x) for x in profile.get("hidden_roles") or []}:
+        return False
+    if rid in {str(x) for x in profile.get("shown_roles") or []}:
+        return True
+    if _in(role.get("company") or "", profile.get("not_interested_companies") or []):
+        return False
+    if _in(role.get("company") or "", profile.get("interested_companies") or []):
+        return True
+    return None
+
+
 def effective_deadlines(roles: list[dict], notices: list[dict], index: CompanyIndex) -> dict[str, dict]:
     """A notice that gives a later deadline than the companies list wins."""
     out = {}
@@ -359,6 +374,9 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                             "flags": e["flags"],
                             "first_seen": r.get("first_seen")}
         members[r["id"]]["tag"], members[r["id"]]["note"] = tag(r, targets, cvtext)
+        pin = pinned(r, profile)          # what you said in the chat ("X not relevant", "Y is relevant") wins
+        if pin is not None:
+            members[r["id"]]["tag"], members[r["id"]]["note"] = ("for_you", "you said it's for you") if pin else ("other", "")
         if members[r["id"]]["tag"] == "for_you" and (r.get("relevance") or {}).get("best_cv"):
             members[r["id"]]["cv"] = r["relevance"]["best_cv"]
     items = digests.build(items, members, previous or {}, profile, now)

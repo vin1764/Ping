@@ -734,3 +734,19 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .today-done { margin-top: var(--s3); border-top: 1px solid var(--line); padding-top: var(--s2); }
 .today-done > summary { cursor: pointer; color: var(--muted); font-size: .9rem; padding: var(--s2) 0; }
 .today-done[open] > summary { margin-bottom: var(--s2); }
+/* Forms: Closed and Filled, collapsed, one compact line per form */
+.forms-sec.compact > summary { cursor: pointer; list-style: none; }
+.forms-sec.compact > summary::-webkit-details-marker { display: none; }
+.forms-sec.compact > summary h2::after { content: " ▸"; color: var(--muted); font-weight: 400; }
+.forms-sec.compact[open] > summary h2::after { content: " ▾"; }
+.forms-rows.compact { display: grid; gap: 2px; }
+.fc-line { display: flex; align-items: center; gap: var(--s2); padding: 6px var(--s2); border-bottom: 1px solid var(--line); }
+.fc-line .fc-tap { all: unset; cursor: pointer; flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; min-height: 32px; }
+.fc-line .fc-tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.fc-line .co { font-weight: 600; }
+.fc-line .fc-what, .fc-line .fc-date { color: var(--muted); font-size: .88rem; }
+.fc-line .fc-tag { margin-left: auto; font-size: .75rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.fc-line .fc-tag.ok { color: var(--accent); border-color: currentColor; }
+.fc-open { border: 1px solid var(--line); border-radius: 12px; margin: var(--s1) 0; }
+.fc-open .fc-line { border-bottom: 0; }
+.fc-open .form-row { border: 0; box-shadow: none; }

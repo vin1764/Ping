@@ -1669,13 +1669,34 @@
     const block = (id, title, rows, empty) => h("section", { class: "forms-sec", id: `forms-${id}`, "aria-label": title },
       h("h2", {}, title, h("span", { class: "n" }, rows.length)), rows.length ? h("div", { class: "forms-rows" }, groupedRows(rows)) : h("p", { class: "muted small" }, empty));
     if (!all.length) { list.replaceChildren(h("p", { class: "muted" }, "No forms yet. Forms from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
+    // Closed and Filled: nothing to do there, so collapsed, one line per form; a tap opens that one form in place
+    state.formsSecOpen = state.formsSecOpen || {};
+    const compactBlock = (id, title, rows, empty) => h("details", { class: "forms-sec compact", id: `forms-${id}`, "aria-label": title,
+        open: state.formsSecOpen[id] ? true : null, ontoggle: (ev) => { state.formsSecOpen[id] = ev.currentTarget.open; } },
+      h("summary", {}, h("h2", {}, title, h("span", { class: "n" }, rows.length))),
+      rows.length ? h("div", { class: "forms-rows compact" }, rows.map(compactRow)) : h("p", { class: "muted small" }, empty));
     list.replaceChildren(
       block("today", "Due today", sec.today, "Nothing due today."),
       block("upcoming", "Upcoming", sec.upcoming, "Nothing coming up."),
       block("past", "Past due (not filled)", sec.past, "None."),
-      ...(sec.closed.length ? [block("closed", "Closed", sec.closed, "")] : []),
-      block("filled", "Filled", sec.filled, "Tick a form when you've filled it."));
+      ...(sec.closed.length ? [compactBlock("closed", "Closed", sec.closed, "")] : []),
+      compactBlock("filled", "Filled", sec.filled, "Tick a form when you've filled it."));
     formsBadge();
+  }
+  // a form you can't act on any more (closed, or ticked): checkbox, company, type, date and a small tag on one line;
+  // a tap opens the full card in its place (one at a time), a second tap closes it
+  function compactRow(f) {
+    const open = state.formsExpanded === f.key;
+    const cos = [...new Set(FORMS.names(f).map(FORMS.cleanName))];
+    const filled = FORMS.isFilled(state.formStatus, f.key);
+    const toggle = () => { state.formsExpanded = open ? null : f.key; drawForms(); };
+    const line = h("div", { class: `fc-line${open ? " open" : ""}`, "data-form": f.key }, formTick(f.key),
+      h("button", { type: "button", class: "fc-tap", "aria-expanded": String(open), onclick: toggle },
+        h("strong", { class: "co" }, cos.length > 1 ? `${cos[0]} +${cos.length - 1}` : cos[0] || "A form"),
+        h("span", { class: "fc-what" }, FORMS.label(f.purpose)),
+        f.due_at ? h("span", { class: "fc-date num" }, when(f.due_at)) : null,
+        h("span", { class: `fc-tag${filled ? " ok" : ""}` }, filled ? "✓" : "closed")));
+    return open ? h("div", { class: "fc-open" }, line, formRow(f)) : line;
   }
   // one notice that gives several companies their own forms: one row per form, under that notice's heading
   function groupedRows(rows) {

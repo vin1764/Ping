@@ -690,7 +690,9 @@
   const OPEN = /\b(why|how come|explain|compare|comparison|versus|vs|better|difference|differ|should i|recommend|suggest\w*|advice|advise|tips?|prepare|preparation|tell me (more )?about|what do you think|worth|pros|cons|opinion|which (one|company|role|offer) (is|should|would))\b/;
   const ELSE = /\b(nothing|anything|what|something|any|whats) else\b|\bany ?more\b|\bothers?\s*$|^else$/;
   const FOLLOW = /^(and|but|also|then|so|plus|what about|how about|same for|same|same with|and for)\b/;
-  const PRONOUN = /\b(it|its|they|them|their|that|there|this one|those|these)\b/;
+  // "that" only as "that one/company/role" or at the end ("what about that"): in "what's due tonight that's relevant
+  // to me" it starts a clause and the question is a new one
+  const PRONOUN = /\b(it|its|they|them|their|there|this one|those|these)\b|\bthat\s*$|\bthat (one|company|role|test|list)\b/;
   const ACTIONS = "apply|withdraw|submit|upload|change|update|edit|accept|decline|reject|fill|register|cancel|sign\\s?up|opt\\s(?:in|out)|delete|remove|book|send|email|mail";
   const ACT_WORD = new RegExp(`\\b(${ACTIONS})\\b`, "i");
   const STARTS_WITH_ACT = new RegExp(`^(?:please\\s+|pls\\s+|kindly\\s+|ping,?\\s+)?(?:${ACTIONS})\\b`, "i");

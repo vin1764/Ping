@@ -124,3 +124,15 @@ test("mail questions are answered from the mail messages, with their links", () 
   const due = ask("whats due from mail");
   assert.ok(due.indexOf("Pine Labs") < due.indexOf("Atlassian") && !/Groww/.test(due));
 });
+
+test("'that' starting a clause doesn't make a new question a follow-up (found by the page evals)", () => {
+  const d = { now: "2026-11-21T18:35:00+05:30", roles: [
+    { id: "e1", company: "Esri", designation: "Data Scientist I", deadline: "2026-11-21T20:00:00+05:30", applied: false, for_you: true },
+    { id: "a1", company: "Axis Bank", designation: "BIU", deadline: "2026-11-21T20:00:00+05:30", applied: false, for_you: true }], items: [], notices: [] };
+  const r = R.route("what's due tonight that's relevant to me", ["when does ESRI close?"], d);
+  assert.deepStrictEqual(r.spec.hits, []);
+  assert.notStrictEqual(r.why, "follow-up");
+  const f = R.route("what about that one", ["when does ESRI close?"], d);       // a real follow-up still is one
+  assert.match(f.why, /follow-up/);
+  assert.deepStrictEqual(f.spec.hits.map((h) => h.name), ["Esri"]);
+});

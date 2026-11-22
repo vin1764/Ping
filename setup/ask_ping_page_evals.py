@@ -37,6 +37,20 @@ def median(xs):
 PER_SESSION = 7    # Supabase allows about 30 new anonymous sign-ins an hour from one address; 7 a session, as the API evals
 
 
+def schedule(cases: list[dict]) -> list[dict]:
+    """A one- or two-word question ("hmm") is read against the questions before it in the thread; in a shared
+    session each of those goes first, so it has none (like the API evals, which ask each single on its own)."""
+    short = [c for c in cases if len(c["question"].split()) <= 2]
+    rest = [c for c in cases if c not in short]
+    out = []
+    while short or rest:
+        chunk = [short.pop(0)] if short else []
+        while len(chunk) < PER_SESSION and rest:
+            chunk.append(rest.pop(0))
+        out.extend(chunk)
+    return out
+
+
 def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
     from playwright.sync_api import sync_playwright
     from run_ask_ping_evals import score
@@ -49,12 +63,16 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
             page = ctx.new_page()
             calls = []
 
+            current = {"no_ai": False}
+
             def on_route(route):
                 req = route.request
                 hdr = dict(req.headers)
-                if proof:
+                if proof and not current["no_ai"]:
                     hdr.update(proof)
                     return route.continue_(headers=hdr)
+                if proof:
+                    hdr.update(proof)
                 try:
                     data = json.loads(req.post_data or "{}")
                 except ValueError:
@@ -80,6 +98,7 @@ def run(url: str, cases: list[dict], proof: dict | None) -> list[dict]:
             page.wait_for_timeout(400)
             page.evaluate(WATCH)
             for c in cases[k:k + PER_SESSION]:
+                current["no_ai"] = bool(c.get("no_ai"))     # the case's own "rules only" flag, as in the API evals
                 page.evaluate("() => { window.__typing = false; }")
                 before = page.locator(".msg.ping:not(.typing)").count()
                 n_calls = len(calls)
@@ -152,7 +171,9 @@ def main(argv: list[str]) -> int:
     import requests
     build = (requests.get(url + "config.js", timeout=30).text.split('PING_BUILD = "')[-1].split('"')[0]
              if url.startswith("http") else "?")
-    rows = run(url, cases, proof)
+    rows = run(url, schedule(cases), proof)
+    order = {c["id"]: i for i, c in enumerate(cases)}
+    rows.sort(key=lambda r: order[r["id"]])
     md = report(rows, url, mode, build)
     (ROOT / "evals" / "ask_ping" / "PAGE_RUN.md").write_text(md, encoding="utf-8")
     (ROOT / "evals" / "ask_ping" / "page_results.json").write_text(json.dumps(

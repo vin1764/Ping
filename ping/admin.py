@@ -32,6 +32,8 @@
   schedule-setup   schedule the hourly Ping run and the daily demo cleanup inside Supabase (pg_cron + the kick-run
                    function), with a new shared secret; then a dry-run call to prove it's wired up
   schedule-status  the Supabase jobs, their last runs and calls, and the latest Ping runs on GitHub
+  notice-forms     reads only: every form link of a notice (NOTICE_IDS, default 1815), the companies named next to
+                   it, its form page title, mails with the link, and the stored row holding it
   feedback-evals   run evals/feedback ("X not relevant", "show X again", "undo") against the deployed function
   ask-ping-evals   run evals/ask_ping (questions against the deployed function from demo sessions) and save the report
   rearm-schedule   switch the Ping workflow off and on through GitHub's API, which makes GitHub register its
@@ -830,6 +832,59 @@ def forms_report(secrets) -> int:
     return 0
 
 
+def notice_forms(secrets) -> int:
+    """Reads only. For notice(s) NOTICE_IDS (default 1815): every form link in the text (in order), the companies
+    named next to it (the text between the previous link and this one, and on the link's own line), the form page's
+    title, mails that carry the same link (subject's companies), the attachment, and the stored Forms row(s) that
+    hold the link now. Prints company names and link ids only, never the notice text."""
+    from .forms import key_of
+    from .notices import URL_RE, FORM_RE
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    ids = [x.strip() for x in os.environ.get("NOTICE_IDS", "1815").split(",") if x.strip()]
+    pages = {p["key"]: p for p in store.select("form_pages")}
+    rows = store.select("forms", {"is_sample": "is.false"})
+    mails = store.select("emails", REAL) if True else []
+    for nid in ids:
+        ns = [n for n in store.select("notices", {"notice_id": f"eq.{nid}"}) if not n.get("is_sample")]
+        if not ns:
+            say(f"notice {nid}: not stored")
+            continue
+        n = ns[0]
+        text = re.sub(r"[\u2060\u200b\ufeff]", "", n.get("text") or n.get("preview") or "")
+        a = n.get("analysis") or {}
+        targets = [t.get("company") or t.get("name") for t in a.get("targets") or []]
+        say(f"\nnotice {nid} ({n.get('notice_time')}), subject {n.get('subject')!r}, attachment: {'yes' if n.get('has_attachment') else 'no'}")
+        say(f"  companies the notice lists ({len(targets)}): {', '.join(targets)}")
+        links = list(dict.fromkeys(u.rstrip(".,;") for u in URL_RE.findall(text)))
+        forms = [l for l in links if FORM_RE.search(l)]
+        say(f"  links in the text: {len(links)}, of them form links: {len(forms)}")
+        low, prev = text.lower(), 0
+        named_anywhere = set()
+        for i, f in enumerate(forms):
+            pos = low.find(f.lower())
+            line_start = low.rfind("\n", 0, pos) + 1
+            seg = text[prev:pos]
+            line = text[line_start:pos]
+            near = [t for t in targets if t and (t.lower() in seg.lower() or t.split()[0].lower() in seg.lower().split())]
+            on_line = [t for t in targets if t and (t.lower() in line.lower() or t.split()[0].lower() in line.lower().split())]
+            k = key_of(f) or ""
+            final = (pages.get(k) or {}).get("final_url")
+            fk = key_of(final) if final else k
+            title = (pages.get(fk) or pages.get(k) or {}).get("title")
+            in_mails = [m for m in mails if f in json.dumps(m.get("links") or [])]
+            held = [r for r in rows if fk in (r.get("merged_keys") or []) or r.get("key") == fk or k in (r.get("merged_keys") or [])]
+            named_anywhere |= set(on_line or near)
+            say(f"  link {i + 1}: {k[:48]}" + (f" -> {fk[:48]}" if fk != k else ""))
+            say(f"     on its line: {', '.join(on_line) or '-'} | since the previous link: {', '.join(near) or '-'}")
+            say(f"     form page title: {title or '(not read)'}")
+            say(f"     mails with this link: {len(in_mails)}" + (f" ({'; '.join((m.get('company') or '?') for m in in_mails[:4])})" if in_mails else ""))
+            say(f"     stored row now: " + ("; ".join(f"{r['key'][:30]} with {len(r.get('companies') or [])} companies" for r in held) or "none"))
+            prev = pos + len(f)
+        missing = [t for t in targets if t and t not in named_anywhere]
+        say(f"  companies named next to no link: {', '.join(missing) or 'none'}")
+    return 0
+
+
 def live_page(secrets) -> int:
     """Live updates on the published dashboard (setup/live_page_test.py): a new message appears without a reload,
     the scroll rules, the demo's Check now, catching up without the socket, and the row rules on the Realtime
@@ -1424,7 +1479,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

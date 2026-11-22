@@ -22,7 +22,13 @@ reminders) is put back after judging.
 5. **Change what you see by saying it**: `only show me product and consulting roles` (the lists re-split at once),
    then `help`, `how do I install Ping?` (steps for your device).
 6. **Read-only**: `apply for me` → "Ping is read-only, so I can't apply for you".
-7. **Companies** tab: every role with pay, deadline and eligibility; tap one for the JD summary and "Apply with".
+7. **Today**: tap any row. A sheet lists everything in it, one card per company or role: deadline with a live
+   countdown, applied or not, For you or Other with the reason, and links that open outside the app (Open on ERP,
+   Form link, Notice, Show in chat).
+8. **Forms** tab: every form from the notices and the mail, one row per form (the same form by notice and by mail,
+   or posted again with a later deadline, is one row with its history). Tick one as filled: an undo toast, it moves
+   to Filled, its reminders stop; ask `which forms haven't I filled?` or `mark the <company> form as filled`.
+9. **Companies** tab: every role with pay, deadline and eligibility; tap one for the JD summary and "Apply with".
 
 ## How good is it (numbers, each with its source)
 

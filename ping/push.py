@@ -142,6 +142,8 @@ def mail_reminders(items: list[dict], profile: dict, now: datetime) -> list[dict
         d = it.get("details") or {}
         if d.get("via") != "email" or it.get("level") == "hidden" or it.get("dismissed") or it.get("done") or not it.get("due_at"):
             continue
+        if (d.get("form") or {}).get("filled"):         # you've ticked this form: no reminder
+            continue
         at = datetime.fromisoformat(str(it["due_at"]).replace("Z", "+00:00"))
         if at <= now:
             continue
@@ -150,9 +152,12 @@ def mail_reminders(items: list[dict], profile: dict, now: datetime) -> list[dict
         company = it.get("company") or "From your mail"
         body = f"{company}: " + ("fill the form" if action == "fill_form" else "complete the online test" if action == "take_test"
                                  else first_line(it, 120)) + f" by {at.astimezone(IST).strftime('%H:%M')}"
-        out.append({"id": f"reminder:{it['id']}", "kind": "reminder", "title": f"{what} · due {_when(it['due_at'], now)}",
-                    "body": body, "url": f"./#m-{quote(str(it['id']), safe='')}", "tag": f"reminder:{it['id']}"[:120],
-                    "event_at": at.isoformat(), "send_at": max(at - lead, now).isoformat()})
+        row = {"id": f"reminder:{it['id']}", "kind": "reminder", "title": f"{what} · due {_when(it['due_at'], now)}",
+               "body": body, "url": f"./#m-{quote(str(it['id']), safe='')}", "tag": f"reminder:{it['id']}"[:120],
+               "event_at": at.isoformat(), "send_at": max(at - lead, now).isoformat()}
+        if (d.get("form") or {}).get("key"):           # send-push checks your tick again when it's time to send
+            row["form_key"] = d["form"]["key"]
+        out.append(row)
     return out
 
 

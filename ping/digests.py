@@ -378,7 +378,9 @@ def build(items: list[dict], members_by_role: dict[str, dict], previous: dict[st
                 if previous.get(rid):
                     emit(dict(previous[rid]))
                 elif pending and at - timedelta(hours=reminder_h) <= now < at and sent < at - timedelta(hours=reminder_h):
-                    emit({**made[did], "id": rid, "title": _named(lambda names: f"Reminder: {_plural(len(pending), 'form')} due {when(at, now)}: {names}",
+                    ticked = len(its) - len(pending)          # filled (your tick) or marked done: no reminder for them
+                    emit({**made[did], "id": rid, "title": _named(lambda names: f"Reminder: {_plural(len(pending), 'form')} due {when(at, now)}: {names}"
+                                                                  + (f" ({ticked} filled)" if ticked else ""),
                                                                   [p.get("company") or "" for p in pending]),
                           "first_seen": now.isoformat(),
                           "details": {**made[did]["details"], "role": "reminder",

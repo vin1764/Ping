@@ -298,7 +298,10 @@ class Runner:
                 sent = {r["id"] for r in self.store.select("push_queue", {"kind": "eq.reminder", "sent_at": "not.is.null"})}
                 rows = [r for r in rows if r["id"] not in sent]
                 if rows:
-                    self.store.upsert("push_queue", rows)
+                    try:
+                        self.store.upsert("push_queue", rows)
+                    except Exception:                 # push_queue without form_key yet (before apply-sql)
+                        self.store.upsert("push_queue", [{k: v for k, v in r.items() if k != "form_key"} for r in rows])
             self.counts["push_reminders_queued"] = len(rows)
         except Exception as e:                        # e.g. before Admin > apply-sql made push_queue
             self.problems.append(f"queueing test reminders failed: {type(e).__name__}")
@@ -620,8 +623,15 @@ class Runner:
         self._classify(roles, profile)
         dstats: dict = {}
         previous = {p["id"]: p for p in self.store.select("items", REAL)}
+        # your form ticks (form_status: your own rows; a demo session's never count): a ticked form is done, so no
+        # reminder is made for it (the digests read "done" from the last run's rows)
+        from . import forms as forms_mod
+        forms_prev = {f["key"]: f for f in self._rows("forms", REAL)}
+        filled = forms_mod.filled_keys(self._rows("form_status", {"is_demo": "is.false"}))
+        filled_items = {iid for k in filled for iid in (forms_prev.get(k) or {}).get("item_ids") or [] if iid in previous}
+        for_build = {**previous, **{iid: {**previous[iid], "done": True} for iid in filled_items}}
         items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats,
-                            previous=previous)
+                            previous=for_build)
         # a role's deadline that moved since the last run becomes one "Update" message
         from .dedupe import changes_since_last_run
         moved = [u for u in changes_since_last_run(previous, items, self.now) if u["id"] not in previous]
@@ -629,6 +639,18 @@ class Runner:
         self.counts["dedupe"] = {k: v for k, v in dstats.items() if k != "examples"}
         self.counts["dedupe"]["deadline_moves_between_runs"] = len(moved)
         self.counts["dedupe_examples"] = dstats.get("examples", [])[:5]
+        # the forms list: one row per form (ping/forms.py), and each form item learns its form and your tick
+        try:
+            frows = forms_mod.build(items, forms_prev, self._rows("form_merges", {"is_demo": "is.false"}),
+                                    {p["key"]: p for p in self._rows("form_pages")}, fetch=self._form_fetch(), now=self.now)
+            forms_mod.mark_items(items, frows, filled)
+            if frows:
+                self.store.upsert("forms", [forms_mod.stored(r) for r in frows], key="key")
+            self.counts["forms"] = {"forms": len(frows), "filled": len(filled & {r["key"] for r in frows}),
+                                    "from_several_postings": sum(1 for r in frows if len(r["sources"]) > 1),
+                                    "deadlines_moved": sum(1 for r in frows if r["deadline_history"])}
+        except Exception as e:                        # e.g. before Admin > apply-sql made the forms tables
+            self.problems.append(f"forms list not built: {type(e).__name__}: {str(e)[:120]}")
         # what the chat shows that it didn't show before (role cards and reminders live inside the digests)
         self.new_messages = [it for it in items if it["id"] not in previous and it.get("level") != "hidden"
                              and it.get("category") not in ("apply", "reminder") and not it.get("dismissed")]
@@ -655,6 +677,17 @@ class Runner:
         except Exception as e:
             self.problems.append(f"saving the feed failed: {e}")
         return items
+
+    def _rows(self, table: str, query: dict | None = None) -> list[dict]:
+        """A table's rows, or none when it isn't there yet (a project that hasn't run apply-sql since)."""
+        try:
+            return self.store.select(table, query or {})
+        except Exception:
+            return []
+
+    def _form_fetch(self):
+        """Following short form links (forms.gle, bit.ly…) to the form: ping/form_pages.py (none in tests)."""
+        return getattr(self, "form_fetch", None)
 
     def _classify(self, roles: list[dict], profile: dict) -> None:
         """'For you' or not, for every role you could apply to (cached on the role; see ping/relevance.py)."""

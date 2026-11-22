@@ -97,6 +97,14 @@ Deno.serve(async (req) => {
         await svc.from("push_queue").update({ sent_at: now.toISOString(), result: "skipped: the test had started" }).eq("id", q.id);
         continue;
       }
+      // a form you've ticked since the reminder was queued: not sent (your own ticks only, never a demo session's)
+      if (q.form_key) {
+        const { data: tick } = await svc.from("form_status").select("filled").eq("form_key", q.form_key).eq("is_demo", false).eq("filled", true).limit(1);
+        if (tick?.length) {
+          await svc.from("push_queue").update({ sent_at: now.toISOString(), result: "skipped: the form is ticked as filled" }).eq("id", q.id);
+          continue;
+        }
+      }
       const res = await sendAll({ title: q.title, body: reminderBody(q.body, q.event_at, now), url: q.url || "./#chat",
                                   tag: q.tag || q.id, at: now.toISOString() });
       await svc.from("push_queue").update({ sent_at: now.toISOString(), result: JSON.stringify(res) }).eq("id", q.id);

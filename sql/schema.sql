@@ -499,3 +499,108 @@ alter table public.profile_snapshots enable row level security;
 revoke all on public.profile_snapshots from anon, authenticated;
 grant all on public.profile_snapshots to service_role;
 grant usage, select on sequence public.profile_snapshots_id_seq to service_role;
+
+-- ------------------------------------------------------------------ forms (ping/forms.py)
+-- Every form that has come in (notices, their PDFs, placement mail), one row per form (its canonical key), built by
+-- the hourly run; your ticks in form_status (each login's own rows: the owner's are the owner's alone, a demo
+-- session's are its own and never count for anything); your Merge / Keep both answers in form_merges.
+-- Ping never submits, prefills or signs in to a form: a tick is your own record, written nowhere else.
+create table if not exists forms (
+  key text primary key,
+  company text, companies text[] default '{}', purpose text,
+  title text, description text, question_count int, closed boolean default false, signin_required boolean default false,
+  due_at timestamptz, deadline_history jsonb default '[]', link text, final_url text,
+  sources jsonb default '[]', first_seen timestamptz default now(), last_seen timestamptz,
+  item_ids text[] default '{}', role_ids text[] default '{}', looks_like jsonb default '[]', merged_keys text[] default '{}',
+  is_sample boolean default false
+);
+alter table forms enable row level security;
+drop policy if exists owner_forms_read on forms;
+create policy owner_forms_read on forms for select to authenticated using (is_ping_owner() and not coalesce(is_sample, false));
+drop policy if exists demo_forms_read on forms;
+create policy demo_forms_read on forms for select to authenticated using (is_ping_demo() and is_sample is true);
+grant select on forms to authenticated;
+grant select, insert, update, delete on forms to service_role;
+
+create table if not exists form_status (
+  owner_id uuid not null default auth.uid(),
+  form_key text not null,
+  filled boolean not null default false,
+  filled_at timestamptz,
+  updated_at timestamptz default now(),
+  is_demo boolean not null default coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false),
+  primary key (owner_id, form_key)
+);
+alter table form_status enable row level security;
+drop policy if exists own_form_status on form_status;
+create policy own_form_status on form_status for all to authenticated
+  using (owner_id = auth.uid() and (is_ping_owner() or is_ping_demo()))
+  with check (owner_id = auth.uid() and (is_ping_owner() or is_ping_demo())
+              and is_demo = coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false));
+grant select, insert, update, delete on form_status to authenticated;
+grant select, insert, update, delete on form_status to service_role;
+
+create table if not exists form_merges (
+  owner_id uuid not null default auth.uid(),
+  a text not null, b text not null,
+  choice text not null check (choice in ('merge', 'keep')),
+  decided_at timestamptz default now(),
+  is_demo boolean not null default coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false),
+  primary key (owner_id, a, b)
+);
+alter table form_merges enable row level security;
+drop policy if exists own_form_merges on form_merges;
+create policy own_form_merges on form_merges for all to authenticated
+  using (owner_id = auth.uid() and (is_ping_owner() or is_ping_demo()))
+  with check (owner_id = auth.uid() and (is_ping_owner() or is_ping_demo())
+              and is_demo = coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false));
+grant select, insert, update, delete on form_merges to authenticated;
+grant select, insert, update, delete on form_merges to service_role;
+
+-- what Ping read from each form's public page (cached; service key only)
+create table if not exists form_pages (
+  key text primary key, final_url text, fetched_at timestamptz default now(), title text, description text,
+  question_count int, closed boolean default false, signin_required boolean default false, error text
+);
+alter table form_pages enable row level security;
+revoke all on form_pages from anon, authenticated;
+grant select, insert, update, delete on form_pages to service_role;
+
+-- reminders queued for a form are skipped at send time if you've ticked it (send-push)
+alter table push_queue add column if not exists form_key text;
+
+-- ticks reach your other open devices at once
+do $fs$
+declare t text;
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
+  foreach t in array array['form_status', 'forms'] loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $fs$;
+
+-- the nightly demo cleanup also removes old demo sessions' form ticks and merge answers (never the owner's: those
+-- aren't is_demo)
+create or replace function cleanup_demo_sessions(days int default 7) returns jsonb
+language plpgsql volatile security definer set search_path = public, auth as $$
+declare c int; q int; u int; f int;
+begin
+  delete from public.chat_messages
+    where owner_id in (select id from auth.users where is_anonymous and created_at < now() - make_interval(days => days))
+       or (is_sample and created_at < now() - make_interval(days => days));
+  get diagnostics c = row_count;
+  delete from public.demo_questions where asked_at < now() - make_interval(days => days);
+  get diagnostics q = row_count;
+  delete from public.form_status where is_demo
+    and owner_id in (select id from auth.users where is_anonymous and created_at < now() - make_interval(days => days));
+  get diagnostics f = row_count;
+  delete from public.form_merges where is_demo
+    and owner_id in (select id from auth.users where is_anonymous and created_at < now() - make_interval(days => days));
+  delete from auth.users where is_anonymous and created_at < now() - make_interval(days => days);
+  get diagnostics u = row_count;
+  return jsonb_build_object('anonymous_users', u, 'chat_messages', c, 'demo_question_counts', q, 'form_ticks', f);
+end $$;
+revoke all on function cleanup_demo_sessions(int) from public, anon, authenticated;
+grant execute on function cleanup_demo_sessions(int) to service_role;

@@ -279,3 +279,20 @@ def test_job_descriptions_found_off_the_companies_list(monkeypatch):
     before_files = files()
     rec2, store = run(fake, store)
     assert files() == before_files, "no file fetched again (no new notice, the role's JD inputs unchanged)"
+
+
+def test_the_run_builds_the_forms_list_and_a_tick_carries_to_the_next_run():
+    fake = FakeErp(NOW)
+    rec, store = run(fake)
+    assert rec["status"] == "ok", rec["problems"]
+    fs = store.select("forms")
+    assert len(fs) == 1 and fs[0]["company"] == "Accordion" and fs[0]["link"] == "https://forms.gle/abc123"
+    item = next(i for i in store.select("items") if (i.get("details") or {}).get("form"))
+    assert item["details"]["form"] == {"key": fs[0]["key"], "filled": False, "sources": 1, "extended": False, "closed": False}
+    # you tick it; the next run knows (only your own ticks count, never a demo session's)
+    store.upsert("form_status", [{"owner_id": "me", "form_key": fs[0]["key"], "filled": True, "is_demo": False}],
+                 key="owner_id,form_key")
+    rec2, store = run(fake, store)
+    assert rec2["counts"]["forms"]["filled"] == 1
+    item = next(i for i in store.select("items") if (i.get("details") or {}).get("form"))
+    assert item["details"]["form"]["filled"] is True

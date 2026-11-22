@@ -433,6 +433,28 @@ def gemini_check(secrets) -> int:
     say(f"test call: {'answered' if res else 'FAILED'}; {res}")
     for a in ai.stats["attempts"]:
         say(f"  model said: {a}")
+    # Ask Ping's main model has 10 s in all: how long it takes on a prompt the size of Ask Ping's, with its default
+    # thinking and with less (an option the model refuses answers 400, which is reported, not retried)
+    main = os.environ.get("PING_AI_MODEL") or "gemini-flash-latest"
+    big = ("FACTS start here.\n" + "\n".join(f"- Company {i} (made-up): role Analyst {i}, CTC {10 + i % 20} LPA, closes "
+           f"2{i % 9} Nov 20:00, CG cut-off 7.{i % 10}" for i in range(220)) + "\nFACTS end here.\n\n"
+           "Question: which three of these pay the most and close soonest? Answer in under 80 words.")
+    for label, extra in (("default thinking", {}), ("thinkingBudget 0", {"thinkingConfig": {"thinkingBudget": 0}}),
+                         ("thinkingLevel low", {"thinkingConfig": {"thinkingLevel": "low"}})):
+        for attempt in (1, 2):
+            t = time.monotonic()
+            try:
+                rr = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{main}:generateContent",
+                                   headers={"x-goog-api-key": cfg.get("key", "")}, timeout=60,
+                                   json={"contents": [{"role": "user", "parts": [{"text": big}]}],
+                                         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096, **extra}})
+                um = rr.json().get("usageMetadata", {}) if rr.headers.get("content-type", "").startswith("application/json") else {}
+                say(f"  {main}, {label}, try {attempt}: HTTP {rr.status_code} in {time.monotonic() - t:.1f} s; "
+                    f"prompt {len(big)} chars; thinking tokens {um.get('thoughtsTokenCount', 0)}"
+                    + ("" if rr.ok else f"; {rr.text[:160]}"))
+            except Exception as e:
+                say(f"  {main}, {label}, try {attempt}: {type(e).__name__} after {time.monotonic() - t:.1f} s")
+            time.sleep(2)
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
     missed = [n for n in store.select("notices", REAL) if (n.get("analysis") or {}).get("rule_misses")]
     say(f"notices the rules couldn't read: {len(missed)}")

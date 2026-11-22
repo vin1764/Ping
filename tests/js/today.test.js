@@ -115,3 +115,52 @@ test("mail-only items on Today carry 'via email'; a mail interview is called one
   assert.strictEqual(iv.via, "email");
   assert.strictEqual(d.rows.find((r) => r.kind === "todo").via, "email");
 });
+
+// ---- the detail sheet behind a row
+test("Open on ERP: the role's own ERP page with your roll, else the ERP's home and what to search for", () => {
+  const r = { company: "Groww Pvt Ltd", jnf_id: 7, com_id: 12, yop: "2026-2027" };
+  const direct = T.erpLink(r, "21AB12345");
+  assert.equal(direct.direct, true);
+  assert.match(direct.href, /^https:\/\/erp\.iitkgp\.ac\.in\/TrainingPlacementSSO\/TPJNFView\.jsp\?jnf_id=7&com_id=12&yop=2026-2027&user_type=SU&rollno=21AB12345$/);
+  const noRoll = T.erpLink(r, null);
+  assert.equal(noRoll.direct, false);
+  assert.equal(noRoll.href, "https://erp.iitkgp.ac.in/IIT_ERP3/");
+  assert.equal(T.erpLink({ company: "Groww" }, "21AB12345").direct, false);    // no ids: no direct link
+});
+
+test("form links: the notice's, the mail's, web links only, once each", () => {
+  assert.deepEqual(T.formLinks({ details: { todo: { link: "https://forms.gle/a" }, forms: ["https://forms.gle/a", "mailto:x@y.z"],
+                                            mail: { link: "https://example.com/f" }, mail_links: ["javascript:alert(1)"] } }),
+                   ["https://forms.gle/a", "https://example.com/f"]);
+  assert.deepEqual(T.formLinks({}), []);
+});
+
+test("card order: for you and not applied first (soonest first), applied next, others last; no marks stays in view", () => {
+  const { top, others } = T.orderCards([
+    { company: "O", mine: false, at: 1 }, { company: "A", mine: true, applied: true, at: 1 },
+    { company: "Late", mine: true, at: 9 }, { company: "Soon", mine: true, at: 2 }, { company: "Test", mine: null, at: 5 }]);
+  assert.deepEqual(top.map((c) => c.company), ["Soon", "Test", "Late", "A"]);
+  assert.deepEqual(others.map((c) => c.company), ["O"]);
+  const cards = [{ mine: true }, { mine: true, applied: true }, { mine: false }];
+  assert.equal(T.filterCards(cards, "notapplied").length, 2);
+  assert.equal(T.filterCards(cards, "foryou").length, 2);
+  assert.equal(T.filterCards(cards, "all").length, 3);
+});
+
+test("sheet title: '55 applications close today 20:00 · 3 for you · 9 applied'", () => {
+  const now = Date.parse("2026-11-21T12:00:00+05:30");
+  assert.equal(T.sheetTitle({ n: 55, at: Date.parse("2026-11-21T20:00:00+05:30"), now, mine: 3, applied: 9 }),
+               "55 applications close today 20:00 · 3 for you · 9 applied");
+  assert.equal(T.sheetTitle({ n: 1, at: Date.parse("2026-11-22T17:00:00+05:30"), now, mine: 0, applied: 0 }),
+               "1 application closes tomorrow 17:00");
+});
+
+test("Today rows carry what they stand for (role ids, item ids, the notice)", () => {
+  const now = Date.parse("2026-11-21T12:00:00+05:30");
+  const roles = [{ id: "r1", company: "A", effective_deadline: "2026-11-21T20:00:00+05:30" }, { id: "r2", company: "B", applied: true, effective_deadline: "2026-11-21T20:00:00+05:30" }];
+  const m = T.build({ roles, now });
+  const d = m.rows.find((r) => r.kind === "deadline");
+  assert.deepEqual(d.roleIds, ["r1", "r2"]);
+  assert.equal(d.applied, 1);
+  assert.equal(d.total, 2);
+});

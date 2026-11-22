@@ -520,7 +520,7 @@ body { grid-template-columns: minmax(0, 1fr); }
 .today-head { display: flex; align-items: baseline; gap: var(--s3); }
 .today-head h2 { margin: 0; font-size: var(--t-lg); }
 .today-list { display: grid; gap: 2px; }
-.today-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 2px var(--s3); align-items: start; width: 100%; text-align: left;
+.today-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; gap: 2px var(--s3); align-items: start; width: 100%; text-align: left;
   padding: 10px var(--s2); border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--ink); cursor: pointer; min-height: 44px; }
 button.today-row:hover { background: var(--bg); }
 .today-row .t-ico { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--line-strong); }
@@ -588,3 +588,43 @@ body:has(form.login) main { background-color: var(--wall); background-image: var
 .thread .earlier { position: static; left: auto; transform: none; align-self: center; margin: var(--s2) auto var(--s3); display: flex; }
 /* the smallest phones: the status line one size down so "checked 13:24 · next 18:23" still fits next to Demo */
 @media (max-width: 380px) { .top .sub { font-size: var(--t-xs); line-height: 16px; } .top { gap: var(--s2); } }
+
+/* the detail sheet behind Today rows, "Show N more" and Ask Ping lists: full screen with a back arrow on phones,
+   the side panel on desktop (the chat stays in view) */
+dialog.sheet.act { margin: 0; width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0; }
+.sheet-head .back { flex: none; width: 44px; height: 44px; margin-left: calc(-1 * var(--s2)); border: 0; background: none; color: var(--ink);
+  font-size: 22px; line-height: 1; cursor: pointer; border-radius: 50%; }
+.sheet-head .back:focus-visible, .sheet-head .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+dialog.sheet:not(.act) .sheet-head .back { display: none; }
+dialog.sheet.act .sheet-head { align-items: center; padding-top: max(var(--s3), env(safe-area-inset-top, 0px)); }
+dialog.sheet.act .sheet-head .close { display: none; }
+.act-titles { min-width: 0; flex: 1; }
+.act-titles .co { font-size: var(--t-md); line-height: 22px; overflow-wrap: anywhere; }
+.act-titles .rn { color: var(--muted); }
+@media (min-width: 900px) {
+  dialog.sheet.act { margin: 0 0 0 auto; width: min(520px, 92vw); border-width: 0 0 0 1px; }
+  dialog.sheet.act .sheet-head .back { display: none; }
+  dialog.sheet.act .sheet-head .close { display: block; }
+}
+.act-body { gap: var(--s3); }
+.act-body .chips.filters { padding: 0; }
+.act-list { display: grid; gap: var(--s2); }
+.act-card { border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--s3); display: grid; gap: 6px; background: var(--surface); }
+.act-card.other { background: var(--thread); }
+.ac-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--s2); }
+.ac-head .co { font-size: var(--t-md); line-height: 22px; }
+.ac-head .rn { color: var(--ink); font-size: var(--t-sm); line-height: 20px; }
+.ac-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--t-sm); line-height: 20px; }
+.ac-meta .kind { font-size: var(--t-xs); line-height: 16px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.ac-line, .ac-why { font-size: var(--t-sm); line-height: 20px; overflow-wrap: anywhere; }
+.ac-why { color: var(--muted); }
+.ac-links { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: 2px; }
+.act-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border-radius: var(--r-pill); border: 1px solid var(--line);
+  background: var(--surface); color: var(--accent); font: inherit; font-size: var(--t-sm); font-weight: 600; text-decoration: none; cursor: pointer; }
+.act-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.act-others > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--muted); font-size: var(--t-sm); }
+.act-note { margin: 0; }
+.pill.plain { background: var(--thread); color: var(--muted); }
+.show-more { min-height: 44px; }
+.open-roles { display: block; margin-top: var(--s2); min-height: 44px; text-align: left; }
+.today-row .t-caret { color: var(--muted); }

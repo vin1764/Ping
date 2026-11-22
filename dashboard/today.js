@@ -78,7 +78,7 @@
       return { kind: "test", at: ms(it.event_at), due: it.event_at, via: d.via || null,
                title: `${cleanName(it.company)} ${d.kind === "interview" ? "interview" : "test"}`,
                sub: [roleOfTitle(it.title), clock(ms(it.event_at)), place].filter(Boolean).join(" · "),
-               status: st === "yes" ? "on" : st === "no" ? "off" : null,
+               status: st === "yes" ? "on" : st === "no" ? "off" : null, itemIds: [it.id],
                target: inChat(it) ? { item: it.id } : { company: it.company } };
     });
   }
@@ -102,7 +102,8 @@
       return { kind: "deadline", at: t, due: new Date(t).toISOString(),
                title: rs.length === 1 ? "1 application closes" : `${rs.length} applications close`, sub: `${clock(t)} · ${parts.join(" · ")}`,
                names: names.length > 4 ? `${names.slice(0, 4).join(", ")} +${names.length - 4}` : names.join(", "),
-               mine: mine.length,
+               mine: mine.length, roleIds: rs.map((r) => r.id), applied: applied.length, total: rs.length,
+               digestId: digest ? digest.id : null,
                target: digest ? { item: digest.id } : mine.length === 1 || rs.length === 1 ? { role: (mine[0] || rs[0]).id } : { companies: true } };
     });
   }
@@ -111,6 +112,7 @@
     : it.details?.todo?.action === "take_test" ? "test" : /submit/i.test(it.title || "") ? "submission" : "to-do");
   function todos(items, day, inChat) {
     const one = (it) => ({ kind: "todo", at: ms(it.due_at), due: it.due_at, title: cleanName(it.company) || "To do", via: it.details?.via || null,
+                           itemIds: [it.id],
                            sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
                            target: inChat(it) ? { item: it.id } : { company: it.company } });
     const list = (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day
@@ -125,7 +127,7 @@
       const what = whats.size === 1 ? [...whats][0] : "to-do";
       const names = [...new Set(its.map((it) => shortName(it.company)).filter(Boolean))];
       const digest = (items || []).find((x) => inChat(x) && x.category === "digest" && x.details?.kind === "form" && ms(x.due_at) === t);
-      return { kind: "todo", group: true, at: t, due: new Date(t).toISOString(),
+      return { kind: "todo", group: true, at: t, due: new Date(t).toISOString(), itemIds: its.map((it) => it.id), what,
                title: `${its.length} ${what}s due ${clock(t)}`, sub: "", names: listNames(names, 4),
                children: its.map(child).sort((a, b) => a.title.localeCompare(b.title)),
                target: digest ? { item: digest.id } : null };
@@ -166,12 +168,13 @@
       const it = (items || []).find((x) => x.notice_id === nid && inChat(x));
       // a notice for several companies says what it is first ("CV Submission"), then "several companies"
       const many = /multiple|several|various/i.test(n.company || "");
-      if (!many) return { kind: "notice", at: ms(n.notice_time), title: cleanName(n.company),
+      if (!many) return { kind: "notice", at: ms(n.notice_time), title: cleanName(n.company), noticeId: nid, itemIds: it ? [it.id] : [],
                           sub: `${clock(ms(n.notice_time))} · ${n.subject || "Notice"}`, target: it ? { item: it.id } : { notice: nid } };
       // several companies: say which (first 3 + N) and what it asks, not "several companies"
       const names = noticeCompanies(n), asks = noticeAsks(n);
       const who = names.length ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ")) : "several companies";
-      return { kind: "notice", at: ms(n.notice_time), title: n.subject || "Notice",
+      return { kind: "notice", at: ms(n.notice_time), title: n.subject || "Notice", noticeId: nid, itemIds: it ? [it.id] : [],
+               companies: names, asks,
                sub: `${clock(ms(n.notice_time))}${asks ? ` · ${asks}` : ""}`, names: who,
                target: it ? { item: it.id } : { notice: nid } };
     });
@@ -205,7 +208,43 @@
     };
   }
 
-  const api = { build, countdown, nextCheck, clock, dayOf, cleanName, shortName };
+  // ---------------------------------------------------------------- the detail sheet behind a row (pure parts)
+  const ERP = "https://erp.iitkgp.ac.in";
+  // "Open on ERP": the role's own page on the ERP (where Apply is) when Ping knows the role's ids and your roll; it
+  // opens in the browser and works while you're signed in to the ERP there. Otherwise the ERP's home page and what
+  // to search for. A link only: Ping never opens the ERP itself.
+  function erpLink(role, roll) {
+    const company = cleanName(role?.company || "");
+    if (role && role.jnf_id && role.com_id && role.yop && roll) {
+      const q = new URLSearchParams({ jnf_id: role.jnf_id, com_id: role.com_id, yop: role.yop, user_type: "SU", rollno: roll });
+      return { href: `${ERP}/TrainingPlacementSSO/TPJNFView.jsp?${q}`, direct: true, search: company };
+    }
+    return { href: `${ERP}/IIT_ERP3/`, direct: false, search: company };
+  }
+  // every form link an item carries (the notice's todo, its form links, the mail's), web links only, once each
+  function formLinks(it) {
+    const d = (it && it.details) || {};
+    const all = [d.todo && d.todo.link, ...(d.forms || []), d.mail && d.mail.link, ...(d.mail_links || [])];
+    return [...new Set(all.filter((u) => typeof u === "string" && /^https?:\/\//i.test(u)))];
+  }
+  // a sheet's role cards: for you and not applied first (soonest first), then applied, then the others (collapsed)
+  function orderCards(cards) {
+    // a card is "other" only when the marks say so (mine === false); with no marks (tests, notices, no targets) it's in view
+    const rank = (c) => (c.mine === false && !c.applied ? 2 : c.applied ? 1 : 0);
+    const by = (a, b) => rank(a) - rank(b) || (a.at || 0) - (b.at || 0) || String(a.company).localeCompare(String(b.company));
+    const sorted = [...cards].sort(by);
+    return { top: sorted.filter((c) => rank(c) < 2), others: sorted.filter((c) => rank(c) === 2) };
+  }
+  // which cards a filter chip keeps: "notapplied" | "foryou" | "all"
+  const filterCards = (cards, f) => cards.filter((c) => f === "all" || (f === "foryou" ? c.mine !== false : !c.applied));
+  // "55 applications close today 20:00 · 3 for you · 9 applied"
+  function sheetTitle({ n, at, now, mine, applied, word = "application", verb = "close" }) {
+    const day = dayOf(at) === dayOf(now) ? "today" : dayOf(at) === dayOf(now + 86400000) ? "tomorrow" : dayOf(at);
+    const head = `${n} ${word}${n === 1 ? "" : "s"} ${verb}${n === 1 ? "s" : ""} ${day} ${clock(at)}`;
+    return [head, mine ? `${mine} for you` : "", applied ? `${applied} applied` : ""].filter(Boolean).join(" · ");
+  }
+
+  const api = { build, countdown, nextCheck, clock, dayOf, cleanName, shortName, erpLink, formLinks, orderCards, filterCards, sheetTitle };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingToday = api;
 })(typeof window !== "undefined" ? window : globalThis);

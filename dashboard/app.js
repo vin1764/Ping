@@ -1336,7 +1336,8 @@
 
   function textBubble(role, text, at, enter) {
     return h("div", { class: `msg ${role === "me" ? "me" : "ping"}${enter ? " enter" : ""}`, "data-key": msgKey(role, at), "data-sig": "1" },
-      h("span", { class: "text" }, text), h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
+      h("span", { class: "text" }, text), role === "me" ? null : rolesButton(text),
+      h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
   }
 
   // every bubble has a key (what it is) and a signature (what it shows), so live updates add what's new and
@@ -1495,15 +1496,25 @@
     const groups = (d.list || []).map((g) => {
       const rows = (g.rows || []).map(row);
       if (g.collapsed && rows.length) {
-        const label = String(g.head || "").replace(/\s*\(\d+\)\s*$/, "") || "Others";
-        return h("details", { class: "grp more-rows", onclick: (ev) => ev.stopPropagation() },
-          h("summary", {}, h("span", { class: "closed" }, `Show ${rows.length} more ▸`),
-            h("span", { class: "opened" }, `${label} (${rows.length}) · hide ▴`)), rows);
+        // "Show 33 more": the sheet with every role in this message (one place to act from)
+        return h("div", { class: "grp more-rows" }, h("button", { type: "button", class: "linklike show-more", "aria-haspopup": "dialog",
+          onclick: (ev) => { ev.stopPropagation(); openDigestSheet(it, d); } }, `Show ${rows.length} more ›`));
       }
       return h("div", { class: "grp" }, g.head ? h("div", { class: "gh" }, g.head) : null, rows);
     });
     return h("div", { class: "list" }, groups, d.note ? h("div", { class: "why" }, d.note) : null,
       d.source ? h("div", { class: "src" }, d.source) : null);
+  }
+
+  function openDigestSheet(it, d) {
+    const ids = (d.list || []).flatMap((g) => (g.rows || []).map((r) => r.id)).filter(Boolean);
+    const roles = [...new Set(ids)].map((id) => roleById().get(id)).filter(Boolean);
+    const due = it.due_at ? +dt(it.due_at) : 0;
+    const mine = roles.filter((r) => !r.applied && targetsOn() && markOf(r)?.relevant).length, applied = roles.filter((r) => r.applied).length;
+    const title = due && roles.every((r) => +dt(deadlineOf(r)) === due)
+      ? TODAY.sheetTitle({ n: roles.length, at: due, now: liveNow(), mine, applied })
+      : [`${roles.length} roles`, mine ? `${mine} for you` : "", applied ? `${applied} applied` : ""].filter(Boolean).join(" · ");
+    openActSheet({ title, sub: retitle(it), cards: roles.map((r) => roleCard(r, { chat: it.id })), filters: true });
   }
 
   function itemDetails(it) {
@@ -1683,17 +1694,11 @@
         : r.due ? countPill(r.due) : null;
       const body = [h("span", { class: "t-title" }, r.title, status), r.sub ? h("span", { class: "t-sub" }, r.sub) : null,
                     r.names ? h("span", { class: "t-names" }, r.names) : null];
-      if (r.children) {
-        // "5 forms due 20:00": tap to open the single ones (each opens its own message)
-        const list = h("div", { class: "today-sub", hidden: true }, r.children.map((c) => row({ ...c, over: r.over })));
-        const head = h("button", { type: "button", class: `today-row k-${r.kind} group${r.over ? " over" : ""}`, "aria-expanded": "false",
-          onclick: () => { const open = list.hidden; list.hidden = !open; head.setAttribute("aria-expanded", String(open)); } },
-          h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right,
-          h("span", { class: "t-caret", "aria-hidden": "true" }, "▸"));
-        return h("div", { class: "today-group" }, head, list);
-      }
-      return h("button", { type: "button", class: `today-row k-${r.kind}${r.over ? " over" : ""}`, onclick: () => goTo(r.target) },
-        h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right);
+      // every row opens the sheet with everything in it ("5 forms due 20:00": one card per form)
+      return h("button", { type: "button", class: `today-row k-${r.kind}${r.group ? " group" : ""}${r.over ? " over" : ""}`,
+        "aria-haspopup": r.kind === "more" ? null : "dialog", onclick: () => openRowSheet(r) },
+        h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right,
+        r.kind === "more" ? null : h("span", { class: "t-caret", "aria-hidden": "true" }, "›"));
     };
     return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), h("p", { class: "tomorrow" }, m.tomorrow.text));
   }
@@ -1930,6 +1935,166 @@
     return s;
   }
 
+  // ------------------------------------------------------------ the detail sheet behind Today rows and lists
+  // One place to act from: a Today row, a digest's "Show N more" and an Ask Ping answer that lists roles all open
+  // this sheet, one card per company/role with what it is, when, where you stand, and links. Links only (Ping stays
+  // read-only); the ERP and forms open in the browser, never inside the app; a link Ping doesn't know isn't shown.
+  // Phones: full screen with a back arrow (the phone's own back closes it too); desktop: a side panel.
+  const EXT = { target: "_blank", rel: "noopener noreferrer" };
+  const myRoll = () => (state.src?.kind === "demo" || state.data?.profile?.is_sample ? null : state.data?.profile?.roll || null);
+  const KIND_WORD = { application: "Application", form: "Form", submission: "CV submission", test: "Test", interview: "Interview",
+                      shortlist: "Shortlist", notice: "Notice", "to-do": "To do" };
+  const roleIn = (t) => (String(t || "").match(/\(([^)]+)\)/) || [])[1] || "";
+  function roleCard(r, extra = {}) {
+    const m = markOf(r), due = deadlineOf(r);
+    return { role: r, company: cleanName(r.company), roleName: r.designation, due, at: due ? +dt(due) : 0, kind: "application",
+             applied: !!r.applied, mine: targetsOn() ? !!m?.relevant : null, reason: m?.relevant ? m.reason || "" : "",
+             cv: m?.relevant ? m.best_cv || "" : "", forms: [], noticeId: null, pdf: null, chat: null, ...extra };
+  }
+  function itemCardOf(it) {
+    const d = it.details || {};
+    const role = (it.role_ids || []).map((id) => roleById().get(id)).find(Boolean) || null;
+    const st = d.pdf?.status || it.pdf_status || null;
+    const kind = it.category === "test" || ["test", "test_rooms", "interview"].includes(d.kind) ? (d.kind === "interview" ? "interview" : "test")
+      : it.category === "shortlist" || d.kind === "shortlist" ? "shortlist"
+      : /fill the form/i.test(it.title || "") || d.todo?.action === "fill_form" ? "form"
+      : /submi/i.test(`${it.title} ${d.subject || ""}`) ? "submission" : it.category === "todo" ? "to-do" : "notice";
+    const row = d.pdf?.details || {}, m = role ? markOf(role) : null, due = it.due_at || it.event_at;
+    return { item: it, role, company: cleanName(it.company), roleName: role?.designation || roleIn(it.title), due, at: due ? +dt(due) : 0, kind,
+             applied: role ? !!role.applied : null, list: st === "yes" ? "on" : st === "no" ? "off" : null, done: !!it.done,
+             mine: role && targetsOn() ? !!m?.relevant : null, reason: m?.relevant ? m.reason || "" : "", cv: m?.relevant ? m.best_cv || "" : "",
+             place: [row.room ? `Room ${row.room}` : "", row.slot ? `Slot ${row.slot}` : "", !row.room && d.venue ? d.venue : ""].filter(Boolean).join(" · "),
+             myRow: d.pdf?.my_row ? (d.pdf.header ? d.pdf.header.map((x, i) => `${x}: ${d.pdf.my_row[i] ?? ""}`) : d.pdf.my_row).join(" · ") : "",
+             forms: TODAY.formLinks(it), noticeId: it.notice_id || null, pdf: it.notice_id && st ? it : null, chat: inChat(it) ? it.id : null };
+  }
+  function sheetCard(c) {
+    const status = c.list === "on" ? h("span", { class: "pill you" }, "on the list") : c.list === "off" ? h("span", { class: "pill over" }, "not on the list")
+      : c.applied === true ? h("span", { class: "pill applied" }, "✓ applied") : c.applied === false ? h("span", { class: "pill plain" }, "not applied") : null;
+    const fit = c.mine === true ? h("span", { class: "pill you" }, "For you") : c.mine === false ? h("span", { class: "pill plain" }, "Other") : null;
+    const erp = c.role || c.kind === "application" ? TODAY.erpLink(c.role || { company: c.company }, myRoll()) : null;
+    const pastDue = c.due && c.at <= liveNow();
+    const links = [
+      erp ? h("a", { class: "act-btn", href: erp.href, ...EXT, "data-link": "erp",
+        title: erp.direct ? "The role's page on the ERP, in your browser" : `On the ERP: CDC › Application of Placement/Internship, search “${erp.search}”` }, "Open on ERP") : null,
+      ...c.forms.map((u, k) => h("a", { class: "act-btn", href: u, ...EXT, "data-link": "form" }, c.forms.length > 1 ? `Form link ${k + 1}` : "Form link")),
+      c.pdf ? Object.assign(pdfLink(c.pdf), { className: "act-btn" }) : null,
+      c.noticeId ? h("button", { type: "button", class: "act-btn", "data-link": "notice", onclick: () => openNotice(c.noticeId) }, "Notice") : null,
+      c.chat ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => { closeSheet(); goTo({ item: c.chat }); } }, "Show in chat") : null,
+    ].filter(Boolean);
+    return h("article", { class: `act-card${c.mine === false && !c.applied ? " other" : ""}`, "data-kind": c.kind },
+      h("div", { class: "ac-head" }, h("strong", { class: "co" }, c.company || "Notice"), c.roleName ? h("span", { class: "rn" }, c.roleName) : null),
+      h("div", { class: "ac-meta" }, h("span", { class: "kind" }, KIND_WORD[c.kind] || c.kind),
+        c.due ? h("span", { class: "num" }, when(c.due)) : null,
+        c.due ? (pastDue ? h("span", { class: "pill cd c-over" }, "over") : countPill(c.due)) : null, status, fit,
+        c.done ? h("span", { class: "pill applied" }, "✓ done") : null),
+      c.place ? h("div", { class: "ac-line" }, c.place) : null,
+      c.myRow ? h("div", { class: "ac-line" }, h("strong", {}, "Your row: "), c.myRow) : null,
+      c.text ? h("div", { class: "ac-line" }, c.text) : null,
+      c.reason ? h("div", { class: "ac-why" }, c.reason) : null,
+      c.cv ? h("div", { class: "ac-line" }, "Apply with: ", h("strong", {}, c.cv)) : null,
+      links.length ? h("div", { class: "ac-links" }, links) : null);
+  }
+  // open and close: the phone's back gesture closes the sheet (a history entry while it's open)
+  function showSheet(sheet) {
+    if (!sheet.dataset.wired) {
+      sheet.dataset.wired = "1";
+      sheet.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); });   // a tap on the backdrop
+      sheet.addEventListener("close", () => { if (history.state?.pingSheet) { state.sheetPopping = true; history.back(); } });
+      window.addEventListener("popstate", () => {
+        if (state.sheetPopping) { state.sheetPopping = false; return; }
+        if (sheet.open) { history.replaceState(null, ""); sheet.close(); }
+      });
+    }
+    if (!sheet.open) { if (!history.state?.pingSheet) history.pushState({ pingSheet: 1 }, ""); sheet.showModal(); }
+    sheet.scrollTop = 0;
+  }
+  const closeSheet = () => { const s = $("#sheet"); if (s?.open) s.close(); };
+  function openActSheet({ title, sub = "", cards, filters = false, note = "" }) {
+    if (state.details && !state.detailsIn) {           // the demo's JD and pay details: fetched after the first paint
+      state.startDetails?.();
+      state.details.then(() => { state.detailsIn = true; openActSheet({ title, sub, cards, filters, note }); });
+      return;
+    }
+    const sheet = $("#sheet");
+    let filter = "all";
+    const body = h("div", { class: "sheet-body act-body" });
+    const chip = (key, label) => h("button", { type: "button", class: "chip", "aria-pressed": String(filter === key), "data-filter": key,
+      onclick: () => { filter = key; draw(); } }, label, h("span", { class: "n" }, TODAY.filterCards(cards, key).length));
+    const draw = () => {
+      const { top, others } = TODAY.orderCards(filters ? TODAY.filterCards(cards, filter) : cards);
+      body.replaceChildren(...[
+        filters ? h("div", { class: "chips filters", role: "group", "aria-label": "Show" },
+          chip("notapplied", "Not applied"), chip("foryou", "For you"), chip("all", "All")) : null,
+        top.length ? h("div", { class: "act-list" }, top.map(sheetCard)) : null,
+        others.length ? h("details", { class: "act-others" }, h("summary", {}, `Others (${others.length})`),
+          h("div", { class: "act-list" }, others.map(sheetCard))) : null,
+        !top.length && !others.length ? h("p", { class: "muted" }, "Nothing here with this filter.") : null,
+        h("p", { class: "muted small act-note" }, note || (myRoll()
+          ? "“Open on ERP” opens the role's page in your browser; sign in to the ERP there if it asks. Ping only reads the ERP: you apply there."
+          : "“Open on ERP” opens the ERP in your browser: CDC › Application of Placement/Internship, then search for the company. Ping only reads the ERP: you apply there.")),
+      ].filter(Boolean));
+    };
+    const close = h("button", { type: "button", class: "close", "aria-label": "Close", onclick: () => sheet.close() }, "×");
+    const back = h("button", { type: "button", class: "back", "aria-label": "Back", onclick: () => sheet.close() }, "←");
+    sheet.classList.add("act");
+    sheet.replaceChildren(
+      h("div", { class: "sheet-head" }, back, h("div", { class: "act-titles" }, h("h2", { id: "sheet-title", class: "co" }, title),
+        sub ? h("div", { class: "rn small" }, sub) : null), close), body);
+    draw();
+    showSheet(sheet);
+    (matchMedia("(max-width: 899px)").matches ? back : close).focus();
+  }
+  // what each Today row opens
+  function openRowSheet(r) {
+    const items = (r.itemIds || []).map((id) => state.data.items.find((i) => i.id === id)).filter(Boolean);
+    if (r.kind === "deadline") {
+      const roles = (r.roleIds || []).map((id) => roleById().get(id)).filter(Boolean);
+      return openActSheet({ title: TODAY.sheetTitle({ n: roles.length, at: r.at, now: liveNow(), mine: r.mine, applied: r.applied }),
+        cards: roles.map((x) => roleCard(x, { chat: r.digestId })), filters: true });
+    }
+    if (r.kind === "todo" || r.kind === "test") {
+      const cards = items.map(itemCardOf);
+      const done = cards.filter((c) => c.done).length;
+      return openActSheet({ title: r.title, sub: [r.group ? clock(r.due) : r.sub, done ? `${done} done` : ""].filter(Boolean).join(" · "), cards,
+        filters: cards.length > 3 });
+    }
+    if (r.kind === "notice") {
+      const n = (state.data.notices || []).find((x) => (x.notice_id ?? x.id) === r.noticeId) || {};
+      const it = items[0] || null;
+      const base = it ? itemCardOf(it) : { company: cleanName(n.company), kind: "notice", forms: [], noticeId: r.noticeId };
+      const names = r.companies || [];
+      const roles = names.length ? state.data.roles.filter((x) => names.some((nm) => cleanName(x.company).toLowerCase().startsWith(nm.toLowerCase())
+        || nm.toLowerCase().startsWith(cleanName(x.company).toLowerCase())) && (x.applied || isOpen(x))) : [];
+      const cards = roles.length ? roles.map((x) => roleCard(x, { kind: "application", forms: base.forms, noticeId: r.noticeId, chat: base.chat || null }))
+        : [{ ...base, text: base.kind === "notice" ? (n.preview || "").slice(0, 220) : "", noticeId: r.noticeId }];
+      return openActSheet({ title: r.title, sub: [r.sub, r.names].filter(Boolean).join(" · "), cards, filters: roles.length > 3 });
+    }
+    return goTo(r.target);
+  }
+  // the roles an Ask Ping answer lists ("- Company — Role (apply with …)"), to open them in the sheet
+  const norm = (s) => cleanName(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  function rolesIn(text) {
+    if (!state.data?.roles?.length) return [];
+    const out = [];
+    for (const line of String(text || "").split("\n")) {
+      const m = line.match(/^\s*[-•]\s*(.+?)\s+—\s+(.+?)(?:\s+\(apply with[^)]*\)|\s+✓ applied)?\s*$/);
+      if (!m) continue;
+      const co = norm(m[1]), rn = m[2].trim().toLowerCase();
+      const r = state.data.roles.find((x) => String(x.designation || "").trim().toLowerCase() === rn
+        && (norm(x.company).startsWith(co) || co.startsWith(norm(x.company))));
+      if (r && !out.includes(r)) out.push(r);
+    }
+    return out;
+  }
+  function rolesButton(text) {
+    const roles = rolesIn(text);
+    if (roles.length < 2) return null;
+    return h("button", { type: "button", class: "linklike open-roles", onclick: (ev) => { ev.stopPropagation();
+      openActSheet({ title: `${roles.length} roles from this answer`, sub: [`${roles.filter((x) => !x.applied && targetsOn() && markOf(x)?.relevant).length} for you`,
+        `${roles.filter((x) => x.applied).length} applied`].join(" · "), cards: roles.map((x) => roleCard(x)), filters: true }); } },
+      `Open these ${roles.length} roles`);
+  }
+
   // the role sheet: everything Ping knows about one role (a bottom sheet on phones, a side panel on desktop)
   function openRole(r) {
     if (state.details && !state.detailsIn) {           // the demo's JD and pay details: fetched after the first paint
@@ -1984,12 +2149,8 @@
         sec("Source", h("p", { class: "muted small", style: "margin:0" },
           `The ERP's companies list${r.last_seen ? `, last read ${when(r.last_seen)}` : ""}. Ping only reads the ERP: apply there. `),
           h("a", { href: companyHref(r.company), onclick: () => sheet.close() }, `All roles at ${cleanName(r.company)}`))));
-    if (!sheet.dataset.wired) {
-      sheet.dataset.wired = "1";
-      sheet.addEventListener("click", (ev) => { if (ev.target === sheet) sheet.close(); });   // a tap on the backdrop
-    }
-    sheet.showModal();
-    sheet.scrollTop = 0;
+    sheet.classList.remove("act");
+    showSheet(sheet);
     close.focus();
   }
 

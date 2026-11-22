@@ -646,7 +646,7 @@
     const m = Math.floor((liveNow() - t) / 60000);
     if (m < 1) return "checked just now";
     if (m < 60) return `checked ${m} min ago`;
-    return istDay(new Date(t)) === istDay(nowDate()) ? `last checked ${clock(t)}` : `last checked ${when(t)}`;
+    return istDay(new Date(t)) === istDay(nowDate()) ? `checked ${clock(t)}` : `checked ${when(t)}`;   // short: it fits a phone
   }
   function showLastRun() {
     const cur = LIVE.current(state.data.runs, liveNow());

@@ -94,7 +94,7 @@ main { grid-area: main; min-height: 0; overflow-y: auto; -webkit-overflow-scroll
 .nav a.on { color: var(--accent); }
 .nav a.on::before { content: ""; position: absolute; top: 0; left: 30%; right: 30%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
 .nav .dot { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-pill);
-  background: var(--accent); color: var(--on-accent); font-size: 11px; line-height: 18px; text-align: center; }
+  background: var(--accent); color: var(--on-accent); font-size: var(--t-xs); line-height: 18px; text-align: center; }
 .nav .rail-only { display: none; }
 body.typing-focus .nav { display: none; }    /* phones: the keyboard is up, give the thread the room */
 @media (min-width: 900px) {
@@ -460,11 +460,11 @@ body { grid-template-columns: minmax(0, 1fr); }
 .msg.ping + .msg.ping::before, .msg.me + .msg.me::before { display: none; }
 /* the time sits inside the bubble, bottom right */
 .msg .foot { margin-top: 0; }
-.msg .time { font-size: 11px; }
+.msg .time { font-size: var(--t-xs); }
 .msg.item, .msg.run { border-left: 0; }
 .msg.item.past { opacity: .72; }
 /* the label line: REMINDER · TEST · NEW · PING */
-.kicker { margin-bottom: 1px; letter-spacing: .06em; font-size: 11px; }
+.kicker { margin-bottom: 1px; letter-spacing: .06em; font-size: var(--t-xs); }
 .kicker .k { font-weight: 700; }
 .k-soon .kicker .k { color: var(--soon); } .k-test .kicker .k { color: var(--test); } .k-new .kicker .k { color: var(--accent); }
 .k-you .kicker .k { color: var(--applied); } .k-review .kicker .k { color: var(--accent); }
@@ -550,7 +550,7 @@ body.today-on main { background: var(--surface); }
   .nav .today-tab { display: none; }
 }
 /* four tabs on phones: tighter labels */
-@media (max-width: 420px) { .nav a { font-size: 11px; } }
+@media (max-width: 420px) { .nav a { font-size: var(--t-xs); } }
 
 /* the other pages speak the same language: the same radii, surfaces and chips; sign-in sits on the wallpaper */
 body:has(form.login) main { background-color: var(--wall); background-image: var(--wall-pattern); background-size: 240px 240px; }

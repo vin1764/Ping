@@ -825,3 +825,8 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .cv-sum > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); }
 .today-more { margin: var(--s2) 0 0; }
 .today-more a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; display: inline-flex; min-height: 44px; align-items: center; }
+/* a long name: the task leads line 2 */
+.cc-l2-wrap { line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); }
+.cc-l2-wrap .cc-l2 { display: inline; }
+.cc-task2 { color: var(--ink); }
+.cc-l2 .pill, .cc-l2-wrap .pill { margin-left: 6px; font-size: var(--t-xs); line-height: 18px; padding: 0 8px; }

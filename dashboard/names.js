@@ -13,6 +13,8 @@
            .replace(/\s*\(([^()]*)\)/g, (m, inner) => (URLISH.test(inner) ? "" : m));          // (www.x.com)
     } while (s !== prev);
     s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:])/g, "$1").trim();
+    // "(legal name: Elixar Systems Pvt Ltd)", "(formerly …)": not part of the name on screen
+    s = s.replace(/\s*\((legal name|formerly|earlier|a subsidiary|subsidiary)[^)]*\)/gi, "").trim();
     // never "Private Limited" / "Pvt Ltd" / "Limited" on screen
     for (let i = 0; i < 2; i++) s = s.replace(/[\s,]+(private\s+limited|pvt\.?\s*ltd\.?|pvt\.?|limited|ltd\.?|llp|inc\.?|corporation|corp\.?)\s*$/i, "").trim();
     return s || raw.trim();

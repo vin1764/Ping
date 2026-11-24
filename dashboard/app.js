@@ -1792,12 +1792,24 @@
   // (the role, or what a title adds), one primary button and "⋯". A tap on the card or on ⋯ opens the detail in place:
   // the full titles, every notice, when it was posted, the role, Show in chat. Only what renders: the data is as it was.
   const CARDS = window.PingCards;
+  // a company as a card's first line says it: short, no legal suffix ("EY Global Delivery Services")
+  const shortCo = (c) => (window.PingNames?.shortName ? window.PingNames.shortName(cleanName(c || "")) : FORMS.cleanName(cleanName(c || "")));
+  // a role without the company's own name in it ("Associate Manager BlackBuck Leadership Program" -> "Associate
+  // Manager Leadership Program"): the company is already on line 1
+  function withoutCo(role, company) {
+    const w = String(company || "").split(/\s+/)[0];
+    if (!role || !w || w.length < 3) return String(role || "").replace(/\s*\|\s*/g, " · ");
+    const out = role.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b\\s*`, "ig"), "").replace(/\s*\|\s*/g, " · ").replace(/\s{2,}/g, " ").trim();
+    return out.length >= 3 ? out : role;
+  }
   const relOf = (at, event = false) => CARDS.relDeadline(at, liveNow(), { event });
   function cardC({ key, cls = "", lead = null, company, task, at, event = false, status = null, l3 = "", primary = null,
                    tail = null, detail = () => [], attrs = {} }) {
     state.cardOpen = state.cardOpen || new Set();
     const open = !!key && state.cardOpen.has(key);
     const rel = at === undefined ? null : relOf(at, event);
+    // line 1 never cut off: when the name and the task don't fit, the task leads line 2 ("Test · Tue 24 Nov 11:00")
+    const name = shortCo(company), long = task && name.length + task.length > 30;
     const body = h("div", { class: "cc-detail", hidden: open ? null : true });
     let built = false;
     const build = () => { if (!built) { built = true; body.append(...[].concat(detail()).filter(Boolean)); } };
@@ -1805,9 +1817,11 @@
     const card = h("article", { class: `card-c${cls ? ` ${cls}` : ""}${open ? " open" : ""}`, ...attrs },
       h("div", { class: "cc-main" }, lead,
         h("div", { class: "cc-text" },
-          h("div", { class: "cc-l1" }, h("strong", { class: "co" }, FORMS.cleanName(company || "")), task ? h("span", { class: "cc-task" }, ` · ${task}`) : null, status),
-          rel ? h("div", { class: `cc-l2 lv-${rel.level}`, ...(rel.level !== "over" && rel.level !== "none" && at ? { "data-rel": dt(at).toISOString(), "data-event": event ? "1" : null } : {}) }, rel.text) : null,
-          l3 ? h("div", { class: "cc-l3" }, l3) : null)),
+          h("div", { class: "cc-l1" }, h("strong", { class: "co" }, name), task && !long ? h("span", { class: "cc-task" }, ` · ${task}`) : null, long ? null : status),
+          rel || long ? h("div", { class: "cc-l2-wrap" }, long ? h("span", { class: "cc-task2" }, `${task}${rel ? " · " : ""}`) : null,
+            rel ? h("span", { class: `cc-l2 lv-${rel.level}`, ...(rel.level !== "over" && rel.level !== "none" && at ? { "data-rel": dt(at).toISOString(), "data-event": event ? "1" : null } : {}) }, rel.text) : null,
+            long ? status : null) : null,
+          l3 ? h("div", { class: "cc-l3" }, withoutCo(l3, company)) : null)),
       h("div", { class: "cc-act" }, primary, h("span", { class: "cc-gap" }), tail, more),
       body);
     const toggle = () => {
@@ -1894,12 +1908,12 @@
     // collapsed, by the card rule: who and what, the time in relative words, the role (or the names in a list), one
     // button; the full message, its list, where it came from and its links are behind ⋯ (or a tap on the message)
     const digest = (d.list || []).some((g) => (g.rows || []).length);
-    const company = FORMS.cleanName(cleanName(it.company || "")) || ((it.title || "").match(/^(?:Update - )?([^:(]{2,40}?)(?: deadline| test| form)?:/) || [])[1] || "";
+    const company = shortCo(it.company) || ((it.title || "").match(/^(?:Update - )?([^:(]{2,40}?)(?: deadline| test| form)?:/) || [])[1] || "";
     const task = d.todo?.action === "fill_form" || /fill the form/i.test(it.title || "") ? "Form"
       : /\bsubmi(t|ssion)\b.*\bcv\b|\bcv submission\b/i.test(it.title || "") ? "CV submission"
       : it.category === "shortlist" || d.kind === "shortlist" ? "Shortlist" : it.category === "result" ? "Result"
       : kind === "test" || d.todo?.action === "take_test" ? (d.kind === "interview" || /interview/i.test(it.title || "") ? "Interview" : "Test")
-      : /deadline (extended|moved)|extended to/i.test(it.title || "") ? "Deadline extended" : /time moved/i.test(it.title || "") ? "Time moved"
+      : /deadline (extended|moved)|extended to/i.test(it.title || "") ? "Extended" : /time moved/i.test(it.title || "") ? "Time moved"
       : it.category === "ppt" || /pre-placement talk/i.test(it.title || "") ? "Talk" : it.category === "offer" ? "Offer"
       : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" ? "Reminder" : "Application") : kind === "new" ? "New roles" : "Update";
     const event = ["Test", "Interview", "Shortlist", "Result", "Talk", "Time moved"].includes(task);
@@ -1907,12 +1921,17 @@
     const listed = digest ? (d.list || []).flatMap((g) => g.collapsed ? [] : (g.rows || []).map((r) => FORMS.cleanName(cleanName(cleanRowText(r.text).split(/ — | deadline\b|:| \(/)[0].trim())))) : [];
     const names = [...new Set(listed)];
     const allIds = digest ? (d.list || []).flatMap((g) => (g.rows || []).map((r) => r.id)).filter(Boolean) : [];
-    const headline = String(retitle(it) || "").replace(/\s*\([^)]*\)/g, "").split(/;\s/)[0]
+    const shortHead = (t) => {
+      const m = String(t).match(/(\d+)\s+(applications?|roles?|forms?|deadlines?|tests?|shortlists?)\b/i), y = String(t).match(/(\d+) for you/);
+      return t.length <= 32 || !m ? t : `${m[1]} ${m[2].toLowerCase()}${y ? ` · ${y[1]} for you` : ""}`;
+    };
+    const headline0 = String(retitle(it) || "").replace(/^(reminder|update)\s*:\s*/i, "").split(/:\s+(?=[A-Z])/)[0].replace(/ for roles you applied to/, "").replace(/\s*\([^)]*\)/g, "").split(/;\s/)[0]
       .replace(/(,| to| by| at| on)? (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} \w{3}( \d\d:\d\d)?:?/g, "").replace(/[.:]\s*$/, "").trim();
+    const headline = shortHead(headline0);
     const onList = (d.pdf?.status || it.pdf_status) === "yes" && ["Shortlist", "Test", "Result"].includes(task);
     const status = it.done ? h("span", { class: "pill applied" }, "✓ done") : onList ? h("span", { class: "pill you" }, "you're on it")
       : listLink(it) ? h("span", { class: "pill plain" }, "check the list") : null;
-    const role = roleIn(it.title) || "";
+    const role = withoutCo(roleIn(it.title) || "", company);
     const place = [d.pdf?.details?.room ? `Room ${d.pdf.details.room}` : ""].filter(Boolean).join("");
     const plain = CARDS.cleanTitle(it.title, company, [task]);
     const l3 = digest ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", "))
@@ -1928,17 +1947,19 @@
     const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}${open ? " open" : ""}`, role: "button",
       tabindex: "0", "aria-expanded": String(open), "data-kind": kind, "data-key": `item:${it.id}`, "data-sig": itemSig(it) },
       review ? h("div", { class: "kicker" }, h("span", { class: "k" }, label)) : null,
-      review ? h("span", { class: "text title" }, retitle(it))
+      review ? h("span", { class: "text title" }, (d.candidates || []).reduce((t, c) => t.split(c).join(shortCo(c)), retitle(it)))
         : h("div", { class: "card-c chat-c" }, h("div", { class: "cc-text" },
             h("div", { class: "cc-l1" }, digest ? h("strong", { class: "co" }, headline || label) : h("strong", { class: "co" }, company || label),
-              digest || !company ? null : h("span", { class: "cc-task" }, ` · ${task}`), status),
-            rel ? h("div", { class: `cc-l2 lv-${rel.level}`, ...(!past && rel.level !== "over" ? { "data-rel": dt(due).toISOString(), "data-event": event ? "1" : null } : {}) },
-              past && rel.level !== "over" ? `${rel.text} · ${pastLabel.toLowerCase()}` : rel.text)
+              digest || !company || company.length + task.length > 26 ? null : h("span", { class: "cc-task" }, ` · ${task}`)),
+            !digest && company && company.length + task.length > 26 ? h("div", { class: "cc-l2 cc-task2" }, `${task}${rel ? ` · ${rel.text}` : ""}`, status) : null,
+            !digest && company && company.length + task.length > 26 ? null
+            : rel ? h("div", { class: `cc-l2 lv-${rel.level}`, ...(!past && rel.level !== "over" ? { "data-rel": dt(due).toISOString(), "data-event": event ? "1" : null } : {}) },
+              past && rel.level !== "over" ? `${rel.text} · ${pastLabel.toLowerCase()}` : rel.text, status)
               : !digest ? h("div", { class: "cc-l2" }, String(it.title || "").replace(/^[^:]{2,60}:\s*/, "")) : null,
             l3 && (rel || digest) ? h("div", { class: "cc-l3" }, l3) : null)),
       // "Which company is that? Tap to choose.": the choices are on the message, not under Details
       review ? h("div", { class: "onb-actions choose", role: "group", "aria-label": "Which company" },
-        d.candidates.map((c) => h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { company: c }); } }, c)),
+        d.candidates.map((c) => h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { company: c }); } }, shortCo(c))),
         h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { ignore: true }); } }, "None of these")) : null,
       h("div", { class: "cc-act foot" }, primary, h("span", { class: "cc-gap" }), h("span", { class: "time" }, clock(at)),
         h("button", { type: "button", class: "cc-more expand", "aria-expanded": String(open), "aria-label": open ? "Less" : "More about this message" }, open ? "▴" : "⋯")));
@@ -2575,7 +2596,7 @@
       key: `feed:${it.id}`, cls: `item ${cls}${it.done ? " done" : ""}`, company: c.company || cleanName(it.company || "") || "Placement office",
       task: it.needs_review ? "Question" : KIND_WORD[c.kind] || "Update", at: due || undefined, event: !!it.event_at && !it.due_at,
       status: it.done ? h("span", { class: "pill applied" }, "✓ done") : null,
-      l3: c.roleName || (due ? "" : String(it.title || "").replace(/^[^:]{2,60}:\s*/, "")),
+      l3: c.roleName || (due ? "" : (d.candidates || []).reduce((t, x) => t.split(x).join(shortCo(x)), String(it.title || "").replace(/^[^:]{2,60}:\s*/, ""))),
       primary: link ? h("a", { class: "act-btn primary", href: link, ...EXT }, /forms\.gle|docs\.google\.com\/forms|\/forms\//i.test(link) || d.todo?.link ? "Open form"
         : /meet\.google|zoom\.us|teams\.microsoft|webex|\/interview\//i.test(link) ? "Join" : /hackerrank|hackerearth|mettl|codility|test|assess/i.test(link) ? "Open test" : "Open link") : null,
       detail: () => [
@@ -2592,7 +2613,7 @@
     });
     if (it.needs_review && it.level !== "hidden") {
       card.append(h("div", { class: "onb-actions choose" }, "It's about:",
-        (d.candidates || []).map((x) => h("button", { type: "button", class: "chip", onclick: () => fix(it, { company: x }) }, x)),
+        (d.candidates || []).map((x) => h("button", { type: "button", class: "chip", onclick: () => fix(it, { company: x }) }, shortCo(x))),
         h("button", { type: "button", class: "chip", onclick: () => fix(it, { ignore: true }) }, "None of these")));
     }
     return card;
@@ -2715,9 +2736,9 @@
     const rel = dl ? relOf(dl) : null;
     return h("button", { type: "button", class: `role-row r-${cls}`, "data-role": r.id, onclick: () => openRole(r),
       "aria-label": `${cleanName(r.company)}, ${r.designation}, ${chip[1]}. Details` },
-      h("span", { class: "co" }, FORMS.cleanName(cleanName(r.company))),
+      h("span", { class: "co" }, shortCo(r.company)),
       h("span", { class: `pill ${chip[0]} rr-chip` }, chip[1]),
-      h("span", { class: "rn" }, r.designation),
+      h("span", { class: "rn" }, withoutCo(r.designation, cleanName(r.company))),
       h("span", { class: `meta cc-l2${rel ? ` lv-${rel.level}` : ""}`, ...(rel && open ? { "data-rel": dt(dl).toISOString() } : {}) },
         rel ? (open ? rel.text : rel.text.replace(/ · past due$/, " · closed")) : "No deadline yet"));
   }

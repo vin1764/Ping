@@ -1,5 +1,5 @@
 {
- "about": "Real conversations that went wrong (24 Nov), as evals: a JD that is in a notice's PDF, a source word read as a company, a source the student named that was ignored, the same answer sent twice, one 'no JD' line per role. The data is shaped like the real RISA Labs case (8 roles with no JD on the ERP; notices 1841 and 1860 with a 16-page PDF; the notice text says the JD is attached). Two states: 'before' (the PDF not yet read as a JD: only the notice text says so) and 'after' (the re-scan kept it as a JD and linked it to the 8 roles). Run by tests/js/conversations.test.js through the same rules the page and the function use.",
+ "about": "Real conversations that went wrong (24 Nov), as evals: a JD that is in a notice's PDF, a source word read as a company, a source the student named that was ignored, the same answer sent twice, one 'no JD' line per role. The data is shaped like the real RISA Labs case (8 roles with no JD on the ERP; notices 1841 and 1860 with a 16-page PDF; the notice text says the JD is attached). Two states: 'before' (the PDF not yet read as a JD: only the notice text says so) and 'after' (the re-scan kept it as a JD and linked it to the 8 roles). Run by tests/js/conversations.test.js through the same rules the page and the function use. Style (24 Nov): where a file is is said as 'the CDC notice PDF (date)' with an Open link, never a notice number; a source named that doesn't have it says so and where it is, in one sentence.",
  "now": "2026-11-24T21:35:00+05:30",
  "last_checked": "2026-11-24T21:12:00+05:30",
  "company": "RISA LABS PRIVATE LIMITED",
@@ -44,23 +44,27 @@
     {
      "q": "Risa JD?",
      "must": [
-      "notice 1841",
+      "id=1841",
       "AdmFilePDF.htm?type=NOTICE&year=2026-2027&id=1841"
      ],
      "not": [
       "no JD on the ERP",
-      "I don't have"
+      "I don't have",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 3
     },
     {
      "q": "Check notices for JD",
      "must": [
-      "notice 1841"
+      "id=1841"
      ],
      "not": [
       "I don't have Notices",
-      "I don't have"
+      "I don't have",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 2
     },
@@ -68,10 +72,13 @@
      "q": "risa jd on mail??",
      "must": [
       "placement mail",
-      "notice 1841"
+      "id=1841",
+      "CDC notice"
      ],
      "not": [
-      "I don't have"
+      "I don't have",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 3
     }
@@ -84,18 +91,24 @@
     {
      "q": "risa labs jd",
      "must": [
-      "notice 1841"
+      "id=1841"
      ],
-     "max_lines": 3
+     "max_lines": 3,
+     "not": [
+      "notice 1841",
+      "posted again"
+     ]
     },
     {
      "q": "pdf mein hai kya?",
      "must": [
-      "notice 1841"
+      "id=1841"
      ],
      "not": [
       "I don't have Pdf",
-      "I don't have Mein"
+      "I don't have Mein",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 2
     },
@@ -105,7 +118,9 @@
       "mail"
      ],
      "not": [
-      "I don't have Mail"
+      "I don't have Mail",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 3
     }
@@ -119,9 +134,13 @@
      "q": "risa apm jd",
      "must": [
       "Associate Product Manager",
-      "notice 1841"
+      "id=1841"
      ],
-     "max_lines": 6
+     "max_lines": 6,
+     "not": [
+      "notice 1841",
+      "posted again"
+     ]
     },
     {
      "q": "what about ctc",
@@ -129,7 +148,9 @@
       "RISA Labs"
      ],
      "not": [
-      "I don't have Ctc"
+      "I don't have Ctc",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 3
     }
@@ -142,23 +163,35 @@
     {
      "q": "risa labs jd",
      "must": [
-      "notice 1841"
+      "id=1841"
      ],
-     "max_lines": 3
+     "max_lines": 3,
+     "not": [
+      "notice 1841",
+      "posted again"
+     ]
     },
     {
      "q": "what about ctc",
      "must": [
       "RISA Labs"
      ],
-     "max_lines": 3
+     "max_lines": 3,
+     "not": [
+      "notice 1841",
+      "posted again"
+     ]
     },
     {
      "q": "what about ctc",
      "must": [
       "Nothing new"
      ],
-     "max_lines": 1
+     "max_lines": 1,
+     "not": [
+      "notice 1841",
+      "posted again"
+     ]
     },
     {
      "q": "pdf mein hai kya?",
@@ -168,7 +201,9 @@
       "RISA Labs"
      ],
      "not": [
-      "Which company"
+      "Which company",
+      "notice 1841",
+      "posted again"
      ],
      "max_lines": 2
     }

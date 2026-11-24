@@ -30,11 +30,28 @@
   const URLISH = /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|in|io|ai|co|org|net|tech|app|dev)\b/i;
   const SUFFIX = /[\s,]+(?:private\s+limited|pvt\.?\s*ltd\.?|limited|ltd\.?|inc\.?|llp|llc|corporation|corp\.?|plc)\s*$/i;
   // display name: no bracketed website, no "Private Limited" / "Corporation" at the end, ALL CAPS made readable
+  // well-known acronyms that have vowels (the rest are kept by rule: short or vowel-less words)
+  const ACRONYMS = new Set("ICICI HDFC IDFC HSBC HPCL BPCL IOCL ONGC NTPC BHEL GAIL SAIL KPMG NVIDIA EXL BNY UBS DBS ITC TVS JSW EY AMEX IBM SAP AIG LTM ZS".split(" "));
+  // capitals the sources themselves use for a word ("RISA" in "RISA Labs - Job Descriptions", a notice in mixed case):
+  // learnt from the notices' and JDs' text (learnCasing), so a name keeps the casing its own documents give it
+  const CASING = new Set();
+  function learnCasing(texts) {
+    for (const t of texts || []) {
+      const s = String(t || "");
+      if (!/[a-z]{3}/.test(s)) continue;                       // a shouted text says nothing about casing
+      for (const m of s.matchAll(/\b([A-Z]{2,6})\b(?=\s+[A-Z][a-z])/g)) CASING.add(m[1]);
+    }
+  }
   function shortName(name) {
     let s = String(name || "").replace(/\s*\(([^()]*)\)/g, (m, inner) => (URLISH.test(inner) ? "" : m));
     for (let i = 0; i < 2; i++) s = s.replace(SUFFIX, "");
     s = s.replace(/\s{2,}/g, " ").trim() || String(name || "").trim();
-    if (s === s.toUpperCase() && /[A-Z]{4,}/.test(s)) s = s.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
+    // a shouted name in title case, its acronyms kept: short words, words with no vowel, known acronyms, and words the
+    // sources write in capitals ("ZS ASSOCIATES" -> "ZS Associates", "RISA LABS" -> "RISA Labs" when its JD says
+    // "RISA Labs"); one shouted word stays as it is ("AIRAMATRIX")
+    if (s === s.toUpperCase() && /[A-Z]{4,}/.test(s) && /\s/.test(s))
+      s = s.split(/(\s+)/).map((w) => (/^[A-Z]{1,3}$|^[^AEIOU\s]+$|\d/.test(w) || ACRONYMS.has(w.replace(/[^A-Z]/g, "")) || CASING.has(w)
+        ? w : w.charAt(0) + w.slice(1).toLowerCase())).join("");
     return s;
   }
   // "Auro Group([www.AuroIM.com](https://www.AuroIM.com))" -> "Auro Group", in any answer text (the model's too)
@@ -99,6 +116,9 @@
   // every company Ping knows: from the companies list, plus companies that only appear in notices
   const SCHEDULE = /placement schedule|^cdc\b|all students/i;
   function entities(data) {
+    learnCasing([...(data.notices || []).map((n) => `${n.subject || ""}. ${String(n.text || "").slice(0, 3000)}`),
+                 ...(data.roles || []).map((r) => String(r.jd_text || "").slice(0, 3000)),
+                 ...(data.pdf_checks || []).map((c) => String(c.context || "").slice(0, 3000))]);
     const ents = [];
     const byKey = new Map();
     const add = (raw, fromRole) => {
@@ -201,7 +221,7 @@
     if (has(/\bforms?\b(?! (is|are) )|\bpreference form\b/) && !has(/\bjd\b/)) out.add("form");
     // placement mail: "any mails for X", "did I get a test link for Y", "what's due from mail"
     if (has(/\b(e ?mails?|mails?|mailed|inbox|via email)\b/) || has(/\b(test|assessment|oa|interview|meeting) links?\b/)) out.add("mail");
-    if (has(/\b(what|which) roles\b|\broles? (does|do|at|in)\b|\bopenings?\b|\bpositions?\b/) && !out.has("deadline")) out.add("roles");
+    if (has(/\b(what|which)( all| are the| other)? roles\b|\ball (the )?roles\b|\broles? (does|do|at|in|of|hai|hain)\b|\bopenings?\b|\bpositions?\b|\bkaun(se|si)? roles?\b/) && !out.has("deadline")) out.add("roles");
     if (has(/\b(located|location|based (in|at)|which city|office)\b/)) out.add("location");
     else if (has(/\bwhere\b/)) out.add("test");
     if (has(/\b(score|scores|marks|rank|percentile)\b/)) out.add("score");
@@ -321,7 +341,7 @@
     const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     if (!s) {
       if (role.jd_text && ["notice", "mail"].includes(role.jd_source))
-        return `${who}: the JD is in ${role.jd_note || "a notice's file"}${role.jd_url ? ` — [open](${role.jd_url})` : ""}.\n${String(role.jd_text).split(/\s+/).slice(0, 60).join(" ")}…`;
+        return `${who}: the JD is in ${docLabel(role)}${role.jd_url ? ` — [Open](${role.jd_url})` : ""}.\n${String(role.jd_text).split(/\s+/).slice(0, 60).join(" ")}…`;
       if (role.jd_text) return `${who}: ${String(role.jd_text).split(/\s+/).slice(0, 90).join(" ")}…` + linkNote;
       const note = String(role.jd_note || "").trim();
       // the ERP's own words when they say something ("As mentioned in Registration Email"), not "-" or "NA"
@@ -351,7 +371,7 @@
     }
     const src = role.jd_source === "attachment" ? "the JD file on the ERP" : role.jd_source === "link" ? "the JD link"
       : role.jd_source === "detail" ? "the ERP's role details"
-      : ["notice", "mail"].includes(role.jd_source) ? `${role.jd_note || "a notice's file"}${role.jd_url ? ` — [open](${role.jd_url})` : ""}`
+      : ["notice", "mail"].includes(role.jd_source) ? `${docLabel(role)}${role.jd_url ? ` — [Open](${role.jd_url})` : ""}`
       : "the ERP's job description";
     return out.join("\n") + `\n(From ${src}.)` + linkNote;
   }
@@ -411,20 +431,21 @@
       const key = r.jd_url || r.jd_note;
       if (seenFile.has(key)) { found.find((f) => f.key === key).roles.push(r); continue; }
       seenFile.add(key);
-      found.push({ where: r.jd_source === "mail" ? "mail" : "attachment", key, label: String(r.jd_note || "a notice's file").replace(/ \(one PDF for several roles\)$/, ""), link: r.jd_url,
+      found.push({ where: r.jd_source === "mail" ? "mail" : "attachment", key, label: docLabel(r), link: r.jd_url,
                    roles: [r], snippet: field === "jd" ? "" : sentence(r.jd_text, F.re) });
     }
     for (const n of notices) {
       const text = `${n.subject || ""}. ${n.text || n.preview || ""}`;
       const chk = (data.pdf_checks || []).find((c) => c.notice_id === n.id);
       const file = n.has_attachment || chk ? noticeFile(n) : null;
-      const label = `the PDF on notice ${n.notice_id} (${dayMon(n.notice_time)})`;
-      if ([...seenFile].some((k) => String(k).includes(`notice ${n.notice_id} `) || String(k).includes(`id=${n.notice_id}`))) continue;
+      const label = `the CDC notice PDF (${dayMon(n.notice_time)})`;
+      if ([...seenFile].some((k) => String(k).includes(`notice ${n.notice_id} `) || String(k).includes(`id=${n.notice_id}`)) ||
+          roles.some((r) => /posted again as/.test(r.jd_note || "") && new RegExp(`\\b${n.notice_id}\\b`).test(r.jd_note))) continue;
       if (chk?.status === "jd" && (field === "jd" || F.re.test(chk.context || ""))) {
-        found.push({ where: "attachment", label, link: file, at: n.notice_time, snippet: field === "jd" ? "" : sentence(chk.context, F.re) });
+        found.push({ where: "attachment", label, link: file, at: n.notice_time, nid: n.notice_id, snippet: field === "jd" ? "" : sentence(chk.context, F.re) });
       } else if (F.re.test(text)) {
         const inFile = file && ATTACHED.test(text);
-        found.push({ where: inFile ? "attachment" : "notice", label: inFile ? label : `notice ${n.notice_id} (${dayMon(n.notice_time)})`,
+        found.push({ where: inFile ? "attachment" : "notice", label: inFile ? label : `a CDC notice (${dayMon(n.notice_time)})`, nid: n.notice_id,
                      link: file || null, at: n.notice_time, snippet: inFile && field === "jd" ? "" : sentence(text, F.re), said: inFile && chk?.status !== "jd" });
       }
     }
@@ -445,10 +466,10 @@
                      snippet: field === "deadline" && f.due_at ? `due ${when(f.due_at)}` : "" });
     }
     // the same notice posted again (same subject, a file each): one entry, the first posting, "posted again as 1860"
-    const files = found.filter((f) => f.where === "attachment" && f.at && /notice \d+/.test(f.label));
+    const files = found.filter((f) => f.where === "attachment" && f.at && f.nid);
     for (const f of files) {
       const twin = files.find((g) => g !== f && !g.dup && !f.dup && g.at > f.at && g.said === f.said);
-      if (twin) { twin.dup = true; f.label = f.label.replace(/\)$/, `; posted again as ${twin.label.match(/notice (\d+)/)[1]} on ${dayMon(twin.at)})`); }
+      if (twin) twin.dup = true;
     }
     for (let i = found.length - 1; i >= 0; i--) if (found[i].dup) found.splice(i, 1);
     const order = ["erp", "notice", "attachment", "mail", "form"];
@@ -457,6 +478,31 @@
     found.sort((a, b) => rank(a.where) - rank(b.where));
     return { found, searched: ["erp", "notice", "attachment", "mail", "form"] };
   }
+  // where a role's JD document is, in words ("the CDC notice PDF (22 Nov)", "the 22 Nov mail from CDC (PDF attached)")
+  function docLabel(r) {
+    const note = String(r.jd_note || "");
+    if (r.jd_source === "mail") return note.replace(/ \(one PDF for several roles\)$/, "") || "placement mail";
+    const d = (note.match(/\((\d{1,2} [A-Z][a-z]{2})/) || [])[1];
+    return `the CDC notice PDF${d ? ` (${d})` : ""}`;
+  }
+  // one chip per role that asks for that role's JD ("[Associate Product Manager](#ask:RISA Labs Associate Product Manager jd)")
+  const askChip = (label, ask) => `[${String(label).replace(/[[\]]/g, "")}](#ask:${encodeURIComponent(ask)})`;
+  function roleChips(name, roles, what = "jd") {
+    return roles.slice(0, 12).map((r) => askChip(r.designation, `${name} ${r.designation} ${what}`)).join(" ");
+  }
+  // "For which company?" and chips for the 3 companies with the newest notices (that have roles)
+  function clarifyCompany(data, ents, what = "roles") {
+    ents = ents || entities(data);
+    const withRoles = ents.filter((e) => (data.roles || []).some((r) => e.raw.has(r.company)));
+    const latest = new Map();
+    for (const n of data.notices || []) {
+      const e = withRoles.find((x) => x.raw.has(n.company));
+      if (e && String(n.notice_time || "") > String(latest.get(e) || "")) latest.set(e, n.notice_time);
+    }
+    const pick = [...latest.entries()].sort((a, b) => String(b[1]).localeCompare(String(a[1]))).map(([e]) => e).slice(0, 3);
+    const ask = (e) => (what === "roles" ? `which roles at ${e.name}` : `${e.name} ${what}`);
+    return `For which company?\n${pick.map((e) => askChip(e.name, ask(e))).join(" ")}`.trim();
+  }
   // "Not on the ERP, in notices, or in placement mail as of 21:12"
   const asOfLine = (data) => `as of ${hhmm(data.lastChecked || data.now)}`;
   function absentLine(field, name, data) {
@@ -464,9 +510,9 @@
   }
   function foundLine(f, field, name, n = 1) {
     const what = field === "jd" ? (n > 1 ? "JDs are" : "JD is") : `${FIELD[field].word} is`;
-    const open = f.link ? ` — [open](${f.link})` : "";
+    const open = f.link ? ` — [Open](${f.link})` : "";
     const quote = f.snippet ? `: "${f.snippet}"` : "";
-    if (f.said) return `${name}: ${f.label.replace(/^the PDF on /, "")} says the ${FIELD[field].word} is attached${open}.`;
+    if (f.said) return `${name}: ${f.label.replace(/^the CDC notice PDF/, "a CDC notice")} says the ${FIELD[field].word}${n > 1 ? "s are" : " is"} attached${open}.`;
     return `${name} ${what} in ${f.label}${quote}${open}.`;
   }
   // the answer about the source the student named ("on mail?"): found there, or not there (then where it is)
@@ -519,18 +565,26 @@
     // several roles: one line per source, never one line per role saying the same thing
     const docs = lk.found.filter((f) => f.where !== "erp");
     const byDoc = docs.filter((f) => f.roles);
+    // a source you named that doesn't have it: that, and where it is, in one sentence (never only "nothing in mail")
+    if (miss && docs.length) {
+      const f = byDoc[0] || docs[0];
+      lines.splice(0, lines.length, `${miss} It's in ${f.label}${f.link ? ` — [Open](${f.link})` : ""}.`);
+      return lines.join("\n");
+    }
     for (const f of byDoc) {
       const n = f.roles.length;
-      lines.push(`${ent.name}: ${n === roles.length ? `${n === 1 ? "the" : `all ${n}`}` : `${n} of ${roles.length}`} role${n === 1 ? "" : "s"}' JD${n === 1 ? "" : "s"} in ${f.label}${f.link ? ` — [open](${f.link})` : ""}.`);
+      lines.push(`${ent.name} ${n === roles.length ? (n === 1 ? "JD is" : "JDs are") : `JDs for ${n} of ${roles.length} roles are`} in ${f.label}${f.link ? ` — [Open](${f.link})` : ""}.`);
     }
     if (!byDoc.length && docs.length) lines.push(foundLine(docs[0], "jd", ent.name, roles.length));
-    if (own.length) lines.push(`${ent.name}: ${own.length === roles.length ? `all ${own.length}` : `${own.length} of ${roles.length}`} roles have a JD on the ERP. Ask for a role by name to see it.`);
+    // the roles as chips: each asks for that role's JD
+    if (docs.length && roles.length > 1) lines.push(roleChips(ent.name, roles));
+    if (own.length) lines.push(`${ent.name}: ${own.length === roles.length ? `all ${own.length}` : `${own.length} of ${roles.length}`} roles have a JD on the ERP. Tap one:`);
     const covered = new Set([...byDoc.flatMap((f) => f.roles.map((r) => r.id)), ...own.map((r) => r.id)]);
     const rest = roles.filter((r) => !covered.has(r.id));
     if (rest.length && !docs.length) lines.push(rest.length === roles.length
       ? `${ent.name}: ${roles.length} roles, ${absentLine("jd", ent.name, data).replace(/^No JD for .*? (on the ERP)/, "no JD $1")}`
       : `${ent.name}: ${rest.length} more role${rest.length === 1 ? "" : "s"} with no JD on the ERP, in notices, or in placement mail ${asOfLine(data)}.`);
-    if (byDoc.length || own.length) lines.push("Ask for a role by name to see its JD.");
+    if (own.length && !docs.length) lines.push(roleChips(ent.name, own));
     return [...new Set(lines)].join("\n");
   }
 
@@ -629,7 +683,9 @@
       lines.push(withCv.length ? withCv.map((r) => `${label(ent, r)}: apply with ${r.cv}.`).join("\n")
         : `No CV suggestion for ${ent.name} yet (it comes from your targets and CVs on the Profile page).`);
     }
-    if (intents.has("roles")) lines.push(`${ent.name} roles (${all.length}):\n` + all.map((r) => `- ${r.designation}${r.ctc ? ` · CTC ${money(r.ctc, r.currency || "INR")}` : ""}${r.deadline ? ` · ${new Date(r.deadline) > now ? "closes" : "closed"} ${when(r.deadline)}` : ""}${r.applied ? " · ✓ applied" : ""}`).join("\n"));
+    // every role of the company, one short line each with where you stand
+    if (intents.has("roles")) lines.push(`${ent.name} roles (${all.length}):\n` + all.map((r) => `- ${r.designation} · ${r.applied ? "✓ applied"
+      : r.eligible === false ? "not eligible" : r.deadline && new Date(r.deadline) > now ? `open till ${when(r.deadline)}` : r.deadline ? "closed" : "no deadline yet"}`).join("\n"));
     if (intents.has("form") && !intents.has("pay") && !intents.has("eligible")) {
       const now2 = data.now.getTime();
       const fs = (data.forms || []).filter((f) => [f.company, ...(f.companies || [])].some((c) => c && aboutEnt(ent, c, c)));
@@ -640,7 +696,7 @@
       const seen = new Set();
       const ofs = open2.filter((f) => !seen.has(f.link || f.at) && seen.add(f.link || f.at));
       const past = [...fs.map((f) => f.due_at), ...todos.map((i) => i.due_at)].filter((t) => t && new Date(t).getTime() <= now2).sort().pop();
-      lines.push(ofs.length ? ofs.slice(0, 2).map((f) => `${ent.name} ${String(f.what).toLowerCase() === "form" ? "form" : `${String(f.what).toLowerCase()} form`}: due ${when(f.at)}${relTime(new Date(f.at).getTime(), data.now)}${f.link ? ` — [open](${f.link})` : ""}.`).join("\n")
+      lines.push(ofs.length ? ofs.slice(0, 2).map((f) => `${ent.name} ${String(f.what).toLowerCase() === "form" ? "form" : `${String(f.what).toLowerCase()} form`}: due ${when(f.at)}${relTime(new Date(f.at).getTime(), data.now)}${f.link ? ` — [Open](${f.link})` : ""}.`).join("\n")
         : past ? `No open ${ent.name} form: the last one closed ${when(past)}.` : `No ${ent.name} form on the ERP, in notices, or in placement mail ${asOfLine(data)}.`);
       return lines.join("\n");
     }
@@ -712,7 +768,7 @@
         const inel = roles.filter((r) => r.eligible === false && r.deadline && new Date(r.deadline) > now);
         if (inel.length) lines.unshift(...inel.slice(0, 2).map((r) => `${label(ent, r)}: closes ${when(r.deadline)}${relTime(new Date(r.deadline).getTime(), data.now)}, but the ERP marks you not eligible.`));
         else
-        if (later.length) lines.unshift(...later.slice(0, 2).map((f) => `${ent.name}: ${f.label} is due ${when(f.at)}${f.link ? ` — [open](${f.link})` : ""}.`));
+        if (later.length) lines.unshift(...later.slice(0, 2).map((f) => `${ent.name}: ${f.label} is due ${when(f.at)}${f.link ? ` — [Open](${f.link})` : ""}.`));
         else lines.unshift(`No open deadline for ${ent.name} on the ERP, in notices, or in placement mail (last checked ${checked}).` +
           (closed.length === 1 ? ` ${closed[0].designation} closed ${when(closed[0].deadline)} (already passed).`
             : closed.length ? ` ${closed.length} roles closed, the last on ${when(closed[0].deadline)} (already passed).` : ""));
@@ -829,6 +885,8 @@
       return { kind: "company", companies: hits.map((e) => e.name),
                text: hits.slice(0, 3).map((e) => aboutCompany(e, intents, data, ents, checked, question, spec || {})).join("\n\n") };
     }
+    // "what all roles?" with no company and no topic: ask which, with the companies most recently in the news
+    if (intents.has("roles") && !intents.has("deadline") && !range) return { kind: "intent", companies: [], text: clarifyCompany(data, ents, "roles") };
     // a name Ping has no company for: the words left once question words, intents and times are gone
     const left = spec ? spec.unknown || [] : tokensOf(question).filter((t) => !STOP.has(t) && !used.has(t) && t.length >= 3 && !/^\d+$/.test(t));
     const factual = [...intents].some((i) => !["count", "foryou"].includes(i));
@@ -1409,7 +1467,7 @@
     return { text: `I'm not sure what you'd like me to do with that. Hide one of these from For you? ${names.map((n) => `[${n}](#ask:${encodeURIComponent(`hide ${n}`)})`).join(" ")} [No](#ask:never%20mind)` };
   }
 
-  const api = { lookup, sourcesOf, noRepeat, feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  const api = { learnCasing, lookup, sourcesOf, noRepeat, clarifyCompany, feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

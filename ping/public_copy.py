@@ -123,18 +123,45 @@ def _fake(n: str) -> bool:
     return re.sub(r"\D", "", n).startswith("90000")
 
 
-def history_values(repo: Path) -> tuple[set[str], set[str]]:
+# an institute roll number (22XY10042); the made-up ones used in today's tests are kept
+ROLL_RE = re.compile(r"(?<![A-Za-z0-9])\d{2}[A-Z]{2}\d{5}(?![0-9])")
+# who a roll belongs to, in an offer / shortlist line: "First LAST - 22XY10042" (up to three words before the dash)
+HOLDER_RE = re.compile(r"((?:[A-Za-z]{2,}\s){0,2}[A-Za-z]{2,})\s*-\s*(\d{2}[A-Z]{2}\d{5})")
+
+
+def _rolls_today() -> set[str]:
+    out = set()
+    for f in run("git", "ls-files", cwd=ROOT).split("\n"):
+        if not f or f.endswith("demo-data.json"):
+            continue
+        try:
+            out |= set(ROLL_RE.findall((ROOT / f).read_text(encoding="utf-8")))
+        except (UnicodeDecodeError, OSError):
+            continue
+    return out
+
+
+def history_values(repo: Path) -> tuple[set[str], set[str], set[str]]:
     """What only the history holds: names on the anonymiser's denylist (quoted prompts, early versions written
-    before the list was hashed) and ten-digit numbers that aren't in today's files. Kept in memory, never printed."""
+    before the list was hashed), ten-digit numbers (and their 5-digit halves when grouped "90000 12345") and roll
+    numbers that aren't in today's files, and the words naming a history-only roll's holder ("Name SURNAME - 22XY10042").
+    Kept in memory, never printed."""
     from .demo_from_real import _ten_digit_numbers, deny_hits
-    today = _numbers_today()
-    names, numbers = set(), set()
+    today, rolls_today = _numbers_today(), _rolls_today()
+    names, numbers, rolls = set(), set(), set()
     for path, text in _blobs(repo):
         if path.endswith("demo-data.json"):
             continue                                  # replaced by today's clean snapshot anyway
         names |= {text[a:b] for a, b in deny_hits(text)}
-        numbers |= {n for n in _ten_digit_numbers(text) if n not in today and not _fake(n)}
-    return names, numbers
+        for n in _ten_digit_numbers(text):
+            if n not in today and not _fake(n):
+                numbers.add(n)
+                numbers |= {g for g in re.split(r"[\s\-.]+", n) if len(g) >= 4}
+        rolls |= {r for r in ROLL_RE.findall(text) if r not in rolls_today}
+        for m in HOLDER_RE.finditer(text):
+            if m.group(2) not in rolls_today:
+                names |= {w for w in m.group(1).split() if len(w) >= 3 and w.lower() not in ("name", "and", "the")}
+    return names, numbers, rolls
 
 
 def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
@@ -152,12 +179,14 @@ def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
     rules = target.parent / "replacements.txt"
     lines = [f"regex:(?i){pat}==>{rep}" for _, pat, rep in pairs]
     lines.append(f"regex:(?i){BANNED}==>Ping")
-    names, numbers = history_values(target)
+    names, numbers, rolls = history_values(target)
     # the denylist's own idea of a word: a run of letters (so "Name_2" and "Name2" count, as in deny_hits)
     lines += [f"regex:(?<![A-Za-z]){re.escape(n)}(?![A-Za-z])==>[name]" for n in sorted(names, key=len, reverse=True)]
-    lines += [f"literal:{n}==>9000000000" for n in sorted(numbers, key=len, reverse=True)]
-    say(f"also replacing {len(names)} denylisted name(s) and {len(numbers)} ten-digit number(s) found only in "
-        f"history or in quoted prompts (not printed)")
+    lines += [f"literal:{n}==>{'9000000000' if len(re.sub(r'[^0-9]', '', n)) >= 10 else '90000'}"
+              for n in sorted(numbers, key=len, reverse=True)]
+    lines += [f"literal:{r}==>22XY00000" for r in sorted(rolls)]
+    say(f"also replacing {len(names)} name(s), {len(numbers)} phone number(s) or parts and {len(rolls)} roll "
+        f"number(s) found only in history or in quoted prompts (not printed)")
     rules.write_text("\n".join(lines) + "\n", encoding="utf-8")
     callback = (f"ids = set(open({str(ids_file)!r}).read().split())\n"
                 f"if blob.original_id.decode() in ids:\n"
@@ -170,7 +199,7 @@ def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
 
 def check(target: Path, secrets: dict[str, str]) -> list[str]:
     from .demo_from_real import _ten_digit_numbers, deny_hits, final_check
-    today = _numbers_today()
+    today, rolls_today = _numbers_today(), _rolls_today()
     problems = []
     blobs = set()
     for line in run("git", "rev-list", "--all", "--objects", cwd=target).splitlines():
@@ -194,6 +223,8 @@ def check(target: Path, secrets: dict[str, str]) -> list[str]:
                 problems.append(f"a demo-data.json version fails the anonymiser check: {final_check(text)}")
         if deny_hits(text):
             leaks["a denylisted name"] = leaks.get("a denylisted name", 0) + 1
+        if not path.endswith("demo-data.json") and any(r not in rolls_today for r in ROLL_RE.findall(text)):
+            leaks["a roll number not in today's files"] = leaks.get("a roll number not in today's files", 0) + 1
         if not path.endswith("demo-data.json") and any(n not in today and not _fake(n) for n in _ten_digit_numbers(text)):
             leaks["a ten-digit number not in today's files"] = leaks.get("a ten-digit number not in today's files", 0) + 1
         low = text.lower()

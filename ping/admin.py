@@ -1066,6 +1066,19 @@ def in_chat(i) -> bool:
     return True
 
 
+def restore_items(secrets) -> int:
+    """Writes to Ping's own feed only: brings the given messages back into the chat (dismissed = false). The ids come
+    in the company input, comma-separated, and must exist (owner or demo)."""
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    ids = [x.strip() for x in (os.environ.get("PING_COMPANY") or "").split(",") if x.strip()]
+    found = [i["id"] for i in store.select("items", {"id": "in.(" + ",".join(f'"{x}"' for x in ids) + ")"}, columns="id")] if ids else []
+    say(f"restoring {len(found)} of {len(ids)} message(s): {', '.join(found)}")
+    if found:
+        store._req("PATCH", "items", params={"id": "in.(" + ",".join(f'"{x}"' for x in found) + ")"}, json={"dismissed": False},
+                   headers={"Prefer": "return=minimal"})
+    return 0
+
+
 def posting_cleanup(secrets, hours: float = 4) -> int:
     """Writes to Ping's own feed only (never the ERP). Takes out of the chat (dismissed: kept in the data, gone from
     the thread), owner and demo: repeats of a message (same company, task, deadline, link and words: the first kept;
@@ -1866,7 +1879,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "posting-cleanup": posting_cleanup, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

@@ -1178,7 +1178,7 @@
     const seen = new Set();
     return [...items].sort((a, b) => String(a.first_seen || "~").localeCompare(String(b.first_seen || "~")) || String(a.id).localeCompare(String(b.id)))
       .filter((it) => {
-        if (it.category === "digest" || it.category === "listing") return true;
+        if (it.category === "digest" || it.category === "listing" || it.category === "review" || it.needs_review) return true;
         const k = repeatKey(it);
         if (seen.has(k)) return false;
         seen.add(k); return true;

@@ -124,7 +124,9 @@ def collapse_repeats(items: list[dict]) -> int:
         if it.get("level") == "hidden" and COVERED.search(why):
             covered.setdefault((post_key(it), it.get("category"), _words(it.get("title"))), it["id"])
     for it in sorted(items, key=lambda i: (str(i.get("first_seen") or "~"), i["id"])):
-        if it.get("category") in ("digest", "listing") or not in_chat(it):
+        # digests and new-role lists are one a batch by their own ids; a "which company is that?" question is about its
+        # own notice (answering one doesn't answer the other), so neither is a repeat
+        if it.get("category") in ("digest", "listing", "review") or it.get("needs_review") or not in_chat(it):
             continue
         k = (post_key(it), it.get("category"), _words(it.get("title")))
         if k in covered:

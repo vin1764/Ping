@@ -121,3 +121,10 @@ def test_a_new_message_about_something_days_old_is_saved_not_posted():
     old = dict(form(1, later), details={"notice_time": "2026-11-20T10:00:00+05:30", "todo": {"action": "fill_form", "link": "https://forms.gle/abc"}})
     shown, out, _ = run([old])
     assert shown == [] and "older message" in out[0]["details"]["hidden_because"]
+
+
+def test_a_which_company_question_is_never_a_repeat():
+    q = lambda n: {"id": f"notice:2026-2027:{n}:unsure0", "level": "show", "category": "review", "needs_review": True, "company": None,
+                   "title": 'A cv submission notice says "DELOITTE". Which company is that?', "details": {}}
+    items = [q(1705), q(1870)]
+    assert posting.collapse_repeats(items) == 0

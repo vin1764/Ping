@@ -94,7 +94,8 @@ def effective_deadlines(roles: list[dict], notices: list[dict], index: CompanyIn
 
 def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profile: dict, now: datetime,
                 emails: list[dict] | None = None, corrections: dict | None = None,
-                stats: dict | None = None, previous: dict[str, dict] | None = None) -> list[dict]:
+                stats: dict | None = None, previous: dict[str, dict] | None = None,
+                not_for_me: set[str] | None = None) -> list[dict]:
     corrections = corrections or {}
     emails = emails or []
     index = CompanyIndex(roles)
@@ -403,6 +404,12 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
             members[r["id"]]["tag"], members[r["id"]]["note"] = ("for_you", "you said it's for you") if pin else ("other", "")
         if members[r["id"]]["tag"] == "for_you" and (r.get("relevance") or {}).get("best_cv"):
             members[r["id"]]["cv"] = r["relevance"]["best_cv"]
+    # "Not for me" (your own record, ping/forms.py not_for_me_items): out before the digests, so no message, no
+    # reminder, no push; kept in the data (a reason the chat never draws), back as before once you restore it
+    for it in items:
+        if it["id"] in (not_for_me or ()):
+            it["level"] = "hidden"
+            it["details"] = {**(it.get("details") or {}), "hidden_because": "you said it's not for you"}
     items = digests.build(items, members, previous or {}, profile, now)
     if stats is not None:
         stats.update(dstats)

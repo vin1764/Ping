@@ -675,11 +675,14 @@ class Runner:
         # reminder is made for it (the digests read "done" from the last run's rows)
         from . import forms as forms_mod
         forms_prev = {f["key"]: f for f in self._rows("forms", REAL)}
-        filled = forms_mod.filled_keys(self._rows("form_status", {"is_demo": "is.false"}))
+        status_rows = self._rows("form_status", {"is_demo": "is.false"})
+        filled = forms_mod.filled_keys(status_rows)
+        not_for_me = forms_mod.not_for_me_items(status_rows, list(forms_prev.values()), roles)
+        self.counts["not_for_me_items"] = len(not_for_me)
         filled_items = {iid for k in filled for iid in (forms_prev.get(k) or {}).get("item_ids") or [] if iid in previous}
         for_build = {**previous, **{iid: {**previous[iid], "done": True} for iid in filled_items}}
         items = build_items(roles, notices, checks, profile, self.now, emails, corrections, stats=dstats,
-                            previous=for_build)
+                            previous=for_build, not_for_me=not_for_me)
         # a role's deadline that moved since the last run becomes one "Update" message
         from .dedupe import changes_since_last_run
         moved = [u for u in changes_since_last_run(previous, items, self.now) if u["id"] not in previous]

@@ -223,3 +223,20 @@ Decisions:
 - The cleanup (Admin posting-cleanup) dismisses, never deletes: the data stays, the thread loses the repeats.
 - The service worker now installs a new build's files with `cache: "reload"`: a plain addAll could take the previous
   today.js from the browser's 10-minute HTTP cache, which is how a deployed fix could still look undeployed.
+
+## 24 Nov: "Not for me" on forms and Today items
+
+- Stored in form_status (the tick's table) as not_for_me / not_for_me_at / not_for_me_reason: per login (owner and a
+  demo session apart, by the same row rules as ticks), on every device through the same Realtime channel. Keys: a
+  form's key; "item:<id>" for a Today to-do that has no form; "kind:company:<name>" / "kind:role:<type>" for a kind
+  you said yes to; "asked:<kind>:<value>" so Ping asks once.
+- What it does: the form leaves Due today / Upcoming / Past due, the Forms and Today badges and Today's rows; the
+  chat stops drawing its messages; the next check hides its items before the digests (no message, no reminder, no
+  push), and send-push skips a queued reminder for it. The company's roles are never touched: hiding a whole company
+  stays the separate "X not relevant" in the chat.
+- Undo (5 s) and Restore set not_for_me back to false and leave the tick as it was, so the form comes back exactly as
+  before (tests/test_not_for_me.py, tests/js/forms.test.js).
+- The reason is optional, one tap, saved with the dismissal. After 2+ dismissed forms from one company or of one role
+  type (a fixed list of generic types, the same in dashboard/forms.js and ping/forms.py), Ping asks once in the chat;
+  only "Yes" saves the kind ("stop showing X forms"), answered in the page; "keep showing X forms" undoes it.
+- A demo session's rows never count for the owner's run (is_demo, the same rule as ticks).

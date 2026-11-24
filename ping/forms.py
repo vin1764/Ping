@@ -448,3 +448,39 @@ def mark_items(items: list[dict], rows: list[dict], filled: set[str]) -> None:
         d["form"] = {"key": r["key"], "filled": r["key"] in filled, "sources": len(r["sources"]),
                      "extended": bool(h), "moved": ({"from": h[0]["from"], "to": h[-1]["to"]} if h else None),
                      "closed": r["closed"], "signin_required": r.get("signin_required", False)}
+
+
+# ---- "Not for me" (form_status.not_for_me: your own record; a demo session's never count). A dismissed form's items
+# are hidden before the digests are made, so it gets no message, no reminder and no push, and drops out of every
+# count. It never touches the company's roles. Keys: a form's key, "item:<id>" (a Today item with no form), and kinds
+# you said yes to in the chat ("kind:company:<name>", "kind:role:<type>"). The page's twin: dashboard/forms.js.
+ROLE_TYPES = [("product manager", r"\bproduct\s+(manager|management)\b|\bapm\b"), ("product analyst", r"\bproduct\s+analyst\b"),
+              ("data scientist", r"\bdata\s+scien"), ("data analyst", r"\bdata\s+analyst\b"), ("business analyst", r"\bbusiness\s+analyst\b"),
+              ("management trainee", r"\bmanagement\s+trainee\b|\bmt\b"), ("consultant", r"\bconsult"),
+              ("software engineer", r"\b(software|sde|developer|full\s*stack|backend|frontend)\b"), ("quant", r"\bquant"),
+              ("research", r"\bresearch"), ("sales", r"\bsales\b"), ("marketing", r"\bmarketing\b"),
+              ("finance", r"\bfinanc|\binvestment\b|\bbanking\b"), ("operations", r"\boperations?\b"), ("design", r"\bdesign(er)?\b"),
+              ("analyst", r"\banalyst\b"), ("engineer", r"\bengineer")]
+
+
+def role_type(designation) -> str | None:
+    d = str(designation or "").lower()
+    return next((t for t, rx in ROLE_TYPES if re.search(rx, d)), None)
+
+
+def not_for_me_items(status_rows: list[dict], forms_rows: list[dict], roles: list[dict], items: list[dict] | None = None) -> set[str]:
+    """The item ids you said aren't for you: every item of a dismissed form (or of a form a kind you said yes to
+    covers), and Today items dismissed on their own."""
+    from .posting import _norm
+    flagged = {r["form_key"] for r in status_rows if r.get("not_for_me") and not r.get("is_demo")}
+    if not flagged:
+        return set()
+    designation = {r["id"]: r.get("designation") for r in roles}
+    out = {k[5:] for k in flagged if k.startswith("item:")}
+    for f in forms_rows:
+        names = (f.get("companies") or []) if len(f.get("companies") or []) > 1 else [f.get("company")]
+        types = {role_type(designation.get(rid)) for rid in f.get("role_ids") or []} | {role_type(f.get("title"))}
+        if (f["key"] in flagged or any(f"kind:company:{_norm(n)}" in flagged for n in names if n)
+                or any(f"kind:role:{t}" in flagged for t in types if t)):
+            out |= set(f.get("item_ids") or [])
+    return out

@@ -61,3 +61,55 @@ test("company names cleaned, and a short list for a form for many companies", ()
     "Piramal Finance", "BlackBuck", "ICICI LOMBARD", "TATA AIG General Insurance"] };
   assert.equal(F.shortList(f), "LTM, AIRAMATRIX, Auro Group +8 more");
 });
+
+// ---- "Not for me"
+test("not for me: out of every section and the badge, listed in Not for me; restore puts it back exactly", () => {
+  const before = F.sections(forms, new Map(), { now });
+  const status = new Map([["g1", { filled: false, not_for_me: true, not_for_me_at: "2026-11-21T11:00:00+05:30", not_for_me_reason: "Wrong role" }]]);
+  const s = F.sections(forms, status, { now });
+  assert.deepEqual(s.today.map((f) => f.key), []);
+  assert.deepEqual(s.notForMe.map((f) => f.key), ["g1"]);
+  assert.equal(F.badge(forms, status, now), F.badge(forms, new Map(), now) - 1);
+  // even with the For you filter on (you find it there to restore it)
+  assert.deepEqual(F.sections(forms, status, { now, only: "foryou", mineOf: () => false }).notForMe.map((f) => f.key), ["g1"]);
+  // restore (not_for_me false): every section as it was
+  status.set("g1", { filled: false, not_for_me: false });
+  const back = F.sections(forms, status, { now });
+  for (const k of ["today", "upcoming", "past", "closed", "filled"]) assert.deepEqual(back[k].map((f) => f.key), before[k].map((f) => f.key));
+  assert.deepEqual(back.notForMe, []);
+  // a filled form keeps its tick under "not for me" and after
+  const st2 = new Map([["o1", { filled: true, filled_at: "2026-11-19T10:00:00+05:30", not_for_me: true }]]);
+  assert.deepEqual(F.sections(forms, st2, { now }).notForMe.map((f) => f.key), ["o1"]);
+  st2.set("o1", { ...st2.get("o1"), not_for_me: false });
+  assert.deepEqual(F.sections(forms, st2, { now }).filled.map((f) => f.key), ["o1"]);
+});
+
+test("not for me: 'which forms haven't I filled?' leaves it out", () => {
+  const status = new Map([["g1", { not_for_me: true }]]);
+  const a = F.ask("which forms haven't I filled?", forms, status, { now, when });
+  assert.ok(!/Groww/.test(a.text) && /Soon Co/.test(a.text));
+});
+
+test("not for me: two from one company asks once; a kind said yes to covers the company's other forms", () => {
+  const two = [...forms, { key: "g2", company: "Groww", purpose: "form", due_at: "2026-11-24T17:00:00+05:30", sources: [] },
+               { key: "g3", company: "Groww India Pvt. Ltd.", purpose: "form", due_at: "2026-11-25T17:00:00+05:30", sources: [] }];
+  const status = new Map([["g1", { not_for_me: true }]]);
+  assert.equal(F.askAbout(status, two), null);                       // one dismissal: no question
+  status.set("g2", { not_for_me: true });
+  const c = F.askAbout(status, two);
+  assert.equal(c.kind, "company"); assert.equal(c.value, "Groww"); assert.equal(c.n, 2);
+  status.set(`asked:${F.kindKey("company", "Groww").slice(5)}`, { not_for_me: false });
+  assert.equal(F.askAbout(status, two), null);                       // asked once only
+  // nothing saved until you say yes; then "Groww India Pvt. Ltd." is the same company
+  assert.equal(F.notForMe(status, two[6]), null);
+  status.set(F.kindKey("company", "Groww"), { not_for_me: true });
+  assert.equal(F.notForMe(status, two[6]), "company");
+});
+
+test("not for me: role types", () => {
+  assert.equal(F.roleType("GBS MANAGEMENT TRAINEE"), "management trainee");
+  assert.equal(F.roleType("Associate Product Manager - Growth"), "product manager");
+  const status = new Map([[F.kindKey("role", "management trainee"), { not_for_me: true }]]);
+  assert.equal(F.notForMe(status, { key: "x", company: "Any", title: "MT programme" }, ["Management Trainee"]), "role");
+  assert.equal(F.notForMe(status, { key: "y", company: "Any", title: "" }, ["Product Analyst"]), null);
+});

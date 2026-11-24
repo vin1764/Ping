@@ -543,6 +543,11 @@ create table if not exists form_status (
   is_demo boolean not null default coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false),
   primary key (owner_id, form_key)
 );
+-- "Not for me" (dashboard/forms.js, ping/forms.py not_for_me_items): your own record, per login like the tick; a
+-- form's key, "item:<id>", "kind:company:<name>" / "kind:role:<type>" (said yes to in the chat), "asked:..." (asked once)
+alter table form_status add column if not exists not_for_me boolean not null default false;
+alter table form_status add column if not exists not_for_me_at timestamptz;
+alter table form_status add column if not exists not_for_me_reason text;
 alter table form_status enable row level security;
 drop policy if exists own_form_status on form_status;
 create policy own_form_status on form_status for all to authenticated

@@ -90,6 +90,14 @@
     return { get: (k) => tx("readonly", (s) => s.get(k)).catch(() => null), set: (k, v) => tx("readwrite", (s) => s.put(v, k)).catch(() => null) };
   })();
   // offline: the thread as it was when last loaded; reading works, sending queues
+  // a form_status change: a tick, or "Not for me" (its time; a reason when you give one)
+  function patchOf(x) {
+    if (typeof x === "boolean") return { filled: x, filled_at: x ? new Date().toISOString() : null };
+    const p = { ...x };
+    if ("not_for_me" in p) p.not_for_me_at = p.not_for_me ? new Date().toISOString() : null;
+    if ("not_for_me" in p && !p.not_for_me) p.not_for_me_reason = null;
+    return p;
+  }
   class OfflineSource {
     constructor(snap) { this.s = snap; this.kind = snap.kind || "real"; this.demo = !!snap.demo; this.offline = true; }
     async load() { return unpackDemo(this.s.data); }   // a saved copy in the demo file's packed form works too
@@ -135,7 +143,7 @@
     async formStatus() { return Object.entries(store.get("ping-demo-forms", {})).map(([form_key, v]) => ({ form_key, ...v })); }
     async setFormStatus(key, filled) {
       const all = store.get("ping-demo-forms", {});
-      all[key] = { filled, filled_at: filled ? new Date().toISOString() : null };
+      all[key] = { ...(all[key] || {}), ...patchOf(filled) };
       store.set("ping-demo-forms", all);
       return all[key];
     }
@@ -183,10 +191,10 @@
     // the forms list (the hourly run builds it) and your ticks (your own rows: form_status)
     async forms() { return this.q("forms", (q) => q.order("due_at", { ascending: true }).limit(2000)).catch(() => []); }
     async formStatus() { return this.q("form_status").catch(() => []); }
+    // a tick (true / false) or a patch ({ not_for_me, not_for_me_reason }): only those columns change
     async setFormStatus(key, filled) {
       const { data: { session } } = await this.sb.auth.getSession();
-      const row = { owner_id: session?.user?.id, form_key: key, filled, filled_at: filled ? new Date().toISOString() : null,
-                    updated_at: new Date().toISOString() };
+      const row = { owner_id: session?.user?.id, form_key: key, ...patchOf(filled), updated_at: new Date().toISOString() };
       const { error } = await this.sb.from("form_status").upsert(row, { onConflict: "owner_id,form_key" });
       if (error) throw new Error(error.message);
       return row;
@@ -1162,7 +1170,7 @@
   };
   // one card per role ("X opened", "Reminder: X closes") isn't a chat message any more: the new-roles message and
   // the deadline digests list them (the Feed and Companies pages still show every role)
-  const inChat = (it) => !it.dismissed && it.category !== "apply" && it.category !== "reminder" &&
+  const inChat = (it) => !it.dismissed && it.category !== "apply" && it.category !== "reminder" && !itemNotForMe(it) &&
     (it.level !== "hidden" || (isPast(it) && wasLive(it)));
 
   // the same message twice (same company, task, deadline, link and words) is drawn once, whatever its ids (ping/posting.py
@@ -1614,22 +1622,24 @@
     if (!state.src?.formStatus) return;
     try {
       const rows = await state.src.formStatus();
-      state.formStatus = new Map((rows || []).map((r) => [r.form_key, { filled: !!r.filled, filled_at: r.filled_at || null }]));
+      state.formStatus = new Map((rows || []).map((r) => [r.form_key, statusOf(r)]));
       if (state.src.formMerges) state.formMerges = await state.src.formMerges();
       if (quiet) refreshTicks();
     } catch { /* the table isn't there yet: no ticks */ }
   }
+  const statusOf = (r) => ({ filled: !!r.filled, filled_at: r.filled_at || null, not_for_me: !!r.not_for_me,
+                              not_for_me_at: r.not_for_me_at || null, not_for_me_reason: r.not_for_me_reason || null });
   function onTick(row) {
     if (!row?.form_key) return;
-    const was = state.formStatus.get(row.form_key);
-    if (was && was.filled === !!row.filled) return;
-    state.formStatus.set(row.form_key, { filled: !!row.filled, filled_at: row.filled_at || null });
+    const was = state.formStatus.get(row.form_key), now = statusOf(row);
+    if (was && was.filled === now.filled && was.not_for_me === now.not_for_me && was.not_for_me_reason === now.not_for_me_reason) return;
+    state.formStatus.set(row.form_key, now);
     refreshTicks();
   }
   const formByKey = (key) => (state.data?.forms || []).find((f) => f.key === key);
   async function setTick(key, filled, { quiet = false } = {}) {
     const before = state.formStatus.get(key);
-    state.formStatus.set(key, { filled, filled_at: filled ? new Date().toISOString() : null });
+    state.formStatus.set(key, { ...(before || {}), filled, filled_at: filled ? new Date().toISOString() : null });
     refreshTicks();
     try { await state.src.setFormStatus(key, filled); }
     catch (e) {
@@ -1642,6 +1652,85 @@
     const f = formByKey(key);
     const what = f ? `${FORMS.names(f).join(", ")} ${FORMS.label(f.purpose).toLowerCase()}` : "Form";
     toast(filled ? `Ticked: ${what}. Reminders stop for it.` : `Unticked: ${what}.`, "Undo", () => setTick(key, !filled, { quiet: true }));
+  }
+  // ---- "Not for me" (your own record; never the ERP, never the company's roles): out of Due today / Upcoming / Past
+  // due, the badges and Today; no more reminders or pushes from the next check. Undo for 5 s; Restore in Forms.
+  const rolesOfForm = (f) => (f.role_ids || []).map((id) => roleById().get(id)?.designation).filter(Boolean);
+  const nfmOf = (f) => FORMS.notForMe(state.formStatus, f, rolesOfForm(f));
+  // a chat / Today item that's out: its form is, or the item itself was dismissed on Today
+  function itemNotForMe(it) {
+    if (!it || !state.formStatus?.size) return false;
+    if (state.formStatus.get(`item:${it.id}`)?.not_for_me) return true;
+    const k = it.details?.form?.key, f = k && formByKey(k);
+    return !!(f ? nfmOf(f) : k && state.formStatus.get(k)?.not_for_me);
+  }
+  async function setNotForMe(key, on, { reason = null, quiet = false, label = "" } = {}) {
+    const before = state.formStatus.get(key);
+    const patch = on ? { not_for_me: true, ...(reason ? { not_for_me_reason: reason } : {}) } : { not_for_me: false };
+    state.formStatus.set(key, { ...(before || { filled: false, filled_at: null }), ...patchOf(patch) });
+    refreshTicks();
+    try { await state.src.setFormStatus(key, patch); }
+    catch (e) {
+      if (before) state.formStatus.set(key, before); else state.formStatus.delete(key);
+      refreshTicks();
+      toast(`Couldn't save that. ${plainly(e)}`);
+      return false;
+    }
+    if (quiet) return true;
+    if (on && !reason) nfmToast(key, label, before);
+    else if (!on) toast(`Restored: ${label || "it"}.`);
+    return true;
+  }
+  // "Not for me: Diageo form. Undo" for 5 s, with an optional one-tap reason
+  function nfmToast(key, label, before) {
+    let t = $("#toast");
+    if (!t) { t = h("div", { id: "toast", class: "toast", role: "status", "aria-live": "polite" }); document.body.append(t); }
+    const why = h("div", { class: "nfm-why", role: "group", "aria-label": "Why (optional)" },
+      FORMS.REASONS.map((r) => h("button", { type: "button", class: "chip", onclick: async () => {
+        t.hidden = true;
+        await state.src.setFormStatus(key, { not_for_me: true, not_for_me_reason: r }).catch(() => {});
+        state.formStatus.set(key, { ...state.formStatus.get(key), not_for_me_reason: r });
+        refreshTicks();
+        askKindOnce();
+      } }, r)));
+    t.replaceChildren(h("div", { class: "nfm-toast" },
+      h("span", {}, `Not for me: ${label || "this"}.`),
+      h("button", { type: "button", class: "linklike", onclick: () => {
+        t.hidden = true;
+        // back exactly as before: the row as it was (or none)
+        if (before && !before.not_for_me) { state.formStatus.set(key, before); refreshTicks(); state.src.setFormStatus(key, { not_for_me: false }).catch(() => {}); }
+        else setNotForMe(key, false, { quiet: true });
+      } }, "Undo")), why);
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; askKindOnce(); }, 5000);
+  }
+  // two or more forms from one company (or of one role type) dismissed: ask once in the chat; saved only on yes
+  async function askKindOnce() {
+    const c = FORMS.askAbout(state.formStatus, state.data?.forms || [], rolesOfForm);
+    if (!c) return;
+    const value = c.kind === "company" ? c.value : c.value;
+    const askedKey = `asked:${FORMS.kindKey(c.kind, value).slice(5)}`;
+    state.formStatus.set(askedKey, { filled: false, filled_at: null, not_for_me: false });
+    state.src.setFormStatus(askedKey, { not_for_me: false }).catch(() => {});
+    const yes = `stop showing ${c.label}`, no = `keep showing ${c.label}`;
+    const text = `You've marked ${c.n} ${c.label} as not for you. Stop showing ${c.label} from now on? It won't touch the roles. `
+      + `[Yes](#ask:${encodeURIComponent(yes)}) [No](#ask:${encodeURIComponent(no)})`;
+    const reply = { role: "ping", text, created_at: new Date().toISOString() };
+    if (addChatRow(reply)) { state.src.addChat(reply).catch(() => {}); applyLive(); }
+  }
+  // "stop showing Diageo forms" / "keep showing management trainee forms": answered here, saved as your preference
+  function kindAnswer(q) {
+    const m = String(q || "").trim().match(/^(stop|keep) showing (.+?) forms\.?$/i);
+    if (!m) return null;
+    const what = m[2].trim();
+    const isRole = FORMS.ROLE_TYPES.some(([t]) => t === what.toLowerCase());
+    const key = FORMS.kindKey(isRole ? "role" : "company", what);
+    const on = m[1].toLowerCase() === "stop";
+    const had = !!state.formStatus.get(key)?.not_for_me;
+    if (on || had) setNotForMe(key, on, { quiet: true, reason: on ? "your preference" : null });
+    return on ? `Done: ${what} forms go to Not for me in Forms from now on, and get no reminders. The roles stay as they are. [Undo](#ask:${encodeURIComponent(`keep showing ${what} forms`)})`
+      : had ? `OK: ${what} forms show again.` : `OK, I'll keep showing ${what} forms.`;
   }
   // every checkbox for a form, wherever it is (Forms, the chat's digests, the sheet), shows the same tick
   function formTick(key) {
@@ -1660,7 +1749,7 @@
   function formsBadge() {
     const b = $("#nav-forms");
     if (!b || !state.data) return;
-    const n = FORMS.badge(state.data.forms || [], state.formStatus, liveNow());
+    const n = FORMS.badge(state.data.forms || [], state.formStatus, liveNow(), rolesOfForm);
     b.textContent = String(n); b.hidden = !n;
     b.parentElement.setAttribute("aria-label", n ? `Forms, ${n} due in the next 24 hours` : "Forms");
   }
@@ -1700,7 +1789,7 @@
     chips.replaceChildren(...[chip("foryou", "For you"), chip("all", "All"),
       state.formsAt ? h("button", { type: "button", class: "chip", "aria-pressed": "true", "data-at": "1", onclick: () => { state.formsAt = null; drawForms(); } },
         `Due ${when(new Date(state.formsAt).toISOString())} ×`) : null].filter(Boolean));
-    const sec = FORMS.sections(all, state.formStatus, { now, query: state.formsQuery || "", only: state.formsOnly, mineOf: formMine, at: state.formsAt ?? null });
+    const sec = FORMS.sections(all, state.formStatus, { now, query: state.formsQuery || "", only: state.formsOnly, mineOf: formMine, at: state.formsAt ?? null, rolesOf: rolesOfForm });
     const block = (id, title, rows, empty) => h("section", { class: "forms-sec", id: `forms-${id}`, "aria-label": title },
       h("h2", {}, title, h("span", { class: "n" }, rows.length)), rows.length ? h("div", { class: "forms-rows" }, groupedRows(rows)) : h("p", { class: "muted small" }, empty));
     if (!all.length) { list.replaceChildren(h("p", { class: "muted" }, "No forms yet. Forms from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
@@ -1719,7 +1808,12 @@
         h("summary", {}, h("h2", {}, "Past due", h("span", { class: "n" }, `· ${sec.past.length}`)), h("span", { class: "chev", "aria-hidden": "true" })),
         h("div", { class: "forms-rows" }, groupedRows(sec.past))) : null,
       ...(sec.closed.length ? [compactBlock("closed", "Closed", sec.closed, "")] : []),
-      compactBlock("filled", "Filled", sec.filled, "Tick a form when you've filled it.")].filter(Boolean));
+      compactBlock("filled", "Filled", sec.filled, "Tick a form when you've filled it."),
+      // not for you: one line each, with Restore (a kind you said yes to in the chat is restored by saying "keep showing …")
+      sec.notForMe.length ? h("details", { class: "forms-sec compact", id: "forms-notforme", "aria-label": "Not for me",
+        open: state.formsSecOpen.notforme ? true : null, ontoggle: (ev) => { state.formsSecOpen.notforme = ev.currentTarget.open; } },
+        h("summary", {}, h("h2", {}, "Not for me", h("span", { class: "n" }, `· ${sec.notForMe.length}`))),
+        h("div", { class: "forms-rows compact" }, sec.notForMe.map(nfmRow))) : null].filter(Boolean));
     formsBadge();
   }
   // a form you can't act on any more (closed, or ticked): checkbox, company, type, date and a small tag on one line;
@@ -1736,6 +1830,19 @@
         f.due_at ? h("span", { class: "fc-date num" }, when(f.due_at)) : null,
         h("span", { class: `fc-tag${filled ? " ok" : ""}` }, filled ? "✓" : "closed")));
     return open ? h("div", { class: "fc-open" }, line, formRow(f)) : line;
+  }
+  function nfmRow(f) {
+    const cos = [...new Set(FORMS.names(f).map(FORMS.cleanName))];
+    const why = nfmOf(f), st = state.formStatus.get(f.key);
+    const label = `${cos[0] || "A form"}${cos.length > 1 ? ` +${cos.length - 1}` : ""} ${FORMS.label(f.purpose).toLowerCase()}`;
+    const by = why === "company" ? "all their forms" : why === "role" ? "this kind of role" : st?.not_for_me_reason || "";
+    return h("div", { class: "fc-line nfm", "data-form": f.key },
+      h("strong", { class: "co" }, cos.length > 1 ? `${cos[0]} +${cos.length - 1}` : cos[0] || "A form"),
+      h("span", { class: "fc-what" }, FORMS.label(f.purpose)),
+      f.due_at ? h("span", { class: "fc-date num" }, when(f.due_at)) : null,
+      by ? h("span", { class: "fc-tag" }, by) : null,
+      why === "you" ? h("button", { type: "button", class: "act-btn", onclick: () => setNotForMe(f.key, false, { label }) }, "Restore")
+        : h("button", { type: "button", class: "act-btn", onclick: () => askInChat(`keep showing ${why === "company" ? cos[0] : FORMS.roleType([...rolesOfForm(f), f.title].find((x) => FORMS.roleType(x)))} forms`) }, "Restore"));
   }
   // one notice that gives several companies their own forms: one row per form, under that notice's heading
   function groupedRows(rows) {
@@ -1778,7 +1885,9 @@
       l3: many ? cos.slice(1).join(", ") : roleNames.join(", ") || extra,
       primary: href ? h("a", { class: "act-btn primary", href, ...EXT, "data-link": "form" }, "Open form")
         : erp ? h("a", { class: "act-btn primary", href: erp.href, ...EXT, "data-link": "erp" }, "Apply on ERP") : null,
+      tail: h("button", { type: "button", class: "act-btn ghost nfm-btn", onclick: () => setNotForMe(f.key, true, { label: `${cos[0] || "this"} ${FORMS.label(f.purpose).toLowerCase()}` }) }, "Not for me"),
       detail: () => [
+        h("div", { class: "ac-links cc-links nfm-menu" }, h("button", { type: "button", class: "act-btn", onclick: () => setNotForMe(f.key, true, { label: `${cos[0] || "this"} ${FORMS.label(f.purpose).toLowerCase()}` }) }, "Not for me")),
         f.title ? ccRow("Title", f.title) : null,
         ccRow("For", FORMS.label(f.purpose)),
         many ? ccRow("Companies", cos.join(", ")) : null,
@@ -2180,20 +2289,22 @@
     // cv for the second one?", "where is it?", "done" on a form line, "check again"); others are asked about it
     const P = window.PingReply;
     // feedback ("piramal not relevant", "show Zeta again", "undo"): the function saves it; never answered here
-    const feedback = !!RR?.feedbackLike(q);
+    // "stop showing Diageo forms" (the Yes under Ping's question after two dismissals): your form preference, here
+    const kind = !rp ? kindAnswer(q) : null;
+    const feedback = !kind && !!RR?.feedbackLike(q);
     const direct = rp && P && !feedback ? P.answer(q, rp.anchor, { isFilled: (k) => !!FORMS?.isFilled(state.formStatus, k), when }) : null;
     if (direct?.recheck) return recheckFlow(q, { kind: "recheck", companies: rp.anchor.companies }, mine, { input, inner, thread, btn }, backQuote);
     const named = rp && RR ? RR.matchCompanies(q, factsOf(state.data), RR.entities(factsOf(state.data))).hits.length : 0;
     const qRoute = rp && !named && rp.anchor.companies.length ? `${q} ${rp.anchor.companies.map((c) => RR.shortName(c)).join(" ")}` : q;
     const replyCtx = rp ? { sender: rp.anchor.sender, text: rp.anchor.text, companies: rp.anchor.companies } : null;
-    const rr = RR && state.data && !feedback ? RR.route(qRoute, previousQuestions(q), factsOf(state.data)) : null;
+    const rr = RR && state.data && !feedback && !kind ? RR.route(qRoute, previousQuestions(q), factsOf(state.data)) : null;
     if (rr?.kind === "recheck") return recheckFlow(q, rr, mine, { input, inner, thread, btn }, rp ? backQuote : null);
     // forms: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the
     // last ticks it: your own record, never the ERP or the form)
     if (direct?.tick) setTick(direct.tick, true, { quiet: true });
-    const fq = direct || feedback ? null : FORMS && state.data?.forms?.length ? FORMS.ask(qRoute, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
+    const fq = kind || direct || feedback ? null : FORMS && state.data?.forms?.length ? FORMS.ask(qRoute, state.data.forms, state.formStatus, { now: liveNow(), when }) : null;
     if (fq?.tick) setTick(fq.tick, true, { quiet: true });
-    const local = direct?.text ? { text: direct.text } : fq ? { text: fq.text } : feedback ? {} : localFact(qRoute);
+    const local = kind ? { text: kind } : direct?.text ? { text: direct.text } : fq ? { text: fq.text } : feedback ? {} : localFact(qRoute);
     if (local.text) local.text = withStale(local.text, rr);
     if (local.text) {
       state.chat.push(mine);
@@ -2486,7 +2597,7 @@
   // ------------------------------------------------------------ Today (dashboard/today.js builds it)
   const isMine = (r) => r.eligible !== false && (pinOf(r) ?? (targetsOn() ? !!markOf(r)?.relevant : true));
   function todayModel() {
-    return TODAY.build({ items: state.data.items.filter((it) => !it.dismissed), roles: state.data.roles,
+    return TODAY.build({ items: state.data.items.filter((it) => !it.dismissed && !itemNotForMe(it)), roles: state.data.roles,
       notices: state.data.notices || [], runs: state.data.runs, profile: state.data.profile, now: liveNow(), isMine, inChat,
       split: targetsOn() || hasPins(), listOthers: ({ ...(state.data.profile || {}), ...(state.prefs || {}) }).list_other_roles !== false,
       isFilled: (it) => FORMS.isFilled(state.formStatus, it.details?.form?.key) });
@@ -2861,11 +2972,16 @@
       : c.list === "off" && c.pdf ? Object.assign(pdfLink(c.pdf), { className: "act-btn primary", textContent: "Open list" }) : null;
     // line 3: the role, then what you need to act (the CV to apply with, your room)
     const l3 = [c.roleName, c.place, c.cv && !c.applied ? `Apply with ${c.cv}` : ""].filter(Boolean).join(" · ");
+    // a Today to-do: "Not for me" (its form, or the item itself when it has no form)
+    const nfmKey = c.formKey || (c.item && !c.role && !["test", "interview", "notice", "shortlist"].includes(c.kind) ? `item:${c.item.id}` : null);
+    const nfm = (menu) => nfmKey ? h("button", { type: "button", class: `act-btn${menu ? "" : " ghost nfm-btn"}`,
+      onclick: () => { setNotForMe(nfmKey, true, { label: `${c.company || "this"} ${String(KIND_WORD[c.kind] || "to-do").toLowerCase()}` }); closeSheet(); } }, "Not for me") : null;
     return cardC({
       key: `sheet:${c.kind}:${c.role?.id || c.item?.id || c.company}`, cls: `act-card${c.mine === false && !c.applied ? " other" : ""}`,
       attrs: { "data-kind": c.kind }, lead: c.formKey ? formTick(c.formKey) : null,
-      company: c.company || "Notice", task: KIND_WORD[c.kind] || c.kind, at: c.due || null, event, status, l3, primary,
+      company: c.company || "Notice", task: KIND_WORD[c.kind] || c.kind, at: c.due || null, event, status, l3, primary, tail: nfm(false),
       detail: () => [
+        nfmKey ? h("div", { class: "ac-links cc-links nfm-menu" }, nfm(true)) : null,
         c.roleName ? ccRow("Role", c.roleName) : null,
         c.due ? ccRow(event ? "When" : "Due", when(c.due)) : null,
         c.applied === false ? ccRow("Status", "Not applied") : null,

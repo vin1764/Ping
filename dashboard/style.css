@@ -830,3 +830,18 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .cc-l2-wrap .cc-l2 { display: inline; }
 .cc-task2 { color: var(--ink); }
 .cc-l2 .pill, .cc-l2-wrap .pill { margin-left: 6px; font-size: var(--t-xs); line-height: 18px; padding: 0 8px; }
+
+/* "Not for me": next to the card's buttons on a wide screen; on a phone it's in the ⋯ detail */
+.cc-act .nfm-btn { font-size: 0.85rem; }
+.cc-detail .nfm-menu { display: none; }
+@media (max-width: 599px) {
+  .cc-act .nfm-btn { display: none; }
+  .cc-detail .nfm-menu { display: flex; }
+}
+.nfm-toast { display: flex; align-items: center; gap: var(--s2); justify-content: space-between; }
+.nfm-why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.nfm-why .chip { font-size: 0.8rem; }
+.fc-line.nfm { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.fc-line.nfm .act-btn { margin-left: auto; }
+.toast:has(.nfm-why) { flex-direction: column; align-items: stretch; }
+.toast .nfm-why .chip { padding: 4px 10px; min-height: 32px; }

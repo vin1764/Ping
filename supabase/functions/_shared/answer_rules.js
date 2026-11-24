@@ -1098,7 +1098,10 @@
         const ownIntents = [...cur.intents].filter((i) => i !== "count" && !(["mail", "notice"].includes(i) && prev.hits.length && !cur.hits.length));
         const intents = ownIntents.length && !(isElse && !cur.hits.length) ? new Set(ownIntents)
           : new Set([...prev.intents, ...[...cur.intents].filter((i) => !["mail", "notice"].includes(i) || !prev.hits.length)]);
-        const hits = cur.hits.length ? cur.hits : prev.hits;
+        // the topic company: the latest question that named one (a "what about ctc" in between names none)
+        const prevHits = prev.hits.length ? prev.hits
+          : (prevQs.map((p) => parse(String(p), data, ents)).find((p) => p.hits.length) || { hits: [] }).hits;
+        const hits = cur.hits.length ? cur.hits : prevHits;
         const range = cur.range || (cur.hits.length ? null : prev.range);
         const news = cur.hits.length || cur.range || ownIntents.length || isElse || sourcesOf(text).length ||
           cur.toks.some((t) => hits.some((e) => (data.roles || []).some((r) => e.raw.has(r.company) && keyWords(r.designation).includes(t))));

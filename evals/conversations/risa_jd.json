@@ -3,34 +3,176 @@
  "now": "2026-11-24T21:35:00+05:30",
  "last_checked": "2026-11-24T21:12:00+05:30",
  "company": "RISA LABS PRIVATE LIMITED",
- "roles": ["Associate Product Manager", "Associate Technical Product Manager", "System Engineer", "Member of Technical Staff-US",
-           "Growth - US", "Associate Product Manager - Growth", "Member of Technical Staff", "Associate Product Manager - Product Operations"],
+ "roles": [
+  "Associate Product Manager",
+  "Associate Technical Product Manager",
+  "System Engineer",
+  "Member of Technical Staff-US",
+  "Growth - US",
+  "Associate Product Manager - Growth",
+  "Member of Technical Staff",
+  "Associate Product Manager - Product Operations"
+ ],
  "notices": [
-  {"id": "2026-2027:1841", "notice_id": 1841, "year": "2026-2027", "company": "RISA LABS", "subject": "CV Submission",
-   "notice_time": "2026-11-23T16:09:00+05:30", "has_attachment": true,
-   "text": "The CV submission of RISA LABS has been opened. JD for all the roles is attached. Interested students may fill the preference form."},
-  {"id": "2026-2027:1860", "notice_id": 1860, "year": "2026-2027", "company": "RISA LABS", "subject": "CV Submission",
-   "notice_time": "2026-11-24T12:24:00+05:30", "has_attachment": true,
-   "text": "The CV submission of RISA LABS has been extended. JD for all the roles is attached."}
+  {
+   "id": "2026-2027:1841",
+   "notice_id": 1841,
+   "year": "2026-2027",
+   "company": "RISA LABS",
+   "subject": "CV Submission",
+   "notice_time": "2026-11-23T16:09:00+05:30",
+   "has_attachment": true,
+   "text": "The CV submission of RISA LABS has been opened. JD for all the roles is attached. Interested students may fill the preference form."
+  },
+  {
+   "id": "2026-2027:1860",
+   "notice_id": 1860,
+   "year": "2026-2027",
+   "company": "RISA LABS",
+   "subject": "CV Submission",
+   "notice_time": "2026-11-24T12:24:00+05:30",
+   "has_attachment": true,
+   "text": "The CV submission of RISA LABS has been extended. JD for all the roles is attached."
+  }
  ],
  "jd_text": "RISA Labs - Job Descriptions\nAbout the company: AI agents for oncology workflows.\nAssociate Product Manager\nResponsibilities: own a product line roadmap.\nRequirements: SQL.\nLocation: Bangalore",
  "conversations": [
-  {"id": "C1", "case": "the 24 Nov conversation: JD, then 'check notices for JD', then 'risa jd on mail??'",
+  {
+   "id": "C1",
+   "case": "the 24 Nov conversation: JD, then 'check notices for JD', then 'risa jd on mail??'",
    "turns": [
-    {"q": "Risa JD?", "must": ["notice 1841", "AdmFilePDF.htm?type=NOTICE&year=2026-2027&id=1841"], "not": ["no JD on the ERP", "I don't have"], "max_lines": 3},
-    {"q": "Check notices for JD", "must": ["notice 1841"], "not": ["I don't have Notices", "I don't have"], "max_lines": 2},
-    {"q": "risa jd on mail??", "must": ["placement mail", "notice 1841"], "not": ["I don't have"], "max_lines": 3}
-   ]},
-  {"id": "C2", "case": "a source word never becomes a company; Hinglish and typos keep the topic",
+    {
+     "q": "Risa JD?",
+     "must": [
+      "notice 1841",
+      "AdmFilePDF.htm?type=NOTICE&year=2026-2027&id=1841"
+     ],
+     "not": [
+      "no JD on the ERP",
+      "I don't have"
+     ],
+     "max_lines": 3
+    },
+    {
+     "q": "Check notices for JD",
+     "must": [
+      "notice 1841"
+     ],
+     "not": [
+      "I don't have Notices",
+      "I don't have"
+     ],
+     "max_lines": 2
+    },
+    {
+     "q": "risa jd on mail??",
+     "must": [
+      "placement mail",
+      "notice 1841"
+     ],
+     "not": [
+      "I don't have"
+     ],
+     "max_lines": 3
+    }
+   ]
+  },
+  {
+   "id": "C2",
+   "case": "a source word never becomes a company; Hinglish and typos keep the topic",
    "turns": [
-    {"q": "risa labs jd", "must": ["notice 1841"], "max_lines": 3},
-    {"q": "pdf mein hai kya?", "must": ["notice 1841"], "not": ["I don't have Pdf", "I don't have Mein"], "max_lines": 2},
-    {"q": "and mail?", "must": ["mail"], "not": ["I don't have Mail"], "max_lines": 3}
-   ]},
-  {"id": "C3", "case": "a JD for one role named, then the same company's CTC (a new field: a new answer)",
+    {
+     "q": "risa labs jd",
+     "must": [
+      "notice 1841"
+     ],
+     "max_lines": 3
+    },
+    {
+     "q": "pdf mein hai kya?",
+     "must": [
+      "notice 1841"
+     ],
+     "not": [
+      "I don't have Pdf",
+      "I don't have Mein"
+     ],
+     "max_lines": 2
+    },
+    {
+     "q": "and mail?",
+     "must": [
+      "mail"
+     ],
+     "not": [
+      "I don't have Mail"
+     ],
+     "max_lines": 3
+    }
+   ]
+  },
+  {
+   "id": "C3",
+   "case": "a JD for one role named, then the same company's CTC (a new field: a new answer)",
    "turns": [
-    {"q": "risa apm jd", "must": ["Associate Product Manager", "notice 1841"], "max_lines": 6},
-    {"q": "what about ctc", "must": ["RISA Labs"], "not": ["I don't have Ctc"], "max_lines": 3}
-   ]}
+    {
+     "q": "risa apm jd",
+     "must": [
+      "Associate Product Manager",
+      "notice 1841"
+     ],
+     "max_lines": 6
+    },
+    {
+     "q": "what about ctc",
+     "must": [
+      "RISA Labs"
+     ],
+     "not": [
+      "I don't have Ctc"
+     ],
+     "max_lines": 3
+    }
+   ]
+  },
+  {
+   "id": "C4",
+   "case": "the live demo check: the topic company survives two company-less follow-ups and a repeat; 'is it in the PDF?' after two CTC questions is about the CTC",
+   "turns": [
+    {
+     "q": "risa labs jd",
+     "must": [
+      "notice 1841"
+     ],
+     "max_lines": 3
+    },
+    {
+     "q": "what about ctc",
+     "must": [
+      "RISA Labs"
+     ],
+     "max_lines": 3
+    },
+    {
+     "q": "what about ctc",
+     "must": [
+      "Nothing new"
+     ],
+     "max_lines": 1
+    },
+    {
+     "q": "pdf mein hai kya?",
+     "must": [
+      "notice files",
+      "CTC",
+      "RISA Labs"
+     ],
+     "not": [
+      "Which company"
+     ],
+     "max_lines": 2
+    }
+   ]
+  }
  ]
 }

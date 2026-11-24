@@ -832,6 +832,58 @@ def forms_report(secrets) -> int:
     return 0
 
 
+def push_examples(secrets) -> int:
+    """Reads only: notifications as they would read now, rendered from your live items and roles (one per type, and
+    the grouped ones). A type with nothing open right now is shown on its most recent example, as it read 3 h before."""
+    from datetime import timedelta, timezone
+    from . import push
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    items = store.select("items", REAL)
+    roles = {r["id"]: r for r in store.select("roles", REAL)}
+    now = datetime.now(timezone.utc).astimezone(IST)
+    shown = 0
+
+    def show(label, note, at_now):
+        nonlocal shown
+        shown += 1
+        say(f"{shown}. {label}{f' ({at_now})' if at_now else ''}")
+        say(f"   title: {note['title']}")
+        for line in (note.get("body") or "").split("\n"):
+            say(f"   body:  {line}")
+        say(f"   tap:   {note['url']}")
+    every = push.acts(items, roles, now)
+    for typ, label in (("apply", "Application"), ("form", "Form"), ("extended", "Deadline extension"), ("test", "Test"),
+                       ("shortlist", "Shortlist"), ("new", "New role for you")):
+        a = next((x for x in sorted(every, key=lambda x: x["at"] or now) if x["type"] == typ), None)
+        if a:
+            note = push.compose([a["item"]], roles, now)
+            if note:
+                show(label, note, "")
+                continue
+        # nothing open of this type now: its latest example, as it read 3 h before its time
+        for it in sorted(items, key=lambda i: str(i.get("due_at") or i.get("event_at") or i.get("first_seen") or ""), reverse=True):
+            at = push._at(it.get("due_at") or it.get("event_at")) or push._at(it.get("first_seen"))
+            if not at:
+                continue
+            then = at - timedelta(hours=3)
+            got = [x for x in push.acts([it], roles, then) if x["type"] == typ]
+            if got:
+                show(label, push.compose([it], roles, then), f"as on {then:%a %d %b %H:%M}")
+                break
+        else:
+            say(f"-. {label}: nothing of this type in your data")
+    # grouped: the deadline with the most to do
+    for typ, label in (("apply", "Grouped applications"), ("form", "Grouped forms")):
+        by: dict = {}
+        for x in every:
+            if x["type"] == typ:
+                by.setdefault(x["at"], []).append(x)
+        best = max(by.values(), key=len, default=[])
+        if len(best) > 1:
+            show(label, push.compose(list({id(x["item"]): x["item"] for x in best}.values()), roles, now), "")
+    return 0
+
+
 def public_ci(secrets) -> int:
     """Reads only: the public copy's latest workflow runs (Tests, Dashboard, Ping) and whether it's non-empty, with
     PUBLIC_REPO_TOKEN. Prints the repository as 'owner / name' (the URL itself is a masked secret)."""
@@ -1549,7 +1601,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

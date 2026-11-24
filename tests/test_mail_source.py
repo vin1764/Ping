@@ -154,8 +154,9 @@ def test_reminders_fire_on_mail_only_deadlines(feed):
     items, _, _ = feed
     from fixture import PROFILE
     rows = mail_reminders(list(items.values()), PROFILE, NOW)
-    pine = next(r for r in rows if "Pine Labs" in r["body"])
-    assert pine["title"].startswith("Form · due") and pine["send_at"] == "2026-11-22T15:00:00+05:30"   # 2 h before 17:00
-    assert any(r["body"].startswith("Atlassian: complete the online test by 23:59") for r in rows)
+    # who and what to do in the title ("Pine Labs · Fill form by 17:00"), sent 2 h before
+    pine = next(r for r in rows if r["title"].startswith("Pine Labs"))
+    assert pine["title"].startswith("Pine Labs · Fill form by") and pine["send_at"] == "2026-11-22T15:00:00+05:30"
+    assert any(r["title"].startswith("Atlassian · Complete the test by") and "23:59" in r["title"] for r in rows)
     # a mail interview with a time is a test: the test-day reminder covers it
-    assert any("Navi" in r["body"] for r in reminders(list(items.values()), PROFILE, NOW))
+    assert any(r["title"].startswith("Navi") for r in reminders(list(items.values()), PROFILE, NOW))

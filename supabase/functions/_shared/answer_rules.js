@@ -851,6 +851,13 @@
       const base = r.spec?.hits?.length ? answer(question, data, { ...r.spec, intents: ["deadline"] }).text.split("\n").slice(0, 3).join("\n") : "";
       return { kind: "act", companies: [], text: `Ping is read-only, so I can't ${verb} for you: it only reads the ERP.${base ? `\n${base}` : ""}` };
     }
+    // an open question the model couldn't answer: its leftover words ("plan", "lines") are not company names
+    // ("summarise this week" is not a JD question when it names no company)
+    if (r.kind === "open" && r.spec) {
+      const intents = r.spec.hits?.length ? r.spec.intents : (r.spec.intents || []).filter((i) => i !== "jd");
+      return answer(question, data, { ...r.spec, unknown: [], intents: intents.length || !/\bweek\b/.test(norm(question)) ? intents : ["deadline"],
+                                      range: r.spec.range });
+    }
     return answer(question, data, r.spec);
   }
 

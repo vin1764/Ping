@@ -38,6 +38,8 @@ test("FACT questions are answered by rules; OPEN ones go to the model; requests 
                    "what do you think about slice's roles for a data person?"]) {  // the last three: found by the live provider run
     assert.strictEqual(route(q).kind, "open", q);
   }
+  // when the model can't answer an open question, the rules don't read its words as a company ("I don't have Plan")
+  assert.doesNotMatch(reply("give me a plan for today's deadlines"), /I don't have Plan/);
   assert.strictEqual(route("apply to slice for me").kind, "act");
   assert.match(reply("apply to slice for me"), /^Ping is read-only, so I can't apply for you/);
   assert.strictEqual(route("ok").kind, "ack");

@@ -750,3 +750,76 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .fc-open { border: 1px solid var(--line); border-radius: 12px; margin: var(--s1) 0; }
 .fc-open .fc-line { border-bottom: 0; }
 .fc-open .form-row { border: 0; box-shadow: none; }
+
+/* ---------------------------------------------------------------- the compact card (declutter pass)
+   Collapsed: at most 3 lines of text (company + task, the deadline in relative words, the role) and one button row;
+   the detail opens in place. Shared by Forms, Today's sheet, the chat's messages and Today's rows. */
+.card-c { display: block; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface); padding: 10px var(--s3) 8px; cursor: pointer; }
+.card-c.form-row, .card-c.act-card { display: block; gap: 0; }
+.card-c.closed, .card-c.act-card.other { background: var(--thread); }
+.card-c .cc-main { display: flex; align-items: flex-start; gap: var(--s2); min-width: 0; }
+.card-c .cc-main > label.tick { margin: -8px -4px -8px -8px; }
+.cc-text { flex: 1; min-width: 0; display: grid; gap: 0; }
+.cc-l1, .cc-l2, .cc-l3 { line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cc-l1 { font-size: var(--t-md); color: var(--ink); }
+.cc-l1 .co { font-weight: 700; }
+.cc-l1 .cc-task { font-weight: 400; }
+.cc-l1 .pill { margin-left: 6px; vertical-align: 1px; font-size: var(--t-xs); line-height: 18px; padding: 0 8px; }
+.cc-l2 { font-size: var(--t-sm); color: var(--ink); font-variant-numeric: tabular-nums; }
+.cc-l2.lv-urgent { color: var(--danger); font-weight: 600; }
+.cc-l2.lv-today { color: var(--soon); font-weight: 600; }
+.cc-l2.lv-over, .cc-l2.lv-none, .cc-l2.lv-done { color: var(--muted); }
+.cc-l3 { font-size: var(--t-sm); color: var(--muted); }
+.cc-act { display: flex; align-items: center; gap: var(--s2); margin-top: 6px; min-height: 44px; }
+.cc-act .cc-gap { flex: 1; }
+.cc-act .act-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; text-decoration: none; }
+.cc-more { min-width: 44px; min-height: 44px; padding: 0 var(--s2); border: 1px solid var(--line); border-radius: var(--r-pill); background: transparent;
+  color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
+.cc-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card-c.open .cc-l1, .card-c.open .cc-l3 { white-space: normal; }
+.cc-detail { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); display: grid; gap: 4px; cursor: auto; }
+.cc-detail[hidden] { display: none; }
+.cc-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: var(--s2); font-size: var(--t-sm); line-height: 20px; }
+.cc-k { color: var(--muted); }
+.cc-v { overflow-wrap: anywhere; }
+.cc-note { margin: 2px 0; font-size: var(--t-sm); line-height: 20px; color: var(--muted); }
+.cc-links { margin-top: 4px; }
+.card-c.filled .co { color: var(--muted); }
+
+/* chat: the message head is a compact card inside the bubble */
+.msg.item .chat-c { border: 0; padding: 0; background: transparent; }
+.msg.item .cc-act.foot { margin-top: 4px; justify-content: flex-start; }
+.msg.item .cc-act .time { color: var(--muted); font-size: var(--t-xs); }
+.msg.item .cc-detail.chat-detail { cursor: pointer; }
+.msg.item .cc-detail .text.title { font-size: var(--t-md); line-height: 22px; }
+
+/* Forms: past due folded to one line */
+.forms-sec.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.forms-sec.fold > summary::-webkit-details-marker { display: none; }
+.forms-sec.fold > summary h2 { margin: 0; }
+.forms-sec.fold .chev { width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); margin-right: 6px; transition: transform .15s ease; }
+.forms-sec.fold[open] .chev { transform: rotate(45deg); }
+
+/* Companies: one chip, the role, the next deadline */
+.role-row .rr-chip { grid-column: 2; grid-row: 1; justify-self: end; font-size: var(--t-xs); }
+.role-row .co, .role-row .rn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-row .meta.cc-l2 { display: block; }
+
+/* Today's rows: the relative deadline as line 2, no pill on the right */
+.today-row { grid-template-columns: 12px minmax(0, 1fr) 14px; }
+.today-row .t-title { flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+.today-row .t-names { -webkit-line-clamp: 1; }
+.today-row .t-sub.cc-l2 { color: var(--ink); }
+.today-row .t-sub.cc-l2.lv-urgent { color: var(--danger); }
+.today-row .t-sub.cc-l2.lv-today { color: var(--soon); }
+.today-row .t-sub.cc-l2.lv-over, .today-row .t-sub.cc-l2.lv-done { color: var(--muted); }
+
+/* a reply's quoted message: one line */
+.msg .quote { flex-direction: row; align-items: baseline; gap: 6px; }
+.msg .quote .q-who { flex: none; }
+.msg .quote .q-text { min-width: 0; }
+
+/* Profile: settings grouped under three small headings */
+.pgroup { margin: var(--s5) 0 var(--s2); font-size: var(--t-xs); line-height: 16px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.pgroup:first-of-type { margin-top: var(--s3); }
+.cv-sum > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); }

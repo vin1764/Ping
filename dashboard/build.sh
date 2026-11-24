@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 -m pip install -q -r requirements.txt >/dev/null 2>&1 || true
 rm -rf _site && mkdir -p _site
-cp dashboard/index.html dashboard/style.css dashboard/app.js dashboard/onboarding.js dashboard/names.js dashboard/live.js dashboard/today.js dashboard/forms.js dashboard/reply.js supabase/functions/_shared/answer_rules.js supabase/functions/_shared/help.js dashboard/manifest.webmanifest _site/
+cp dashboard/index.html dashboard/style.css dashboard/app.js dashboard/onboarding.js dashboard/names.js dashboard/live.js dashboard/today.js dashboard/forms.js dashboard/cards.js dashboard/reply.js supabase/functions/_shared/answer_rules.js supabase/functions/_shared/help.js dashboard/manifest.webmanifest _site/
 # the installable app: icons, and a service worker that knows this build (a new deploy = a new worker and cache)
 mkdir -p _site/icons && cp dashboard/icons/*.png dashboard/icons/*.svg _site/icons/
 # the short commit id (7 characters): a full one can hold ten digits in a row, which the public-build guard blocks

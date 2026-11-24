@@ -1664,7 +1664,7 @@
       value: state.formsQuery || "", oninput: (ev) => { state.formsQuery = ev.target.value; drawForms(); } });
     mountPage(h("div", { class: "forms-page" },
       h("h1", {}, "Forms"),
-      h("p", { class: "muted small" }, "Every form from the notices and your placement mail. Tick one when you've filled it: it's your own record (Ping never fills or submits a form), and the reminders stop for it."),
+      h("p", { class: "muted small" }, "Tick a form once you've filled it and its reminders stop. Ping never fills or submits a form."),
       h("div", { class: "forms-tools" }, search, h("div", { class: "chips", id: "forms-chips", role: "group", "aria-label": "Show" })),
       h("div", { id: "forms-list" })));
     drawForms();
@@ -1689,12 +1689,16 @@
         open: state.formsSecOpen[id] ? true : null, ontoggle: (ev) => { state.formsSecOpen[id] = ev.currentTarget.open; } },
       h("summary", {}, h("h2", {}, title, h("span", { class: "n" }, rows.length))),
       rows.length ? h("div", { class: "forms-rows compact" }, rows.map(compactRow)) : h("p", { class: "muted small" }, empty));
-    list.replaceChildren(
+    list.replaceChildren(...[
       block("today", "Due today", sec.today, "Nothing due today."),
       block("upcoming", "Upcoming", sec.upcoming, "Nothing coming up."),
-      block("past", "Past due (not filled)", sec.past, "None."),
+      // past due: nothing more to do there, so folded to one line ("Past due · 16"); a tap shows the cards
+      sec.past.length ? h("details", { class: "forms-sec fold", id: "forms-past", "aria-label": "Past due (not filled)",
+        open: state.formsSecOpen.past ? true : null, ontoggle: (ev) => { state.formsSecOpen.past = ev.currentTarget.open; } },
+        h("summary", {}, h("h2", {}, "Past due", h("span", { class: "n" }, `· ${sec.past.length}`)), h("span", { class: "chev", "aria-hidden": "true" })),
+        h("div", { class: "forms-rows" }, groupedRows(sec.past))) : null,
       ...(sec.closed.length ? [compactBlock("closed", "Closed", sec.closed, "")] : []),
-      compactBlock("filled", "Filled", sec.filled, "Tick a form when you've filled it."));
+      compactBlock("filled", "Filled", sec.filled, "Tick a form when you've filled it.")].filter(Boolean));
     formsBadge();
   }
   // a form you can't act on any more (closed, or ticked): checkbox, company, type, date and a small tag on one line;
@@ -1724,47 +1728,50 @@
       if (done.has(n)) continue;
       done.add(n);
       const members = rows.filter((x) => noticeOf(x) === n);
-      const subject = (state.data.notices || []).find((x) => String(x.notice_id) === String(n))?.subject;
-      out.push(h("div", { class: "forms-group", role: "group", "aria-label": `Notice ${n}` },
-        h("div", { class: "fg-head" }, h("strong", {}, subject || FORMS.label(members[0].purpose)),
-          h("span", { class: "muted small" }, ` · notice ${n} · ${members.length} forms`)),
+      const subject = CARDS.cleanTitle((state.data.notices || []).find((x) => String(x.notice_id) === String(n))?.subject || "", "");
+      const head = subject || "One notice";
+      out.push(h("div", { class: "forms-group", role: "group", "aria-label": `${head}: ${members.length} forms` },
+        h("div", { class: "fg-head" }, h("strong", {}, head), h("span", { class: "muted small" }, ` · ${members.length} forms`)),
         members.map(formRow)));
     }
     return out;
   }
+  // a form's task in plain words: a CV submission, a test, or a form (what it's for goes in the detail)
+  const formTask = (f) => (/cv|resume/i.test(f.purpose || "") ? "CV submission" : /test/i.test(f.purpose || "") ? "Test" : "Form");
   function formRow(f) {
     const filled = FORMS.isFilled(state.formStatus, f.key);
-    const notice = (f.sources || []).find((x) => x.type === "notice");
+    const notices = (f.sources || []).filter((x) => x.type === "notice");
     const item = (f.item_ids || []).map((id) => itemById().get(id)).find((i) => i && inChat(i));
     const href = f.final_url || f.link;
-    const past = f.due_at && dt(f.due_at) <= nowDate();
-    const moved = FORMS.movedLine(f, when), posted = FORMS.postedLine(f);
+    const moved = FORMS.movedLine(f, when);
     const cos = [...new Set(FORMS.names(f).map(FORMS.cleanName))], many = cos.length > 1;
-    return h("article", { class: `form-row${filled ? " filled" : ""}${f.closed ? " closed" : ""}`, "data-form": f.key },
-      formTick(f.key),
-      h("div", { class: "fr-body" },
-        // several companies: "Additional requirement · 11 companies", then three names and "+8 more" to see all
-        many ? h("div", { class: "fr-head" }, h("strong", { class: "co" }, FORMS.label(f.purpose)), h("span", { class: "fr-what" }, `${cos.length} companies`),
-            f.closed ? h("span", { class: "pill over" }, "Closed") : null, f.signin_required ? h("span", { class: "pill plain" }, "sign-in required") : null)
-          : null,
-        many ? h("div", { class: "fr-line fr-cos" }, cos.slice(0, 3).join(", "), cos.length > 3 ? " " : null,
-            cos.length > 3 ? h("button", { type: "button", class: "linklike", "aria-expanded": "false", onclick: (ev) => {
-              const line = ev.currentTarget.parentElement; line.replaceChildren(cos.join(", ")); } }, `+${cos.length - 3} more`) : null) : null,
-        many ? null : h("div", { class: "fr-head" }, h("strong", { class: "co" }, cos[0] || "A form"),
-          h("span", { class: "fr-what" }, FORMS.label(f.purpose)),
-          f.closed ? h("span", { class: "pill over" }, "Closed") : null,
-          f.signin_required ? h("span", { class: "pill plain" }, "sign-in required") : null),
-        h("div", { class: "fr-meta" }, f.due_at ? h("span", { class: "num" }, when(f.due_at)) : h("span", { class: "muted" }, "No deadline given"),
-          f.due_at && !filled ? (past ? h("span", { class: `pill cd ${f.closed ? "c-over" : "c-overdue"}` }, "past due") : countPill(f.due_at)) : null,
-          filled && moved ? h("span", { class: "pill plain" }, "deadline extended") : null),
-        f.title ? h("div", { class: "fr-line" }, f.title) : null,
-        f.signin_required ? h("div", { class: "fr-line muted small" }, "This form needs an institute sign-in: Ping can't read it, so open it in your browser. The notice says what it's for.") : null,
-        f.closed ? h("div", { class: "fr-line muted small" }, "The form page says it's no longer accepting responses.") : null,
-        moved || posted ? h("div", { class: "fr-line muted small" }, [moved, posted].filter(Boolean).join(" · ")) : null,
-        h("div", { class: "ac-links" },
-          href ? h("a", { class: "act-btn", href, ...EXT, "data-link": "form" }, "Open form") : null,
-          notice ? h("button", { type: "button", class: "act-btn", "data-link": "notice", onclick: () => openNotice(Number(notice.id) || notice.id) }, "Notice") : null,
-          item ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => goTo({ item: item.id }) }, "Show in chat") : null)));
+    const roles = (f.role_ids || []).map((id) => roleById().get(id)).filter(Boolean);
+    const roleNames = [...new Set(roles.map((r) => r.designation).filter(Boolean))];
+    const extra = CARDS.cleanTitle(f.title, cos[0], [formTask(f), "form"]);
+    const erp = href ? null : TODAY.erpLink(roles[0] || { company: cos[0] }, myRoll());
+    const status = filled ? h("span", { class: "pill applied" }, "✓ filled") : f.closed ? h("span", { class: "pill over" }, "Closed")
+      : moved && !(f.due_at && dt(f.due_at) <= nowDate()) ? h("span", { class: "pill plain" }, "extended") : null;
+    return cardC({
+      key: `form:${f.key}`, cls: `form-row${filled ? " filled" : ""}${f.closed ? " closed" : ""}`, attrs: { "data-form": f.key },
+      lead: formTick(f.key), company: many ? `${cos[0]} +${cos.length - 1}` : cos[0] || "A form", task: formTask(f), at: f.due_at || null, status,
+      l3: many ? cos.slice(1).join(", ") : roleNames.join(", ") || extra,
+      primary: href ? h("a", { class: "act-btn primary", href, ...EXT, "data-link": "form" }, "Open form")
+        : erp ? h("a", { class: "act-btn primary", href: erp.href, ...EXT, "data-link": "erp" }, "Apply on ERP") : null,
+      detail: () => [
+        f.title ? ccRow("Title", f.title) : null,
+        ccRow("For", FORMS.label(f.purpose)),
+        many ? ccRow("Companies", cos.join(", ")) : null,
+        roleNames.length ? ccRow(roleNames.length > 1 ? "Roles" : "Role", roleNames.join(", ")) : null,
+        ccRow("Due", f.due_at ? when(f.due_at) : "No deadline given"),
+        moved ? ccRow("Moved", moved.replace(/^deadline moved /, "")) : null,
+        ccRow("Posted", postedSpan((f.sources || []).map((x) => x.at || (state.data.notices || []).find((n) => String(n.notice_id) === String(x.id))?.notice_time),
+          "time")),
+        f.signin_required ? h("p", { class: "cc-note" }, "This form needs an institute sign-in: Ping can't read it, so open it in your browser. The notice says what it's for.") : null,
+        f.closed ? h("p", { class: "cc-note" }, "The form page says it's no longer accepting responses.") : null,
+        ccLinks(noticeButtons(notices.map((x) => x.id)),
+          item ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => goTo({ item: item.id }) }, "Show in chat") : null),
+      ],
+    });
   }
   // "Looks like the same form as <X>, merge?": your answer is remembered (form_merges) and the next check follows it
   function looksLike(f, x) {
@@ -1779,6 +1786,59 @@
       h("button", { type: "button", class: "act-btn", onclick: () => answer("merge") }, "Merge"),
       h("button", { type: "button", class: "act-btn", onclick: () => answer("keep") }, "Keep both"));
   }
+  // ------------------------------------------------------------ the compact card (Forms, Today's sheet, chat)
+  // Collapsed, at most 3 lines and one button row: line 1 the company and the task in plain words, line 2 the deadline
+  // in relative words ("Today 23:59 · 2 h 24 m left", "Tomorrow 20:00", "Mon 23 Nov · past due"), an optional line 3
+  // (the role, or what a title adds), one primary button and "⋯". A tap on the card or on ⋯ opens the detail in place:
+  // the full titles, every notice, when it was posted, the role, Show in chat. Only what renders: the data is as it was.
+  const CARDS = window.PingCards;
+  const relOf = (at, event = false) => CARDS.relDeadline(at, liveNow(), { event });
+  function cardC({ key, cls = "", lead = null, company, task, at, event = false, status = null, l3 = "", primary = null,
+                   tail = null, detail = () => [], attrs = {} }) {
+    state.cardOpen = state.cardOpen || new Set();
+    const open = !!key && state.cardOpen.has(key);
+    const rel = at === undefined ? null : relOf(at, event);
+    const body = h("div", { class: "cc-detail", hidden: open ? null : true });
+    let built = false;
+    const build = () => { if (!built) { built = true; body.append(...[].concat(detail()).filter(Boolean)); } };
+    const more = h("button", { type: "button", class: "cc-more", "aria-expanded": String(open), "aria-label": `More about ${company || "this"}` }, "⋯");
+    const card = h("article", { class: `card-c${cls ? ` ${cls}` : ""}${open ? " open" : ""}`, ...attrs },
+      h("div", { class: "cc-main" }, lead,
+        h("div", { class: "cc-text" },
+          h("div", { class: "cc-l1" }, h("strong", { class: "co" }, FORMS.cleanName(company || "")), task ? h("span", { class: "cc-task" }, ` · ${task}`) : null, status),
+          rel ? h("div", { class: `cc-l2 lv-${rel.level}`, ...(rel.level !== "over" && rel.level !== "none" && at ? { "data-rel": dt(at).toISOString(), "data-event": event ? "1" : null } : {}) }, rel.text) : null,
+          l3 ? h("div", { class: "cc-l3" }, l3) : null)),
+      h("div", { class: "cc-act" }, primary, h("span", { class: "cc-gap" }), tail, more),
+      body);
+    const toggle = () => {
+      const now = !card.classList.contains("open");
+      if (now) build();
+      card.classList.toggle("open", now); body.hidden = !now; more.setAttribute("aria-expanded", String(now));
+      if (key) now ? state.cardOpen.add(key) : state.cardOpen.delete(key);
+    };
+    if (open) build();
+    more.addEventListener("click", (ev) => { ev.stopPropagation(); toggle(); });
+    card.addEventListener("click", (ev) => { if (!ev.target.closest("a, button, input, label, summary, .tick")) toggle(); });
+    return card;
+  }
+  // the detail's rows: "Posted · first Thu 12 Nov 05:34, last Thu 12 Nov 15:22"
+  const ccRow = (label, value) => (value ? h("div", { class: "cc-row" }, h("span", { class: "cc-k" }, label), h("span", { class: "cc-v" }, value)) : null);
+  const ccLinks = (...links) => { const l = links.flat().filter(Boolean); return l.length ? h("div", { class: "ac-links cc-links" }, l) : null; };
+  // the notices a form or message came from: one button each, by when it was posted (never its number)
+  function noticeButtons(ids) {
+    const byId = new Map((state.data.notices || []).map((n) => [String(n.notice_id ?? n.id), n]));
+    const list = [...new Set(ids.map(String))].map((id) => ({ id, n: byId.get(id) }))
+      .sort((a, b) => String(a.n?.notice_time || "").localeCompare(String(b.n?.notice_time || "")));
+    return list.map(({ id, n }, k) => h("button", { type: "button", class: "act-btn", "data-link": "notice", onclick: () => openNotice(Number(id) || id) },
+      list.length > 1 ? `Notice · ${n?.notice_time ? shortTime(n.notice_time) : k + 1}` : "Notice"));
+  }
+  // "first Thu 12 Nov 05:34, last Thu 12 Nov 15:22 (2 notices)"
+  function postedSpan(times, what = "notice") {
+    const t = times.filter(Boolean).map((v) => +dt(v)).filter((x) => !Number.isNaN(x)).sort((a, b) => a - b);
+    if (!t.length) return "";
+    if (t.length === 1) return when(new Date(t[0]).toISOString());
+    return `first ${when(new Date(t[0]).toISOString())}, last ${when(new Date(t[t.length - 1]).toISOString())} (${t.length} ${what}s)`;
+  }
   const countdown = (at) => TODAY.countdown(at, liveNow()).text;
   const countPill = (at) => { const c = TODAY.countdown(at, liveNow());
     return h("span", { class: `pill cd c-${c.level}`, "data-due": dt(at).toISOString(), title: when(at) }, c.text); };
@@ -1789,6 +1849,12 @@
       const c = TODAY.countdown(el.dataset.due, now);
       if (el.textContent !== c.text) el.textContent = c.text;
       const cls = `pill cd c-${c.level}`;
+      if (el.className !== cls) el.className = cls;
+    }
+    for (const el of document.querySelectorAll("[data-rel]")) {
+      const r = CARDS.relDeadline(el.dataset.rel, now, { event: !!el.dataset.event });
+      if (el.textContent !== r.text) el.textContent = r.text;
+      const cls = `${el.className.replace(/\blv-\w+/, "").trim()} lv-${r.level}`;
       if (el.className !== cls) el.className = cls;
     }
     showLastRun();
@@ -1825,28 +1891,59 @@
     const mlink = viaMail ? d.mail?.link || d.todo?.link : mailed ? d.mail?.link : null;
     const linkText = (u) => /forms\.gle|docs\.google\.com\/forms|forms\.office|typeform|jotform|\/forms\//i.test(u) ? "Open form ↗"
       : /meet\.google|zoom\.us|teams\.microsoft|webex|\/interview\//i.test(u) ? "Join ↗" : /hackerrank|hackerearth|mettl|codility|test|assess/i.test(u) ? "Open test ↗" : "Open link ↗";
-    const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}`, role: "button",
+    // collapsed, by the card rule: who and what, the time in relative words, the role (or the names in a list), one
+    // button; the full message, its list, where it came from and its links are behind ⋯ (or a tap on the message)
+    const digest = (d.list || []).some((g) => (g.rows || []).length);
+    const company = FORMS.cleanName(cleanName(it.company || "")) || ((it.title || "").match(/^(?:Update - )?([^:(]{2,40}?)(?: deadline| test| form)?:/) || [])[1] || "";
+    const task = d.todo?.action === "fill_form" || /fill the form/i.test(it.title || "") ? "Form"
+      : /\bsubmi(t|ssion)\b.*\bcv\b|\bcv submission\b/i.test(it.title || "") ? "CV submission"
+      : it.category === "shortlist" || d.kind === "shortlist" ? "Shortlist" : it.category === "result" ? "Result"
+      : kind === "test" || d.todo?.action === "take_test" ? (d.kind === "interview" || /interview/i.test(it.title || "") ? "Interview" : "Test")
+      : /deadline (extended|moved)|extended to/i.test(it.title || "") ? "Deadline extended" : /time moved/i.test(it.title || "") ? "Time moved"
+      : it.category === "ppt" || /pre-placement talk/i.test(it.title || "") ? "Talk" : it.category === "offer" ? "Offer"
+      : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" ? "Reminder" : "Application") : kind === "new" ? "New roles" : "Update";
+    const event = ["Test", "Interview", "Shortlist", "Result", "Talk", "Time moved"].includes(task);
+    const rel = due ? relOf(due, event) : null;
+    const listed = digest ? (d.list || []).flatMap((g) => g.collapsed ? [] : (g.rows || []).map((r) => FORMS.cleanName(cleanName(cleanRowText(r.text).split(/ — | deadline\b|:| \(/)[0].trim())))) : [];
+    const names = [...new Set(listed)];
+    const allIds = digest ? (d.list || []).flatMap((g) => (g.rows || []).map((r) => r.id)).filter(Boolean) : [];
+    const headline = String(retitle(it) || "").replace(/\s*\([^)]*\)/g, "").split(/;\s/)[0]
+      .replace(/(,| to| by| at| on)? (Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} \w{3}( \d\d:\d\d)?:?/g, "").replace(/[.:]\s*$/, "").trim();
+    const onList = (d.pdf?.status || it.pdf_status) === "yes" && ["Shortlist", "Test", "Result"].includes(task);
+    const status = it.done ? h("span", { class: "pill applied" }, "✓ done") : onList ? h("span", { class: "pill you" }, "you're on it")
+      : listLink(it) ? h("span", { class: "pill plain" }, "check the list") : null;
+    const role = roleIn(it.title) || "";
+    const place = [d.pdf?.details?.room ? `Room ${d.pdf.details.room}` : ""].filter(Boolean).join("");
+    const plain = CARDS.cleanTitle(it.title, company, [task]);
+    const l3 = digest ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", "))
+      : [/^\d+ roles?$/.test(role) ? "" : role, place].filter(Boolean).join(" · ") || (!rel ? plain : "");
+    const stop = (ev) => ev.stopPropagation();
+    const primary = past ? null
+      : mlink ? h("a", { class: "act-btn primary", href: mlink, target: "_blank", rel: "noopener", onclick: stop }, linkText(mlink).replace(" ↗", ""))
+      : listLink(it) ? h("a", { class: "act-btn primary", href: listLink(it), target: "_blank", rel: "noopener", onclick: stop }, "Open list")
+      : d.todo?.link ? h("a", { class: "act-btn primary", href: d.todo.link, target: "_blank", rel: "noopener", onclick: stop }, "Open form")
+      : digest && allIds.length ? h("button", { type: "button", class: "act-btn primary", "aria-haspopup": "dialog", onclick: (ev) => { stop(ev); openDigestSheet(it, { ...d, list: resplit(d) }); } },
+          `See all ${new Set(allIds).size}`) : null;
+    const review = it.needs_review && it.level !== "hidden" && !past && d.candidates?.length;
+    const bubble = h("div", { class: `msg ping item k-${kind}${past ? " past" : ""}${it.done ? " done" : ""}${open ? " open" : ""}`, role: "button",
       tabindex: "0", "aria-expanded": String(open), "data-kind": kind, "data-key": `item:${it.id}`, "data-sig": itemSig(it) },
-      h("div", { class: "kicker" }, h("span", { class: "k" }, label),
-        !past && due && (kind === "soon" || kind === "test" || d.todo) ? countPill(due) : null,
-        viaMail ? h("span", { class: "pill via", title: `From your mail: ${d.mail?.from || ""}` }, "via email") : null,
-        mailed ? h("span", { class: "pill via", title: d.mail.subject || "" }, "also mailed to you") : null),
-      h("span", { class: "text title" }, retitle(it)),
-      // a form posted again: one line on the message, not a new message
-      d.extended?.length ? h("div", { class: "ext-line" }, `Deadline extended: ${when(d.extended[0].from)} → ${when(d.extended[d.extended.length - 1].to)}${d.extended.at(-1).notice_id ? ` (notice ${d.extended.at(-1).notice_id})` : ""}`) : null,
-      listBlock(it),
-      mlink && !past ? h("div", { class: "mail-link" }, h("a", { href: mlink, target: "_blank", rel: "noopener",
-        onclick: (ev) => ev.stopPropagation() }, linkText(mlink))) : null,
-      // "check the list yourself" / "couldn't read it": the list itself, right there (opens the ERP in the browser)
-      listLink(it) ? h("div", { class: "mail-link" }, h("a", { href: listLink(it), target: "_blank", rel: "noopener",
-        onclick: (ev) => ev.stopPropagation() }, "Open list ↗")) : null,
+      review ? h("div", { class: "kicker" }, h("span", { class: "k" }, label)) : null,
+      review ? h("span", { class: "text title" }, retitle(it))
+        : h("div", { class: "card-c chat-c" }, h("div", { class: "cc-text" },
+            h("div", { class: "cc-l1" }, digest ? h("strong", { class: "co" }, headline || label) : h("strong", { class: "co" }, company || label),
+              digest || !company ? null : h("span", { class: "cc-task" }, ` · ${task}`), status),
+            rel ? h("div", { class: `cc-l2 lv-${rel.level}`, ...(!past && rel.level !== "over" ? { "data-rel": dt(due).toISOString(), "data-event": event ? "1" : null } : {}) },
+              past && rel.level !== "over" ? `${rel.text} · ${pastLabel.toLowerCase()}` : rel.text)
+              : !digest ? h("div", { class: "cc-l2" }, String(it.title || "").replace(/^[^:]{2,60}:\s*/, "")) : null,
+            l3 && (rel || digest) ? h("div", { class: "cc-l3" }, l3) : null)),
       // "Which company is that? Tap to choose.": the choices are on the message, not under Details
-      it.needs_review && it.level !== "hidden" && !past && d.candidates?.length ? h("div", { class: "onb-actions choose", role: "group", "aria-label": "Which company" },
+      review ? h("div", { class: "onb-actions choose", role: "group", "aria-label": "Which company" },
         d.candidates.map((c) => h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { company: c }); } }, c)),
         h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { ignore: true }); } }, "None of these")) : null,
-      h("div", { class: "foot" }, h("span", { class: "expand" }, open ? "Less ▴" : "Details ▾"), h("span", { class: "time" }, clock(at))));
+      h("div", { class: "cc-act foot" }, primary, h("span", { class: "cc-gap" }), h("span", { class: "time" }, clock(at)),
+        h("button", { type: "button", class: "cc-more expand", "aria-expanded": String(open), "aria-label": open ? "Less" : "More about this message" }, open ? "▴" : "⋯")));
     const toggle = (ev) => {
-      if (ev.target.closest("a, button, .more, summary, details")) return;
+      if (ev.target.closest("a, button:not(.cc-more), .more, summary, details")) return;
       state.open.has(it.id) ? state.open.delete(it.id) : state.open.add(it.id);
       const next = itemBubble(it, at);
       bubble.replaceWith(next);
@@ -1854,7 +1951,15 @@
     };
     bubble.addEventListener("click", toggle);
     bubble.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(ev); } });
-    if (open) bubble.append(itemDetails(it));
+    // the detail: the whole message, its list, where it came from, every link
+    if (open) bubble.append(h("div", { class: "cc-detail chat-detail" },
+      review ? null : h("span", { class: "text title" }, retitle(it)),
+      // a form posted again: one line on the message, not a new message
+      d.extended?.length ? h("div", { class: "ext-line" }, `Deadline extended: ${when(d.extended[0].from)} → ${when(d.extended[d.extended.length - 1].to)}`) : null,
+      listBlock(it),
+      viaMail ? h("div", { class: "muted small" }, `Via email${d.mail?.from ? ` from ${String(d.mail.from).replace(/<[^>]*>/g, "").trim()}` : ""}`) : null,
+      mailed ? h("div", { class: "muted small" }, d.mail.note) : null,
+      itemDetails(it)));
     return bubble;
   }
 
@@ -2360,20 +2465,28 @@
     const now = nowDate();
     const head = h("div", { class: "today-head" }, h("h2", {}, "Today"),
       h("span", { class: "muted small" }, now.toLocaleDateString("en-GB", { timeZone: TZ, weekday: "long", day: "numeric", month: "short" })));
+    // a row, by the card rule: what and who on line 1, the deadline in relative words on line 2, the names (or the
+    // role and room) on line 3; internal notes ("per a notice (00:02)", "posted 12:34", "31 others") stay in the sheet
     const row = (r) => {
       const status = [r.filledAll ? h("span", { class: "pill applied" }, "✓ filled") : null,
         r.status === "on" ? h("span", { class: "pill you" }, "you're on the list")
-        : r.status === "off" ? h("span", { class: "pill plain" }, "roll not found: check the list") : null,
-        r.via === "email" ? h("span", { class: "pill via" }, "via email") : null].filter(Boolean);
-      const right = r.kind === "notice" || r.kind === "more" ? null : r.done || r.filledAll ? h("span", { class: "pill applied" }, "✓ done")
-        : r.over ? h("span", { class: "pill cd c-over" }, "over")
-        : r.due ? countPill(r.due) : null;
-      const body = [h("span", { class: "t-title" }, r.title, status), r.sub ? h("span", { class: "t-sub" }, r.sub) : null,
-                    r.names ? h("span", { class: "t-names" }, r.names) : null];
+        : r.status === "off" ? h("span", { class: "pill plain" }, "check the list") : null].filter(Boolean);
+      const done = r.done || r.filledAll, due = r.due || (r.dueAt ? new Date(r.dueAt).toISOString() : null);
+      const what = r.kind === "test" ? String(r.title).replace(/ (test|interview)$/i, (m, w) => ` · ${w[0].toUpperCase()}${w.slice(1)}`)
+        : r.kind === "todo" && !r.group ? `${r.title} · ${r.forms ? "Form" : /submi|cv/i.test(r.sub || "") ? "CV submission" : /test/i.test(r.sub || "") ? "Test" : "To do"}`
+        : String(r.title).replace(/ to apply by \d\d:\d\d$/, " to apply").replace(/ due \d\d:\d\d$/, (m) => (r.forms || /form/.test(r.title) ? " to fill" : ""))
+            .replace(/ (by|until) \d\d:\d\d$/, "").replace(/ · submit (your )?CVs?$/i, " · CV submission");
+      const rel = r.kind === "more" ? null : done ? { text: "✓ done", level: "done" } : due ? relOf(due, r.kind === "test") : null;
+      const l3 = r.kind === "test" ? String(r.sub || "").split(" · ").filter((x) => !/^\d\d:\d\d$/.test(x)).join(" · ")
+        : r.kind === "todo" && !r.group ? (r.sub || "").replace(/^\d\d:\d\d · /, "").replace(/^.*?\(([^)]+)\).*$/, "$1").replace(/^(fill the form|submit.*)$/i, "")
+        : r.names || "";
+      const body = [h("span", { class: "t-title" }, what, status),
+                    rel ? h("span", { class: `t-sub cc-l2 lv-${rel.level}`, ...(rel.level !== "over" && rel.level !== "done" && due ? { "data-rel": dt(due).toISOString(), "data-event": r.kind === "test" ? "1" : null } : {}) }, rel.text) : null,
+                    l3 ? h("span", { class: "t-names" }, l3) : null];
       // every row opens the sheet with everything in it ("5 forms due 20:00": one card per form)
       return h("button", { type: "button", class: `today-row k-${r.kind}${r.group ? " group" : ""}${r.over ? " over" : ""}`,
         "aria-haspopup": r.kind === "more" ? null : "dialog", onclick: () => openRowSheet(r) },
-        h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body), right,
+        h("span", { class: "t-ico", "aria-hidden": "true" }), h("span", { class: "t-body" }, body),
         r.kind === "more" ? null : h("span", { class: "t-caret", "aria-hidden": "true" }, "›"));
     };
     // "Done today: 11 applied ✓ · 2 forms filled ✓": one collapsed line, the done rows inside
@@ -2445,26 +2558,35 @@
       shown.length ? h("div", { class: "list" }, shown.map(itemCard)) : h("p", { class: "muted" }, "Nothing here right now."));
   }
 
+  // All updates: the same compact card (who and what, when, one button); the rest behind ⋯
   function itemCard(it) {
-    const due = itemDue(it);
-    const soon = due && dt(due) - nowDate() < 86400000 && dt(due) > nowDate();
+    const due = itemDue(it), d = it.details || {};
     const cls = it.needs_review ? "review" : it.level;
-    const meta = [
-      h("span", { class: `tag ${cls}` }, it.needs_review ? "Question" : LEVELS[it.level]),
-      it.details?.via === "email" ? h("span", { class: "pill via" }, "via email") : it.details?.mail?.note ? h("span", { class: "pill via" }, "also mailed to you") : null,
-      due ? h("span", { class: "due" + (soon ? " soon" : "") }, (it.due_at ? "Due " : "On ") + when(due)) : null,
-      it.company ? h("a", { href: companyHref(it.company) }, it.company) : null,
-      it.notice_id ? h("button", { onclick: () => openNotice(it.notice_id) }, "Open notice") : null,
-      it.notice_id && it.pdf_status ? pdfLink(it) : null,
-      ...mailLinks(it).map((u, k) => h("a", { href: u, target: "_blank", rel: "noopener" }, k ? "Link 2" : "Link from your mail")),
-      ...(it.details?.todo?.link ? [h("a", { href: it.details.todo.link, target: "_blank", rel: "noopener" }, "Open form")] : []),
-      it.level !== "hidden" ? h("button", { onclick: () => toggleDone(it) }, it.done ? "Undo done" : "Done") : null,
-    ];
-    const card = h("div", { class: `item ${cls}${it.done ? " done" : ""}` }, h("div", { class: "title" }, it.title), h("div", { class: "meta" }, meta));
+    const c = itemCardOf(it);
+    const link = d.todo?.link || mailLinks(it)[0];
+    const card = cardC({
+      key: `feed:${it.id}`, cls: `item ${cls}${it.done ? " done" : ""}`, company: c.company || cleanName(it.company || "") || "Placement office",
+      task: it.needs_review ? "Question" : KIND_WORD[c.kind] || "Update", at: due || undefined, event: !!it.event_at && !it.due_at,
+      status: it.done ? h("span", { class: "pill applied" }, "✓ done") : null,
+      l3: c.roleName || (due ? "" : String(it.title || "").replace(/^[^:]{2,60}:\s*/, "")),
+      primary: link ? h("a", { class: "act-btn primary", href: link, ...EXT }, /forms\.gle|docs\.google\.com\/forms|\/forms\//i.test(link) || d.todo?.link ? "Open form"
+        : /meet\.google|zoom\.us|teams\.microsoft|webex|\/interview\//i.test(link) ? "Join" : /hackerrank|hackerearth|mettl|codility|test|assess/i.test(link) ? "Open test" : "Open link") : null,
+      detail: () => [
+        ccRow("Message", it.title),
+        ccRow("Shown as", it.needs_review ? "Question" : LEVELS[it.level]),
+        due ? ccRow(it.due_at ? "Due" : "When", when(due)) : null,
+        d.via === "email" ? ccRow("From", "Your placement mail") : d.mail?.note ? ccRow("Also", d.mail.note) : null,
+        ccLinks(it.company ? h("a", { class: "act-btn", href: companyHref(it.company) }, "Company") : null,
+          it.notice_id ? noticeButtons([it.notice_id]) : null,
+          it.notice_id && it.pdf_status ? Object.assign(pdfLink(it), { className: "act-btn" }) : null,
+          ...mailLinks(it).slice(link === mailLinks(it)[0] ? 1 : 0).map((u) => h("a", { class: "act-btn", href: u, ...EXT }, "Link from your mail")),
+          it.level !== "hidden" ? h("button", { type: "button", class: "act-btn", onclick: () => toggleDone(it) }, it.done ? "Undo done" : "Mark done") : null),
+      ],
+    });
     if (it.needs_review && it.level !== "hidden") {
-      card.append(h("div", { class: "meta" }, "It's about:",
-        (it.details?.candidates || []).map((c) => h("button", { onclick: () => fix(it, { company: c }) }, c)),
-        h("button", { onclick: () => fix(it, { ignore: true }) }, "none of these / not relevant")));
+      card.append(h("div", { class: "onb-actions choose" }, "It's about:",
+        (d.candidates || []).map((x) => h("button", { type: "button", class: "chip", onclick: () => fix(it, { company: x }) }, x)),
+        h("button", { type: "button", class: "chip", onclick: () => fix(it, { ignore: true }) }, "None of these")));
     }
     return card;
   }
@@ -2568,22 +2690,29 @@
   }
   const bestCv = (r) => { const m = markOf(r); return m?.relevant && m.best_cv ? m.best_cv : null; };
 
+  // the companies you're on a shortlist / test list of (from the lists Ping read), for the one status chip
+  function shortlistedSet() {
+    const key = state.data.items;
+    if (state.slCache?.key === key) return state.slCache.set;
+    const set = new Set(key.filter((it) => (it.category === "shortlist" || it.category === "test" || ["shortlist", "test", "test_rooms"].includes(it.details?.kind))
+      && (it.details?.pdf?.status || it.pdf_status) === "yes").map((it) => cleanName(it.company).toLowerCase()));
+    state.slCache = { key, set };
+    return set;
+  }
+  // a role: the company and one status chip, the role, the next deadline; pay, criteria and the JD are one tap away
   function roleRow(r) {
-    const dl = deadlineOf(r), open = isOpen(r), mk = markOf(r);
+    const dl = deadlineOf(r), open = isOpen(r);
     const cls = r.applied ? "applied" : targetsOn() && forYou(r) ? "you" : closingSoon(r) ? "soon" : "plain";
-    const cv = bestCv(r);
+    const chip = shortlistedSet().has(cleanName(r.company).toLowerCase()) ? ["you", "Shortlisted"] : r.applied ? ["applied", "Applied"]
+      : !open && dl ? ["over", "Closed"] : r.eligible === false ? ["no", "Not eligible"] : ["plain", "Eligible"];
+    const rel = dl ? relOf(dl) : null;
     return h("button", { type: "button", class: `role-row r-${cls}`, "data-role": r.id, onclick: () => openRole(r),
-      "aria-label": `${cleanName(r.company)}, ${r.designation}. Details` },
-      h("span", { class: "co" }, cleanName(r.company)),
-      h("span", { class: "ctc" }, ctcShort(r)),
+      "aria-label": `${cleanName(r.company)}, ${r.designation}, ${chip[1]}. Details` },
+      h("span", { class: "co" }, FORMS.cleanName(cleanName(r.company))),
+      h("span", { class: `pill ${chip[0]} rr-chip` }, chip[1]),
       h("span", { class: "rn" }, r.designation),
-      h("span", { class: "meta" },
-        dl ? h("span", { class: "num" }, `${open ? "Closes" : "Closed"} ${when(dl)}`) : h("span", {}, "No deadline yet"),
-        dl && open && !r.applied ? countPill(dl) : null,
-        r.applied ? h("span", { class: "pill applied" }, "✓ applied") : null,
-        targetsOn() && mk?.relevant && !r.applied ? h("span", { class: "pill you" }, "For you") : null,
-        r.eligible === false ? h("span", { class: "pill no" }, "Not eligible") : null,
-        cv ? h("span", { class: "applywith" }, "Apply with ", h("strong", {}, cv)) : null));
+      h("span", { class: `meta cc-l2${rel ? ` lv-${rel.level}` : ""}`, ...(rel && open ? { "data-rel": dt(dl).toISOString() } : {}) },
+        rel ? (open ? rel.text : rel.text.replace(/ · past due$/, " · closed")) : "No deadline yet"));
   }
 
   function sortRoles(list, key) {
@@ -2625,7 +2754,7 @@
     draw();
     const search = h("div", { class: "search-row" }, svgIcon("M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14zM21 21l-5-5"), input);
     mountPage(h("h1", {}, "Companies"),
-      h("p", { class: "lede" }, `Every role on the ERP's companies list (${roles.length}). Tap one for pay, eligibility and deadlines.`),
+      h("p", { class: "lede" }, `Every role on the ERP's companies list (${roles.length}). Tap one for pay, criteria and the JD.`),
       search, chips, count, out,
       h("p", { class: "page-links" }, h("a", { href: "#feed" }, "All updates, newest first")));
   }
@@ -2671,32 +2800,41 @@
              formKey: d.form?.key || null };
   }
   function sheetCard(c) {
-    const status = c.list === "on" ? h("span", { class: "pill you" }, "on the list") : c.list === "off" ? h("span", { class: "pill plain" }, "roll not found: check the list")
-      : c.applied === true ? h("span", { class: "pill applied" }, "✓ applied") : c.applied === false ? h("span", { class: "pill plain" }, "not applied") : null;
-    const fit = c.mine === true ? h("span", { class: "pill you" }, "For you") : c.mine === false ? h("span", { class: "pill plain" }, "Other") : null;
+    const status = c.done ? h("span", { class: "pill applied" }, "✓ done")
+      : c.list === "on" ? h("span", { class: "pill you" }, "on the list")
+      : c.applied === true ? h("span", { class: "pill applied" }, "✓ applied") : null;
     const erp = c.role || c.kind === "application" ? TODAY.erpLink(c.role || { company: c.company }, myRoll()) : null;
-    const pastDue = c.due && c.at <= liveNow();
-    const links = [
-      erp ? h("a", { class: "act-btn", href: erp.href, ...EXT, "data-link": "erp",
-        title: erp.direct ? "The role's page on the ERP, in your browser" : `On the ERP: CDC › Application of Placement/Internship, search “${erp.search}”` }, "Open on ERP") : null,
-      ...c.forms.map((u, k) => h("a", { class: "act-btn", href: u, ...EXT, "data-link": "form" }, c.forms.length > 1 ? `Form link ${k + 1}` : "Form link")),
-      c.pdf ? Object.assign(pdfLink(c.pdf), { className: "act-btn" }) : null,
-      c.noticeId ? h("button", { type: "button", class: "act-btn", "data-link": "notice", onclick: () => openNotice(c.noticeId) }, "Notice") : null,
-      c.chat ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => { closeSheet(); goTo({ item: c.chat }); } }, "Show in chat") : null,
-    ].filter(Boolean);
-    return h("article", { class: `act-card${c.mine === false && !c.applied ? " other" : ""}`, "data-kind": c.kind },
-      h("div", { class: "ac-head" }, c.formKey ? formTick(c.formKey) : null, h("strong", { class: "co" }, c.company || "Notice"),
-        c.roleName ? h("span", { class: "rn" }, c.roleName) : null),
-      h("div", { class: "ac-meta" }, h("span", { class: "kind" }, KIND_WORD[c.kind] || c.kind),
-        c.due ? h("span", { class: "num" }, when(c.due)) : null,
-        c.due ? (pastDue ? h("span", { class: "pill cd c-over" }, "over") : countPill(c.due)) : null, status, fit,
-        c.done ? h("span", { class: "pill applied" }, "✓ done") : null),
-      c.place ? h("div", { class: "ac-line" }, c.place) : null,
-      c.myRow ? h("div", { class: "ac-line" }, h("strong", {}, "Your row: "), c.myRow) : null,
-      c.text ? h("div", { class: "ac-line" }, c.text) : null,
-      c.reason ? h("div", { class: "ac-why" }, c.reason) : null,
-      c.cv ? h("div", { class: "ac-line" }, "Apply with: ", h("strong", {}, c.cv)) : null,
-      links.length ? h("div", { class: "ac-links" }, links) : null);
+    const event = ["test", "interview", "notice", "shortlist"].includes(c.kind);
+    const form = c.forms[0];
+    const primary = form && !c.applied ? h("a", { class: "act-btn primary", href: form, ...EXT, "data-link": "form" }, "Open form")
+      : erp && !c.applied ? h("a", { class: "act-btn primary", href: erp.href, ...EXT, "data-link": "erp",
+          title: erp.direct ? "The role's page on the ERP, in your browser" : `On the ERP: CDC › Application of Placement/Internship, search “${erp.search}”` }, "Apply on ERP")
+      : c.list === "off" && c.pdf ? Object.assign(pdfLink(c.pdf), { className: "act-btn primary", textContent: "Open list" }) : null;
+    // line 3: the role, then what you need to act (the CV to apply with, your room)
+    const l3 = [c.roleName, c.place, c.cv && !c.applied ? `Apply with ${c.cv}` : ""].filter(Boolean).join(" · ");
+    return cardC({
+      key: `sheet:${c.kind}:${c.role?.id || c.item?.id || c.company}`, cls: `act-card${c.mine === false && !c.applied ? " other" : ""}`,
+      attrs: { "data-kind": c.kind }, lead: c.formKey ? formTick(c.formKey) : null,
+      company: c.company || "Notice", task: KIND_WORD[c.kind] || c.kind, at: c.due || null, event, status, l3, primary,
+      detail: () => [
+        c.roleName ? ccRow("Role", c.roleName) : null,
+        c.due ? ccRow(event ? "When" : "Due", when(c.due)) : null,
+        c.applied === false ? ccRow("Status", "Not applied") : null,
+        c.list === "off" ? ccRow("List", "Roll not found: check the list yourself") : null,
+        c.mine != null ? ccRow("Fit", [c.mine ? "For you" : "Other", c.reason].filter(Boolean).join(" · ")) : null,
+        c.cv ? ccRow("Apply with", c.cv) : null,
+        c.place ? ccRow("Where", c.place) : null,
+        c.myRow ? ccRow("Your row", c.myRow) : null,
+        c.text ? h("p", { class: "cc-note" }, c.text) : null,
+        c.item?.title ? ccRow("Message", c.item.title) : null,
+        ccLinks(
+          erp && (form || c.applied) ? h("a", { class: "act-btn", href: erp.href, ...EXT, "data-link": "erp" }, "Open on ERP") : null,
+          ...c.forms.slice(form && !c.applied ? 1 : 0).map((u, k) => h("a", { class: "act-btn", href: u, ...EXT, "data-link": "form" }, c.forms.length > 1 ? `Form link ${k + (form && !c.applied ? 2 : 1)}` : "Form link")),
+          c.pdf && c.list !== "off" ? Object.assign(pdfLink(c.pdf), { className: "act-btn" }) : null,
+          c.noticeId ? noticeButtons([c.noticeId]) : null,
+          c.chat ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => { closeSheet(); goTo({ item: c.chat }); } }, "Show in chat") : null),
+      ],
+    });
   }
   // open and close: the phone's back gesture closes the sheet (a history entry while it's open)
   function showSheet(sheet) {
@@ -2985,7 +3123,8 @@
     }
 
     const about = card("about", "About you",
-      kv([["Roll number", p.roll || "Your ERP user id"], ["Name", p.name], ["Degree", p.degree], ["Department", p.department],
+      // the roll number masked on the page ("22XY•••42"); the edit form shows it in full
+      kv([["Roll number", p.roll ? String(p.roll).replace(/^(.{4}).+(.{2})$/, "$1•••$2") : "Your ERP user id"], ["Name", p.name], ["Degree", p.degree], ["Department", p.department],
           ["CGPA", p.cgpa], ["Active backlogs", p.active_backlogs ? "Yes" : "No"]]),
       [h("div", { class: "row2" },
         field("roll", "Roll number", p.roll, {}, "Leave empty to use your ERP user id"),
@@ -3060,7 +3199,10 @@
 
     mountPage(h("h1", {}, "Profile"), h("p", { class: "lede" },
       "Whether you applied comes from the ERP's companies list, not from here. Ping only reads the ERP."),
-      h("div", { class: "pcards" }, about, looking, cvs, sched, pushCard(demo), installCard(), account));
+      // grouped: you, your alerts, the app
+      h("h2", { class: "pgroup" }, "You"), h("div", { class: "pcards" }, about, looking, cvs),
+      h("h2", { class: "pgroup" }, "Checks and alerts"), h("div", { class: "pcards" }, sched, pushCard(demo)),
+      h("h2", { class: "pgroup" }, "App and account"), h("div", { class: "pcards" }, installCard(), account));
     updateCheckButtons();
   }
 
@@ -3096,7 +3238,9 @@
         } catch (e) { status.textContent = ` Couldn't upload it. ${plainly(e)}`; }
       } }, c.path ? "Replace" : "Upload");
       return h("div", { class: "cv-slot" }, label, demo ? null : file, demo ? null : upload,
-        c.summary ? h("div", { class: "small muted" }, c.summary) : c.path ? h("div", { class: "small muted" }, "Not read yet") : null);
+        // what Ping read from it: one tap away (it's long)
+        c.summary ? h("details", { class: "cv-sum small muted" }, h("summary", {}, "What Ping read from it"), h("div", {}, c.summary))
+          : c.path ? h("div", { class: "small muted" }, "Not read yet") : null);
     };
     return h("div", { class: "cvs" },
       h("p", { class: "hint", style: "margin:0" }, demo ? " Made-up CVs of the demo student (summaries only; the demo can't upload)."

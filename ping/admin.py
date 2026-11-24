@@ -858,12 +858,19 @@ def push_examples(secrets) -> int:
         if a:
             show(label, push.render([a], now), "")
             continue
-        # nothing open of this type now: its latest example, as it read 3 h before its time
+        # nothing open of this type now: its latest example, as it read 3 h before its time (an extension: 30 min
+        # after it was seen)
         for it in sorted(items, key=lambda i: str(i.get("due_at") or i.get("event_at") or i.get("first_seen") or ""), reverse=True):
             at = push._at(it.get("due_at") or it.get("event_at")) or push._at(it.get("first_seen"))
             if not at:
                 continue
             then = at - timedelta(hours=3)
+            ext = (it.get("details") or {}).get("extended")
+            if typ == "extended" and isinstance(ext, list) and ext:
+                seen = push._at(ext[-1].get("at") or ext[-1].get("seen_at"))
+                if not seen:
+                    continue
+                then = seen + timedelta(minutes=30)
             got = [x for x in push.acts([it], roles, then) if x["type"] == typ]
             if got:
                 show(label, push.render(got[:1], then), f"as on {then:%a %d %b %H:%M}")
@@ -879,6 +886,18 @@ def push_examples(secrets) -> int:
         best = max(by.values(), key=len, default=[])
         if len(best) > 1:
             show(label, push.render(best, now), "")
+            continue
+        # none now: the latest deadline that had several, as it read 3 h before
+        dues = sorted({str(i.get("due_at")) for i in items if i.get("due_at")}, reverse=True)
+        for due in dues:
+            at = push._at(due)
+            then = at - timedelta(hours=3)
+            got = [x for x in push.acts(items, roles, then) if x["type"] == typ and x["at"] == at]
+            if len(got) > 1:
+                show(label, push.render(got, then), f"as on {then:%a %d %b %H:%M}")
+                break
+        else:
+            say(f"-. {label}: no deadline with more than one in your data")
     return 0
 
 

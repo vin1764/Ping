@@ -1013,7 +1013,62 @@ def posted_report(secrets, hours: float = 6) -> int:
     say(f"push queue rows since then: {len(q)} (pushes a run sends directly are in its log as 'push: ...')")
     for x in q[:20]:
         say(f"  {str(x.get('send_at') or x.get('created_at'))[:16]} | {str(x.get('title'))[:60]!r} | sent={x.get('sent_at') or x.get('sent')}")
+    # what the chat draws (dashboard/app.js inChat): visible items, and past ones Ping posted while they still mattered,
+    # at the notice's / mail's own time. Groups of 2+ with the same key are repeats in the thread.
+    groups: dict = {}
+    for i in items:
+        if in_chat(i):
+            groups.setdefault(posting.post_key(i), []).append(i)
+    reps = {k: v for k, v in groups.items() if len(v) > 1}
+    say(f"messages in the chat: {sum(len(v) for v in groups.values())}; keys shown more than once: {len(reps)}")
+    for k, v in sorted(reps.items(), key=lambda kv: -len(kv[1])):
+        say(f"  x{len(v)} {k[:110]}")
+        for i in sorted(v, key=lambda i: str(_chat_time(i))):
+            d = i.get("details") or {}
+            say(f"     shown at {str(_chat_time(i))[:16]} | first seen {str(i.get('first_seen'))[:16]} | {i['id'][:70]} | {i.get('level')} {str(d.get('hidden_because') or '')[:40]!r} | {str(i.get('title'))[:60]!r}")
+    co = os.environ.get("PING_COMPANY")
+    if co:
+        say(f"every item for {co!r}:")
+        for i in sorted([i for i in items if co.lower() in str(i.get("company") or "").lower() or co.lower() in str(i.get("title") or "").lower()], key=lambda i: str(_chat_time(i))):
+            d = i.get("details") or {}
+            say(f"  in chat={in_chat(i)!s:5} | shown at {str(_chat_time(i))[:16]} | first seen {str(i.get('first_seen'))[:16]} | {i['id'][:70]} | {i.get('category')} | {i.get('level')} {str(d.get('hidden_because') or '')[:40]!r} | due {str(i.get('due_at'))[:16]} | dismissed={i.get('dismissed')} | {str(i.get('title'))[:70]!r}")
     return 0
+
+
+PAST_WHY = re.compile(r"deadline gone|already happened|older than 3 days|replaced by the 24h reminder|updated by a later message")
+
+
+def _chat_time(i):
+    return (i.get("details") or {}).get("notice_time") or i.get("first_seen") or i.get("sort_at")
+
+
+def in_chat(i) -> bool:
+    """The same test as the page's inChat (dashboard/app.js)."""
+    if i.get("dismissed") or i.get("category") in ("apply", "reminder"):
+        return False
+    if i.get("level") != "hidden":
+        return True
+    d = i.get("details") or {}
+    why = str(d.get("hidden_because") or "")
+    if not PAST_WHY.search(why):
+        return False
+    def t(v):
+        try:
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00")) if v else None
+        except ValueError:
+            return None
+    seen = t(_chat_time(i))
+    if not seen:
+        return True
+    if "deadline gone" in why and t(i.get("due_at")):
+        return seen < t(i.get("due_at"))
+    if "already happened" in why and t(i.get("event_at")):
+        return seen < t(i.get("event_at")) + timedelta(hours=12)
+    if "older than 3 days" in why and t(i.get("sort_at")):
+        return seen < t(i.get("sort_at")) + timedelta(days=3)
+    if "reminder" in why and t(i.get("due_at")):
+        return seen < t(i.get("due_at")) - timedelta(days=1)
+    return True
 
 
 def posting_cleanup(secrets, hours: float = 12) -> int:

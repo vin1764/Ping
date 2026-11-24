@@ -4,6 +4,10 @@ name: Admin
 on:
   workflow_dispatch:
     inputs:
+      company:
+        description: "A company name, for the tasks that look at one (jd-sources, posted-report)"
+        required: false
+        type: string
       task:
         description: "What to do"
         type: choice
@@ -40,6 +44,7 @@ jobs:
       - name: Run ${{ inputs.task }}
         env:
           TASK: ${{ inputs.task }}
+          PING_COMPANY: ${{ inputs.company }}
           ERP_USER_ID: ${{ secrets.ERP_USER_ID }}
           MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

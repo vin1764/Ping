@@ -50,7 +50,7 @@ import re
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -988,6 +988,63 @@ def chat_audit(secrets) -> int:
     return subprocess.run(["node", str(ROOT / "evals" / "generated" / "audit_chat.js"), str(facts), str(path)], cwd=ROOT).returncode
 
 
+def posted_report(secrets, hours: float = 6) -> int:
+    """Reads only: every message that became visible in the chat in the last `hours` (first_seen), with its key
+    (company, task, deadline, form link), why it may be a repeat, and the push notifications queued or sent."""
+    from collections import Counter
+    from . import posting
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    since = (datetime.now(timezone.utc) - timedelta(hours=float(os.environ.get("PING_HOURS") or hours))).isoformat()
+    items = store.select("items", REAL)
+    now = datetime.now(timezone.utc)
+    shown = sorted([i for i in items if i.get("level") != "hidden" and not i.get("dismissed") and str(i.get("first_seen") or "") >= since],
+                   key=lambda i: str(i.get("first_seen")))
+    keys = Counter(posting.post_key(i) for i in items if i.get("level") != "hidden" and not i.get("dismissed"))
+    say(f"visible messages first seen since {since[:16]} UTC: {len(shown)}")
+    for i in shown:
+        k = posting.post_key(i)
+        flags = [f"same key x{keys[k]}" if keys[k] > 1 else "", "past due when posted" if posting.is_past(i, datetime.fromisoformat(str(i["first_seen"]).replace("Z", "+00:00"))) else ""]
+        say(f"  {str(i['first_seen'])[:19]} | {i['id'][:60]:60} | {str(i.get('company'))[:22]:22} | {i.get('category')} | due {str(i.get('due_at') or i.get('event_at') or '')[:16]} | {str(i.get('title'))[:70]!r} {' '.join(f for f in flags if f)}")
+    try:
+        q = [x for x in store.select("push_queue", {}) if str(x.get("created_at") or x.get("send_at") or "") >= since]
+    except Exception as e:
+        q = []
+        say(f"push queue not readable: {type(e).__name__}")
+    say(f"push queue rows since then: {len(q)} (pushes a run sends directly are in its log as 'push: ...')")
+    for x in q[:20]:
+        say(f"  {str(x.get('send_at') or x.get('created_at'))[:16]} | {str(x.get('title'))[:60]!r} | sent={x.get('sent_at') or x.get('sent')}")
+    return 0
+
+
+def posting_cleanup(secrets, hours: float = 12) -> int:
+    """Writes to Ping's own feed only (never the ERP): messages first seen in the last `hours` that repeat an earlier
+    visible message (same company, task, deadline and form link: the earliest is kept), or whose time had already
+    passed when they were posted (none kept), are dismissed: gone from the chat, kept in the data. Owner and demo."""
+    from . import posting
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    since = (datetime.now(timezone.utc) - timedelta(hours=float(os.environ.get("PING_HOURS") or hours))).isoformat()
+    for label, query in (("owner", REAL), ("demo", {"is_sample": "is.true"})):
+        items = [i for i in store.select("items", query) if i.get("level") != "hidden" and not i.get("dismissed")]
+        items.sort(key=lambda i: str(i.get("first_seen") or ""))
+        seen, drop = {}, []
+        for i in items:
+            k = posting.post_key(i)
+            recent = str(i.get("first_seen") or "") >= since
+            fs = datetime.fromisoformat(str(i["first_seen"]).replace("Z", "+00:00")) if i.get("first_seen") else None
+            if recent and fs and posting.is_past(i, fs) and i.get("category") not in ("digest", "listing"):
+                drop.append((i, "its time had passed when it was posted"))
+            elif k in seen and recent:
+                drop.append((i, f"repeats {seen[k]['id'][:40]}"))
+            else:
+                seen.setdefault(k, i)
+        say(f"{label}: {len(drop)} message(s) to take out of the chat")
+        for i, why in drop:
+            say(f"  {str(i.get('first_seen'))[:16]} | {str(i.get('company'))[:22]} | {str(i.get('title'))[:60]!r} | {why}")
+        for k in range(0, len(drop), 20):
+            store.upsert("items", [{"id": i["id"], "dismissed": True} for i, _ in drop[k:k + 20]])
+    return 0
+
+
 def jd_sources(secrets, company: str | None = None) -> int:
     """Reads only: everything Ping has stored about one company that could hold a JD (default RISA Labs): the role
     page's JD, the company's notices (does the text mention a JD or a file?), each notice file's check (a JD kept
@@ -1749,7 +1806,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "posting-cleanup": posting_cleanup, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

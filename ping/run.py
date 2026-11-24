@@ -312,14 +312,23 @@ class Runner:
             self.counts["push_reminders_queued"] = len(rows)
         except Exception as e:                        # e.g. before Admin > apply-sql made push_queue
             self.problems.append(f"queueing test reminders failed: {type(e).__name__}")
-        chosen = push.pick(new, self.now)
-        if chosen and self.secrets.supabase_url and self.secrets.supabase_key:
+        # what a notification says: who and what to do in the title, only what's needed to act in the body
+        roles = {r["id"]: r for r in self._rows("roles", REAL)}
+        note = push.compose(new, roles, self.now)
+        try:
+            # the same, for everything still to do (not only new): Profile > Notifications > Send a test shows it
+            example = push.compose(items, roles, self.now)
+            self.store.set_state("push_example", example)
+        except Exception:
+            pass
+        if note and self.secrets.supabase_url and self.secrets.supabase_key:
             try:
-                res = push.send(self.secrets.supabase_url, self.secrets.supabase_key, push.payload(*chosen, self.now))
+                res = push.send(self.secrets.supabase_url, self.secrets.supabase_key, note)
                 self.counts["push"] = {k: res[k] for k in ("status", "sent", "devices", "ok", "why", "error") if k in res}
             except Exception as e:
                 self.counts["push"] = {"error": type(e).__name__}
             log(f"push: {self.counts['push']}")
+        chosen = push.pick(new, self.now)
         if chosen and profile.get("email_digests"):
             text = push.email_text(new, self.now, DASHBOARD_URL)
             if text:

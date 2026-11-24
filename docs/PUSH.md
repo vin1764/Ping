@@ -9,13 +9,25 @@ something is for you. Nothing changes for anyone who doesn't install it: the sam
 - **Offline reading:** without a connection Ping opens with the thread as it was last loaded, and says so. What you
   send offline waits ("waiting for a connection") and is asked in order when you're back online.
 - **Notifications** (only if you say yes, per device):
-  - at most **one per check**, for the most urgent new message that's **for you**: a test you're on, a deadline
-    for roles you'd apply to, a form to fill, an update about a role you applied to. "Nothing new" checks and
-    messages about other roles only send nothing. If several are for you, the one notification says "(+2 more for you)";
-  - **test-day reminders**: for a test a list says you're on, at your reminder lead time ("Groww test at 15:00 ·
-    room 304 (in 2 h)"), sent by Supabase's scheduler even if no check runs then;
+  - at most **one per check**, for the most urgent new thing **you** have to do. The title says who and what to do,
+    the body only what you need to act (the role, "Apply with <CV>", the countdown), in one or two short lines:
+
+    | what | title | body |
+    |---|---|---|
+    | an application | `ZS Associates · Apply by tomorrow 20:00` | `Decision Analytics Associate · Apply with PM CV · in 23 h` |
+    | a form | `Piramal Finance · Fill form by 20:00` | `in 3 h 10 min` |
+    | a deadline moved (only if you haven't applied / filled; otherwise nothing) | `Meesho · Deadline extended to Wed 14:00` | the role, the countdown |
+    | a test you're on | `Groww · Test at 15:00 · Room 304` | the role, the countdown |
+    | a shortlist with your name | `FirstClub · You're on the shortlist` | the role |
+    | a new role for you | `Bluestone · New role for you: APM` | `apply by 22:00 · in 1 h` |
+    | several due at the same time | `2 to apply by tomorrow 20:00` | one per line, `Company — Role`; more than 3: the first 3 and "and 2 more" |
+
+    Roles that aren't for you ("Others") are never in a notification. "Nothing new" checks send nothing.
+    Tapping it opens the matching Today sheet (the forms or the roles due then), or the test / shortlist message;
+  - **test-day reminders**: for a test a list says you're on, at your reminder lead time ("Groww · Test at 15:00 ·
+    Room 304"), sent by Supabase's scheduler even if no check runs then;
   - **mail-only deadlines**: a form or a "complete the test by" that only your placement mail has (no ERP notice
-    says it) gets the same reminder at your lead time ("Form · due tomorrow 17:00", "Pine Labs: fill the form by 17:00");
+    says it) gets the same reminder at your lead time ("Pine Labs · Fill form by 17:00");
   - **never in your quiet hours**: outside your check window (Profile > Schedule, default 06:00 to 01:00 IST);
   - tapping one opens the chat **at that message** (it flashes).
 - **Optional email** of the same for-you messages (Profile > Notifications > "Also email me", off by default). The
@@ -48,15 +60,14 @@ something is for you. Nothing changes for anyone who doesn't install it: the sam
 
 ```json
 {
-  "title": "Reminder · closes tonight 20:00",
-  "body": "Reminder: 38 applications you haven't applied to close tonight, Sat 21 Nov 20:00 — 8 for you (+1 more for you)",
-  "url": "./#m-sample%3Adigest%3Aapplication%3A20261121T2000%3Areminder",
-  "tag": "sample:digest:application:20261121T2000:reminder",
-  "at": "2026-11-21T14:30:00.000Z"
+  "title": "2 to apply by tonight 20:00",
+  "body": "Navi — SDE-1 · Apply with Tech CV\nMoneyview — Data Scientist\nin 3 h",
+  "url": "./#sheet/apply/1795530600000",
+  "tag": "sample:digest:application:20261121T2000"
 }
 ```
 
-A test-day reminder: `{"title": "Test · today 15:00", "body": "Groww test at 15:00 · room 304 (in 2 h)", "url": "./#m-…"}`.
+A test-day reminder: `{"title": "Groww · Test at 15:00 · Room 304", "body": "APM", "url": "./#m-…"}`.
 The request to the push service carries `Content-Encoding: aes128gcm` (RFC 8291), `TTL: 21600` (6 h),
 `Urgency: high` and `Authorization: vapid t=<JWT signed with the private key>, k=<public key>`.
 

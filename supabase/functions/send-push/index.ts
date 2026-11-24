@@ -61,8 +61,12 @@ Deno.serve(async (req) => {
   if (mode === "test") {
     const who = await caller(req);
     if (who?.role !== "owner") return json({ error: "only the owner's devices get notifications" }, 403);
-    const res = await sendAll({ title: "Ping · test", body: "Notifications work on this device.", url: "./#chat", tag: "ping-test",
-                                at: new Date().toISOString() });
+    // the notification Ping would send now (the last check stored it), in its real words; else a plain test
+    const ex: any = (await svc.from("state").select("value").eq("key", "push_example").limit(1)).data?.[0]?.value;
+    const res = await sendAll(ex?.title
+      ? { title: ex.title, body: `${ex.body || ""}\n(Test: what Ping would send now)`.trim(), url: ex.url || "./#chat", tag: "ping-test",
+          at: new Date().toISOString() }
+      : { title: "Ping · test", body: "Notifications work on this device.", url: "./#chat", tag: "ping-test", at: new Date().toISOString() });
     console.log(JSON.stringify({ event: "push_test", ...res }));
     return json(res);
   }

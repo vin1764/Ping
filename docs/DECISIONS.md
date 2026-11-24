@@ -163,3 +163,19 @@ Judgement calls made while working unattended, one line each.
   unticked, and the ticks made since (RISA Labs, Diageo) sit on those exact links.
 - **Public copy**: force-pushed (it holds only the generated copy), marked as a template when the token allows;
   Ping and Dashboard workflows are green with no secrets (they say "not set up yet" / build without publishing).
+
+## Push notifications: who and what to do (24 Nov)
+
+- **One composer for every push** (`ping/push.py` `compose` / `render`): the title says who and what to do, the body
+  only the role, "Apply with <CV>" and the countdown. Only roles marked For you that you haven't applied to count;
+  "Others" never appear, and the "+N more for you" suffix is gone.
+- **Forms digests are not applications**: a forms digest's rows are reached through each form's own to-do (so a
+  filled form never pushes); only an applications digest gives "Apply by".
+- **"Deadline extended" only for a fresh extension** (seen in the last 3 h) and only if not applied / filled;
+  otherwise the form or role is pushed as usual at its new deadline, or nothing at all.
+- **Grouping**: same kind of thing, same deadline: "2 to apply by tomorrow 20:00", one per line; more than 3 shows the
+  first 3 and "and N more".
+- **Send a test** sends the notification Ping would send now (stored by each run as `push_example`), marked as a
+  test, so the owner sees the real format on the phone.
+- **Tap targets**: `#sheet/apply/<ms>` and `#sheet/form/<ms>` open the Today sheet for that deadline; tests and
+  shortlists open their message.

@@ -983,6 +983,20 @@
       return viewCompany(name || "");
     }
     renderToday();
+    // a notification's tap: "#sheet/apply/<ms>" the roles closing then (the Today sheet), "#sheet/form/<ms>" the forms due then
+    if (base === "sheet") {
+      const [, kind, ms] = hash.split("/"), at = Number(ms);
+      if (kind === "form") { state.formsAt = at; state.formsOnly = "all"; state.formsQuery = ""; history.replaceState(null, "", "#forms"); return viewForms(); }
+      history.replaceState(null, "", "#today");
+      viewToday();
+      const roles = (state.data.roles || []).filter((r) => +dt(deadlineOf(r)) === at);
+      if (roles.length) {
+        const cards = roles.map((x) => roleCard(x, {}));
+        const t = TODAY.sheetTitle({ cards, at, now: liveNow() });
+        openActSheet({ title: t.title, sub: t.sub, cards, filters: true });
+      }
+      return;
+    }
     if (hash === "feed") return viewFeed();
     if (hash === "today") return viewToday();
     if (hash === "companies") return viewCompanies();

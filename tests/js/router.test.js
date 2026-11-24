@@ -33,7 +33,9 @@ test("FACT questions are answered by rules; OPEN ones go to the model; requests 
                    "how many roles close tonight", "what's due on 25 November", "summarise slice's JD"]) {
     assert.strictEqual(route(q).kind, "fact", q);
   }
-  for (const q of ["why should I pick slice over harness", "compare slice and aiprise", "tell me about slice", "hmm"]) {
+  for (const q of ["why should I pick slice over harness", "compare slice and aiprise", "tell me about slice", "hmm",
+                   "give me a plan for today's deadlines", "summarise this week for me in three lines",
+                   "what do you think about slice's roles for a data person?"]) {  // the last three: found by the live provider run
     assert.strictEqual(route(q).kind, "open", q);
   }
   assert.strictEqual(route("apply to slice for me").kind, "act");

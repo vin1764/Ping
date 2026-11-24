@@ -93,7 +93,7 @@ CV text:
 
 - **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Groq and Gemini keys are Supabase function secrets and never reach the browser
 - **When:** Only OPEN questions typed in the dashboard chat (summaries, "why", comparisons, advice, a follow-up with nothing new): every message is routed first (`route()` in `supabase/functions/_shared/answer_rules.js`), and FACT questions (what's due, tests and rooms, shortlists, CTC and its parts, bond, eligibility, which CV, applied, notices, a company's roles, counts), feedback ("X not relevant", "undo"), requests to act and "ok" are answered by rules with no model call. If no model answers, or the reply has a number that isn't in its FACTS, the rules answer instead. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
-- **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part. Groq gets the same prompt made compact: "All roles in the companies list" becomes only the roles of the companies in the question, the feed its newest 25 lines, and it's sent only if under 22,000 characters.
+- **Input:** `${...}` parts are filled in per question from the caller's own rows (Row Level Security applies: the owner's real data, or the anonymised demo for a demo session). See the template for each part. Groq gets the same prompt made compact: "All roles in the companies list" becomes only the roles of the companies in the question, the feed its newest 25 lines, and it's sent only if under 16,000 characters.
 - **Expected output:** Plain text, shown as Ping's chat reply. No JSON.
 - **Models, in fallback order:** `groq/openai/gpt-oss-120b` → `gemini-3.1-flash-lite`
 - Groq: OpenAI-compatible `chat/completions` (`supabase/functions/_shared/openai_compat.ts`); key `GROQ_API_KEY` for students and demo visitors, `GROQ_API_KEY_EVALS` for evals (no evals key: evals skip Groq); `PING_GROQ_MODEL` replaces the model; reasoning effort low, at most 1,500 tokens out
@@ -191,7 +191,7 @@ ${noticeLines.length ? `\nLatest notices for the companies in the question, newe
 FACTS end here.
 
 Conversation so far, oldest first:
-${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
+${convo || "(this is the first message)"}
 
 Question: ${ask}${replyNote}
 ````

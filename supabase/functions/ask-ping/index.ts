@@ -6,7 +6,7 @@
 // within 150 s. So dates are formatted with one shared formatter (making a new one per date was the
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
 import { caller, cors, json } from "../_shared/owner.ts";
-import { asksToAct, glance, stripRefusal, todayNote, wantsLists } from "./wording.ts";
+import { asksToAct, fitPrompt, glance, stripRefusal, todayNote, wantsLists } from "./wording.ts";
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
@@ -35,7 +35,9 @@ const PRIMARY = Deno.env.get("PING_CHAT_MODEL") || "gemini-3.1-flash-lite";
 const GROQ_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = Deno.env.get("PING_GROQ_MODEL") || "openai/gpt-oss-120b";
 const GROQ_MS = 6_000;
-const GROQ_MAX_CHARS = 22_000;       // about 5,500 tokens: with the answer, under the 8K tokens a minute
+const GROQ_MAX_CHARS = 16_000;       // about 5,000 tokens with numbers and names: with the answer, under 8K tokens a minute
+const GROQ_MAX_TOKENS = 900;
+
 const CHAT_CAP_MS = 15_000;
 const PRIMARY_WINDOW_MS = 10_000;
 const RETRY_PAUSE_MS = 500;
@@ -473,6 +475,7 @@ Deno.serve(async (req) => {
 
   // decided here, not by the model: only a request to act may get the read-only refusal
   const act = asksToAct(ask);
+  const convo = kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n");
   const prompt = `You are Ping, a placement assistant for one IIT Kharagpur student. Answer ONLY from the data below.
 Be short and concrete: dates in IST, times as HH:MM in 24-hour form (e.g. 20:00), money in rupees as written
 (e.g. 22,00,000 or 22 LPA). For pay questions, list every component the data gives (fixed / take-home, bonuses,
@@ -558,7 +561,7 @@ ${noticeLines.length ? `\nLatest notices for the companies in the question, newe
 FACTS end here.
 
 Conversation so far, oldest first:
-${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s+/g, " ")}`).join("\n") || "(this is the first message)"}
+${convo || "(this is the first message)"}
 
 Question: ${ask}${replyNote}`;
 
@@ -601,14 +604,17 @@ Question: ${ask}${replyNote}`;
                `Roles of the companies in the question:\n${roleLines.filter(own).join("\n") || "(none named; the lists above cover what's due)"}`)
       .replace(`Feed (things for this student):\n${feed.join("\n") || "(empty)"}`,
                `Feed (the newest 25 things for this student):\n${feed.slice(0, 25).join("\n") || "(empty)"}`);
-    if (c.length > GROQ_MAX_CHARS && blocks.length > 6000) c = c.replace(blocks, `${blocks.slice(0, 6000)}\n(… more in the app's Today panel)`);
-    return c.length <= GROQ_MAX_CHARS ? c : null;
+    return fitPrompt(c, [
+      // least needed first: each is cut (at a line end) only as far as the prompt is still over the limit
+      feed.slice(0, 25).join("\n"), JSON.stringify(prof), listLines.join("\n"), noticeLines.join("\n"),
+      { text: convo, oldestFirst: true }, roleLines.filter(own).join("\n"), detailLines.join("\n"), blocks, ruledFacts || "",
+    ], GROQ_MAX_CHARS);
   })();
   const callGroq = async (limit: number): Promise<{ answer?: string; busy: boolean }> => {
     const name = `groq/${GROQ_MODEL}`;
     if (!compactPrompt) { tried.push(`${name}:skipped(prompt too big)`); return { busy: false }; }
     const r = await chatComplete({ baseUrl: GROQ_URL, key: groqKey, model: GROQ_MODEL, prompt: compactPrompt, timeoutMs: limit,
-                                   maxTokens: 1500, extra: /gpt-oss/.test(GROQ_MODEL) ? { reasoning_effort: "low", include_reasoning: false } : {} });
+                                   maxTokens: GROQ_MAX_TOKENS, extra: /gpt-oss/.test(GROQ_MODEL) ? { reasoning_effort: "low", include_reasoning: false } : {} });
     tried.push(`${name}:${r.status || r.error}:${r.ms}ms`);
     if (r.status !== 200) {
       if (r.status) console.error(JSON.stringify({ event: "groq_error", model: name, status: r.status, body: r.error }));

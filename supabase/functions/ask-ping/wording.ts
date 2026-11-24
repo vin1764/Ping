@@ -146,3 +146,27 @@ export function roleLists(roles: ListRole[], marks: Map<string, { relevant: bool
 // answered better without them).
 const LISTY = /\b(due|clos\w*|deadline\w*|tonight|today|tomorrow|this week|next week|relevant|for me|apply\w*|roles?|open|which|anything|what else|list\w*|cv)\b/i;
 export const wantsLists = (q: string) => LISTY.test(q);
+
+// The prompt cut to max characters for a model with a small token budget: each section (least needed first) loses
+// lines until the prompt fits, the last lines (or, for the conversation, the oldest). The instructions, Now, the
+// at-a-glance counts and the question are never cut. null if even that can't fit.
+export function fitPrompt(prompt: string, sections: (string | { text: string; oldestFirst?: boolean })[], max: number): string | null {
+  let out = prompt;
+  for (const s of sections) {
+    if (out.length <= max) break;
+    const sec = typeof s === "string" ? s : s.text, oldest = typeof s !== "string" && !!s.oldestFirst;
+    if (!sec || sec.length < 200 || !out.includes(sec)) continue;
+    const cut = out.length - max + 40;
+    let keep: string;
+    if (oldest) {
+      keep = sec.slice(Math.min(sec.length, cut));
+      keep = keep.slice(keep.indexOf("\n") + 1 || keep.length);
+    } else {
+      keep = sec.slice(0, Math.max(0, sec.length - cut));
+      keep = keep.slice(0, Math.max(0, keep.lastIndexOf("\n")));
+    }
+    const note = "(… more in the app)";
+    out = out.replace(sec, () => (oldest ? `${note}\n${keep}` : `${keep}${keep ? "\n" : ""}${note}`));
+  }
+  return out.length <= max ? out : null;
+}

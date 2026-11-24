@@ -1,4 +1,4 @@
-import { asksToAct, glance, stripRefusal, todayNote } from "./wording.ts";
+import { asksToAct, glance, stripRefusal, todayNote, fitPrompt } from "./wording.ts";
 const eq = (a: unknown, b: unknown) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} != ${JSON.stringify(b)}`); };
 
 Deno.test("only requests to act get the refusal", () => {
@@ -41,4 +41,22 @@ Deno.test("today and this week, counted", () => {
     "Application deadlines still open today: 2 roles at 2 companies (1 not applied, 1 applied: ESRI, SLB) close at 20:00 (later today, in 1h 25m)",
     "Application deadlines from now to the end of this week (Sunday; today counts as this week): Sat 21 Nov 20:00: 2 roles at 2 companies (1 not applied, 1 applied: ESRI, SLB); Sun 22 Nov 20:00: 1 role at 1 company (1 not applied, 0 applied: Pine Labs)",
   ]);
+});
+
+const assert = (c: boolean) => { if (!c) throw new Error("assertion failed"); };
+const assertEquals = eq;
+Deno.test("fitPrompt cuts the least needed sections, at line ends, to the limit", () => {
+  const feed = Array.from({ length: 40 }, (_, i) => `- feed line ${i} with some words to make it long enough`).join("\n");
+  const convo = Array.from({ length: 30 }, (_, i) => `Student: question ${i} asked about something long`).join("\n");
+  const blocks = "Close tonight 20:00:\n- Groww — APM";
+  const prompt = `INSTRUCTIONS\nFeed:\n${feed}\nLists:\n${blocks}\nConversation:\n${convo}\nQuestion: why?`;
+  const out = fitPrompt(prompt, [feed, { text: convo, oldestFirst: true }, blocks], 1500)!;
+  const some = fitPrompt(prompt, [feed, { text: convo, oldestFirst: true }, blocks], 2600)!;
+  assert(some.length <= 2600 && some.includes("feed line 0") && !some.includes("feed line 39"));
+  assert(out.length <= 1500);
+  assert(out.includes("INSTRUCTIONS") && out.includes("Question: why?") && out.includes("- Groww — APM"));
+  assert(!out.includes("feed line 39"));
+  assert(out.includes("question 29"));                                       // the conversation keeps its latest turns
+  assertEquals(fitPrompt("x".repeat(3000), [], 1500), null);
+  assertEquals(fitPrompt(prompt, [feed], 100_000), prompt);
 });

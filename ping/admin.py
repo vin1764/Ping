@@ -878,7 +878,7 @@ def push_examples(secrets) -> int:
         else:
             say(f"-. {label}: nothing of this type in your data")
     # grouped: the deadline with the most to do
-    for typ, label in (("apply", "Grouped applications"), ("form", "Grouped forms")):
+    for typ, label in (("apply", "Grouped applications"), ("new", "Grouped new roles"), ("form", "Grouped forms")):
         by: dict = {}
         for x in every:
             if x["type"] == typ:

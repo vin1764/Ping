@@ -79,6 +79,8 @@ function truth(company, field, d) {
     const t = items.filter((i) => i.category !== "ppt" && (i.category === "test" || i.kind === "test_rooms" || i.kind === "interview") && i.event_at)
       .sort((a, b) => ms(b.event_at) - ms(a.event_at))[0];
     if (t) return { src: "notice", token: hm(t.event_at) };
+    // a test notice without a time yet is still a test
+    if (items.some((i) => i.category === "test" && !i.event_at)) return { src: "notice", token: "test" };
     return { absent: true };
   }
   if (field === "shortlist") {

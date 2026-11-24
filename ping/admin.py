@@ -856,10 +856,8 @@ def push_examples(secrets) -> int:
                        ("shortlist", "Shortlist"), ("new", "New role for you")):
         a = next((x for x in sorted(every, key=lambda x: x["at"] or now) if x["type"] == typ), None)
         if a:
-            note = push.compose([a["item"]], roles, now)
-            if note:
-                show(label, note, "")
-                continue
+            show(label, push.render([a], now), "")
+            continue
         # nothing open of this type now: its latest example, as it read 3 h before its time
         for it in sorted(items, key=lambda i: str(i.get("due_at") or i.get("event_at") or i.get("first_seen") or ""), reverse=True):
             at = push._at(it.get("due_at") or it.get("event_at")) or push._at(it.get("first_seen"))
@@ -868,7 +866,7 @@ def push_examples(secrets) -> int:
             then = at - timedelta(hours=3)
             got = [x for x in push.acts([it], roles, then) if x["type"] == typ]
             if got:
-                show(label, push.compose([it], roles, then), f"as on {then:%a %d %b %H:%M}")
+                show(label, push.render(got[:1], then), f"as on {then:%a %d %b %H:%M}")
                 break
         else:
             say(f"-. {label}: nothing of this type in your data")
@@ -880,7 +878,7 @@ def push_examples(secrets) -> int:
                 by.setdefault(x["at"], []).append(x)
         best = max(by.values(), key=len, default=[])
         if len(best) > 1:
-            show(label, push.compose(list({id(x["item"]): x["item"] for x in best}.values()), roles, now), "")
+            show(label, push.render(best, now), "")
     return 0
 
 

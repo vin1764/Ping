@@ -148,11 +148,14 @@ def acts(items: list[dict], roles: dict[str, dict], now: datetime) -> list[dict]
     don't name you and other roles are left out."""
     out = []
     for it in items:
-        if it.get("level") == "hidden" or it.get("dismissed") or it.get("done"):
-            continue
         d = it.get("details") or {}
+        # a message folded into a digest is stored hidden but still to do (as on Today)
+        if (it.get("level") == "hidden" and "digest" not in str(d.get("hidden_because") or "")) or it.get("dismissed") or it.get("done"):
+            continue
         cat, kind = it.get("category"), d.get("kind")
-        if cat in ("digest", "listing") or kind in ("application", "listing"):
+        if cat in ("digest", "listing") and kind not in ("application", "listing"):
+            continue                                  # a forms digest: its forms are their own to-dos below
+        if kind in ("application", "listing"):
             # the For you rows only (when the roles are marked); every pending row when nothing is marked
             groups = d.get("list") or []
             marked = any(str(g.get("head", "")).split(" · ")[-1].startswith(("For you", "Others")) for g in groups)
@@ -161,8 +164,8 @@ def acts(items: list[dict], roles: dict[str, dict], now: datetime) -> list[dict]
             typ = "new" if kind == "listing" else "extended" if d.get("role") in ("moved", "update") and "moved" in (it.get("title") or "").lower() else "apply"
             for r in rows:
                 role = _role_of(roles, r.get("id"))
-                if role.get("applied") or r.get("tag") == "done":
-                    continue
+                if not role or role.get("applied") or r.get("tag") == "done":
+                    continue                          # only rows that are roles you haven't applied to
                 text = str(r.get("text") or "")
                 co = role.get("company") or text.split(" — ")[0]
                 label = role.get("designation") or (text.split(" — ", 1)[1] if " — " in text else "")
@@ -180,7 +183,10 @@ def acts(items: list[dict], roles: dict[str, dict], now: datetime) -> list[dict]
             at = _at(it.get("due_at"))
             if (d.get("form") or {}).get("filled") or not at or at <= now:
                 continue
-            typ = "extended" if d.get("extended") or (d.get("form") or {}).get("extended") else "form"
+            # extended: only when the extension is new (in the last 3 h), never for a form's old history
+            last = (d.get("extended") or [{}])[-1] if d.get("extended") else {}
+            moved_at = _at(last.get("at") or last.get("seen_at"))
+            typ = "extended" if moved_at and now - moved_at < timedelta(hours=3) else "form"
             out.append({"type": typ, "form": True, "company": display_name(it.get("company") or ""), "role": "", "cv": None,
                         "at": at, "item": it})
         elif cat in ("test",) or kind in ("test", "test_rooms", "interview"):
@@ -231,7 +237,11 @@ def _line(a: dict, now: datetime, with_company: bool = True) -> str:
 def compose(items: list[dict], roles: dict[str, dict], now: datetime) -> dict | None:
     """The one notification for these new messages (the most urgent thing to do), or None. Several things due at the
     same time in this run become one: '2 to apply by tomorrow 20:00', one per line (first 3, then 'and N more')."""
-    all_acts = acts(items, roles, now)
+    return render(acts(items, roles, now), now)
+
+
+def render(all_acts: list[dict], now: datetime) -> dict | None:
+    """The notification for these things to do: the most urgent, with the others due at the same time grouped."""
     if not all_acts:
         return None
     far = datetime.max.replace(tzinfo=IST)

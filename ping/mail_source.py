@@ -1,22 +1,22 @@
 """The institute mailbox as a source: placement mail only, read-only, privacy-first (docs/SECURITY.md, "Mailbox").
 
-Two steps, so a mail that isn't about placements is never read beyond its headers:
-
-1. scope(head): From, Subject, Date and List-Unsubscribe / Precedence only. A mail is kept when
-   - it comes from the placement office (a CDC / placement / career-development / training-and-placement address,
-     or an address in PING_PLACEMENT_SENDERS), or
-   - it names a company in the ERP companies list (subject, sender name or sender domain; the same company matching
-     as notices, incl. "PineLabs" for "Pine Labs" and one typo in a long name), or
-   - it comes from an online-test platform, or its subject carries a placement signal: test link, assessment,
-     shortlist, interview, pre-placement talk / PPT, offer letter / PPO, placement, recruitment, campus drive;
-     "form", "deadline", "offer", "registration" or "last date" count only next to a word like internship, job,
-     role, hiring, campus, CV or candidate.
-   Never kept: OTP / verification-code mails (used for the ERP login only, never stored or shown), account and
-   shopping mails (security alert, password, receipt, order...), job-board alerts (LinkedIn, Naukri...), and bulk
-   mail (List-Unsubscribe) unless it is from the placement office, a listed company or a test platform.
-2. read(): for kept mails only, the whole message: company, kind, deadline / date-time, links, and PDF / Excel
-   attachments through the notice attachment checker (only your row and the table heading are kept).
-
+Rules v3 (24 Nov). A mail is placement mail when
+  - it comes from the placement office (a CDC / placement / career-development / training-and-placement address, or
+    an address in PING_PLACEMENT_SENDERS), or
+  - it comes from a listed company: its own domain or its full name (ping/mail_names.py; never a parent company or a
+    first word alone: ICICI Bank is not ICICI Lombard), or names one in the subject, or
+  - it comes from a test / hiring platform (HackerRank, HackerEarth, Mettl/Mercer, SHL, Unstop, Codility, iMocha, AMCAT,
+    Aon, Talview, HireVue, Superset, Workday, Greenhouse, Lever, SuccessFactors...) or a sender that sent you a test
+    link before, or
+  - it is in a thread with a placement mail, or with a mail you sent about an application, or
+  - its subject carries a placement signal (test link, assessment, shortlist, interview, PPT / PPO, offer letter,
+    placement, recruitment...; "form", "deadline", "registration" only next to a hiring word), or
+  - its body names a listed company by its full name together with a placement word (application, assessment, test,
+    interview, shortlist, offer, PPO, slot, round, JD).
+Never kept: OTP mails (used for the ERP login only, never stored), account and shopping mail, job-board alerts, and bulk
+mail (a List-Unsubscribe header, or a newsletter / marketing sender) unless it is from the placement office or a test
+platform with a test link in it. The body of a mail the headers don't settle is read in memory to decide and dropped;
+for a kept mail only a short summary, its links and its attachments' checks are stored, never the body.
 Nothing here changes "applied": that comes from the ERP alone.
 """
 
@@ -33,7 +33,7 @@ from .mailbox import Attachment, Head, Mail, extract_otp
 from .matching import CompanyIndex, compact, tokens
 from .pdfs import check_attachment
 
-RULES_VERSION = 2   # 2: a JD / role description (attachment or the mail itself) is kept whole
+RULES_VERSION = 3   # 2: a JD kept whole; 3: own domain / full name, bulk guard, platforms, threads, body check, summary only
 KINDS = ("form", "test", "interview", "shortlist", "ppt", "offer", "announcement")
 
 OTP_RE = re.compile(r"\botp\b|one[\s-]*time[\s-]*pass(?:word|code)?|verification code|login code|"
@@ -43,7 +43,16 @@ PLACEMENT_SENDER = re.compile(
     r"training\s*(?:&|and)\s*placement|recruitment\s*cell)\b", re.I)
 TEST_PLATFORMS = ("hackerrank", "hackerearth", "mettl", "codility", "codesignal", "imocha", "shl", "aon",
                   "talview", "hirepro", "amcat", "cocubes", "glider", "testgorilla", "karat", "mercer",
-                  "superset", "joinsuperset", "hirevue", "interviewbit", "myanatomy", "eklavvya")
+                  "superset", "joinsuperset", "hirevue", "interviewbit", "myanatomy", "eklavvya", "unstop",
+                  "dare2compete", "workday", "myworkday", "myworkdayjobs", "greenhouse", "lever", "successfactors",
+                  "sapsf", "smartrecruiters", "icims", "taleo", "cut-e")
+NEWSLETTER_SENDER = re.compile(r"(^|[.\-_])(news|newsletters?|marketing|promo(tions?)?|offers|deals|mailers?|campaigns?|"
+                               r"digest|bulletin|updates)([.\-_]|$)", re.I)
+PLACEMENT_WORD = re.compile(r"\b(applications?|applied|assessments?|tests?|interviews?|shortlist(?:ed)?|offers?|ppo|"
+                            r"slots?|rounds?|jd|job description)\b", re.I)
+APPLIED_WORD = re.compile(r"\bappl(?:y|ied|ication)\b|\bresume\b|\bcv\b", re.I)
+FACT_RE = re.compile(r"ctc|stipend|lpa|salary|eligib|cgpa|venue|location|round|slot|duration|bond|dress code|reporting",
+                     re.I)
 JOB_BOARDS = ("linkedin", "naukri", "indeed", "glassdoor", "internshala", "instahyre", "foundit", "monster",
               "apna", "cutshort", "wellfound", "angel", "timesjobs", "shine", "iimjobs", "hirist")
 MAIL_HOSTS = ("gmail", "googlemail", "outlook", "hotmail", "yahoo", "live", "icloud", "proton", "protonmail",
@@ -91,7 +100,8 @@ class Stats:
     def as_dict(self) -> dict:
         return {"headers_seen": self.headers_seen, "kept": self.kept, "bodies_read": self.bodies_read,
                 "attachments_read": self.attachments_read, "otp_skipped": self.otp_skipped,
-                "dropped": dict(self.dropped), "kept_because": dict(self.kept_because)}
+                "dropped": dict(self.dropped), "kept_because": dict(self.kept_because),
+                "bodies_read_to_decide": getattr(self, "bodies_read_to_decide", 0)}
 
 
 # --------------------------------------------------------------------------- step 1: headers only
@@ -146,35 +156,83 @@ def find_companies(text: str, index: CompanyIndex, domains: list[str] | None = N
     return found
 
 
-def scope(head: Head, index: CompanyIndex, extra_senders: tuple[str, ...] = ()) -> Verdict:
-    """Keep this mail or not, from its headers alone (module docstring)."""
+def _names(index: CompanyIndex):
+    from .mail_names import Names
+    if getattr(index, "_mail_names", None) is None:
+        index._mail_names = Names(index)
+    return index._mail_names
+
+
+def is_bulk(head: Head) -> bool:
+    """A List-Unsubscribe / Precedence: bulk header, or a newsletter / marketing sender (news@, offers@, *.news)."""
+    _, local, domain = _address(head.sender)
+    return bool(head.bulk or NEWSLETTER_SENDER.search(local) or NEWSLETTER_SENDER.search(domain))
+
+
+def platform_of(head: Head) -> str | None:
+    name, _, domain = _address(head.sender)
+    words = set(_domain_words(domain)) | set(re.split(r"[^a-z0-9\-]+", name.lower()))
+    return next((p for p in TEST_PLATFORMS if p in words), None)
+
+
+def scope(head: Head, index: CompanyIndex, extra_senders: tuple[str, ...] = (), *, test_senders=frozenset(),
+          threads=frozenset(), me: str = "") -> Verdict:
+    """Keep this mail or not, from its headers (module docstring). signal="body" (not kept yet): read the body in
+    memory to decide; signal="test_link": a platform's bulk mail, kept only with a test link in it."""
     subject = head.subject or ""
     name, local, domain = _address(head.sender)
     addr = f"{local}@{domain}"
     if OTP_RE.search(subject):
         return Verdict(False, "otp")
+    if me and addr == me.lower():
+        return Verdict(False, "yours")                    # a mail you sent: only its thread counts
     dwords = _domain_words(domain)
-    sender_text = f"{name} {local}"
-    office = bool(PLACEMENT_SENDER.search(sender_text) or PLACEMENT_SENDER.search(" ".join(dwords))) or \
+    office = bool(PLACEMENT_SENDER.search(f"{name} {local}") or PLACEMENT_SENDER.search(" ".join(dwords))) or \
         any(s and (s.lower() == addr or addr.endswith("@" + s.lower().lstrip("@")) or s.lower() == domain)
             for s in extra_senders)
-    if any(w in JOB_BOARDS for w in dwords) and not office:
-        return Verdict(False, "job_board")
-    if NOT_PLACEMENT.search(subject) and not office:
-        return Verdict(False, "not_placement")
     if office:
-        return Verdict(True, "placement_office")
+        return Verdict(True, "placement_office", signal=signal(subject))
+    if any(w in JOB_BOARDS for w in dwords):
+        return Verdict(False, "job_board")
+    if NOT_PLACEMENT.search(subject):
+        return Verdict(False, "not_placement")
     sig = signal(subject)
-    companies = find_companies(f"{subject} {name}", index, dwords)
-    # a listed company's newsletter or promotion (bulk mail) is kept only when its subject is about hiring
-    if companies and (not head.bulk or sig or CONTEXT.search(subject) or re.search(r"applica", subject, re.I)):
-        return Verdict(True, "company", companies[0] if len(companies) == 1 else None, sig)
-    if any(w in TEST_PLATFORMS for w in dwords):
-        return Verdict(True, "test_platform", signal=sig)
-    if head.bulk:
+    plat = platform_of(head)
+    bulk = is_bulk(head)
+    if plat or addr in test_senders:
+        if bulk:
+            return Verdict(False, "bulk", signal="test_link")        # kept only if the body has a test link
+        return Verdict(True, "test_platform" if plat else "test_sender", signal=sig)
+    if bulk:
         return Verdict(False, "bulk")
+    if head.thread and head.thread in threads:
+        return Verdict(True, "thread", signal=sig)
+    names = _names(index)
+    co = names.in_sender(name, domain)
+    if co:
+        return Verdict(True, "company", co, sig)
+    cos = names.in_text(subject)
+    if cos:
+        return Verdict(True, "company", cos[0] if len(cos) == 1 else None, sig)
     if sig:
         return Verdict(True, "signal", signal=sig)
+    return Verdict(False, "no_placement_signal", signal="body")
+
+
+def body_decides(head: Head, text: str, links: list[str], index: CompanyIndex, need: str) -> Verdict:
+    """For a mail the headers didn't settle. need="test_link": a platform's bulk mail with a test link to a test
+    platform; need="body": a listed company by its full name together with a placement word."""
+    if need == "test_link":
+        ok = any(any(p in re.sub(r"^https?://([^/]+).*", r"\1", u.lower()) for p in TEST_PLATFORMS)
+                 and re.search(r"/(tests?|assess\w*|exams?|invit\w*|challenges?|candidates?|interviews?|attempt)\b", u, re.I)
+                 and not JUNK_LINK.search(u) for u in clean_links(links))
+        return Verdict(ok, "test_platform" if ok else "bulk")
+    blob = f"{head.subject}\n{(text or '')[:20000]}"
+    cos = _names(index).in_text(blob)
+    if not cos:
+        return Verdict(False, "no_placement_signal")
+    if PLACEMENT_WORD.search(blob):
+        return Verdict(True, "company_in_body", cos[0] if len(cos) == 1 else None)
     return Verdict(False, "no_placement_signal")
 
 
@@ -268,10 +326,12 @@ def read(mail: Mail, attachments: list[Attachment], verdict: Verdict, index: Com
     if extract_otp(mail.subject, mail.text) or OTP_RE.search(mail.subject):
         return None
     company = verdict.company
+    names = _names(index)
+    sname, _, sdomain = _address(mail.sender)
     if company is None:
-        _, _, domain = _address(mail.sender)
-        hits = find_companies(f"{mail.subject} {_address(mail.sender)[0]}", index, _domain_words(domain)) \
-            or index.scan_text(mail.text[:4000])
+        company = names.in_sender(sname, sdomain)
+    if company is None:
+        hits = names.in_text(mail.subject) or names.in_text(mail.text[:4000])
         company = hits[0] if len(hits) == 1 else None
     checks = []
     for a in attachments[:3]:
@@ -293,28 +353,66 @@ def read(mail: Mail, attachments: list[Attachment], verdict: Verdict, index: Com
     kind = classify(mail.subject, mail.text, links, on_a_list=bool(mine) or a_list)
     due, event, words = moments(f"{mail.subject}\n{mail.text}", mail.received, kind)
     sender = re.sub(r"\s+", " ", mail.sender)[:200]
+    plat = platform_of(Head(mail.uid, mail.received, mail.sender, mail.subject))
+    source = f"mail from {company or (plat.capitalize() if plat else '') or sname or sdomain or 'your mailbox'}"
     return {"id": mail_id(mail.received, mail.sender, mail.subject), "received_at": mail.received.isoformat(),
             "sender": sender, "subject": re.sub(r"\s+", " ", mail.subject)[:300],
-            "snippet": " ".join(mail.text.split())[:300], "company": company, "links": links, "kind": kind,
+            # never the body: what it asks, when, and the facts that matter (CTC, eligibility, venue, slot...)
+            "snippet": summary(kind, company or plat, due, event, mail.text), "source": source,
+            "company": company, "links": links, "kind": kind,
             "main_link": main_link(kind, links), "due_at": due, "event_at": event, "when_text": words,
             "pdf": pdf, "kept_because": verdict.because + (f":{verdict.signal}" if verdict.signal else ""),
             "rules_version": RULES_VERSION}
 
 
+KIND_WORDS = {"form": "Form", "test": "Test", "interview": "Interview", "shortlist": "Shortlist", "ppt": "Pre-placement talk",
+              "offer": "Offer", "announcement": "Update"}
+
+
+def summary(kind: str, who: str | None, due: str | None, event: str | None, text: str) -> str:
+    """What a kept mail says, in a line: "Interview · EY GDS · 28 Nov 11:00", then up to two sentences with facts that
+    matter (CTC, eligibility, venue, slot...). Never the body itself."""
+    head = " · ".join(x for x in (KIND_WORDS.get(kind, "Update"), who or "", (event or due or "")[:16].replace("T", " ")) if x)
+    facts = [x.strip() for x in re.split(r"(?<=[.!?])\s+|\n+", text or "") if FACT_RE.search(x) and 8 <= len(x.strip()) <= 160]
+    return (head + (". " + " ".join(facts[:2]) if facts else ""))[:320]
+
+
 def scan(mailbox, since: datetime, index: CompanyIndex, roll: str, name: str = "",
-         extra_senders: tuple[str, ...] = (), limit: int = 400) -> tuple[list[dict], Stats]:
-    """Placement mails since `since`: headers of everything, bodies of kept mails only."""
+         extra_senders: tuple[str, ...] = (), limit: int | None = None, *, test_senders=frozenset(),
+         threads=frozenset(), me: str = "") -> tuple[list[dict], Stats]:
+    """Placement mails since `since`: headers of everything (paged, no cap), the body of a kept mail, and the body of
+    an undecided one read in memory to decide (never stored)."""
     st = Stats()
     rows = []
-    for head in mailbox.heads_after(since, limit=limit):
+    heads = mailbox.heads_after(since, limit=limit) if limit else mailbox.heads_after(since)
+    me = (me or getattr(mailbox, "address", "") or "").lower()
+    # threads: a placement mail's (kept before, or kept by the headers now), and one where you sent an application
+    first = {h.uid: scope(h, index, extra_senders, test_senders=test_senders, me=me) for h in heads}
+    threads = set(threads) | {h.thread for h in heads if h.thread and first[h.uid].keep} | \
+        {h.thread for h in heads if h.thread and me and me in (h.sender or "").lower() and APPLIED_WORD.search(h.subject or "")}
+    st.threads = sorted(t for t in threads if t)
+    for head in heads:
         st.headers_seen += 1
-        v = scope(head, index, extra_senders)
-        if not v.keep:
+        v = first[head.uid]
+        if not v.keep and v.because not in ("otp", "yours") and head.thread in threads and not is_bulk(head) \
+                and v.because not in ("job_board", "not_placement"):
+            v = Verdict(True, "thread", signal=v.signal if v.signal not in ("body", "test_link") else None)
+        if not v.keep and v.signal in ("body", "test_link"):
+            full = mailbox.fetch_full(head.uid)
+            st.bodies_read_to_decide = getattr(st, "bodies_read_to_decide", 0) + 1
+            if full:
+                v = body_decides(head, full[0].text, full[0].links, index, v.signal)
+            if not v.keep:
+                st.dropped[v.because] = st.dropped.get(v.because, 0) + 1
+                continue
+        elif not v.keep:
             st.dropped[v.because] = st.dropped.get(v.because, 0) + 1
             if v.because == "otp":
                 st.otp_skipped += 1
             continue
-        full = mailbox.fetch_full(head.uid)
+        else:
+            full = None
+        full = full or mailbox.fetch_full(head.uid)
         st.bodies_read += 1
         if not full:
             continue

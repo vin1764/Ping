@@ -2763,7 +2763,7 @@
         ccRow("Message", it.title),
         ccRow("Shown as", it.needs_review ? "Question" : LEVELS[it.level]),
         due ? ccRow(it.due_at ? "Due" : "When", when(due)) : null,
-        d.via === "email" ? ccRow("From", "Your placement mail") : d.mail?.note ? ccRow("Also", d.mail.note) : null,
+        d.via === "email" ? ccRow("From", d.source ? d.source.replace(/^mail from /, "Mail from ") : "Your placement mail") : d.mail?.note ? ccRow("Also", d.mail.note) : null,
         ccLinks(it.company ? h("a", { class: "act-btn", href: companyHref(it.company) }, "Company") : null,
           it.notice_id ? noticeButtons([it.notice_id]) : null,
           it.notice_id && it.pdf_status ? Object.assign(pdfLink(it), { className: "act-btn" }) : null,

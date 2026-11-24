@@ -467,6 +467,7 @@ def _mail_item(m: dict, roles: list[dict], elig: dict, profile: dict, now: datet
         why = "not eligible: " + "; ".join(elig[picked[0]["id"]]["reasons"])
     level = "hidden" if why else "always" if (pst == "yes" or kind == "offer" or applied) else "show"
     details = {"via": "email", "kind": kind if kind != "form" else "form", "subject": subject,
+               "source": m.get("source") or f"mail from {who}",
                "mail": {"from": m.get("sender"), "subject": subject, "received_at": m.get("received_at"), "link": link,
                         "id": m["id"]},
                "links": (m.get("links") or [])[:10], "when_text": m.get("when_text"), "applied": bool(applied)}

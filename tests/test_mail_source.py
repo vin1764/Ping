@@ -23,14 +23,18 @@ def scanned():
     return fx, fake, rows, st
 
 
-def test_noise_is_never_read_beyond_headers(scanned):
+def test_noise_is_read_only_as_far_as_needed_and_never_kept(scanned):
     fx, fake, rows, st = scanned
-    noise = {m["uid"] for m in fx if not m["placement"]}
-    assert sorted(fake.headers_read, key=int) == [m["uid"] for m in fx]       # every mail: headers only first
-    assert not noise & set(fake.bodies_read)                                    # no noise body, ever
-    assert set(fake.bodies_read) == {m["uid"] for m in fx if m["placement"]}
+    by_label = {m["label"]: m["uid"] for m in fx}
+    assert sorted(fake.headers_read, key=int) == [m["uid"] for m in fx]       # every mail: headers first
+    # OTP, job-board, shopping, newsletter and account mail: never opened
+    never = {by_label[x] for x in ("OTP", "job-board alert naming a listed company", "shopping", "newsletter", "account security")}
+    assert not never & set(fake.bodies_read)
+    # a personal mail the headers don't settle: read in memory to decide (a listed company with a placement word?)
+    undecided = {by_label[x] for x in ("course deadline", "fest registration", "library", "hostel, placement words only in the body", "lecture slides")}
+    assert set(fake.bodies_read) == {m["uid"] for m in fx if m["placement"]} | undecided
     assert fake.writes == []                                                    # read-only
-    assert st.headers_seen == 20 and st.kept == 10 and st.bodies_read == 10
+    assert st.headers_seen == 20 and st.kept == 10 and st.as_dict()["bodies_read_to_decide"] == 6   # 5 + the bulk test invite
 
 
 def test_nothing_of_the_noise_or_the_otp_is_stored(scanned):
@@ -40,6 +44,13 @@ def test_nothing_of_the_noise_or_the_otp_is_stored(scanned):
         if not m["placement"]:
             assert m["subject"] not in stored
     assert OTP_CODE not in stored and "OTP" not in stored and st.otp_skipped == 1
+    assert "packed lunch" not in stored and "Mess menu" not in stored
+
+
+def test_only_a_summary_is_kept_never_the_body(scanned):
+    fx, _, rows, _ = scanned
+    for r in rows:
+        assert len(r["snippet"]) <= 320 and "Dear students" not in r["snippet"] and r["source"].startswith("mail from ")
 
 
 def test_why_each_noise_mail_was_dropped(scanned):
@@ -48,6 +59,9 @@ def test_why_each_noise_mail_was_dropped(scanned):
     index = CompanyIndex(ROLES)
     for m in fx:
         v = mail_source.scope(parse_head(m["uid"], m["raw"], None), index)
+        if m["label"] == "test platform invite":            # a platform's bulk mail: kept only with a test link (body)
+            assert not v.keep and v.signal == "test_link"
+            continue
         assert v.keep == m["placement"], m["label"]
         if not m["placement"]:
             assert v.because == m["expect"]["because"], m["label"]

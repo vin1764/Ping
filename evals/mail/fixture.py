@@ -179,6 +179,13 @@ class FakeIMAP:
         cmd = cmd.upper()
         if cmd == "SEARCH":
             return "OK", [" ".join(self.by_uid).encode()]
+        if cmd == "FETCH" and "," in args[0]:       # a page of uids ("1,2,3"), as a real server answers it
+            out = []
+            for u in args[0].split(","):
+                typ, data = self.uid("FETCH", u, args[1])
+                if typ == "OK":
+                    out += data
+            return "OK", out
         if cmd == "FETCH":
             uid, what = args[0], args[1]
             raw = self.by_uid.get(uid)

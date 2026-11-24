@@ -240,3 +240,17 @@ Decisions:
   type (a fixed list of generic types, the same in dashboard/forms.js and ping/forms.py), Ping asks once in the chat;
   only "Yes" saves the kind ("stop showing X forms"), answered in the page; "keep showing X forms" undoes it.
 - A demo session's rows never count for the owner's run (is_demo, the same rule as ticks).
+
+## 24 Nov: mail rules v3
+
+- The 30-day dry run of the wider filter as first specified kept 90 more mails, almost all noise (Unstop newsletters,
+  ICICI Bank as ICICI Lombard, "futures" as Futures First, Swiggy promotions). Tightened before it went live: a
+  company only by its own domain or full name, never bulk mail except the placement office or a test platform's mail
+  with a test link. The tightened dry run kept 4 more; with the bulk guard, 2 (an EY recruiter, "buddy connect", no
+  date or link: saved under EY GDS, not posted; the v3 re-read is silent anyway).
+- The 3 ERP-mailer mails the filter skipped in 10 days were an exam rescheduling, a campus security advisory and a
+  talent-search exam: not placement, and "placement word in the subject" stays as it is.
+- Mail is read in every run, also when the ERP login failed; headers are paged (no 400 cap on a re-read).
+- The body of an undecided personal mail is read in memory to decide (your rule "the body names a listed company with
+  a placement word"); OTP, account, shopping, job-board and bulk mail is never opened. A kept mail stores a summary,
+  never the body.

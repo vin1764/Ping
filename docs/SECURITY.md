@@ -75,29 +75,33 @@ session's message and an owner message (posted with the service key, deleted rig
 The institute mailbox is opened read-only (IMAP `EXAMINE`, every fetch is `BODY.PEEK`: nothing is marked read,
 moved, flagged or deleted). Ping reads it in two steps (`ping/mail_source.py`, `ping/mailbox.py`):
 
-**Step 1, every new mail: headers only.** `BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE LIST-UNSUBSCRIBE PRECEDENCE)]`.
-The filter decides from these alone, in this order:
+**Step 1, every new mail: headers only** (rules v3, 24 Nov). `BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE
+LIST-UNSUBSCRIBE PRECEDENCE)]` and Gmail's thread id, fetched in pages with no cap. In this order:
 
 | # | rule | result |
 |---|---|---|
-| 1 | subject says OTP / one-time password / verification code / login, security or sign-in code | **dropped**: OTP mails are used for the ERP login only (searched separately by the word "OTP" during login), never stored or shown |
-| 2 | sender is a job board (LinkedIn, Naukri, Indeed, Glassdoor, Internshala, Instahyre, Foundit, Monster, Apna, Cutshort, Wellfound, Angel, TimesJobs, Shine, IIMJobs, Hirist) and not the placement office | dropped |
-| 3 | subject is an account or shopping mail (security alert, sign-in, password, "verify your email/account", receipt, invoice, order shipped/delivered, refund, payment, subscription, newsletter, unsubscribe, % off, sale, cashback, coupon) and the sender isn't the placement office | dropped |
-| 4 | sender is the placement office: the name, address or domain has CDC, placement(s), placement cell, career development, TnP, T&P, training and/or placement, recruitment cell; or the address/domain is in `PING_PLACEMENT_SENDERS` (comma-separated, optional) | **kept** |
-| 5 | subject, sender name or sender domain names a company in the ERP companies list (whole name, name written together, its distinctive first word, or one typo in a word of 6+ letters, as notices are matched); a bulk mail (List-Unsubscribe / Precedence: bulk) from it only with a hiring word in the subject | **kept** |
-| 6 | sender domain is an online-test platform (HackerRank, HackerEarth, Mettl, Codility, CodeSignal, iMocha, SHL, Aon, Talview, HirePro, AMCAT, CoCubes, Glider, TestGorilla, Karat, Mercer, Superset, HireVue, InterviewBit, MyAnatomy, Eklavvya) | **kept** |
-| 7 | any other bulk mail | dropped |
-| 8 | subject has a placement signal: test link, assessment, online/coding/aptitude/written test, shortlist, interview, pre-placement talk, offer letter, job offer, pre-placement offer, placement, recruitment, campus drive/hiring/recruitment, hiring process, selection process. Weaker words (form, deadline, offer, registration, last date, due, and PPT / PPO in capitals) count only next to internship, job, role, hiring, campus, CV, resume, candidate, selection, recruit, drive, CTC, stipend or profile | **kept** |
-| 9 | everything else | dropped |
+| 1 | subject says OTP / one-time password / verification code / login, security or sign-in code | **dropped**: OTP mails are used for the ERP login only, never stored or shown |
+| 2 | a mail you sent | not kept (its thread counts, rule 7) |
+| 3 | sender is the placement office (CDC, placement(s), placement cell, career development, TnP, T&P, training and placement, recruitment cell; or `PING_PLACEMENT_SENDERS`) | **kept**, bulk or not |
+| 4 | sender is a job board (LinkedIn, Naukri, Indeed, Internshala, ...) | dropped |
+| 5 | subject is an account or shopping mail (security alert, password, receipt, order shipped, newsletter, % off...) | dropped |
+| 6 | sender is a test / hiring platform (HackerRank, HackerEarth, Mettl/Mercer, SHL, Unstop, Codility, iMocha, AMCAT, Aon, Talview, HireVue, Superset, Workday, Greenhouse, Lever, SuccessFactors, ...) or a sender that sent you a test link before | **kept**; a bulk one only with a test link in it (step 1b) |
+| 7 | **any other bulk mail** (List-Unsubscribe / Precedence: bulk, or a newsletter / marketing sender: news@, offers@, *.news) | dropped |
+| 8 | in a Gmail thread with a kept mail, or with a mail you sent about an application | **kept** |
+| 9 | a listed company by its own domain (in.ey.com, zs.com, jpmchase.com) or its full name in the sender's name or the subject (never a parent company or a first word alone: ICICI Bank is not ICICI Lombard) | **kept** |
+| 10 | subject has a placement signal (test link, assessment, shortlist, interview, pre-placement talk, offer letter, placement, recruitment, campus drive...; form / deadline / registration only next to a hiring word) | **kept** |
+| 11 | anything else, not bulk | **step 1b**: the body is read in memory to decide |
 
-A dropped mail is never read beyond those headers and nothing of it is stored (the run log keeps only counts:
-how many were dropped and by which rule).
+**Step 1b, undecided personal mail: the body in memory, to decide.** Kept only if it names a listed company by its
+full name together with a placement word (application, assessment, test, interview, shortlist, offer, PPO, slot,
+round, JD); a platform's bulk mail only with a link to a test on that platform. Otherwise dropped: nothing of it is
+stored or logged beyond the count. OTP, account, shopping, job-board and bulk mail is never opened.
 
-**Step 2, kept mails only: the whole message.** Text, links and PDF / Excel attachments (in memory; never written
-to disk). If the body turns out to carry an OTP the mail is dropped after all. Stored in `emails` (owner only, see
-Tables): sender, subject, the first 300 characters, company, kind (form / test / interview / shortlist / PPT / offer
-/ announcement), deadline and date-time, links (no unsubscribe or tracking links), why it was kept, and for an
-attachment only what the notice attachment check keeps: status, the table heading and your own row. Nothing from a
+**Step 2, kept mails: the whole message.** Text, links and PDF / Excel attachments (in memory; never written to
+disk). If the body turns out to carry an OTP the mail is dropped after all. Stored in `emails` (owner only): sender,
+subject, **a short summary, never the body** ("Interview · Navi Limited · 2026-11-24 11:00", then at most two
+sentences with facts that matter: CTC, eligibility, venue, slot), company, where it came from ("mail from EY GDS"),
+kind, deadline and date-time, links (no unsubscribe or tracking links), why it was kept, and for an attachment only what the notice attachment check keeps: status, the table heading and your own row. Nothing from a
 mail ever changes "applied": that comes from the ERP alone.
 
 A job description (a notice's or a mail's attachment, or a mail that is itself a JD) is not a list of students: it is

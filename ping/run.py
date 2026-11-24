@@ -244,10 +244,9 @@ class Runner:
             except Exception:
                 pass
 
-        # ---- mailbox: placement mails since last run (read-only)
-        emails = []
-        if status == "ok":
-            emails = self._scan_mail(list_roles or list(stored_roles.values()), profile)
+        # ---- mailbox: placement mails since last run (read-only). Read even when the ERP login failed: mail doesn't
+        # need the ERP, and a run that skipped it only delayed it (the next scan starts where the last one stopped)
+        emails = self._scan_mail(list_roles or list(stored_roles.values()), profile)
 
         # ---- save + rebuild the feed
         self._stage("saving")
@@ -286,8 +285,8 @@ class Runner:
                     self.store.upsert("runs", [record])
                 except Exception:
                     log(f"could not save the run record: {e}")
-        if status == "ok":
-            self._notify(profile, items)
+        # push: also after a failed ERP login, for what the mail brought (the guard decides what's new)
+        self._notify(profile, items)
         self._alerts(status)
         self._print_summary(record)
         return record
@@ -570,11 +569,21 @@ class Runner:
                     self.silent_reasons = getattr(self, "silent_reasons", set()) | {"mail rules re-read"}
             profile = profile or {}
             extra = tuple(x.strip() for x in os.environ.get("PING_PLACEMENT_SENDERS", "").split(",") if x.strip())
+            # what earlier scans learnt: senders that sent you a test link, and placement threads (replies count)
+            test_senders = frozenset(st.get_state("mail_test_senders") or []) if st else frozenset()
+            threads = frozenset(st.get_state("mail_threads") or []) if st else frozenset()
             out, stats = mail_source.scan(self.mailbox, since, CompanyIndex(roles), profile.get("roll") or "",
-                                          profile.get("name") or "", extra)
+                                          profile.get("name") or "", extra, test_senders=test_senders, threads=threads,
+                                          me=self.secrets.mail_address or "")
+            if st:
+                new_tests = {mail_source._address(m.get("sender") or "")[1] + "@" + mail_source._address(m.get("sender") or "")[2]
+                             for m in out if m.get("kind") == "test" and m.get("main_link")}
+                st.set_state("mail_test_senders", sorted(set(test_senders) | new_tests)[-500:])
+                st.set_state("mail_threads", sorted(set(threads) | set(getattr(stats, "threads", []) or []))[-2000:])
             self.c("mails_scanned", stats.headers_seen)
             self.c("mails_kept", stats.kept)
             self.c("mail_bodies_read", stats.bodies_read)
+            self.c("mail_bodies_read_to_decide", stats.as_dict().get("bodies_read_to_decide", 0))
             self.c("mail_attachments_read", stats.attachments_read)
             self.c("mail_otp_skipped", stats.otp_skipped)
             self.counts["mail_dropped"] = stats.dropped

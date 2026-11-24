@@ -1826,7 +1826,7 @@ def mail_peek(secrets) -> int:
     """Reads only: the subjects of the ERP mailer's mails that today's filter skipped as not placement (last 10 days,
     subject only), and what the EY recruiter's mails ask (kind, date, link host, subject), to decide whether they're
     still actionable. Nothing stored."""
-    from . import mail_source, mail_wide
+    from . import mail_source
     from .mailbox import Mailbox
     from .matching import CompanyIndex
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
@@ -1859,13 +1859,12 @@ def mail_peek(secrets) -> int:
 def mail_audit(secrets) -> int:
     """Reads only (the mailbox opened read-only, nothing stored). A: how mail reading works today, on the last 7 days:
     the mailbox, the filters, mails read and kept, the latest 3 kept, CDC mail skipped and why, and whether every run
-    reads mail. B: the wider filter (ping/mail_wide.py) as a dry run on the last 30 days: what it would keep on top of
-    today's, from which senders, and what it would have flagged that Ping doesn't have. Prints dates, senders' domains,
-    companies, kinds and reasons; a subject only for A's latest 3, masked where it could name other students."""
+    reads mail. Prints dates, senders' domains, kinds and reasons; a subject only for the latest 3, masked where it could name
+    other students."""
     import imaplib
     from collections import Counter
-    from . import mail_source, mail_wide
-    from .mailbox import HEADER_FIELDS, Mailbox, _internal, parse_head, parse_message
+    from . import mail_source
+    from .mailbox import HEADER_FIELDS, Mailbox, _internal, parse_head
     from .matching import CompanyIndex
     if not (secrets.mail_address and secrets.mail_app_password):
         say("no MAIL_ADDRESS / MAIL_APP_PASSWORD")
@@ -1876,7 +1875,6 @@ def mail_audit(secrets) -> int:
     prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
     stored = store.select("emails", REAL)
     index = CompanyIndex(roles)
-    names = mail_wide.Names(index)
     now = datetime.now(IST)
     extra = tuple(x.strip() for x in os.environ.get("PING_PLACEMENT_SENDERS", "").split(",") if x.strip())
     me = secrets.mail_address.lower()
@@ -1953,61 +1951,7 @@ def mail_audit(secrets) -> int:
     say(f"  last mail scan saved: {store.get_state('last_mail_scan')}. The mail step runs in every run whose ERP login "
         "worked, before the posting guard, and doesn't look at PING_POSTING: a paused run still reads and saves mail")
 
-    # ---------------------------------------------------------------- B: the wider filter, dry run, 30 days
-    say("")
-    say("B. THE WIDER FILTER, DRY RUN ON THE LAST 30 DAYS (nothing stored)")
-    h30 = heads_since(30)
-    test_senders = set()
-    for r in stored:
-        if r.get("kind") == "test" or re.search(mail_source.TEST_LINK.pattern, str(r.get("main_link") or ""), re.I):
-            n, l, d = mail_source._address(r.get("sender") or "")
-            test_senders.add(f"{l}@{d}")
-    now_kept = {h.uid for h in h30 if mail_source.scope(h, index, extra).keep}
-    # threads: a kept mail's, or one where you sent something about an application
-    threads = {h.thread for h in h30 if h.thread and (h.uid in now_kept or (me in h.sender.lower() and mail_wide.APPLIED_WORD.search(h.subject or "")))}
-    wide, body_reads, why_not = {}, 0, Counter()
-    for h in h30:
-        if h.uid in now_kept or me in h.sender.lower():
-            continue
-        v = mail_wide.wide_scope(h, index, names, extra_senders=extra, test_senders=frozenset(test_senders),
-                                 threads=frozenset(threads), thread_of=lambda x: x.thread)
-        if not v.keep and v.signal == "body":
-            typ, data = mb.imap.uid("FETCH", h.uid, "(INTERNALDATE BODY.PEEK[]<0.120000>)")
-            body_reads += 1
-            if typ == "OK" and data and isinstance(data[0], tuple):
-                m = parse_message(h.uid, data[0][1], _internal(data[0][0]))
-                v = mail_wide.body_decides(h, m.text, names, job_board=v.because == "job_board")
-        if v.keep:
-            wide[h.uid] = (h, v)
-        else:
-            why_not[v.because] += 1
-    say(f"  {len(h30)} mails in 30 days; today's filter keeps {len(now_kept)}; the wider one would keep {len(wide)} more "
-        f"(bodies read in memory to decide: {body_reads}); still not kept: {dict(why_not.most_common(8))}")
-    say(f"  extra by reason: {dict(Counter(v.because.split(':')[0] for h, v in wide.values()))}")
-    by_sender = Counter(mail_source._address(h.sender)[2] for h, v in wide.values())
-    say(f"  extra by sender domain: {dict(by_sender.most_common(25))}")
-    flagged = []
-    say("  each extra mail (date | sender | why | company | kind | when | link host):")
-    for uid, (h, v) in sorted(wide.items(), key=lambda kv: kv[1][0].received):
-        full = mb.fetch_full(uid)
-        if not full:
-            continue
-        row = mail_source.read(full[0], full[1], v, index, prof.get("roll") or secrets.erp_user_id or "", prof.get("name") or "")
-        if not row:
-            say(f"    {h.received:%d %b %H:%M} | {who(h.sender)} | {v.because} | an OTP mail after all: dropped")
-            continue
-        host = re.sub(r"^https?://([^/]+).*", r"\1", row.get("main_link") or "") or "-"
-        when = row.get("event_at") or row.get("due_at") or ""
-        say(f"    {h.received:%d %b %H:%M} | {who(h.sender)} | {v.because} | {row.get('company') or v.company or '-'} | {row['kind']} | {str(when)[:16] or '-'} | {host}")
-        if row["kind"] in ("test", "interview", "form", "shortlist", "offer") and (row.get("due_at") or row.get("event_at") or row.get("main_link")) \
-                and not mail_source.erp_twin(row, notices) and row["id"] not in ids:
-            flagged.append((h, v, row))
     mb.close()
-    say("")
-    say(f"  WOULD HAVE FLAGGED, AND PING DOESN'T HAVE IT (not on the ERP, not in Ping's mail): {len(flagged)}")
-    for h, v, row in flagged:
-        say(f"    {h.received:%d %b %H:%M} | {row.get('company') or v.company or mail_source._address(h.sender)[2]} | {row['kind']} | "
-            f"{str(row.get('event_at') or row.get('due_at') or '')[:16] or 'no date found'} | {'link' if row.get('main_link') else 'no link'} | via {v.because}")
     return 0
 
 

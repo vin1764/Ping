@@ -118,6 +118,8 @@ alter table emails add column if not exists when_text text;
 alter table emails add column if not exists pdf jsonb;
 alter table emails add column if not exists kept_because text;
 alter table emails add column if not exists rules_version int;
+-- rules v3: who it's from as the feed shows it ("mail from EY GDS"); snippet holds a short summary, never the body
+alter table emails add column if not exists source text;
 
 create table if not exists contacts (
   id text primary key,

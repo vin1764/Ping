@@ -90,6 +90,7 @@ class Head:
     sender: str
     subject: str
     bulk: bool = False          # List-Unsubscribe / Precedence: bulk (newsletters, promotions)
+    thread: str | None = None   # Gmail's thread id (X-GM-THRID), for replies in a placement thread
 
 
 @dataclass
@@ -215,18 +216,31 @@ class Mailbox:
             out.append(parse_message(uid, data[0][1], _internal(data[0][0])))
         return out
 
-    def heads_after(self, after: datetime, limit: int = 400) -> list[Head]:
-        """Headers only (From, Subject, Date, List-Unsubscribe, Precedence) of every mail since `after`."""
-        uids = self._search_uids(after)[-limit:]
+    def heads_after(self, after: datetime, limit: int | None = None) -> list[Head]:
+        """Headers only (From, Subject, Date, List-Unsubscribe, Precedence, and Gmail's thread id) of every mail since
+        `after`, fetched in pages of 150: no cap (a 14-day re-read once stopped at the newest 400)."""
+        uids = self._search_uids(after)
+        if limit:
+            uids = uids[-limit:]
+        items = "(INTERNALDATE " + ("X-GM-THRID " if self.gmail else "") + f"BODY.PEEK[HEADER.FIELDS ({HEADER_FIELDS})])"
         out = []
-        for uid in uids:
-            typ, data = self.imap.uid("FETCH", uid, f"(INTERNALDATE BODY.PEEK[HEADER.FIELDS ({HEADER_FIELDS})])")
-            if typ != "OK" or not data or not isinstance(data[0], tuple):
+        for k in range(0, len(uids), 150):
+            typ, data = self.imap.uid("FETCH", ",".join(uids[k:k + 150]), items)
+            if typ != "OK":
                 continue
-            h = parse_head(uid, data[0][1], _internal(data[0][0]))
-            if h.received >= after - timedelta(seconds=5):
-                out.append(h)
-        return out
+            for d in data or []:
+                if not isinstance(d, tuple):
+                    continue
+                meta = d[0] or b""
+                m = re.search(rb"UID (\d+)", meta)
+                if not m:
+                    continue
+                h = parse_head(m.group(1).decode(), d[1], _internal(meta))
+                t = re.search(rb"X-GM-THRID (\d+)", meta)
+                h.thread = t.group(1).decode() if t else None
+                if h.received >= after - timedelta(seconds=5):
+                    out.append(h)
+        return sorted(out, key=lambda h: h.received)
 
     def fetch_full(self, uid: str) -> tuple[Mail, list[Attachment]] | None:
         """The whole message of one mail the filter kept: its text, links and PDF/Excel attachments."""

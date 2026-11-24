@@ -163,7 +163,57 @@
     return (items || []).filter((it) => isFilled(status, it?.details?.form?.key)).length;
   }
 
-  const api = { sections, badge, postedLine, movedLine, ask, label, isFilled, filledCount, names, cleanName, shortList,
+  // ---- To do: every actionable thing with a deadline besides the forms (an assignment, documents to upload, a CV to
+  // submit, a test or an interview, an application for you), one row each: {key, type, company, at, link, linkLabel,
+  // itemId | roleIds, source}. The forms come from sections(); the page shows both in one list by deadline.
+  const TASK_TYPE = { assignment: "Assignment", documents: "Documents", cv: "CV submission", take_test: "Test", submit: "Submission",
+                      accept_offer: "Offer", test: "Test", interview: "Interview" };
+  function tasks({ items = [], roles = [], now, isMine = () => true, status = new Map() } = {}) {
+    const out = [];
+    const shown = (it) => !it.dismissed && (it.level !== "hidden" || /digest/.test(it.details?.hidden_because || ""));
+    for (const it of items) {
+      const d = it.details || {}, td = d.todo || {};
+      if (it.category === "todo" && it.due_at && td.action && td.action !== "fill_form" && shown(it)) {
+        const link = td.link || (d.mail_links || [])[0] || null;
+        out.push({ key: `item:${it.id}`, type: TASK_TYPE[td.task] || TASK_TYPE[td.action] || "To do", company: it.company,
+                   at: ms(it.due_at), due_at: it.due_at, link, linkLabel: td.task === "assignment" ? "Open brief" : "Open",
+                   itemId: it.id, source: d.via === "email" ? d.source || "mail" : it.notice_id ? "notice" : "", title: it.title });
+      }
+      // a test or an interview ahead that's about you (a list you're on, an invite in your mail, a test you applied for)
+      if (it.category === "test" && it.event_at && ms(it.event_at) > now - 3 * 3600000 && shown(it)) {
+        out.push({ key: `item:${it.id}`, type: d.kind === "interview" ? "Interview" : "Test", company: it.company, at: ms(it.event_at),
+                   due_at: it.event_at, event: true, link: (d.mail_links || [])[0] || d.mail?.link || null, linkLabel: "Open",
+                   itemId: it.id, source: d.via === "email" ? d.source || "mail" : "notice", title: it.title });
+      }
+    }
+    // applications for you, not applied, still open: one row per company and deadline
+    const groups = new Map();
+    for (const r of roles) {
+      const t = ms(r.effective_deadline || r.apply_end || r.deadline);
+      if (r.applied || !(t > now) || r.eligible === false || !isMine(r)) continue;
+      const k = `${cleanName(r.company)}|${t}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    for (const [k, rs] of groups) {
+      const t = Number(k.split("|")[1]);
+      out.push({ key: `apply:${k}`, type: rs.length > 1 ? `Application (${rs.length} roles)` : "Application", company: rs[0].company,
+                 at: t, due_at: new Date(t).toISOString(), link: null, linkLabel: "Apply on ERP", roleIds: rs.map((r) => r.id),
+                 roles: rs.map((r) => r.designation), source: "erp" });
+    }
+    // the same task said twice (a notice's to-do and its own test row): once
+    const seen = new Set();
+    return out.filter((x) => { const k = `${cleanName(x.company).toLowerCase()}|${x.type}|${x.at}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .sort((a, b) => a.at - b.at);
+  }
+  // where a task stands: done (ticked), not for me, past, open
+  function taskState(task, status, now) {
+    if (status && status.get(task.key)?.not_for_me) return "notForMe";
+    if (status && status.get(task.key)?.filled) return "done";
+    return task.at <= now ? "past" : "open";
+  }
+
+  const api = { sections, badge, tasks, taskState, TASK_TYPE, postedLine, movedLine, ask, label, isFilled, filledCount, names, cleanName, shortList,
                 notForMe, askAbout, roleType, kindKey, REASONS, ROLE_TYPES };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingForms = api;

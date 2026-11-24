@@ -316,8 +316,15 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                     title = f"{company} offered you a PPO. Accept by {fmt_when(_dt(due), now)}."
                     lvl = "always"
                 else:
-                    title = (f"{company}{label_s}: submit by {fmt_when(_dt(due), now)}." if due
-                             else f"{company}{label_s}: submit (no deadline given, see the notice).")
+                    # what the submission is: an assignment, documents, a CV (the notice's subject and text say)
+                    from .mail_source import ASSIGNMENT_RE, DOCUMENTS_RE
+                    said = f"{n.get('subject') or ''} {text[:1500]}"
+                    task = "assignment" if ASSIGNMENT_RE.search(said) else "documents" if DOCUMENTS_RE.search(said) \
+                        else "cv" if re.search(r"\b(cv|resume)s?\b", said, re.I) else None
+                    todo = {**todo, **({"task": task} if task else {})}
+                    what = {"assignment": "submit the assignment", "documents": "upload the documents", "cv": "submit your CV"}.get(task, "submit")
+                    title = (f"{company}{label_s}: {what} by {fmt_when(_dt(due), now)}." if due
+                             else f"{company}{label_s}: {what} (no deadline given, see the notice).")
                     lvl = "always" if (applied or about_me) else "hidden"
                 if due and _dt(due) <= now and lvl != "always":
                     lvl = "hidden"
@@ -366,6 +373,11 @@ def build_items(roles: list[dict], notices: list[dict], pdf_checks: dict, profil
                              "link": link, "id": m["id"]}
                 if link:
                     d["mail_links"] = list(dict.fromkeys((d.get("mail_links") or []) + [link]))[:5]
+                # the notice's to-do without a link: the mail's link is its button (the assignment's brief, the form)
+                if link and d.get("todo") and not d["todo"].get("link"):
+                    d["todo"] = {**d["todo"], "link": link, "link_from": "mail"}
+                if d.get("todo") and m.get("kind") in ("assignment", "documents") and not d["todo"].get("task"):
+                    d["todo"] = {**d["todo"], "task": m["kind"]}
             mstats["mail_twins"] += 1
             continue
         items.append(_mail_item(m, roles, elig, profile, now, index, open_for_me))
@@ -440,6 +452,10 @@ def _mail_item(m: dict, roles: list[dict], elig: dict, profile: dict, now: datet
     if kind == "form":
         category, todo = "todo", {"action": "fill_form", "due": due, "link": link}
         title = f"{who}: fill the form by {fmt_when(_dt(due), now)}." if due else f"{who}: fill the form (link in the mail)."
+    elif kind in ("assignment", "documents"):
+        what = "submit the assignment" if kind == "assignment" else "upload the documents"
+        category, todo = "todo", {"action": "submit", "task": kind, "due": due, "link": link}
+        title = f"{who}: {what} by {fmt_when(_dt(due), now)}." if due else f"{who}: {what} (see the mail)."
     elif kind in ("test", "interview") and event:
         category = "test"
         title = f"{who} {'interview' if kind == 'interview' else 'test'}: {fmt_when(_dt(event), now)}."

@@ -43,7 +43,9 @@ test("countdowns: format and colour", () => {
 test("today, in time order: what's left to do; what's over or done in one line at the bottom; no 'Next ERP check' row", () => {
   const d = day();
   const kinds = d.rows.map((r) => `${r.kind}:${r.title}`);
-  assert.deepStrictEqual(kinds, ["notice:HPCL · submit CV", "test:Groww test", "todo:BlackBuck", "deadline:2 for you to apply by 20:00"]);
+  // the next 48 hours: tomorrow's Swiggy test and 18:00 deadline too (Today used to stop at midnight)
+  assert.deepStrictEqual(kinds, ["notice:HPCL · submit CV", "test:Groww test", "todo:BlackBuck", "deadline:2 for you to apply by 20:00",
+                                 "test:Swiggy test", "deadline:1 for you to apply by 18:00"]);
   assert.deepStrictEqual(d.done.map((r) => `${r.kind}:${r.title}`), ["test:Meesho test", "deadline:1 for you to apply by 12:00"]);
   assert.strictEqual(d.doneLine, "Done today: 1 applied ✓ · 1 test over · 1 closed without applying");
   const groww = d.rows.find((r) => r.title === "Groww test");
@@ -59,18 +61,17 @@ test("today, in time order: what's left to do; what's over or done in one line a
   assert.deepStrictEqual(dl.target, { item: "d1" });                                  // the digest that lists them
   assert.ok(!d.rows.some((r) => r.kind === "check"));                               // the header says the next check
   assert.strictEqual(d.nextCheck, Date.parse("2026-11-21T14:11:00+05:30"));
-  assert.strictEqual(d.ahead, 3);                                                     // test, form, deadline
-  assert.strictEqual(d.left, 4);                                                      // 1 test + 1 form + 2 roles for you
-  assert.strictEqual(d.tomorrow.text, "Tomorrow: 1 test, 1 deadline");
+  assert.strictEqual(d.ahead, 5);                                                     // 2 tests, form, 2 deadlines
+  assert.strictEqual(d.left, 6);                                                      // 2 tests + 1 form + 3 roles for you
   assert.ok(!d.empty);
 });
 
 test("an empty day says so", () => {
   const d = T.build({ items: [], roles: [], notices: [], runs, now: NOW });
   assert.ok(d.empty);
-  assert.strictEqual(d.emptyText, "Nothing scheduled today.");
+  assert.strictEqual(d.emptyText, "Nothing due in the next 48 hours.");
   assert.strictEqual(d.doneLine, "");
-  assert.strictEqual(d.tomorrow.text, "Tomorrow: nothing scheduled yet");
+  assert.ok(!d.tomorrow.tests && !d.tomorrow.deadlines);                              // no "Tomorrow:" line at all
   assert.strictEqual(d.ahead, 0);
 });
 
@@ -189,7 +190,7 @@ test("form rows count what's left: '1 form due 20:00' when 2 of 3 are ticked; al
   assert.equal(m.done.find((r) => r.kind === "todo").filledAll, true);
   assert.equal(m.ahead, 0);
   assert.equal(m.doneLine, "Done today: 3 forms filled ✓");
-  assert.ok(m.empty && /^All done for today\./.test(m.emptyText));
+  assert.ok(m.empty && /^All done for the next 48 hours\./.test(m.emptyText));
 });
 
 test("notice rows say what to do; a notice about a deadline that's already a row joins it", () => {
@@ -219,7 +220,7 @@ test("a deadline with everything applied leaves Today; 'All done for today. Next
   assert.deepEqual(m.rows, []);
   assert.equal(m.doneLine, "Done today: 2 applied ✓");
   assert.ok(m.empty);
-  assert.equal(m.emptyText, "All done for today. Next deadline: Mon 23 Nov, 20:00.");
+  assert.equal(m.emptyText, "All done for the next 48 hours. Next deadline: Mon 23 Nov, 20:00.");
   assert.equal(m.left, 0);
 });
 

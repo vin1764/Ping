@@ -189,6 +189,14 @@ def acts(items: list[dict], roles: dict[str, dict], now: datetime) -> list[dict]
             typ = "extended" if moved_at and now - moved_at < timedelta(hours=3) else "form"
             out.append({"type": typ, "form": True, "company": display_name(it.get("company") or ""), "role": "", "cv": None,
                         "at": at, "item": it})
+        elif cat == "todo" and (d.get("todo") or {}).get("action") in ("submit", "take_test", "accept_offer"):
+            # an assignment, documents, a CV, an online test to take by a time: a task of its own (24 Nov, BlueStone)
+            td = d.get("todo") or {}
+            at = _at(it.get("due_at"))
+            if not at or at <= now:
+                continue
+            out.append({"type": "task", "company": display_name(it.get("company") or ""), "role": _roles_text(it, roles),
+                        "what": TASK_WORDS.get(td.get("task")) or TASK_WORDS.get(td.get("action")) or "To do", "at": at, "item": it})
         elif cat in ("test",) or kind in ("test", "test_rooms", "interview"):
             st = (d.get("pdf") or {}).get("status") or it.get("pdf_status")
             at = _at(it.get("event_at"))
@@ -215,12 +223,14 @@ def _roles_text(it: dict, roles: dict) -> str:
     return m.group(1) if m else ""
 
 
-ORDER = {"test": 0, "shortlist": 1, "form": 2, "extended": 2, "apply": 2, "new": 3}
+ORDER = {"test": 0, "shortlist": 1, "task": 2, "form": 2, "extended": 2, "apply": 2, "new": 3}
+TASK_WORDS = {"assignment": "Submit the assignment", "documents": "Upload documents", "cv": "Submit your CV",
+              "take_test": "Take the test", "submit": "Submit", "accept_offer": "Accept the offer"}
 
 
 def _url(a: dict) -> str:
     it = a["item"]
-    if a["type"] in ("test", "shortlist"):
+    if a["type"] in ("test", "shortlist", "task"):                   # the message itself, with its link
         return f"./#m-{quote(str(it['id']), safe='')}"
     ms = int(a["at"].timestamp() * 1000)
     return f"./#sheet/{'form' if a.get('form') else 'apply'}/{ms}"
@@ -270,6 +280,9 @@ def render(all_acts: list[dict], now: datetime) -> dict | None:
             body = " · ".join(x for x in (a["role"] or ("Fill the form" if a.get("form") else ""), f"Apply with {a['cv']}" if a.get("cv") else "", countdown(a["at"], now)) if x)
         elif a["type"] == "form":
             title, body = f"{a['company']} · Fill form by {by_when(a['at'], now)}", countdown(a["at"], now)
+        elif a["type"] == "task":
+            title = f"{a['company']} · {a['what']} by {by_when(a['at'], now)}"
+            body = " · ".join(x for x in (a["role"], countdown(a["at"], now)) if x)
         elif a["type"] == "test":
             where = f"Room {a['room']}" if a.get("room") else a.get("venue") or ""
             title = " · ".join(x for x in (a["company"], f"Test at {by_when(a['at'], now)}", where) if x)

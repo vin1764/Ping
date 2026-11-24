@@ -1156,7 +1156,15 @@
   // ------------------------------------------------------------ chat (home)
   // a notice's own time first: Ping's first run posts two weeks of notices at once, and they should still
   // read in the order the CDC posted them (later, notice time and first seen are within the hour anyway)
-  const itemTime = (it) => it.details?.notice_time || it.first_seen || it.sort_at;
+  const itemTime = (it) => {
+    const d = it.details || {};
+    if (d.reposted_at) return d.reposted_at;                       // posted again for you (Admin > repost-item)
+    // found hours after its notice was posted (the ERP listed it late) and still ahead: in the thread where you'll see
+    // it, when Ping found it, not up in the history at the notice's time (24 Nov, BlueStone)
+    const nt = d.notice_time, fs = it.first_seen, due = it.due_at || it.event_at;
+    if (nt && fs && due) { const gap = dt(fs) - dt(nt); if (gap > 3600000 && gap < 2 * 86400000 && dt(due) > dt(fs)) return fs; }
+    return nt || fs || it.sort_at;
+  };
   const isPast = (it) => it.level === "hidden" && PAST.test(it.details?.hidden_because || "");
   // A past item stays in the chat only if Ping posted it while it still mattered. A role whose deadline
   // had already gone when Ping first saw it was never news, so it isn't a message.
@@ -1779,9 +1787,11 @@
   function formsBadge() {
     const b = $("#nav-forms");
     if (!b || !state.data) return;
-    const n = FORMS.badge(state.data.forms || [], state.formStatus, liveNow(), rolesOfForm);
+    const now = liveNow();
+    const n = FORMS.badge(state.data.forms || [], state.formStatus, now, rolesOfForm)
+      + taskList(now).filter((t) => FORMS.taskState(t, state.formStatus, now) === "open" && t.at - now <= 86400000 && !t.event).length;
     b.textContent = String(n); b.hidden = !n;
-    b.parentElement.setAttribute("aria-label", n ? `Forms, ${n} due in the next 24 hours` : "Forms");
+    b.parentElement.setAttribute("aria-label", n ? `To do, ${n} due in the next 24 hours` : "To do");
   }
   let toastTimer = null;
   function toast(text, action, run, ms = 6000) {
@@ -1800,11 +1810,11 @@
   }
   function viewForms() {
     state.formsOnly = state.formsOnly || "foryou";
-    const search = h("input", { type: "search", id: "forms-search", placeholder: "Search a company or form", "aria-label": "Search forms",
+    const search = h("input", { type: "search", id: "forms-search", placeholder: "Search a company or task", "aria-label": "Search to-dos",
       value: state.formsQuery || "", oninput: (ev) => { state.formsQuery = ev.target.value; drawForms(); } });
     mountPage(h("div", { class: "forms-page" },
-      h("h1", {}, "Forms"),
-      h("p", { class: "muted small" }, "Tick a form once you've filled it and its reminders stop. Ping never fills or submits a form."),
+      h("h1", {}, "To do"),
+      h("p", { class: "muted small" }, "Everything with a deadline: forms, assignments, documents, tests, interviews, applications. Tick what you've done and its reminders stop. Ping never fills or submits anything."),
       h("div", { class: "forms-tools" }, search, h("div", { class: "chips", id: "forms-chips", role: "group", "aria-label": "Show" })),
       h("div", { id: "forms-list" })));
     drawForms();
@@ -1820,13 +1830,21 @@
       state.formsAt ? h("button", { type: "button", class: "chip", "aria-pressed": "true", "data-at": "1", onclick: () => { state.formsAt = null; drawForms(); } },
         `Due ${when(new Date(state.formsAt).toISOString())} ×`) : null].filter(Boolean));
     const sec = FORMS.sections(all, state.formStatus, { now, query: state.formsQuery || "", only: state.formsOnly, mineOf: formMine, at: state.formsAt ?? null, rolesOf: rolesOfForm });
-    if (!all.length) { list.replaceChildren(h("p", { class: "muted" }, "No forms yet. Forms from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
-    // open forms: one list by deadline, no headings (each card's date line says "Today 20:00", "Tomorrow 20:00",
-    // "Fri 27 Nov"); none: one line, never an empty section
+    // every other task with a deadline (assignments, documents, CVs, tests, interviews, applications for you)
+    const tk = taskList(now);
+    const tOpen = tk.filter((t) => FORMS.taskState(t, state.formStatus, now) === "open");
+    const tPast = tk.filter((t) => FORMS.taskState(t, state.formStatus, now) === "past" && now - t.at < 7 * 86400000 && !/^apply:/.test(t.key));
+    const tDone = tk.filter((t) => FORMS.taskState(t, state.formStatus, now) === "done");
+    const tNfm = tk.filter((t) => FORMS.taskState(t, state.formStatus, now) === "notForMe");
+    if (!all.length && !tk.length) { list.replaceChildren(h("p", { class: "muted" }, "Nothing to do yet. Forms, assignments, tests and deadlines from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
+    // open: forms and tasks in one list by deadline, no headings (each card's date line says "Today 20:00",
+    // "Tomorrow 20:00", "Fri 27 Nov"); none: one line, never an empty section
     const searching = !!(state.formsQuery || "").trim() || state.formsAt != null;
-    const open = sec.open.length ? h("section", { class: "forms-sec open-list", id: "forms-open", "aria-label": `Open forms, ${sec.open.length}` },
-        h("div", { class: "forms-rows" }, groupedRows(sec.open)))
-      : h("p", { class: "forms-clear", id: "forms-open" }, searching ? "No open forms match." : "No open forms. You're clear.");
+    const openRows = [...sec.open.map((f) => ({ at: dt(f.due_at) ? +dt(f.due_at) : 9e15, el: () => formRow(f) })),
+                      ...tOpen.map((t) => ({ at: t.at, el: () => taskRow(t) }))].sort((a, b) => a.at - b.at);
+    const open = openRows.length ? h("section", { class: "forms-sec open-list", id: "forms-open", "aria-label": `To do, ${openRows.length}` },
+        h("div", { class: "forms-rows" }, openRows.map((r) => r.el())))
+      : h("p", { class: "forms-clear", id: "forms-open" }, searching ? "Nothing to do matches." : "Nothing to do. You're clear.");
     // what's left: collapsed rows at the bottom ("Past due · 16"), each only when it has something
     state.formsSecOpen = state.formsSecOpen || {};
     const fold = (id, title, rows, draw, cls = "compact") => rows.length ? h("details", { class: `forms-sec ${cls}`, id: `forms-${id}`, "aria-label": title,
@@ -1837,11 +1855,41 @@
       open,
       // past due: cards (you might still open one); closed and filled: one line each, a tap opens the form in place;
       // not for you: one line each with Restore
-      fold("past", "Past due", sec.past, groupedRows, "fold"),
+      fold("past", "Past due", [...sec.past, ...tPast], (rows) => rows.map((x) => (x.type ? taskRow(x) : formRow(x))), "fold"),
       fold("closed", "Closed", sec.closed, (rows) => rows.map(compactRow)),
-      fold("filled", "Filled", sec.filled, (rows) => rows.map(compactRow)),
-      fold("notforme", "Not for me", sec.notForMe, (rows) => rows.map(nfmRow))].filter(Boolean));
+      fold("filled", "Done", [...sec.filled, ...tDone], (rows) => rows.map((x) => (x.type ? taskRow(x) : compactRow(x)))),
+      fold("notforme", "Not for me", [...sec.notForMe, ...tNfm], (rows) => rows.map((x) => (x.type ? taskRow(x) : nfmRow(x))))].filter(Boolean));
     formsBadge();
+  }
+  // the tasks besides forms, for the To do list (dashboard/forms.js tasks), with the list's filters
+  function taskList(now) {
+    const q = (state.formsQuery || "").trim().toLowerCase();
+    return FORMS.tasks({ items: (state.data.items || []).filter((it) => !it.dismissed), roles: state.data.roles || [], now,
+                         isMine: (r) => isMine(r) || !!pinOf(r), status: state.formStatus })
+      .filter((t) => (!q || `${t.company} ${t.type} ${t.title || ""} ${(t.roles || []).join(" ")}`.toLowerCase().includes(q))
+                  && (state.formsAt == null || t.at === state.formsAt));
+  }
+  // "BlueStone · Assignment · Fri 27 Nov 23:59 [Open brief]": the link (the brief, the test, the ERP) is the button
+  function taskRow(t) {
+    const name = cleanName(t.company || "") || "Placement office";
+    const role = t.roles ? t.roles.join(", ") : roleIn(t.title || "");
+    const erp = t.roleIds ? TODAY.erpLink(roleById().get(t.roleIds[0]) || { company: t.company }, myRoll()) : null;
+    const primary = t.link ? h("a", { class: "act-btn primary", href: t.link, ...EXT, "data-link": "task" }, t.linkLabel || "Open")
+      : erp ? h("a", { class: "act-btn primary", href: erp.href, ...EXT, "data-link": "erp" }, "Apply on ERP") : null;
+    const done = state.formStatus.get(t.key)?.filled;
+    return cardC({
+      key: `task:${t.key}`, cls: `form-row task${done ? " filled" : ""}`, attrs: { "data-task": t.key },
+      lead: t.itemId && !t.event ? formTick(t.key) : null, company: name, task: t.type, at: t.due_at, event: !!t.event,
+      status: done ? h("span", { class: "pill applied" }, "✓ done") : null, l3: role, primary,
+      tail: t.itemId ? h("button", { type: "button", class: "act-btn ghost nfm-btn", onclick: () => setNotForMe(t.key, true, { label: `${name} ${t.type.toLowerCase()}` }) }, "Not for me") : null,
+      detail: () => [
+        t.itemId ? h("div", { class: "ac-links cc-links nfm-menu" }, h("button", { type: "button", class: "act-btn", onclick: () => setNotForMe(t.key, true, { label: `${name} ${t.type.toLowerCase()}` }) }, "Not for me")) : null,
+        ccRow(t.event ? "When" : "Due", when(t.due_at)),
+        role ? ccRow(t.roles && t.roles.length > 1 ? "Roles" : "Role", role) : null,
+        t.source ? ccRow("From", /^mail/.test(t.source) ? t.source.replace(/^mail from /, "Mail from ").replace(/^mail$/, "Your placement mail") : t.source === "erp" ? "The ERP's companies list" : "A CDC notice") : null,
+        ccLinks(t.itemId ? h("button", { type: "button", class: "act-btn", "data-link": "chat", onclick: () => goTo({ item: t.itemId }) }, "Show in chat") : null),
+      ],
+    });
   }
   // a form you can't act on any more (closed, or ticked): checkbox, company, type, date and a small tag on one line;
   // a tap opens the full card in its place (one at a time), a second tap closes it

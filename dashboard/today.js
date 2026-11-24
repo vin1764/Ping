@@ -59,10 +59,12 @@
   const roleOfTitle = (t) => (String(t || "").match(/\(([^)]+)\)/) || [])[1] || "";
   const pdfStatus = (it) => it.details?.pdf?.status || it.pdf_status || null;
 
+  // a day ("2026-11-24") or a window ({from, to}: Today covers the next 48 hours)
+  const inside = (t, day) => (typeof day === "string" ? dayOf(t) === day : t >= day.from && t <= day.to);
   function tests(items, day, inChat) {
     const seen = new Map();
     for (const it of items || []) {
-      if (!isTest(it) || !it.event_at || dayOf(ms(it.event_at)) !== day) continue;
+      if (!isTest(it) || !it.event_at || !inside(ms(it.event_at), day)) continue;
       const st = pdfStatus(it);
       // a test that isn't about you (hidden with no list saying so) isn't on your day
       if (it.level === "hidden" && st !== "no" && st !== "yes") continue;
@@ -89,7 +91,7 @@
     const groups = new Map();
     for (const r of roles || []) {
       const t = ms(r.effective_deadline || r.apply_end);
-      if (!(t > 0) || dayOf(t) !== day) continue;
+      if (!(t > 0) || !inside(t, day)) continue;
       if (!groups.has(t)) groups.set(t, []);
       groups.get(t).push(r);
     }
@@ -123,7 +125,7 @@
                            filled: todoWhat(it) === "form" && isFilled(it) ? 1 : 0, left: todoWhat(it) === "form" && isFilled(it) ? 0 : 1,
                            sub: `${clock(ms(it.due_at))} · ${String(it.title || "").replace(/^[^:]*:\s*/, "")}`,
                            target: inChat(it) ? { item: it.id } : { company: it.company } });
-    const list = (items || []).filter((it) => it.category === "todo" && it.due_at && dayOf(ms(it.due_at)) === day
+    const list = (items || []).filter((it) => it.category === "todo" && it.due_at && inside(ms(it.due_at), day)
       && (it.level !== "hidden" || /digest/.test(it.details?.hidden_because || "")));
     const groups = new Map();
     for (const it of list) { const t = ms(it.due_at); if (!groups.has(t)) groups.set(t, []); groups.get(t).push(it); }
@@ -248,10 +250,12 @@
   function build({ items = [], roles = [], notices: nlist = [], runs = [], profile = {}, now = Date.now(),
                    isMine = () => true, inChat = () => true, isFilled = () => false, split = true, listOthers = true } = {}) {
     const day = dayOf(now), tomorrow = dayOf(now + 86400000);
+    // what's due from the start of today to 48 hours from now (a deadline the day after tomorrow morning shows today)
+    const win = { from: new Date(`${day}T00:00:00+05:30`).getTime(), to: now + 48 * 3600000 };
     // Today = what you still have to act on. Done (everything applied, every form ticked) or over (the time has passed,
     // a test that's over) goes into one "Done today" line at the bottom
-    const timed = [...tests(items, day, inChat).map((r) => ({ ...r, left: 1 })), ...deadlines(roles, day, isMine, items, inChat, { split, listOthers }),
-                   ...todos(items, day, inChat, isFilled)]
+    const timed = [...tests(items, win, inChat).map((r) => ({ ...r, left: 1 })), ...deadlines(roles, win, isMine, items, inChat, { split, listOthers }),
+                   ...todos(items, win, inChat, isFilled)]
       .map((r) => ({ ...r, over: r.at <= now || !!r.filledAll || !!r.done }));
     // a notice about a deadline that's already a row (the 20:00 applications, the 20:00 forms) joins that row
     // instead of appearing twice: the row says the notice moved or set it
@@ -282,16 +286,14 @@
       .map((r) => ms(r.effective_deadline || r.apply_end)).filter((t) => t > now && dayOf(t) !== day), Infinity);
     const NEXT = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
     const nextText = Number.isFinite(nextAt) ? ` Next deadline: ${NEXT.format(new Date(nextAt)).replace(/,? (\d\d:\d\d)$/, ", $1")}.` : "";
-    const tTests = tests(items, tomorrow, inChat).length;
-    const tDead = (roles || []).filter((r) => { const t = ms(r.effective_deadline || r.apply_end);
-      return t > 0 && dayOf(t) === tomorrow && !r.applied && isMine(r); }).length
-      + todos(items, tomorrow, inChat, isFilled).filter((r) => !r.filledAll).reduce((n, r) => n + (r.children ? r.children.length - (r.filled || 0) : 1), 0);
+    // the 48 hours cover tomorrow: no separate "Tomorrow:" line
+    const tTests = 0, tDead = 0;
     const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
     return {
       rows, done, ahead: ahead.length, left: ahead.reduce((n, r) => n + (r.left || 0), 0), nextCheck: next,
       doneLine: doneParts.length ? `Done today: ${doneParts.join(" · ")}` : "",
       empty: !ahead.length && !news.length,
-      emptyText: done.length ? `All done for today.${nextText}` : `Nothing scheduled today.${nextText}`,
+      emptyText: done.length ? `All done for the next 48 hours.${nextText}` : `Nothing due in the next 48 hours.${nextText}`,
       tomorrow: { tests: tTests, deadlines: tDead,
                   text: tTests || tDead ? `Tomorrow: ${[tTests ? plural(tTests, "test") : "", tDead ? plural(tDead, "deadline") : ""]
                     .filter(Boolean).join(", ")}` : "Tomorrow: nothing scheduled yet" },

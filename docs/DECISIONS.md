@@ -254,3 +254,17 @@ Decisions:
 - The body of an undecided personal mail is read in memory to decide (your rule "the body names a listed company with
   a placement word"); OTP, account, shopping, job-board and bulk mail is never opened. A kept mail stores a summary,
   never the body.
+
+## 24 Nov: BlueStone, and where tasks show up
+
+- What happened: the Placecom mail "[URGENT] | BLUESTONE | ASSIGNMENT SUBMISSION" (17:47, with the brief's link) wasn't
+  kept by the old mail filter before 00:10; the ERP notice 1872 saying the same wasn't on the notice board at 22:58 and
+  was by 00:10 (its notice time says 17:49). At 00:10 both were read: the to-do came from the notice (no link), the mail
+  was folded into it and its link lost; the chat drew it at the notice's time (17:49), above what you'd already read;
+  it wasn't a form, so not in Forms; due 27 Nov, so not on Today; and push had no rule for a "submit" task. It was
+  never "Others": you applied, so it was level "always".
+- Fixes: an assignment / documents upload is a task of its own (mail and notice); a mail that says what a notice says
+  (same company, same deadline) gives the notice's to-do its link; a to-do found hours after its notice shows in the
+  chat when Ping found it; push covers assignments, documents, CVs and online tests to take; Forms is now To do (every
+  task with a deadline, one list by deadline, its type, its link as the button); Today covers the next 48 hours.
+- Mail is read in every run, also when the ERP login failed (from 24 Nov, mail rules v3).

@@ -1822,6 +1822,32 @@ def demo_mails(secrets) -> int:
     return 0 if not left and len(mail_items) == 4 else 1
 
 
+def repost_item(secrets) -> int:
+    """Writes to Ping's own feed only: posts one message again for you (the company input: its item id), at the bottom
+    of the chat (details.reposted_at, kept across rebuilds) and with a push. For a message you never saw."""
+    from . import push
+    iid = (os.environ.get("PING_COMPANY") or "").strip()
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    rows = store.select("items", {"id": f"eq.{iid}"})
+    if not rows:
+        say(f"no message {iid!r}")
+        return 1
+    it = rows[0]
+    now = datetime.now(timezone.utc)
+    details = {**(it.get("details") or {}), "reposted_at": now.isoformat()}
+    store._req("PATCH", "items", params={"id": f"eq.{iid}"}, json={"details": details, "dismissed": False},
+               headers={"Prefer": "return=minimal"})
+    roles = {r["id"]: r for r in store.select("roles", REAL)}
+    note = push.compose([{**it, "details": details}], roles, now.astimezone(IST))
+    say(f"posted again: {it.get('title')!r}")
+    if note:
+        res = push.send(secrets.supabase_url, secrets.supabase_key, note)
+        say(f"push: {note.get('title')!r} -> {{k: res.get(k) for k in ('status', 'sent', 'devices', 'ok', 'why', 'error')}}")
+    else:
+        say("push: nothing to send (compose returned nothing)")
+    return 0
+
+
 def company_report(secrets) -> int:
     """Reads only: everything Ping holds about one company (the company input): its roles (applied, eligible, for you
     or not and why), its items (level, why hidden, category, task, due, link, when first seen, in the chat or not),
@@ -2048,7 +2074,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

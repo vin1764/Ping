@@ -34,7 +34,10 @@ from .matching import CompanyIndex, compact, tokens
 from .pdfs import check_attachment
 
 RULES_VERSION = 3   # 2: a JD kept whole; 3: own domain / full name, bulk guard, platforms, threads, body check, summary only
-KINDS = ("form", "test", "interview", "shortlist", "ppt", "offer", "announcement")
+KINDS = ("form", "assignment", "documents", "test", "interview", "shortlist", "ppt", "offer", "announcement")
+ASSIGNMENT_RE = re.compile(r"\bassignments?\b|case stud(?:y|ies)|take[\s-]*home|task submission|\bcase submission\b", re.I)
+DOCUMENTS_RE = re.compile(r"documents? (?:upload|submission|verification)|upload (?:your |the )?documents?|marksheets?|"
+                          r"certificates? (?:upload|submission)|document collection", re.I)
 
 OTP_RE = re.compile(r"\botp\b|one[\s-]*time[\s-]*pass(?:word|code)?|verification code|login code|"
                     r"security code|sign[\s-]*in code", re.I)
@@ -262,6 +265,11 @@ def classify(subject: str, text: str, links: list[str], on_a_list: bool) -> str:
     if re.search(r"shortlist|selected for (?:the )?(?:next|further|final)|list of (?:the )?(?:selected|shortlisted)",
                  s, re.I) or on_a_list:
         return "shortlist"
+    # an assignment / a documents upload is a task with a deadline of its own, whatever link it comes with
+    if ASSIGNMENT_RE.search(s):
+        return "assignment"
+    if DOCUMENTS_RE.search(s):
+        return "documents"
     if re.search(r"\bform\b|register|registration", s, re.I) and forms:
         return "form"
     if re.search(r"interview", s, re.I) and not re.search(r"test|assessment", s, re.I):
@@ -434,7 +442,7 @@ def scan(mailbox, since: datetime, index: CompanyIndex, roll: str, name: str = "
 TWIN_KINDS = {"form": ("form", "apply_open", "deadline_extended"), "test": ("test", "test_rooms", "schedule"),
               "interview": ("test", "test_rooms", "schedule", "shortlist", "result"),
               "shortlist": ("shortlist", "test_rooms", "result"), "ppt": ("ppt", "schedule"),
-              "offer": ("result", "ppo", "info"), "announcement": None}
+              "offer": ("result", "ppo", "info"), "assignment": None, "documents": None, "announcement": None}
 TWIN_WINDOW = timedelta(days=3)
 
 
@@ -469,7 +477,10 @@ def erp_twin(mail: dict, notices: list[dict]) -> dict | None:
             if c not in names:
                 continue
             kinds = TWIN_KINDS.get(mail.get("kind") or "announcement")
-            if kinds is not None and a.get("kind") not in kinds:
+            # the same company asking for the same thing by the same minute is the same message, whatever each calls it
+            due = (_t(mail.get("due_at")) or _t(mail.get("event_at")))
+            same_due = due is not None and any(_t(td.get("due")) == due for td in a.get("todos") or [])
+            if kinds is not None and a.get("kind") not in kinds and not same_due:
                 continue
         else:
             nwords = _words(f"{n.get('subject')} {(n.get('text') or n.get('preview') or '')[:1500]}")

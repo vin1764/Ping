@@ -743,6 +743,11 @@ class Runner:
                                     "deadlines_moved": sum(1 for r in frows if r["deadline_history"])}
         except Exception as e:                        # e.g. before Admin > apply-sql made the forms tables
             self.problems.append(f"forms list not built: {type(e).__name__}: {str(e)[:120]}")
+        # a message posted again for you (Admin > repost-item) keeps that time across rebuilds
+        for it in items:
+            again = ((previous.get(it["id"]) or {}).get("details") or {}).get("reposted_at")
+            if again:
+                it.setdefault("details", {})["reposted_at"] = again
         # the posting guard (ping/posting.py): what this run may post at all
         from . import posting
         try:

@@ -77,3 +77,47 @@ def test_held_back_messages_stay_held_back_on_the_next_run():
 def test_the_first_run_builds_the_thread_with_its_history():
     shown, out, _ = run([form(1)], previous={})
     assert out[0]["level"] == "show"                  # the starting thread, not a new post
+
+
+# ---- the 24 Nov Diageo case: one multi-company notice (22 Nov 23:47) gave every section a copy of one company's
+# form. The copies were hidden for another reason; when their deadline passed, a later run gave them "deadline gone",
+# and the page (which keeps a past message in the history when Ping posted it while it mattered) drew 7 identical cards.
+NOTICE_AT = "2026-11-22T23:47:00+05:30"
+
+
+def copy(section, why, due="2026-11-23T20:00:00+05:30"):
+    return {"id": f"notice:2026-2027:1830:{section}:todo7", "level": "hidden", "category": "todo", "company": "Diageo",
+            "due_at": due, "first_seen": "2026-11-23T00:41:00+05:30", "title": "Diageo (GBS MANAGEMENT TRAINEE): fill the form by Mon 23 Nov 20:00.",
+            "details": {"notice_time": NOTICE_AT, "hidden_because": why, "todo": {"action": "fill_form", "link": "https://forms.gle/x"}}}
+
+
+def test_a_message_hidden_for_another_reason_never_reappears_as_a_past_one():
+    prev = {**FIRST, **{copy(s, "another company's form in the same notice")["id"]: copy(s, "another company's form in the same notice") for s in range(2, 9)}}
+    now = [copy(s, "deadline gone") for s in range(2, 9)]
+    assert all(posting.in_chat(it) for it in now)            # what the page would have drawn: 7 cards
+    out = posting.guard(now, prev, MemoryStore(), NOW, log=lambda *_: None)
+    assert not any(posting.in_chat(it) for it in out)
+
+
+def test_copies_of_a_message_folded_elsewhere_are_none_and_plain_repeats_are_one():
+    items = [copy(1, "in the form digest")] + [copy(s, "deadline gone") for s in range(2, 9)]
+    assert posting.collapse_repeats(items) == 7 and not any(posting.in_chat(it) for it in items)
+    items = [copy(s, "deadline gone") for s in range(2, 9)]
+    assert posting.collapse_repeats(items) == 6 and sum(posting.in_chat(it) for it in items) == 1
+
+
+def test_a_new_message_already_past_never_enters_the_history():
+    # a re-scan found an old test again under a new id: hidden 'already happened', which the page would draw
+    old_test = {"id": "notice:2026-2027:1350:19", "level": "hidden", "category": "test", "company": "Capital One",
+                "event_at": "2026-11-02T18:00:00+05:30", "title": "Capital One test", "details": {"notice_time": "2026-11-01T21:27:00+05:30",
+                "hidden_because": "already happened", "kind": "test"}}
+    assert posting.in_chat(old_test)
+    shown, out, _ = run([old_test])
+    assert not any(posting.in_chat(it) for it in out)
+
+
+def test_a_new_message_about_something_days_old_is_saved_not_posted():
+    later = "2026-11-28T20:00:00+05:30"
+    old = dict(form(1, later), details={"notice_time": "2026-11-20T10:00:00+05:30", "todo": {"action": "fill_form", "link": "https://forms.gle/abc"}})
+    shown, out, _ = run([old])
+    assert shown == [] and "older message" in out[0]["details"]["hidden_because"]

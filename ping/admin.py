@@ -1035,19 +1035,14 @@ def posted_report(secrets, hours: float = 6) -> int:
     return 0
 
 
-PAST_WHY = re.compile(r"deadline gone|already happened|older than 3 days|replaced by the 24h reminder|updated by a later message")
-
-
 def _chat_time(i):
-    return (i.get("details") or {}).get("notice_time") or i.get("first_seen") or i.get("sort_at")
+    from .posting import chat_time
+    return chat_time(i)
 
 
 def in_chat(i) -> bool:
-    """The same test as the page's inChat (dashboard/app.js)."""
-    if i.get("dismissed") or i.get("category") in ("apply", "reminder"):
-        return False
-    if i.get("level") != "hidden":
-        return True
+    from .posting import in_chat as f
+    return f(i)
     d = i.get("details") or {}
     why = str(d.get("hidden_because") or "")
     if not PAST_WHY.search(why):
@@ -1071,32 +1066,42 @@ def in_chat(i) -> bool:
     return True
 
 
-def posting_cleanup(secrets, hours: float = 12) -> int:
-    """Writes to Ping's own feed only (never the ERP): messages first seen in the last `hours` that repeat an earlier
-    visible message (same company, task, deadline and form link: the earliest is kept), or whose time had already
-    passed when they were posted (none kept), are dismissed: gone from the chat, kept in the data. Owner and demo."""
+def posting_cleanup(secrets, hours: float = 4) -> int:
+    """Writes to Ping's own feed only (never the ERP). Takes out of the chat (dismissed: kept in the data, gone from
+    the thread), owner and demo: repeats of a message (same company, task, deadline, link and words: the first kept;
+    none when a copy was folded into a digest or judged a duplicate / another company's form), and what a re-scan or
+    re-read in the last `hours` put into the history (a message about something more than a day old, or one already
+    past when Ping found it)."""
     from . import posting
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
-    since = (datetime.now(timezone.utc) - timedelta(hours=float(os.environ.get("PING_HOURS") or hours))).isoformat()
+    since = datetime.now(timezone.utc) - timedelta(hours=float(os.environ.get("PING_HOURS") or hours))
+    dt = posting._dt
     for label, query in (("owner", REAL), ("demo", {"is_sample": "is.true"})):
-        items = [i for i in store.select("items", query) if i.get("level") != "hidden" and not i.get("dismissed")]
-        items.sort(key=lambda i: str(i.get("first_seen") or ""))
-        seen, drop = {}, []
+        items = store.select("items", query)
+        before = {i["id"] for i in items if posting.in_chat(i)}
+        copies = [dict(i, details=dict(i.get("details") or {})) for i in items]
+        posting.collapse_repeats(copies)
+        drop = {i["id"]: (i["details"].get("hidden_because") or "") for i in copies if i["id"] in before and not posting.in_chat(i)}
         for i in items:
-            k = posting.post_key(i)
-            recent = str(i.get("first_seen") or "") >= since
-            fs = datetime.fromisoformat(str(i["first_seen"]).replace("Z", "+00:00")) if i.get("first_seen") else None
-            if recent and fs and posting.is_past(i, fs) and i.get("category") not in ("digest", "listing"):
-                drop.append((i, "its time had passed when it was posted"))
-            elif k in seen and recent:
-                drop.append((i, f"repeats {seen[k]['id'][:40]}"))
-            else:
-                seen.setdefault(k, i)
-        say(f"{label}: {len(drop)} message(s) to take out of the chat")
-        for i, why in drop:
-            say(f"  {str(i.get('first_seen'))[:16]} | {str(i.get('company'))[:22]} | {str(i.get('title'))[:60]!r} | {why}")
-        for k in range(0, len(drop), 20):
-            store.upsert("items", [{"id": i["id"], "dismissed": True} for i, _ in drop[k:k + 20]])
+            fs, at = dt(i.get("first_seen")), dt(posting.chat_time(i))
+            if i["id"] in before and i["id"] not in drop and fs and fs >= since and i.get("category") not in ("digest", "listing"):
+                if at and at < fs - posting.BACKFILL:
+                    drop[i["id"]] = "an older message a re-scan or re-read found again"
+                elif i.get("level") == "hidden" or posting.is_past(i, fs):
+                    drop[i["id"]] = "already past when Ping found it"
+        say(f"{label}: {len(before)} messages in the chat; {len(drop)} to take out")
+        byid = {i["id"]: i for i in items}
+        for k, why in sorted(drop.items(), key=lambda kv: str(posting.chat_time(byid[kv[0]]))):
+            i = byid[k]
+            say(f"  shown at {str(posting.chat_time(i))[:16]} | {k[:60]} | {str(i.get('title'))[:60]!r} | {why[:60]}")
+        ids = sorted(drop)
+        for n in range(0, len(ids), 40):
+            chunk = ids[n:n + 40]
+            store._req("PATCH", "items", params={"id": "in.(" + ",".join(f'"{x}"' for x in chunk) + ")"}, json={"dismissed": True},
+                       headers={"Prefer": "return=minimal"})
+        if ids:
+            left = [i for i in store.select("items", query) if posting.in_chat(i)]
+            say(f"{label}: {len(left)} messages in the chat now")
     return 0
 
 

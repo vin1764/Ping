@@ -734,6 +734,8 @@ class Runner:
         # the posting guard (ping/posting.py): what this run may post at all
         from . import posting
         try:
+            # the same message twice (same key, same words) is one message, whatever its ids
+            self.counts["repeats_collapsed"] = posting.collapse_repeats(items)
             items = posting.guard(items, previous, self.store, self.now, paused=posting.paused(),
                                   silent=sorted(getattr(self, "silent_reasons", set())), log=log)
         except Exception as e:                                     # never post when the guard itself fails

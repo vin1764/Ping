@@ -203,3 +203,23 @@ Judgement calls made while working unattended, one line each.
   isn't a test, a JD link Ping can't open is still a JD).
 - **The signed-in UI is audited through the app's own offline path** (the owner's saved thread), so no login is needed
   and nobody's data is touched.
+
+## 24 Nov: the Diageo repeats, and the posting guard
+
+What happened: notice 1830 (22 Nov 23:47) gave one Diageo form to every company section of a multi-company notice, so
+the run built 7 copies (`1830:2..8:todo7`) besides the one in the form digest. While the deadline was ahead they were
+hidden for another reason; after it passed, a rebuild gave them "deadline gone". The page keeps a past message in the
+history when Ping posted it while it still mattered, so 7 identical cards appeared at 23:47. No new item was posted
+and no push went out for them (the pushes that day: 18:12, 20:13 and 23:07 IST, one each, none about Diageo).
+
+Decisions:
+- Posting is off until PING_POSTING=on (ping.yml). While off, new messages are held and looked at again once it's on.
+- A message that wasn't in the chat and would enter it only as a past one is held back (reason outside the page's
+  PAST list, so it never shows). The same for a new message already past, and for a new message about something more
+  than a day old (a re-split, a re-read): saved, not posted.
+- Repeats are collapsed every run: same (company, task, deadline, link) and the same words is one message; none when
+  a copy was folded into a digest, or judged a duplicate or another company's form. The page draws each key once too.
+- Re-scans and rule-version re-reads are silent; one digest a run; more than 5 new messages are one grouped message.
+- The cleanup (Admin posting-cleanup) dismisses, never deletes: the data stays, the thread loses the repeats.
+- The service worker now installs a new build's files with `cache: "reload"`: a plain addAll could take the previous
+  today.js from the browser's 10-minute HTTP cache, which is how a deployed fix could still look undeployed.

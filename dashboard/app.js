@@ -1165,8 +1165,27 @@
   const inChat = (it) => !it.dismissed && it.category !== "apply" && it.category !== "reminder" &&
     (it.level !== "hidden" || (isPast(it) && wasLive(it)));
 
+  // the same message twice (same company, task, deadline, link and words) is drawn once, whatever its ids (ping/posting.py
+  // collapses them too; this keeps the thread right with data saved before that)
+  const repeatKey = (it) => {
+    const d = it.details || {}, t = it.due_at || it.event_at || "";
+    const co = String(it.company || "").toLowerCase().replace(/\(.*?\)/g, " ").replace(/\b(private|pvt|limited|ltd|llp|inc|india)\b\.?/g, " ").replace(/[^a-z0-9]+/g, "");
+    const link = String(d.todo?.link || d.form?.link || d.mail?.link || "").replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+    const words = String(it.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return [co, d.todo?.action || d.kind || it.category || "", t ? new Date(t).toISOString().slice(0, 16) : "", link, it.category, words].join("|");
+  };
+  function onceEach(items) {
+    const seen = new Set();
+    return [...items].sort((a, b) => String(a.first_seen || "~").localeCompare(String(b.first_seen || "~")) || String(a.id).localeCompare(String(b.id)))
+      .filter((it) => {
+        if (it.category === "digest" || it.category === "listing") return true;
+        const k = repeatKey(it);
+        if (seen.has(k)) return false;
+        seen.add(k); return true;
+      });
+  }
   function threadEntries() {
-    const items = state.data.items.filter(inChat).map((it) => ({ kind: "item", at: itemTime(it), it }));
+    const items = onceEach(state.data.items.filter(inChat)).map((it) => ({ kind: "item", at: itemTime(it), it }));
     const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text, quote: quoteOf(m) }));
     // a Check now (with its progress) and an hourly check that brought something new
     const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, liveNow()))
@@ -1494,7 +1513,9 @@
   // Ping's answers as rich text: "- " lines become a list, **bold** bold, [Open list](https://…) a link (opens in the
   // browser), and an "ERP data from 12:41 (…)" line gets a Check now button. Never literal ** or "- " in a bubble.
   function richText(text) {
-    const inline = (str) => {
+    const inline = (str0) => {
+      // never a bracket on screen: "[open]" with no link, or a link to nowhere, is just its words
+      const str = String(str0).replace(/\[([^\]\n]+)\]\((?!https?:\/\/|#)[^)]*\)/g, "$1").replace(/\[([^\]\n]+)\](?!\()/g, "$1");
       const parts = [], re = /\[([^\]]+)\]\((https?:\/\/[^)\s]+|#ask:[^)\s]+|#[a-z][\w/-]*)\)|\*\*([^*]+)\*\*/g;
       let last = 0, m;
       while ((m = re.exec(str))) {

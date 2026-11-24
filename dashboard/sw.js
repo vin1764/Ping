@@ -13,7 +13,9 @@ const CDN = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/
 self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(SHELL);
-    await c.addAll(FILES);
+    // straight from the network: a plain addAll can take the old copy from the browser's HTTP cache (Pages keeps
+    // files 10 minutes), and the new build would then run yesterday's today.js
+    await c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })));
     try { await c.put(CDN, await fetch(CDN, { mode: "cors" })); } catch { /* the library comes from the network then */ }
     await self.skipWaiting();
   })());

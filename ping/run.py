@@ -295,8 +295,8 @@ class Runner:
     def _notify(self, profile: dict, items: list[dict]) -> None:
         """Push (docs/PUSH.md): at most one notification for this run's most urgent new for-you message, test-day
         reminders queued for pg_cron, and the optional for-you email. Never fails the run."""
-        from . import push
-        if not self.store_ok:
+        from . import push, posting
+        if not self.store_ok or posting.paused() or getattr(self, "silent_reasons", None):
             return
         new = getattr(self, "new_messages", [])
         try:
@@ -566,6 +566,8 @@ class Runner:
             since = datetime.fromisoformat(last) if last else self.now - timedelta(days=3)
             if str(version) != str(mail_source.RULES_VERSION):
                 since = min(since, self.now - timedelta(days=MAIL_LOOKBACK_DAYS))
+                if version is not None:                      # an upgrade of the rules, not the first scan
+                    self.silent_reasons = getattr(self, "silent_reasons", set()) | {"mail rules re-read"}
             profile = profile or {}
             extra = tuple(x.strip() for x in os.environ.get("PING_PLACEMENT_SENDERS", "").split(",") if x.strip())
             out, stats = mail_source.scan(self.mailbox, since, CompanyIndex(roles), profile.get("roll") or "",
@@ -729,6 +731,17 @@ class Runner:
                                     "deadlines_moved": sum(1 for r in frows if r["deadline_history"])}
         except Exception as e:                        # e.g. before Admin > apply-sql made the forms tables
             self.problems.append(f"forms list not built: {type(e).__name__}: {str(e)[:120]}")
+        # the posting guard (ping/posting.py): what this run may post at all
+        from . import posting
+        try:
+            items = posting.guard(items, previous, self.store, self.now, paused=posting.paused(),
+                                  silent=sorted(getattr(self, "silent_reasons", set())), log=log)
+        except Exception as e:                                     # never post when the guard itself fails
+            self.problems.append(f"posting guard failed, nothing new posted: {type(e).__name__}: {e}")
+            for it in items:
+                if it["id"] not in previous and it.get("level") != "hidden":
+                    it["level"] = "hidden"
+                    it.setdefault("details", {})["hidden_because"] = "not posted: the posting guard failed"
         # what the chat shows that it didn't show before (role cards and reminders live inside the digests)
         self.new_messages = [it for it in items if it["id"] not in previous and it.get("level") != "hidden"
                              and it.get("category") not in ("apply", "reminder") and not it.get("dismissed")]

@@ -12,3 +12,9 @@ def _no_internet_for_jd_links(monkeypatch):
     import ping.jd as jd
     monkeypatch.setattr(jd, "from_link", lambda url, session=None: {
         "jd_text": None, "jd_source": "link-unreadable", "jd_url": url, "jd_note": "not fetched in tests"})
+
+
+@pytest.fixture(autouse=True)
+def _posting_on(monkeypatch):
+    """Tests run with posting on (the deployed run is paused until PING_POSTING=on); tests/test_posting.py covers the guard."""
+    monkeypatch.setenv("PING_POSTING", "on")

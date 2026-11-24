@@ -193,6 +193,8 @@ def rescan(runner, days: int = 14, company: str | None = None, log=print, jds: b
     if new_checks:
         save("pdf_checks", [{"notice_id": k, **{f: v.get(f) for f in CHECK_FIELDS}} for k, v in new_checks.items()], key="notice_id")
     runner.now = datetime.now(timezone.utc).astimezone(runner.now.tzinfo) if getattr(runner, "now", None) else runner.now
+    # a re-scan updates the data; it never posts or pushes (ping/posting.py)
+    runner.silent_reasons = getattr(runner, "silent_reasons", set()) | {"re-scan"}
     runner.items = runner._rebuild(profile)
     runner.rechecked = {"notices": len(todo), "files": len(new_checks), "new_notices": len(new_notices), "changes": changes,
                         "board": [{k: n.get(k) for k in ("id", "year", "notice_id", "subject", "company", "notice_time", "has_attachment")}

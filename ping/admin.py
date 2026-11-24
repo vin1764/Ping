@@ -1822,6 +1822,40 @@ def demo_mails(secrets) -> int:
     return 0 if not left and len(mail_items) == 4 else 1
 
 
+def mail_peek(secrets) -> int:
+    """Reads only: the subjects of the ERP mailer's mails that today's filter skipped as not placement (last 10 days,
+    subject only), and what the EY recruiter's mails ask (kind, date, link host, subject), to decide whether they're
+    still actionable. Nothing stored."""
+    from . import mail_source, mail_wide
+    from .mailbox import Mailbox
+    from .matching import CompanyIndex
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    roles = store.select("roles", REAL)
+    index = CompanyIndex(roles)
+    prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
+    now = datetime.now(IST)
+    mb = Mailbox(secrets.mail_address, secrets.mail_app_password)
+    heads = mb.heads_after(now - timedelta(days=10), limit=5000)
+    say("ERP mailer mails skipped as not placement (subject only):")
+    for h in heads:
+        name, local, domain = mail_source._address(h.sender)
+        if domain == "adm.iitkgp.ac.in" and not mail_source.scope(h, index).keep and not mail_source.OTP_RE.search(h.subject or ""):
+            say(f"  {h.received:%d %b %H:%M} | subject: {h.subject[:120]!r} | bulk={h.bulk} | placement word in subject: {mail_source.signal(h.subject)!r}")
+    say("EY recruiter mails:")
+    for h in heads:
+        if mail_source._address(h.sender)[2].endswith("ey.com"):
+            full = mb.fetch_full(h.uid)
+            if not full:
+                continue
+            row = mail_source.read(full[0], full[1], mail_source.Verdict(True, "company_sender", None), index, prof.get("roll") or "", prof.get("name") or "")
+            if not row:
+                continue
+            host = re.sub(r"^https?://([^/]+).*", r"\1", row.get("main_link") or "") or "-"
+            say(f"  {h.received:%d %b %H:%M} | bulk={h.bulk} | kind {row['kind']} | due {row.get('due_at')} | event {row.get('event_at')} | when words {row.get('when_text')!r} | link {host} | links {len(row.get('links') or [])} | subject: {h.subject[:120]!r}")
+    mb.close()
+    return 0
+
+
 def mail_audit(secrets) -> int:
     """Reads only (the mailbox opened read-only, nothing stored). A: how mail reading works today, on the last 7 days:
     the mailbox, the filters, mails read and kept, the latest 3 kept, CDC mail skipped and why, and whether every run
@@ -2034,7 +2068,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

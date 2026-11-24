@@ -832,6 +832,29 @@ def forms_report(secrets) -> int:
     return 0
 
 
+def public_ci(secrets) -> int:
+    """Reads only: the public copy's latest workflow runs (Tests, Dashboard, Ping) and whether it's non-empty, with
+    PUBLIC_REPO_TOKEN. Prints the repository as 'owner / name' (the URL itself is a masked secret)."""
+    url, token = os.environ.get("PUBLIC_REPO_URL", "").strip(), os.environ.get("PUBLIC_REPO_TOKEN", "").strip()
+    m = re.match(r"https://github\.com/([^/]+)/([^/.]+)", url)
+    if not (m and token):
+        say("needs PUBLIC_REPO_URL and PUBLIC_REPO_TOKEN")
+        return 2
+    api = f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}"
+    hdr = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    repo = requests.get(api, headers=hdr, timeout=30).json()
+    say(f"{m.group(1)} / {m.group(2)}: private={repo.get('private')}, template={repo.get('is_template')}, size={repo.get('size')} KB, "
+        f"default branch {repo.get('default_branch')}")
+    head = requests.get(f"{api}/commits?per_page=1", headers=hdr, timeout=30).json()
+    sha = head[0]["sha"] if isinstance(head, list) and head else ""
+    say(f"head {sha[:7]}: {head[0]['commit']['message'].splitlines()[0][:80] if sha else '(empty)'}")
+    runs = requests.get(f"{api}/actions/runs?per_page=20", headers=hdr, timeout=30).json().get("workflow_runs") or []
+    for r in runs:
+        say(f"  {r['name']:10} {r['event']:9} {r['status']:10} {r.get('conclusion')!s:9} {r['head_sha'][:7]} {r['created_at']}")
+    bad = [r for r in runs if r["head_sha"] == sha and r["status"] == "completed" and r.get("conclusion") not in ("success", "skipped")]
+    return 1 if bad else 0
+
+
 def notice_forms(secrets) -> int:
     """Reads only. For notice(s) NOTICE_IDS (default 1815): every form link in the text (in order), the companies
     named next to it (the text between the previous link and this one, and on the link's own line), the form page's
@@ -1520,7 +1543,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

@@ -142,6 +142,14 @@ def apply(checks: dict, notices: dict, roles: list[dict], index, mails: list[dic
     mc, mn = mail_docs(mails or [], index)
     checks, notices = {**checks, **mc}, {**notices, **mn}
     jd_checks = [(nid, c) for nid, c in checks.items() if (c or {}).get("status") == "jd" and (c.get("context") or "").strip()]
+    # the same PDF posted again (a reminder, an extension): one document, the first posting, "posted again as 1860"
+    import hashlib
+    key = lambda c: hashlib.sha1(re.sub(r"\s+", " ", c["context"]).strip().encode()).hexdigest()  # noqa: E731
+    first: dict = {}
+    for nid, c in sorted(jd_checks, key=lambda x: str((notices.get(x[0]) or {}).get("notice_time") or "")):
+        first.setdefault(key(c), []).append(nid)
+    reposts = {ids[0]: ids[1:] for ids in first.values()}
+    jd_checks = [(nid, c) for nid, c in jd_checks if nid in reposts]
     jd_checks.sort(key=lambda x: str((notices.get(x[0]) or {}).get("notice_time") or ""), reverse=True)
     by_id = {r["id"]: r for r in roles}
     taken, ups, stats = set(), [], {"jd_files": len(jd_checks), "roles_linked": 0, "roles_gained": 0, "sections": 0,
@@ -159,8 +167,12 @@ def apply(checks: dict, notices: dict, roles: list[dict], index, mails: list[dic
             if r.get("jd_source") not in WEAK:
                 continue                                   # a real JD of its own: kept
             taken.add(rid)
+            again = [str((notices.get(x) or {}).get("notice_id") or "") for x in reposts.get(nid, [])]
+            note = note_for(n)
+            if again and not n.get("mail"):
+                note = note[:-1] + f"; posted again as {', '.join(a for a in again if a)})" if note.endswith(")") else note
             row = {"id": rid, "jd_text": text[:20000], "jd_source": "mail" if n.get("mail") else "notice", "jd_url": url,
-                   "jd_note": note_for(n) + ("" if own else (" (one PDF for several roles)" if len(rs) > 1 else ""))}
+                   "jd_note": note + ("" if own else (" (one PDF for several roles)" if len(rs) > 1 else ""))}
             stats["roles_linked"] += 1
             stats["sections"] += own
             if r.get("jd_source") not in ("notice", "mail"):

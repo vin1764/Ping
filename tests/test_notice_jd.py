@@ -75,3 +75,13 @@ def test_coverage_counts_facts_the_documents_add():
     notice_jd.apply({NOTICE["id"]: {"status": "jd", "context": pdfs.jd_document(JD)}}, {NOTICE["id"]: NOTICE}, roles, CompanyIndex(roles))
     cov = notice_jd.coverage(roles)
     assert cov["from_docs"] == 2 and cov["doc_facts"]["ctc"] == 2
+
+
+def test_the_same_pdf_posted_again_is_one_document_the_first_posting():
+    roles = [dict(r) for r in ROLES]
+    again = {**NOTICE, "id": "2026-2027:1860", "notice_id": 1860, "notice_time": "2026-11-24T17:54:00+05:30"}
+    doc = {"status": "jd", "context": pdfs.jd_document(JD)}
+    ups, _ = notice_jd.apply({NOTICE["id"]: doc, again["id"]: dict(doc)}, {NOTICE["id"]: NOTICE, again["id"]: again},
+                             roles, CompanyIndex(roles))
+    assert {u["jd_note"] for u in ups} == {"the PDF on notice 1841 (24 Nov; posted again as 1860)"}
+    assert all("id=1841" in u["jd_url"] for u in ups)

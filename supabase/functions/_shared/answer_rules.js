@@ -140,6 +140,9 @@
         (e.key.includes(" ") && e.key.length >= 6 && joined.includes(e.key.replace(/ /g, "")));
       if (whole) { hits.push(e); e.key.split(" ").forEach((x) => used.add(x)); }
     }
+    // a later word of a name that no other company has ("namo" of "Nation with Namo")
+    const wordCount = new Map();
+    for (const e of ents) for (const w of new Set(e.words || [])) wordCount.set(w, (wordCount.get(w) || 0) + 1);
     // pass 2: one distinctive word, a typo of it, a prefix, initials or an alias
     for (const e of ents) {
       if (hits.includes(e)) continue;
@@ -148,12 +151,21 @@
       let hit = null;
       for (const t of toks) {
         if (used.has(t) || STOP.has(t) || /^\d+$/.test(t)) continue;
-        if ((t === w0 && t.length >= 2) || (t.length === 2 && t === e.words[0] && /^[a-z]{2}$/.test(t)) || (t.length >= 5 && w0.length > t.length && w0.startsWith(t)) || editClose(t, w0) ||
+        if ((t === w0 && t.length >= 2) || (t.length === 2 && t === e.words[0] && /^[a-z]{2}$/.test(t)) ||
+            (t.length >= 4 && e.words.indexOf(t) > 0 && wordCount.get(t) === 1 && !LEGAL.has(t)) || (t.length >= 5 && w0.length > t.length && w0.startsWith(t)) || editClose(t, w0) ||
             (t.length >= 3 && e.words.length >= 3 && t === initials)) { hit = t; break; }
         const want = ALIASES[t];
         if (want && want.some((w) => e.key.includes(w) || e.key.replace(/ /g, "").includes(w.replace(/ /g, "")))) { hit = t; break; }
       }
       if (hit) { hits.push(e); hit.split(" ").forEach((x) => used.add(x)); }
+    }
+    // "jpmc": a name only notices use, with no roles, gives way to the company its alias means ("JP MorganChase")
+    const hasRoles = (e) => (data?.roles || []).some((r) => e.raw.has(r.company));
+    for (let i = 0; i < hits.length; i++) {
+      if (hasRoles(hits[i])) continue;
+      const want = ALIASES[String(hits[i].name || "").toLowerCase().replace(/[^a-z0-9]/g, "")];
+      const alt = want && ents.find((e) => e !== hits[i] && hasRoles(e) && want.some((w) => e.key.includes(w) || e.key.replace(/ /g, "").includes(w.replace(/ /g, ""))));
+      if (alt) hits[i] = { ...alt, raw: new Set([...alt.raw, ...hits[i].raw]) };
     }
     // "Deloitte Touche Tohmatsu India" asked: that company, not also "Deloitte" (the name that matches more words wins)
     if (hits.length > 1) {
@@ -396,10 +408,10 @@
       .sort((a, b) => String(b.notice_time || "").localeCompare(String(a.notice_time || "")));
     const seenFile = new Set();
     for (const r of roles.filter((x) => ["notice", "mail"].includes(x.jd_source) && (field === "jd" || F.re.test(x.jd_text || "")))) {
-      const key = r.jd_note || r.jd_url;
+      const key = r.jd_url || r.jd_note;
       if (seenFile.has(key)) { found.find((f) => f.key === key).roles.push(r); continue; }
       seenFile.add(key);
-      found.push({ where: r.jd_source === "mail" ? "mail" : "attachment", key, label: r.jd_note || "a notice's file", link: r.jd_url,
+      found.push({ where: r.jd_source === "mail" ? "mail" : "attachment", key, label: String(r.jd_note || "a notice's file").replace(/ \(one PDF for several roles\)$/, ""), link: r.jd_url,
                    roles: [r], snippet: field === "jd" ? "" : sentence(r.jd_text, F.re) });
     }
     for (const n of notices) {
@@ -985,11 +997,12 @@
   ].join("|"), "i");
   function isRecheck(message) { return RECHECK.test(String(message || "")); }
 
+  const ROLLISH = /^\d{2}[a-z]{2}\d{5}$/;
   function parse(text, data, ents) {
     const { hits, used } = matchCompanies(text, data, ents);
     const intents = intentsOf(text);
     const range = timeRange(text, data.now);
-    const unknown = hits.length ? [] : tokensOf(text).filter((t) => !STOP.has(t) && !used.has(t) && t.length >= 3 && !/^\d+$/.test(t));
+    const unknown = hits.length ? [] : tokensOf(text).filter((t) => !STOP.has(t) && !used.has(t) && t.length >= 3 && !/^\d+$/.test(t) && !ROLLISH.test(t) && t !== "roll" && t !== "no");
     return { intents, hits, range, unknown, toks: tokensOf(text) };
   }
   // ---------------------------------------------------------------- help: Ping about itself (docs/HELP.md -> help.js)
@@ -1129,6 +1142,12 @@
     return noRepeat(routedOnce(r, question, data), data && data.lastAnswer, question);
   }
   function routedOnce(r, question, data) {
+    const out0 = routedCore(r, question, data);
+    if (/\b\d{2}[a-z]{2}\d{5}\b/i.test(String(question)) && out0 && out0.text && !["ack", "help"].includes(out0.kind))
+      return { ...out0, text: `I look for your own roll number only: other students' rows in a list are never kept.\n${out0.text}` };
+    return out0;
+  }
+  function routedCore(r, question, data) {
     if (r.kind === "ack") return { kind: "ack", companies: [], text: "👍" };
     // a re-check is done by the page (a live, read-only ERP fetch for that company); here only what it's doing,
     // never the old answer again as if it were fresh

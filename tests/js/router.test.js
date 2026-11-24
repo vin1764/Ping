@@ -140,3 +140,19 @@ test("'that' starting a clause doesn't make a new question a follow-up (found by
   assert.match(f.why, /follow-up/);
   assert.deepStrictEqual(f.spec.hits.map((h) => h.name), ["Esri"]);
 });
+
+// found by the audit of past answers (Admin chat-audit): a name only notices use, a later word, a roll number
+test("JPMC means JP MorganChase; 'namo' finds Nation with Namo; a roll number is never a company", () => {
+  const d = { ...data, roles: [...data.roles,
+    { id: "j1", company: "JP MorganChase", designation: "Analyst", jd_source: "inline", jd_text: "Research analyst for the global research team. Build models. ".repeat(6), applied: false },
+    { id: "n1", company: "Nation with Namo", designation: "Associate", ctc: 1900000, applied: false }],
+    notices: [...data.notices, { company: "JPMC", subject: "PPT", notice_time: "2026-11-20T10:00:00+05:30" }] };
+  const jd = R.routed(R.route("summarise JPMC's JD", [], d), "summarise JPMC's JD", d).text;
+  assert.match(jd, /JP MorganChase \(Analyst\)/);
+  assert.doesNotMatch(jd, /I don't have/);
+  const namo = R.routed(R.route("namo ctc", [], d), "namo ctc", d).text;
+  assert.match(namo, /Nation with Namo CTC: 19,00,000/);
+  const roll = R.routed(R.route("is roll no 22AG36010 on the namo shortlist", [], d), "is roll no 22AG36010 on the namo shortlist", d).text;
+  assert.match(roll, /^I look for your own roll number only/);
+  assert.doesNotMatch(roll, /I don't have (Roll|22ag)/i);
+});

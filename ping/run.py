@@ -615,7 +615,8 @@ class Runner:
                         contacts.append({"id": f"{n['id']}:{c['phone']}", "notice_id": n["notice_id"],
                                          "company": n["company"], "name": c["name"], "phone": c["phone"]})
                 if contacts:
-                    self.store.upsert("contacts", contacts)
+                    # one row per id: a notice that lists the same number twice can't fail the whole save
+                    self.store.upsert("contacts", list({c["id"]: c for c in contacts}.values()))
             if checks:
                 rows = [{"notice_id": k, **{f: v.get(f) for f in (
                     "status", "matched_by", "format", "pages", "text_chars", "scanned", "ocr", "roll_like_count",

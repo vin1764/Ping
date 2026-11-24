@@ -92,7 +92,7 @@
   // offline: the thread as it was when last loaded; reading works, sending queues
   class OfflineSource {
     constructor(snap) { this.s = snap; this.kind = snap.kind || "real"; this.demo = !!snap.demo; this.offline = true; }
-    async load() { return this.s.data; }
+    async load() { return unpackDemo(this.s.data); }   // a saved copy in the demo file's packed form works too
     async chat() { return this.s.chat || []; }
     async readAt() { return this.s.readAt || null; }
     async setReadAt() {}

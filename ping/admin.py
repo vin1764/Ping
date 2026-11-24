@@ -1369,6 +1369,12 @@ def schedule_status(secrets) -> int:
     return 0
 
 
+def live_providers(secrets) -> int:
+    """evals/ask_ping/live_providers.py: 20 open questions as a demo visitor on the live keys, per provider."""
+    import subprocess
+    return subprocess.run([sys.executable, str(ROOT / "evals" / "ask_ping" / "live_providers.py")]).returncode
+
+
 def feedback_evals(secrets) -> int:
     """evals/feedback: 12 feedback messages against the deployed function, model on and off (evals keys)."""
     import subprocess
@@ -1543,7 +1549,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

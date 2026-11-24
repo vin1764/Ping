@@ -562,8 +562,9 @@ ${kept.map((m) => `${m.role === "me" ? "Student" : "Ping"}: ${m.text.replace(/\s
 
 Question: ${ask}${replyNote}`;
 
+  // every model try ("groq/openai/gpt-oss-120b:200:1830ms"), so the page's checks can score each provider
   const done = (answer: string, model: string, extra: Record<string, unknown> = {}) =>
-    json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, ...extra, ...(saved ? { prefs, prefs_changed: true } : {}) });
+    json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, tried, ...extra, ...(saved ? { prefs, prefs_changed: true } : {}) });
   const tried: string[] = [];
   // one call: the answer, or why there is none ("busy" may be retried)
   const call = async (model: string, limit: number): Promise<{ answer?: string; busy: boolean }> => {

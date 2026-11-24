@@ -14,7 +14,13 @@ import { chatComplete } from "../_shared/openai_compat.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
+import "../_shared/understand.js";   // the model reads the question and words the reply; the rules fetch every fact
 const Rules = (globalThis as any).PingRules;
+const U = (globalThis as any).PingUnderstand;
+// the two model steps around the rules: off until the follow-up evals pass (Admin > followup-evals), then on
+const MODEL_STEPS = (Deno.env.get("PING_MODEL_STEPS") || "off") === "on";
+const UNDERSTAND_MS = 3_000;         // reading the question: past this, the rules alone route it
+const COMPOSE_MS = 2_500;            // wording the reply: past this, the rules' answer is sent as it is
 
 // Gemini, for the big-context jobs (re-marking every role when your targets change: one call for all of them,
 // cached in role_marks). flash-lite first: flash-latest answered 0 of 7 calls on 23 Nov.
@@ -359,7 +365,37 @@ Deno.serve(async (req) => {
   const named = Rules.matchCompanies(ask, factsData).hits.length;
   const askRoute = reply && isQuestion && !named && reply.companies.length
     ? `${ask} ${reply.companies.map((c: string) => Rules.shortName(c)).join(" ")}` : ask;
-  const routed = Rules.route(askRoute, previous, factsData);
+  // 1. the model reads the question with the last 6 turns (Groq, then Gemini flash-lite; 3 s cap): company, role, fact,
+  //    source, follow-up. Checked against the data; what the question left out is filled in for the rules.
+  const noAiEarly = body?.no_ai === true;
+  const modelCall = async (p: string, ms: number): Promise<{ text?: string; model?: string; error?: string }> => {
+    const t = Date.now();
+    if (groqKey) {
+      const r = await chatComplete({ baseUrl: GROQ_URL, key: groqKey, model: GROQ_MODEL, prompt: p, timeoutMs: ms, maxTokens: 700,
+                                     extra: /gpt-oss/.test(GROQ_MODEL) ? { reasoning_effort: "low", include_reasoning: false } : {} });
+      if (r.status === 200 && r.text) return { text: r.text, model: `groq/${GROQ_MODEL}` };
+    }
+    const left = ms - (Date.now() - t);
+    if (key && left > 400) {
+      try {
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${PRIMARY}:generateContent`, {
+          method: "POST", signal: AbortSignal.timeout(left), headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: p }] }], generationConfig: { temperature: 0, maxOutputTokens: 700 } }) });
+        if (r.ok) {
+          const out = await r.json();
+          const text = out?.candidates?.[0]?.content?.parts?.map((x: { text?: string }) => x.text || "").join("").trim();
+          if (text) return { text, model: PRIMARY };
+        }
+      } catch (_) { /* past the cap: the rules alone */ }
+    }
+    return { error: "no model answer" };
+  };
+  const understood = MODEL_STEPS && !noAiEarly && (groqKey || key) && !Rules.feedbackLike(ask)
+    ? await U.understand({ question: ask, turns: kept.map((m) => ({ role: m.role, text: m.text })), data: factsData, Rules,
+                           call: (p: string) => modelCall(p, UNDERSTAND_MS), capMs: UNDERSTAND_MS })
+    : null;
+  const askUnderstood = understood?.u ? U.augment(askRoute, understood.u, factsData, Rules) : askRoute;
+  const routed = Rules.route(askUnderstood, previous, factsData);
   // the details a FACT answer about a company needs (pay, bond, departments, backlogs), for those companies only
   const withDetails = async (hits: any[]) => {
     const raw = [...new Set(hits.flatMap((e: any) => [...e.raw]))];
@@ -397,10 +433,22 @@ Deno.serve(async (req) => {
   };
   if (routed.kind !== "open") {
     await Promise.all([withDetails(routed.spec?.hits || []), withSources(routed.spec?.hits || [])]);
-    const out = Rules.routed(routed, ask, factsData);
-    console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", route: routed.kind, why: routed.why,
-      intents: routed.spec?.intents || [], kind: out.kind, ms: Date.now() - t0 }));
-    return json({ answer: saved ? `${saved}\n\n${out.text}` : out.text, model: "rules", route: routed.kind,
+    const out = Rules.routed(routed, askUnderstood, factsData);
+    // 3. the model words the reply from the rules' answer only; kept if every date, time, number, name, status and
+    //    link in it is in that answer and no link is dropped (U.verify), else the rules' answer as it is
+    const names = Rules.entities(factsData).map((e: any) => e.name);
+    const composed = MODEL_STEPS && !noAiEarly && (groqKey || key) && out.recheck === undefined
+      ? await U.compose({ question: ask, answer: out.text, data: factsData, companyNames: names,
+                          call: (p: string) => modelCall(p, COMPOSE_MS), capMs: COMPOSE_MS })
+      : null;
+    const text = composed?.used ? composed.text : out.text;
+    console.log(JSON.stringify({ event: "answered", key: keyName, role, model: composed?.used ? `rules+${composed.model}` : "rules",
+      route: routed.kind, why: routed.why, intents: routed.spec?.intents || [], kind: out.kind,
+      understood: understood ? { ok: !!understood.u, ms: understood.ms, model: understood.model, why: understood.why, added: askUnderstood !== askRoute } : null,
+      composed: composed ? { used: composed.used, ms: composed.ms, why: composed.why || null } : null, ms: Date.now() - t0 }));
+    return json({ answer: saved ? `${saved}\n\n${text}` : text, model: composed?.used ? `rules+${composed.model}` : "rules", route: routed.kind,
+                  understood: understood ? { ...understood.u, ms: understood.ms, fell: understood.fell, why: understood.why } : null,
+                  asked_as: askUnderstood, composed: composed ? { used: composed.used, ms: composed.ms, why: composed.why || null } : null,
                   ...(out.recheck !== undefined ? { recheck: out.recheck, companies: out.companies } : {}),
                   ...(saved ? { prefs, prefs_changed: true } : {}) });
   }

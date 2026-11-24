@@ -20,6 +20,7 @@ AI_PY = ROOT / "ping" / "ai.py"
 CONFIG_PY = ROOT / "ping" / "config.py"
 DASH_YML = ROOT / ".github" / "workflows" / "dashboard.yml"
 ASK_TS = ROOT / "supabase" / "functions" / "ask-ping" / "index.ts"
+UNDERSTAND_JS = ROOT / "supabase" / "functions" / "_shared" / "understand.js"
 OUT = ROOT / "docs" / "PROMPTS.md"
 
 
@@ -157,6 +158,40 @@ def ask_ping_prompt() -> dict:
         "prompt": prompt,
     }
 
+def understand_prompts() -> list[dict]:
+    src = UNDERSTAND_JS.read_text(encoding="utf-8")
+    ts = ASK_TS.read_text(encoding="utf-8")
+    groq = _one(r'const GROQ_MODEL = Deno\.env\.get\("PING_GROQ_MODEL"\) \|\| "([^"]+)"', ts, "GROQ_MODEL")
+    gemini = _one(r'const PRIMARY = Deno\.env\.get\("PING_CHAT_MODEL"\) \|\| "([^"]+)"', ts, "PRIMARY")
+    ms = lambda name: int(_one(rf"const {name} = ([\d_]+);", ts, name).replace("_", ""))  # noqa: E731
+    read = _one(r"function prompt\(\{ question, turns, companies, roles \}\) \{.*?return `(.*?)`;\n  \}", src, "the understand prompt", re.S)
+    word = _one(r"function composePrompt\(\{ question, answer \}\) \{\n    return `(.*?)`;\n  \}", src, "the compose prompt", re.S)
+    common = [f"Groq `{groq}` (reasoning low, at most 700 tokens out), then Gemini `{gemini}` with what's left of the cap; "
+              "keys as for the chat (eval keys for evals)"]
+    return [
+        {"title": "Ask Ping: reading the question", "where": "`supabase/functions/_shared/understand.js` (`prompt`), called by "
+         "`supabase/functions/ask-ping/index.ts` before the rules route the question",
+         "when": "Every chat question that isn't feedback. The answer is never the model's: it only says what the question "
+                 "is about, and the rules fetch and say every fact.",
+         "input": "The question, the last 6 turns, every listed company's name, and the roles of the companies in the conversation.",
+         "output": "One JSON object {company, role, fact, source, is_followup, scope}. Checked against the data: a company or role "
+                   "it doesn't have becomes null, an unknown fact \"other\", an unknown source \"any\". What the question left out "
+                   "is added to it for the rules (\"what all roles?\" -> \"what all roles? RISA Labs\").",
+         "models": [f"groq/{groq}", gemini],
+         "settings": common + [f"cap {ms('UNDERSTAND_MS') / 1000:g} s: past it, or unreadable, the rules route the question as asked"],
+         "prompt": read},
+        {"title": "Ask Ping: wording the reply", "where": "`supabase/functions/_shared/understand.js` (`composePrompt`), called by "
+         "`supabase/functions/ask-ping/index.ts` after the rules answered",
+         "when": "Every rules answer of 40 characters or more.",
+         "input": "The question and the rules' answer (every fact fetched).",
+         "output": "The answer reworded. Kept only if every date, time, number, company, role, status word and link in it is in the "
+                   "rules' answer and no link or button of it is dropped (`verify`); otherwise the rules' answer is sent as it is.",
+         "models": [f"groq/{groq}", gemini],
+         "settings": common + [f"cap {ms('COMPOSE_MS') / 1000:g} s: past it, the rules' answer is sent as it is"],
+         "prompt": word},
+    ]
+
+
 def render() -> str:
     lines = [
         "# Prompts Ping sends to a model",
@@ -164,11 +199,11 @@ def render() -> str:
         "_Generated from the source by `python setup/export_prompts.py`; do not edit by hand. "
         "`tests/test_prompts_doc.py` fails when this file is out of date._",
         "",
-        "Ping sends text to a model in exactly four places. Everything else (reading the ERP, notices, PDFs, "
+        "Ping sends text to a model in exactly six places. Everything else (reading the ERP, notices, PDFs, "
         "eligibility, the feed) is rules, with no model involved.",
         "",
     ]
-    for i, p in enumerate((notice_prompt(), relevance_prompt(), cv_prompt(), ask_ping_prompt()), 1):
+    for i, p in enumerate((notice_prompt(), relevance_prompt(), cv_prompt(), ask_ping_prompt(), *understand_prompts()), 1):
         lines += [
             f"## {i}. {p['title']}", "",
             f"- **Where it runs:** {p['where']}",

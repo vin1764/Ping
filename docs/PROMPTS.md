@@ -2,7 +2,7 @@
 
 _Generated from the source by `python setup/export_prompts.py`; do not edit by hand. `tests/test_prompts_doc.py` fails when this file is out of date._
 
-Ping sends text to a model in exactly four places. Everything else (reading the ERP, notices, PDFs, eligibility, the feed) is rules, with no model involved.
+Ping sends text to a model in exactly six places. Everything else (reading the ERP, notices, PDFs, eligibility, the feed) is rules, with no model involved.
 
 ## 1. Notice reader fallback (deadlines and companies the rules couldn't find)
 
@@ -99,7 +99,7 @@ CV text:
 - Groq: OpenAI-compatible `chat/completions` (`supabase/functions/_shared/openai_compat.ts`); key `GROQ_API_KEY` for students and demo visitors, `GROQ_API_KEY_EVALS` for evals (no evals key: evals skip Groq); `PING_GROQ_MODEL` replaces the model; reasoning effort low, at most 1,500 tokens out
 - Gemini: `generateContent`; key `GEMINI_API_KEY`, or `GEMINI_API_KEY_EVALS` for evals and Admin checks (requests that prove they hold it with `x-ping-evals`); `PING_CHAT_MODEL` replaces the model
 - order: Groq once with 6 s; then gemini-3.1-flash-lite for at most 10 s, once more after 500 ms when it's busy (429, 5xx, timeout); 15 s in all; then the rules answer
-- generation (Gemini): `{ temperature: 0.2, maxOutputTokens: 4096 }`
+- generation (Gemini): `{ temperature: 0, maxOutputTokens: 700 }`
 - after the reply: every number, time and amount in it must be in the prompt's FACTS part, or the next in the chain answers, and in the end the rules (logged `model_count_mismatch`)
 - logged per answer: which provider and model answered (`model`), every try with its status and time (`tried`)
 
@@ -194,4 +194,57 @@ Conversation so far, oldest first:
 ${convo || "(this is the first message)"}
 
 Question: ${ask}${replyNote}
+````
+
+## 5. Ask Ping: reading the question
+
+- **Where it runs:** `supabase/functions/_shared/understand.js` (`prompt`), called by `supabase/functions/ask-ping/index.ts` before the rules route the question
+- **When:** Every chat question that isn't feedback. The answer is never the model's: it only says what the question is about, and the rules fetch and say every fact.
+- **Input:** The question, the last 6 turns, every listed company's name, and the roles of the companies in the conversation.
+- **Expected output:** One JSON object {company, role, fact, source, is_followup, scope}. Checked against the data: a company or role it doesn't have becomes null, an unknown fact "other", an unknown source "any". What the question left out is added to it for the rules ("what all roles?" -> "what all roles? RISA Labs").
+- **Models, in fallback order:** `groq/openai/gpt-oss-120b` → `gemini-3.1-flash-lite`
+- Groq `openai/gpt-oss-120b` (reasoning low, at most 700 tokens out), then Gemini `gemini-3.1-flash-lite` with what's left of the cap; keys as for the chat (eval keys for evals)
+- cap 3 s: past it, or unreadable, the rules route the question as asked
+
+**Prompt, verbatim:**
+
+````text
+You read a student's message to a placement assistant. Reply with ONE JSON object and nothing else:
+{"company": string|null, "role": string|null, "fact": one of ${JSON.stringify(FACTS)}, "source": one of ${JSON.stringify(SOURCES)}, "is_followup": true|false, "scope": "one"|"all"}
+- company: the company the message is about, written as in the list below; if the message names none but continues the conversation, the company the conversation is about; null if none.
+- role: a role of that company from the list below if the message names or means one; else null.
+- fact: what is asked (jd = job description, ctc = pay, eligibility, deadline, form, test, shortlist, roles = which roles, cv = which CV to use; other).
+- source: where the student wants it looked up (erp, notice, mail, form) if they say so; else any.
+- is_followup: the message only makes sense with the earlier messages.
+- scope: "all" when the message asks about every role / every company ("all roles", "everything"), else "one".
+Never invent a company or role that isn't in the lists.
+
+Companies: ${(companies || []).slice(0, 200).join("; ")}
+Roles of the companies in the conversation: ${(roles || []).slice(0, 60).join("; ") || "(none)"}
+
+Conversation, oldest first:
+${convo || "(none)"}
+
+Message: ${question}
+````
+
+## 6. Ask Ping: wording the reply
+
+- **Where it runs:** `supabase/functions/_shared/understand.js` (`composePrompt`), called by `supabase/functions/ask-ping/index.ts` after the rules answered
+- **When:** Every rules answer of 40 characters or more.
+- **Input:** The question and the rules' answer (every fact fetched).
+- **Expected output:** The answer reworded. Kept only if every date, time, number, company, role, status word and link in it is in the rules' answer and no link or button of it is dropped (`verify`); otherwise the rules' answer is sent as it is.
+- **Models, in fallback order:** `groq/openai/gpt-oss-120b` → `gemini-3.1-flash-lite`
+- Groq `openai/gpt-oss-120b` (reasoning low, at most 700 tokens out), then Gemini `gemini-3.1-flash-lite` with what's left of the cap; keys as for the chat (eval keys for evals)
+- cap 2.5 s: past it, the rules' answer is sent as it is
+
+**Prompt, verbatim:**
+
+````text
+Rewrite this answer from a placement assistant so it reads naturally for a hurried student: short, plain, no greeting, no sign-off. Use ONLY what the answer says: do not add, drop or change any company, role, date, time, number, status or link. Keep every markdown link and button exactly as written, e.g. [Open](https://...) or [Associate Product Manager](#ask:...). Keep it at most as long as the answer. Reply with the rewritten answer only.
+
+Student asked: ${question}
+
+Answer:
+${answer}
 ````

@@ -19,6 +19,7 @@ const chat = [
     reply_quote: { sender: "Ping", text: "Ather Energy: fill the form by Fri 17:00" } },
   { role: "me", text: "ather energy jd", created_at: at(70) },
   { role: "me", text: "show me ather again", created_at: at(71) },                     // feedback: skipped
+  { role: "me", text: "any test today?", created_at: at(60) },                          // about a time: not a follow-up
   { role: "me", text: "navi and ather ctc", created_at: at(80) },
   { role: "me", text: "cutoff?", created_at: at(81) },                                  // after two companies: skipped
 ];

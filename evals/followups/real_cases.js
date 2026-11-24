@@ -7,7 +7,8 @@
 // B. Your own questions with the company left out: each of your questions that names exactly one company, with the
 //    company's words taken out ("nomura jd?" -> "jd"), asked after your nearest other question about a different
 //    company. Real wording on both sides, on your real data; the answer must be about the earlier question's company.
-// Preferences, help, feedback and questions too short to mean anything are skipped in both.
+// Preferences, help, feedback, questions about a time ("what's due tonight?": every company's) and questions too short
+// to mean anything are skipped in both.
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.PingRealCases = factory();
@@ -17,7 +18,11 @@
   function build(R, data, chat) {
     const ents = R.entities(data);
     const hitsOf = (t) => R.matchCompanies(String(t || ""), data, ents);
-    const skip = (t) => !/[a-z]{2}/i.test(t) || R.feedbackLike(t) || R.prefsLike(t) || R.helpTopic(t);
+    // "what's due tonight?", "any test today?": a question about a time, answered for every company, whatever came
+    // before; a follow-up points back ("the friday one", "same for it")
+    const now = data.now ? new Date(data.now) : new Date();
+    const standalone = (t) => !!R.timeRange(t, now) && !/\b(one|it|its|that|this|same|them|they)\b/i.test(t);
+    const skip = (t) => !/[a-z]{2}/i.test(t) || R.feedbackLike(t) || R.prefsLike(t) || R.helpTopic(t) || standalone(t);
     const historyBefore = (i) => chat.slice(Math.max(0, i - HISTORY), i).map((x) => ({ role: x.role, text: x.text }));
     const previousBefore = (i) => historyBefore(i).filter((x) => x.role === "me").map((x) => x.text).reverse();
     const A = [], B = [];

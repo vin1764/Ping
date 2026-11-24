@@ -66,53 +66,68 @@ async function hurried() {
            composed, fails: after.flat().filter((t) => !t.ok) };
 }
 
+// your real history (evals/followups/real_cases.js): A your real follow-ups, B your own questions with the company left
+// out. Each is answered as Ask Ping would: rules alone (before), and with the model steps on (after: the model reads
+// the question, the rules answer, the model words it and the check keeps or drops the wording). The added time is the
+// reading plus the wording, per question.
 async function real(file) {
   const fs = require("fs");
+  const C = require("./real_cases.js");
   const { data, chat } = JSON.parse(fs.readFileSync(file, "utf8"));
-  const me = chat.filter((m) => m.role === "me");
-  const cases = [];
-  for (let i = 1; i < chat.length; i++) {
-    const m = chat[i];
-    if (m.role !== "me") continue;
-    const prev = [...chat.slice(0, i)].reverse().find((x) => x.role === "me");
-    if (!prev || Date.parse(m.created_at) - Date.parse(prev.created_at) > 30 * 60000) continue;
-    if (R.matchCompanies(m.text, data).hits.length || R.feedbackLike(m.text)) continue;          // names its company: not a follow-up
-    if (R.prefsLike(m.text) || R.helpTopic(m.text)) continue;                                  // preferences, help: not a fact
-    // a "check again" stays in: it must re-check the topic company ("Checking the ERP for Nomura now…")
-    const topic = R.matchCompanies(prev.text, data).hits;
-    if (topic.length !== 1) continue;                                                           // the previous question's company
-    const history = chat.slice(Math.max(0, i - 12), i).map((x) => ({ role: x.role, text: x.text }));
-    cases.push({ q: m.text, prev: prev.text, company: topic[0].name, history });
-  }
+  const { A, B } = C.build(R, data, chat);
   const spec = { fact_says: {}, never: ["Which company", "I don't have", "couldn't tell", "not sure what"] };
-  let bOk = 0, aOk = 0, fell = 0; const lat = [], fails = [];
-  for (const c of cases) {
+  const names = R.entities(data).map((e) => e.name);
+  const out = [];
+  for (const c of [...A, ...B]) {
     const d = { ...data, lastAnswer: null };
-    const rb = R.route(c.q, [c.prev], d);
-    const tb = rb.kind === "open" ? "(couldn't tell)" : R.routed(rb, c.q, d).text;
     const turn = { company: c.company, fact: null };
-    const okB = !S.check(spec, turn, tb).length;
+    const rb = R.route(c.ask, c.previous, d);
+    const tb = rb.kind === "open" ? "(couldn't tell)" : R.routed(rb, c.ask, d).text;
     const u = await U.understand({ question: c.q, turns: c.history, data, Rules: R, call: (p) => call(p, 3000), capMs: 3000 });
-    lat.push(u.ms); if (u.fell) fell++;
-    const q = u.u ? U.augment(c.q, u.u, d, R) : c.q;
-    const ra = R.route(q, [c.prev], d);
-    const ta = ra.kind === "open" ? "(couldn't tell)" : R.routed(ra, q, d).text;
-    const why = S.check(spec, turn, ta);
-    if (okB) bOk++; if (!why.length) aOk++; else fails.push(`"${mask(c.q)}" after a ${c.company} question: ${why.join("; ")}`);
     await sleep(400);
+    const q = u.u ? U.augment(c.ask, u.u, d, R) : c.ask;
+    const ra = R.route(q, c.previous, d);
+    let ta = ra.kind === "open" ? "(couldn't tell)" : R.routed(ra, q, d).text;
+    let w = { ms: 0, used: false, why: "not run" };
+    if (ra.kind !== "open" && ra.kind !== "recheck") {
+      w = await U.compose({ question: c.q, answer: ta, data: d, companyNames: names, call: (p) => call(p, 2500), capMs: 2500 });
+      if (w.used) ta = w.text;
+      await sleep(400);
+    }
+    const why = S.check(spec, turn, ta);
+    out.push({ ...c, okB: !S.check(spec, turn, tb).length, okA: !why.length, why, read: u, worded: w, added: (u.ms || 0) + (w.ms || 0) });
   }
-  return { cases: cases.length, bOk, aOk, lat, fell, fails };
+  return out;
 }
 
 (async () => {
   const realFile = process.argv.indexOf("--real") > 0 ? process.argv[process.argv.indexOf("--real") + 1] : null;
   if (realFile) {
-    const r = await real(realFile);
-    console.log(`REAL HISTORY: ${r.cases} follow-ups (a company-less question within 30 min of one about a company)`);
-    console.log(`  before (rules alone): ${r.bOk}/${r.cases} (${Math.round(100 * r.bOk / Math.max(1, r.cases))}%)`);
-    console.log(`  after (model reading + rules): ${r.aOk}/${r.cases} (${Math.round(100 * r.aOk / Math.max(1, r.cases))}%)`);
-    console.log(`  reading step: median ${median(r.lat)} ms, worst ${Math.max(0, ...r.lat)} ms; fell back to the rules alone ${r.fell}/${r.cases}`);
-    for (const f of r.fails.slice(0, 15)) console.log(`  FAIL ${f}`);
+    const rs = await real(realFile);
+    const pct = (n, d) => `${n}/${d} (${Math.round(100 * n / Math.max(1, d))}%)`;
+    const line = (label, xs) => console.log(`  ${label}: rules alone ${pct(xs.filter((x) => x.okB).length, xs.length)}, ` +
+      `with the model steps ${pct(xs.filter((x) => x.okA).length, xs.length)}`);
+    const A = rs.filter((x) => x.group === "A"), B = rs.filter((x) => x.group === "B");
+    console.log(`REAL HISTORY: ${rs.length} follow-ups (A: ${A.length} real follow-ups, ${A.filter((x) => x.how === "reply").length} of them replies; ` +
+                `B: ${B.length} of your own questions with the company left out)`);
+    line("A, your real follow-ups", A); line("B, company left out", B); line("all", rs);
+    const added = rs.map((x) => x.added), read = rs.map((x) => x.read.ms || 0), worded = rs.filter((x) => x.worded.ms).map((x) => x.worded.ms);
+    const by = {}; for (const x of rs) { const k = x.read.model || "none (fell back)"; by[k] = (by[k] || 0) + 1; }
+    console.log(`  added time per question (reading + wording): median ${median(added)} ms, worst ${Math.max(0, ...added)} ms`);
+    console.log(`    reading: median ${median(read)} ms; wording: median ${median(worded)} ms; who answered the reading: ${JSON.stringify(by)}`);
+    console.log(`  fell back to the rules alone: reading ${rs.filter((x) => x.read.fell).length}/${rs.length}; wording kept ${rs.filter((x) => x.worded.used).length}/${rs.filter((x) => x.worded.why !== "not run" && x.worded.why !== "short").length}`);
+    const better = rs.filter((x) => x.okA && !x.okB), worse = rs.filter((x) => !x.okA && x.okB);
+    console.log(`  the model steps fixed ${better.length} and broke ${worse.length}`);
+    for (const x of worse.slice(0, 10)) console.log(`  BROKE [${x.group}] "${mask(x.q)}" (about ${x.company}): ${x.why.join("; ")}`);
+    for (const x of rs.filter((x) => !x.okA && !x.okB).slice(0, 10)) console.log(`  BOTH MISS [${x.group}] "${mask(x.q)}" (about ${x.company}): ${x.why.join("; ")}`);
+    // the rule for turning PING_MODEL_STEPS on: beats the rules alone on this replay and adds at most 1.5 s median,
+    // measured with Groq first, then flash-lite, as live runs it
+    const okA = (xs) => xs.filter((x) => x.okA).length, okB = (xs) => xs.filter((x) => x.okB).length;
+    const reasons = [];
+    if (!GROQ) reasons.push("no Groq eval key: live calls Groq first, so this run doesn't measure what live would do");
+    if (okA(rs) <= okB(rs)) reasons.push(`doesn't beat the rules alone (${okA(rs)} vs ${okB(rs)})`);
+    if (median(added) > 1500) reasons.push(`adds ${median(added)} ms median (over 1500)`);
+    console.log(reasons.length ? `VERDICT: keep PING_MODEL_STEPS off: ${reasons.join("; ")}` : "VERDICT: turn PING_MODEL_STEPS on");
     return;
   }
   const h = await hurried();

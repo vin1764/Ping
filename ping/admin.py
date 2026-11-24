@@ -1848,8 +1848,9 @@ def followup_evals(secrets) -> int:
             "emails": [{k: m.get(k) for k in ("id", "received_at", "sender", "subject", "snippet", "company", "main_link", "due_at", "pdf")}
                        for m in store.select("emails", REAL)],
             "forms": [f for f in store.select("forms", {}) if not f.get("is_sample")]}
-    chat = sorted([{"role": m["role"], "text": m["text"], "created_at": m["created_at"]}
-                   for m in store.select("chat_messages", {"is_sample": "is.false"}, columns="role,text,created_at")],
+    chat = sorted([{"role": m["role"], "text": m["text"], "created_at": m["created_at"], "reply_to": m.get("reply_to"),
+                    "reply_quote": m.get("reply_quote")}
+                   for m in store.select("chat_messages", {"is_sample": "is.false"}, columns="role,text,created_at,reply_to,reply_quote")],
                   key=lambda m: m["created_at"])
     env = {k: v for k, v in os.environ.items() if k not in ("GEMINI_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY_LIVE")}
     root = Path(__file__).resolve().parents[1]

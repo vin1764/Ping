@@ -43,9 +43,10 @@ for (const w of evals.render) {
 
 test("re-check phrases, and questions that aren't", () => {
   for (const q of ["check again", "recheck", "are you sure?", "that's wrong", "I think I'm on it", "I got a call from firstclub",
-                   "check the erp for the latest", "don't answer on old data", "double check", "Check erp bruh for latest updates, dont answer on old data"])
+                   "check the erp for the latest", "don't answer on old data", "double check", "Check erp bruh for latest updates, dont answer on old data",
+                   "check i guess it has listed on epr", "it's up on the portal now", "check epr"])
     assert.ok(R.isRecheck(q), q);
-  for (const q of ["what's due tonight", "groww ctc", "which cv for zeta", "am I on the firstclub shortlist", "latest notice from groww"])
+  for (const q of ["what's due tonight", "groww ctc", "which cv for zeta", "am I on the firstclub shortlist", "latest notice from groww", "what's listed on the erp today?"])
     assert.ok(!R.isRecheck(q), q);
 });
 

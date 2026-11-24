@@ -268,3 +268,16 @@ Decisions:
   chat when Ping found it; push covers assignments, documents, CVs and online tests to take; Forms is now To do (every
   task with a deadline, one list by deadline, its type, its link as the button); Today covers the next 48 hours.
 - Mail is read in every run, also when the ERP login failed (from 24 Nov, mail rules v3).
+
+## 24 Nov: the model reading the question and wording the reply stay off
+
+- Follow-up evals (Admin > followup-evals, eval keys only; no Groq eval key is set, so the reading step ran on Gemini
+  flash-lite alone). 30 hurried-student conversations: the rules alone went from 83% (follow-ups 72%) to 100% after
+  the rule fixes (tuned on that set). The model reading added nothing on top (100% → 100%), took a median 2.2 s
+  (worst 3.0 s) and fell back to the rules on 88% of turns; the worded reply was kept 2 times in 65 (the rest timed
+  out at 2.5 s).
+- Real chat history (7 follow-ups): rules 4/7, with the model reading 4/7. Of the 3 misses, one was a real follow-up
+  ("check i guess it has listed on epr": now a re-check of the topic company, typo included); "any test today?" is
+  answered for every company, and ".." isn't a question.
+- So PING_MODEL_STEPS stays "off": it would add ~2 s to every answer for no gain. The wiring is deployed and logged;
+  it's worth re-running once a Groq eval key (GROQ_API_KEY_EVALS) is set, since Groq is the faster first choice.

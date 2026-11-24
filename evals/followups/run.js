@@ -77,7 +77,8 @@ async function real(file) {
     const prev = [...chat.slice(0, i)].reverse().find((x) => x.role === "me");
     if (!prev || Date.parse(m.created_at) - Date.parse(prev.created_at) > 30 * 60000) continue;
     if (R.matchCompanies(m.text, data).hits.length || R.feedbackLike(m.text)) continue;          // names its company: not a follow-up
-    if (R.prefsLike(m.text) || R.helpTopic(m.text) || R.isRecheck(m.text)) continue;           // preferences, help, "check again": not a fact
+    if (R.prefsLike(m.text) || R.helpTopic(m.text)) continue;                                  // preferences, help: not a fact
+    // a "check again" stays in: it must re-check the topic company ("Checking the ERP for Nomura now…")
     const topic = R.matchCompanies(prev.text, data).hits;
     if (topic.length !== 1) continue;                                                           // the previous question's company
     const history = chat.slice(Math.max(0, i - 12), i).map((x) => ({ role: x.role, text: x.text }));

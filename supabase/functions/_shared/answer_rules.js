@@ -1046,7 +1046,8 @@
   // broader question). A company named in the message wins; else the active topic (the last 3 questions).
   const RECHECK = new RegExp([
     "\\bre-?check", "\\bcheck (?:it |that |this |them |again |once more )*(?:again|once more)\\b", "\\bdouble[- ]?check",
-    "\\blook (?:again|once more)\\b", "\\b(?:check|look|search|see) (?:on |in |at )?(?:the )?erp\\b", "\\bverify\\b",
+    "\\blook (?:again|once more)\\b", "\\b(?:check|look|search|see) (?:on |in |at )?(?:the )?(?:erp|epr)\\b", "\\bverify\\b",
+    "\\b(?:it|it'?s|its|has|have|is|was|been) (?:been )?(?:listed|posted|put up|up|out|live) (?:on|in) (?:the )?(?:erp|epr|portal)\\b",
     "\\b(?:don'?t|do not|dont|never) (?:answer|reply|use|go)\\b.{0,30}\\bold\\b", "\\bold data\\b", "\\bstale\\b",
     "\\blatest (?:update|updates|data|info|list|news)\\b", "\\bfresh (?:data|check|look)\\b",
     "\\bare you sure\\b", "\\b(?:that'?s|thats|you'?re|youre|ur|it'?s|its) (?:wrong|not right|incorrect|mistaken|not correct)\\b",

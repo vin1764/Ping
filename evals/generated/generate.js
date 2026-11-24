@@ -26,7 +26,7 @@ function names(company) {
 
 // ---------------------------------------------------------------- the oracle: what the data says, and where
 function about(company, text) {
-  const w = norm(R.shortName(company)).split(" ").find((x) => x.length >= 4) || norm(company).split(" ")[0];
+  const w = norm(R.shortName(company)).split(" ").find((x) => x.length >= 2) || norm(company).split(" ")[0];
   return !!w && new RegExp(`\\b${w}\\b`).test(norm(text));
 }
 function truth(company, field, d) {

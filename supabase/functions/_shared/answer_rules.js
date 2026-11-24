@@ -368,10 +368,12 @@
   function sourcesOf(question) { const q = norm(question); return Object.keys(SOURCE_RE).filter((k) => SOURCE_RE[k].test(q)); }
   const noticeFile = (n) => (n && n.year && n.notice_id != null
     ? `https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=${encodeURIComponent(n.year)}&id=${n.notice_id}` : null);
+  // a text about this company: its own name, or the name's first word as a whole word ("EY", not "global" of
+  // "EY Global Delivery Services", which would also find Zeta Global)
   function aboutEnt(ent, text, company) {
     if (company && ent.raw.has(company)) return true;
-    const w = (ent.words || []).find((x) => x.length >= 4);
-    return !!w && new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(norm(text || ""));
+    const w = (ent.words || []).find((x) => x.length >= 2);
+    return !!w && new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(norm(text || ""));
   }
   function sentence(text, re) {
     const t = String(text || "").replace(/\s+/g, " ");
@@ -577,7 +579,8 @@
       // never an absence ("not on it"): only "couldn't find your roll number" (a file read in full) or "couldn't read it"
       const list = /you're (now )?on|you are on|couldn't (find|read)/i.test(t) ? "" : st === "yes" ? "you're on the list"
         : st === "no" ? "I couldn't find your roll number in it; please check the list yourself" : st === "unknown" ? "I couldn't read the file reliably; check it yourself" : "";
-      const time = at ? (at < now ? ` (${dayKey(at) === dayKey(now) ? "earlier today, " : ""}over)` : relTime(at.getTime(), now) || "") : "";
+      const said = at && t.includes(HM.format(at));
+      const time = at ? `${said ? "" : ` Test ${when(at.toISOString())}.`}${at < now ? ` (${dayKey(at) === dayKey(now) ? "earlier today, " : ""}over)` : relTime(at.getTime(), now) || ""}` : "";
       return `- ${i.title}${time}${where ? ` · ${where}` : ""}${list ? ` · ${list}` : ""}`;
     });
   }
@@ -661,7 +664,8 @@
       saidApplied = true;
     }
     if (intents.has("test") || intents.has("shortlist")) {
-      const ev = items.filter(isListItem).sort((a, b) => String(b.event_at || b.due_at || "").localeCompare(String(a.event_at || a.due_at || "")));
+      // a PPO offer list isn't a test: only for a shortlist / result question
+      const ev = items.filter((i) => isListItem(i) && (intents.has("shortlist") || (i.category !== "offer" && !/\bextended the offer\b/i.test(i.title || "")))).sort((a, b) => String(b.event_at || b.due_at || "").localeCompare(String(a.event_at || a.due_at || "")));
       if (intents.has("shortlist") && !intents.has("test")) {
         const lists = ev.filter((i) => (i.pdf?.status || i.pdf_status) === "yes" || (i.pdf?.status || i.pdf_status) === "no");
         // the latest list decides the yes / no; the ones before it follow, one line each

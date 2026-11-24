@@ -1790,30 +1790,27 @@
       state.formsAt ? h("button", { type: "button", class: "chip", "aria-pressed": "true", "data-at": "1", onclick: () => { state.formsAt = null; drawForms(); } },
         `Due ${when(new Date(state.formsAt).toISOString())} ×`) : null].filter(Boolean));
     const sec = FORMS.sections(all, state.formStatus, { now, query: state.formsQuery || "", only: state.formsOnly, mineOf: formMine, at: state.formsAt ?? null, rolesOf: rolesOfForm });
-    const block = (id, title, rows, empty) => h("section", { class: "forms-sec", id: `forms-${id}`, "aria-label": title },
-      h("h2", {}, title, h("span", { class: "n" }, rows.length)), rows.length ? h("div", { class: "forms-rows" }, groupedRows(rows)) : h("p", { class: "muted small" }, empty));
     if (!all.length) { list.replaceChildren(h("p", { class: "muted" }, "No forms yet. Forms from the notices and your placement mail show up here after the next check.")); formsBadge(); return; }
-    // Closed and Filled: nothing to do there, so collapsed, one line per form; a tap opens that one form in place
+    // open forms: one list by deadline, no headings (each card's date line says "Today 20:00", "Tomorrow 20:00",
+    // "Fri 27 Nov"); none: one line, never an empty section
+    const searching = !!(state.formsQuery || "").trim() || state.formsAt != null;
+    const open = sec.open.length ? h("section", { class: "forms-sec open-list", id: "forms-open", "aria-label": `Open forms, ${sec.open.length}` },
+        h("div", { class: "forms-rows" }, groupedRows(sec.open)))
+      : h("p", { class: "forms-clear", id: "forms-open" }, searching ? "No open forms match." : "No open forms. You're clear.");
+    // what's left: collapsed rows at the bottom ("Past due · 16"), each only when it has something
     state.formsSecOpen = state.formsSecOpen || {};
-    const compactBlock = (id, title, rows, empty) => h("details", { class: "forms-sec compact", id: `forms-${id}`, "aria-label": title,
+    const fold = (id, title, rows, draw, cls = "compact") => rows.length ? h("details", { class: `forms-sec ${cls}`, id: `forms-${id}`, "aria-label": title,
         open: state.formsSecOpen[id] ? true : null, ontoggle: (ev) => { state.formsSecOpen[id] = ev.currentTarget.open; } },
-      h("summary", {}, h("h2", {}, title, h("span", { class: "n" }, rows.length))),
-      rows.length ? h("div", { class: "forms-rows compact" }, rows.map(compactRow)) : h("p", { class: "muted small" }, empty));
+      h("summary", {}, h("h2", {}, title, h("span", { class: "n" }, `· ${rows.length}`)), h("span", { class: "chev", "aria-hidden": "true" })),
+      h("div", { class: `forms-rows${cls === "compact" ? " compact" : ""}` }, draw(rows))) : null;
     list.replaceChildren(...[
-      block("today", "Due today", sec.today, "Nothing due today."),
-      block("upcoming", "Upcoming", sec.upcoming, "Nothing coming up."),
-      // past due: nothing more to do there, so folded to one line ("Past due · 16"); a tap shows the cards
-      sec.past.length ? h("details", { class: "forms-sec fold", id: "forms-past", "aria-label": "Past due (not filled)",
-        open: state.formsSecOpen.past ? true : null, ontoggle: (ev) => { state.formsSecOpen.past = ev.currentTarget.open; } },
-        h("summary", {}, h("h2", {}, "Past due", h("span", { class: "n" }, `· ${sec.past.length}`)), h("span", { class: "chev", "aria-hidden": "true" })),
-        h("div", { class: "forms-rows" }, groupedRows(sec.past))) : null,
-      ...(sec.closed.length ? [compactBlock("closed", "Closed", sec.closed, "")] : []),
-      compactBlock("filled", "Filled", sec.filled, "Tick a form when you've filled it."),
-      // not for you: one line each, with Restore (a kind you said yes to in the chat is restored by saying "keep showing …")
-      sec.notForMe.length ? h("details", { class: "forms-sec compact", id: "forms-notforme", "aria-label": "Not for me",
-        open: state.formsSecOpen.notforme ? true : null, ontoggle: (ev) => { state.formsSecOpen.notforme = ev.currentTarget.open; } },
-        h("summary", {}, h("h2", {}, "Not for me", h("span", { class: "n" }, `· ${sec.notForMe.length}`))),
-        h("div", { class: "forms-rows compact" }, sec.notForMe.map(nfmRow))) : null].filter(Boolean));
+      open,
+      // past due: cards (you might still open one); closed and filled: one line each, a tap opens the form in place;
+      // not for you: one line each with Restore
+      fold("past", "Past due", sec.past, groupedRows, "fold"),
+      fold("closed", "Closed", sec.closed, (rows) => rows.map(compactRow)),
+      fold("filled", "Filled", sec.filled, (rows) => rows.map(compactRow)),
+      fold("notforme", "Not for me", sec.notForMe, (rows) => rows.map(nfmRow))].filter(Boolean));
     formsBadge();
   }
   // a form you can't act on any more (closed, or ticked): checkbox, company, type, date and a small tag on one line;
@@ -2610,7 +2607,8 @@
     } else go();
   }
   function tomorrowLine(t) {
-    if (!t.tests && !t.deadlines) return h("p", { class: "tomorrow" }, t.text);
+    // nothing tomorrow: no line at all (never an empty heading or a "nothing" line on Today)
+    if (!t.tests && !t.deadlines) return null;
     return h("p", { class: "tomorrow" }, h("button", { type: "button", class: "linklike inline-link",
       onclick: () => askInChat("What's due tomorrow?") }, `${t.text} ›`));
   }

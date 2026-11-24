@@ -67,12 +67,13 @@
     return all.length <= n + 1 ? all.join(", ") : `${all.slice(0, n).join(", ")} +${all.length - n} more`;
   }
 
-  // Due today · Upcoming · Past due (not filled) · Closed (the form page says so) · Filled. query: words in company / purpose / title; only: "foryou" |
+  // open (Due today + Upcoming, one list by deadline) · Past due (not filled) · Closed (the form page says so) · Filled ·
+  // Not for me. query: words in company / purpose / title; only: "foryou" |
   // null; at: one deadline (Today's "7 forms due 20:00" opens the list at that time)
   function sections(forms, status, { now, query = "", only = null, mineOf = () => true, at = null, rolesOf = () => [] } = {}) {
     const q = String(query || "").trim().toLowerCase();
     const day = T.dayOf(now);
-    const out = { today: [], upcoming: [], past: [], closed: [], filled: [], notForMe: [] };
+    const out = { open: [], today: [], upcoming: [], past: [], closed: [], filled: [], notForMe: [] };
     for (const f of forms || []) {
       if (q && ![...names(f), f.purpose, f.title].join(" ").toLowerCase().includes(q)) continue;
       if (at != null && ms(f.due_at) !== at) continue;
@@ -88,6 +89,9 @@
     }
     const byDue = (a, b) => (ms(a.due_at) || 9e15) - (ms(b.due_at) || 9e15) || String(a.company).localeCompare(String(b.company));
     out.today.sort(byDue); out.upcoming.sort(byDue);
+    // the Forms tab: one list of open forms by deadline (the card's date line says "Today 20:00" / "Fri 27 Nov"),
+    // the ones with no deadline given last
+    out.open = [...out.today, ...out.upcoming].sort(byDue);
     out.past.sort((a, b) => byDue(b, a));
     out.filled.sort((a, b) => (ms(status.get(b.key)?.filled_at) || 0) - (ms(status.get(a.key)?.filled_at) || 0));
     out.notForMe.sort((a, b) => (ms(status.get(b.key)?.not_for_me_at) || 0) - (ms(status.get(a.key)?.not_for_me_at) || 0) || byDue(a, b));

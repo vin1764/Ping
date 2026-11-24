@@ -1,4 +1,4 @@
-// What a compact card says, pure (no page): the deadline in relative words ("Today 23:59 · 2 h 24 m left",
+// What a compact card says, pure (no page): the deadline in relative words ("Today 23:59 · 2 h 24 m left" when under 6 h,
 // "Tomorrow 20:00", "Mon 23 Nov · past due") and a notice / form title cleaned down to what it adds to "Company ·
 // task" ("[URGENT] : CDC | NOMURA | Additonal Details" adds nothing; "Groww | APM Additional Requirement" adds "APM").
 // Only what renders: the data is never changed. Node tests: tests/js/cards.test.js.
@@ -19,15 +19,17 @@
     return h ? `${h} h${m % 60 ? ` ${m % 60} m` : ""}` : `${m} m`;
   }
 
+  const URGENT = 6 * 3600000;
   // The second line of a card. event: a test / talk (it is "over", not "past due"). level: for the colour.
   function relDeadline(at, now, { event = false } = {}) {
     const t = ms(at);
     if (Number.isNaN(t)) return { text: "No deadline given", level: "none" };
     const today = dayKey(now), day = dayKey(t);
     if (t <= now) return { text: `${day === today ? `Today ${hm(t)}` : dayMon(t)} · ${event ? "over" : "past due"}`, level: "over" };
-    if (day === today) return { text: `Today ${hm(t)} · ${span(t - now)} left`, level: t - now <= 3 * 3600000 ? "urgent" : "today" };
-    if (day === plusDays(now, 1)) return { text: `Tomorrow ${hm(t)}`, level: "soon" };
-    return { text: `${dayMon(t)} ${hm(t)}`, level: "later" };
+    // the countdown only when it's close (under 6 hours), in red; otherwise just the day and time
+    const label = day === today ? `Today ${hm(t)}` : day === plusDays(now, 1) ? `Tomorrow ${hm(t)}` : `${dayMon(t)} ${hm(t)}`;
+    if (t - now < URGENT) return { text: `${label} · ${span(t - now)} left`, level: "urgent" };
+    return { text: label, level: day === today ? "today" : day === plusDays(now, 1) ? "soon" : "later" };
   }
 
   // ---------------------------------------------------------------- titles

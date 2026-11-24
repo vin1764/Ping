@@ -845,3 +845,6 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .fc-line.nfm .act-btn { margin-left: auto; }
 .toast:has(.nfm-why) { flex-direction: column; align-items: stretch; }
 .toast .nfm-why .chip { padding: 4px 10px; min-height: 32px; }
+/* Forms: one open list, no heading; nothing open is one line */
+.forms-clear { margin: var(--s3) 0; color: var(--muted); }
+.forms-sec.open-list { margin-top: var(--s2); }

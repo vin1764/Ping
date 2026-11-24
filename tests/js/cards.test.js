@@ -17,6 +17,14 @@ test("deadline: relative when close, the date when not, never the weekday twice"
   assert.equal(C.relDeadline(null, now).text, "No deadline given");
 });
 
+test("deadline: the countdown only under 6 hours (in red), otherwise just the time", () => {
+  const morning = Date.parse("2026-11-24T10:10:00+05:30");
+  assert.deepEqual(C.relDeadline("2026-11-24T20:00:00+05:30", morning), { text: "Today 20:00", level: "today" });     // 9 h 50 m: no countdown
+  assert.deepEqual(C.relDeadline("2026-11-24T16:00:00+05:30", morning), { text: "Today 16:00 · 5 h 50 m left", level: "urgent" });
+  assert.deepEqual(C.relDeadline("2026-11-25T01:00:00+05:30", now), { text: "Tomorrow 01:00 · 3 h 25 m left", level: "urgent" });   // after midnight
+  assert.equal(C.relDeadline("2026-11-25T20:00:00+05:30", morning).text, "Tomorrow 20:00");
+});
+
 test("titles: only what the first line doesn't already say", () => {
   assert.equal(C.cleanTitle("[URGENT] : CDC | NOMURA | Additonal Details", "Nomura"), "");
   assert.equal(C.cleanTitle("FJ Campus Recruitment application 2027 FT", "FischerJordan"), "");

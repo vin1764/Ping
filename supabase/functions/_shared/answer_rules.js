@@ -213,7 +213,7 @@
     if (has(/\bshort ?list\w*|\bselected\b|\bresults?\b|\b(am|was|are|is) (i|my name) (on|in) (the |a |any )?([a-z0-9]+ ){0,4}lists?\b/)) out.add("shortlist");
     if (has(/\b(tests?|exams?|assessments?|oa|rooms?|venue|slots?|interviews?|ppt|dates?)\b/) && !has(/\blast date\b/)) out.add("test");
     if (has(/\b(ctc|pay|salary|package|stipend|lpa|compensation|bond)\b/)) out.add("pay");
-    if (has(/\beligib\w*/)) out.add("eligible");
+    if (has(/\beligib\w*|\belig\b/)) out.add("eligible");                       // "elig?" (hurried)
     if (has(/\b(did i apply|have i applied|applied)\b/)) out.add("applied");
     if (has(/\b(bond|take ?home|joining|bonus\w*|esops?|stocks?|retention|relocation|base salary|break ?(down|up)|brekdown)\b/)) out.add("pay");
     if (has(/\bcut ?offs?\b|\bcgpa\b|\bcg\b|\b(departments?|branch\w*|degrees?)\b.*\b(apply|allowed|eligible|can)\b|\bwho can apply\b/)) out.add("eligible");
@@ -221,7 +221,7 @@
     if (has(/\bforms?\b(?! (is|are) )|\bpreference form\b/) && !has(/\bjd\b/)) out.add("form");
     // placement mail: "any mails for X", "did I get a test link for Y", "what's due from mail"
     if (has(/\b(e ?mails?|mails?|mailed|inbox|via email)\b/) || has(/\b(test|assessment|oa|interview|meeting) links?\b/)) out.add("mail");
-    if (has(/\b(what|which)( all| are the| other)? roles\b|\ball (the )?roles\b|\broles? (does|do|at|in|of|hai|hain)\b|\bopenings?\b|\bpositions?\b|\bkaun(se|si)? roles?\b/) && !out.has("deadline")) out.add("roles");
+    if (has(/\b(what|which)( all| are the| other)? roles\b|\ball (the )?roles\b|\broles? (does|do|at|in|of|hai|hain)\b|\bopenings?\b|\bpositions?\b|\bkaun(se|si)? roles?\b|^(and |the |its |their )?roles?\b|\broles$/) && !out.has("deadline")) out.add("roles");
     if (has(/\b(located|location|based (in|at)|which city|office)\b/)) out.add("location");
     else if (has(/\bwhere\b/)) out.add("test");
     if (has(/\b(score|scores|marks|rank|percentile)\b/)) out.add("score");
@@ -1139,6 +1139,17 @@
       return { kind: "recheck", companies, spec: topic, previous: prevIdx >= 0 ? prevQs[prevIdx] : null,
                why: companies.length ? `re-check: ${companies.join(", ")}` : "re-check: no company in the topic",
                resolved: `${text} [re-check${companies.length ? `: ${companies.join(", ")}` : ""}]` };
+    }
+    // words that are a role of the topic company, not a company ("jd of supply chain one" after "ey gds roles",
+    // "jd for product ownership" after "ather ctc"): the topic company's role, never "I don't have Supply Chain"
+    if (!cur.hits.length && cur.unknown.length && prevQs.length) {
+      const topicHits = (prevQs.map((p) => parse(String(p), data, ents)).find((p) => p.hits.length) || { hits: [] }).hits;
+      const initials = (d) => String(d || "").toLowerCase().replace(/\([^)]*\)/g, " ").split(/[^a-z0-9]+/)
+        .filter((w) => w && !["of", "and", "the", "in", "for", "us", "ai", "pg"].includes(w)).map((w) => w[0]).join("");
+      const roleWord = (t) => topicHits.some((e) => (data.roles || []).some((r) => e.raw.has(r.company) &&
+        (keyWords(r.designation).some((w) => w === t || (t.length >= 5 && (w.startsWith(t) || t.startsWith(w)))) ||
+         (t.length >= 2 && t.length <= 5 && initials(r.designation) === t))));
+      if (topicHits.length && cur.unknown.some(roleWord)) cur.unknown = cur.unknown.filter((t) => !roleWord(t) && t.length > 3 && !["one", "wala", "wali", "that", "this"].includes(t));
     }
     // a question with no company of its own that asks only about a field or a source ("check notices for JD",
     // "and mail?", "what about CTC", "jd kya hai"): it's about the topic company

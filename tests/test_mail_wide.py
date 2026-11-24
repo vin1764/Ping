@@ -59,3 +59,26 @@ def test_a_thread_with_a_kept_mail():
     h = head("Recruiter <r@agency.example>", "Re: your application")
     h.thread = "t1"
     assert scope(h, threads=frozenset({"t1"}), thread_of=lambda x: x.thread).because == "thread"
+
+
+# ---- the false matches the 30-day dry run found (24 Nov), made up in the same shape
+IDX2 = CompanyIndex([{"company": "ICICI LOMBARD"}, {"company": "Futures First Info Services Pvt. Ltd"},
+                     {"company": "INFO EDGE INDIA LIMITED"}, {"company": "Sun Valley Investment Group"},
+                     {"company": "EY Global Delivery Services India LLP"}, {"company": "Swiggy Limited"}])
+N2 = mail_wide.Names(IDX2)
+
+
+def test_the_dry_runs_false_matches_stay_out():
+    s = lambda h: mail_wide.wide_scope(h, IDX2, N2)
+    assert not s(head("ICICI Bank <alerts@custcomm.icici.bank.in>", "Your statement")).keep          # a bank, not ICICI Lombard
+    assert not s(head("Finlatics <hi@finlatics.info>", "Free course")).keep                           # ".info" is not Info Edge
+    assert not s(head("ABC - Aditya Birla Sun Life Mutual Fund <x@camsonline.com>", "NAV update")).keep
+    assert not s(head("Team Unstop <hi@unstop.news>", "Top 10 challenges this week")).keep             # a platform's newsletter
+    assert not s(head("Swiggy <noreply@swiggy.in>", "50% off tonight", bulk=True)).keep               # a listed company's promotion
+    h = head("Traders Watch <x@broker.example>", "Market outlook")
+    assert not mail_wide.body_decides(h, "Futures and options: the interview with our analyst.", N2, job_board=False).keep
+    assert mail_wide.body_decides(h, "Your Futures First interview is on Friday.", N2, job_board=False).keep
+
+
+def test_a_recruiter_at_a_listed_company_is_kept():
+    assert mail_wide.wide_scope(head("A Recruiter <a.r@in.ey.com>", "Next steps"), IDX2, N2).company == "EY Global Delivery Services India LLP"

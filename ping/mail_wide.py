@@ -46,13 +46,18 @@ class Names:
     def __init__(self, index: CompanyIndex):
         self.index = index
         self.by_label: dict[str, str] = {}
+        self.short: dict[str, str] = {}
+        self.phrases: dict[str, str] = {}
+        for c in index.by_company:
+            core = [w for w in tokens(c, keep_stop=True) if w not in ("india", "pvt", "ltd", "limited", "private", "llp", "inc", "co", "the", "and")]
+            phrase = core[:2] if len(core) >= 2 else core
+            if phrase and (len(phrase) == 2 or (len(phrase[0]) >= 5 and phrase[0] not in COMMON)):
+                self.phrases[c] = " ".join(phrase)
         for c in index.by_company:
             core = tokens(c)
             if not core:
                 continue
-            labels = {compact(c)}
-            if len(core[0]) >= 5 and core[0] not in COMMON:
-                labels.add(core[0])
+            labels = {compact(c)}             # a first word alone ("icici" for ICICI Lombard) is never enough
             ini = _initials(core)
             if len(core) > 1 and len(ini) >= 3:
                 labels.add(ini)
@@ -61,30 +66,43 @@ class Names:
                 v = _initials(core[:k]) + "".join(core[k:])
                 if len(v) >= 6:
                     labels.add(v)
-            if 2 <= len(core[0]) <= 4 and core[0] not in COMMON:
-                labels.add(core[0])          # "zs", "ey": only ever an exact domain label / word, never a part
             for l in labels:
-                if len(l) >= 2:
+                if len(l) >= 3:
                     self.by_label.setdefault(l, c)
+            # "zs", "ey": a short first word counts only as a whole domain label (zs.com, in.ey.com), never in a name
+            if 2 <= len(core[0]) <= 4 and core[0] not in COMMON:
+                self.short.setdefault(core[0], c)
 
     def in_sender(self, name: str, domain: str) -> str | None:
-        labels = [w for w in re.split(r"[.\-]", domain or "") if w]
+        # the domain without its ending ("finlatics.info" is finlatics, never "info")
+        labels = [w for w in re.split(r"[.\-]", domain or "") if w][:-1]
         for l in labels:
-            if l in self.by_label and l not in ("com", "co", "in", "org", "net", "io", "mail", "email", "gmail"):
+            if l in ("com", "co", "in", "org", "net", "io", "ac", "mail", "email", "gmail", "info", "news", "customer", "custcomm"):
+                continue
+            if l in self.by_label:
                 return self.by_label[l]
+            if l in self.short:
+                return self.short[l]
             hit = next((c for lab, c in self.by_label.items() if len(lab) >= 6 and (l.startswith(lab) or lab.startswith(l) and len(l) >= 6)), None)
             if hit:
                 return hit
-        found = find_companies(name, self.index, [])
+        # the sender's name: the company's whole name (as notices are matched), or its initials ("JPMC Campus")
+        found = self.index.scan_text(name)
         if found:
             return found[0]
         words = set(tokens(name, keep_stop=True))
         return next((c for lab, c in self.by_label.items() if len(lab) >= 3 and lab in words), None)
 
     def in_text(self, text: str) -> list[str]:
-        found = list(dict.fromkeys(find_companies(text, self.index, [])))
-        words = set(tokens(text, keep_stop=True))
-        found += [c for lab, c in self.by_label.items() if len(lab) >= 4 and lab in words and c not in found]
+        """A company named in a subject / body by its first two words together ("Futures First", "ICICI Lombard"),
+        or a one-word name ("Diageo"); never by a first word alone ("futures" is not Futures First, "ICICI Bank" is not
+        ICICI Lombard)."""
+        words = tokens(text, keep_stop=True)
+        seq = " " + " ".join(words) + " "
+        found = []
+        for c, phrase in self.phrases.items():
+            if f" {phrase} " in seq:
+                found.append(c)
         return found
 
 
@@ -104,7 +122,9 @@ def wide_scope(head, index: CompanyIndex, names: Names, *, extra_senders=(), tes
     name, local, domain = _address(head.sender)
     addr = f"{local}@{domain}"
     plat = platform_of(name, domain)
-    if plat:
+    # a platform's own mail to you (an invite, a link), never its newsletters ("unstop.news", bulk mail)
+    if plat and not head.bulk and not re.search(r"(^|\.)(news|newsletter|mailer|marketing|promo)\.", domain + ".") \
+            and not re.search(r"\bnews(letter)?\b|digest|webinar|top \d+|weekly|daily", head.subject or "", re.I):
         return Verdict(True, f"platform:{plat}")
     if addr in test_senders:
         return Verdict(True, "sent a test link before")
@@ -112,7 +132,7 @@ def wide_scope(head, index: CompanyIndex, names: Names, *, extra_senders=(), tes
         return Verdict(True, "thread")
     if base.because == "not_placement":
         return base
-    co = names.in_sender(name, domain)
+    co = names.in_sender(name, domain) if not head.bulk else None
     if co and base.because != "job_board":
         return Verdict(True, "company_sender", co)
     if base.because == "job_board":

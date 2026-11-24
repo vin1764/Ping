@@ -1822,6 +1822,42 @@ def demo_mails(secrets) -> int:
     return 0 if not left and len(mail_items) == 4 else 1
 
 
+def company_report(secrets) -> int:
+    """Reads only: everything Ping holds about one company (the company input): its roles (applied, eligible, for you
+    or not and why), its items (level, why hidden, category, task, due, link, when first seen, in the chat or not),
+    its mails and its notices. To answer "where did X go?"."""
+    from . import posting
+    want = (os.environ.get("PING_COMPANY") or "").strip().lower()
+    if not want:
+        say("give a company in the company input")
+        return 1
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    hit = lambda v: want in str(v or "").lower()
+    for r in store.select("roles", REAL):
+        if hit(r.get("company")):
+            rel = r.get("relevance") or {}
+            say(f"role {r['id']} | {r.get('designation')} | applied={r.get('applied')} eligible={r.get('eligible')} | "
+                f"deadline {str(r.get('effective_deadline'))[:16]} | for you={rel.get('relevant')} ({str(rel.get('why') or rel.get('reason') or '')[:80]})")
+    for i in sorted([i for i in store.select("items", REAL) if hit(i.get("company")) or hit(i.get("title"))], key=lambda i: str(i.get("first_seen"))):
+        d = i.get("details") or {}
+        say(f"item {i['id'][:60]} | {i.get('category')} | level {i.get('level')} {str(d.get('hidden_because') or '')[:50]!r} | dismissed={i.get('dismissed')} | "
+            f"in chat={posting.in_chat(i)} | due {str(i.get('due_at'))[:16]} | todo {(d.get('todo') or {}).get('action')} link={'yes' if (d.get('todo') or {}).get('link') else 'no'} | "
+            f"via {d.get('via')} | mail note {str((d.get('mail') or {}).get('note') or '')[:40]!r} | first seen {str(i.get('first_seen'))[:16]} | notice_time {str(d.get('notice_time'))[:16]} | {str(i.get('title'))[:90]!r}")
+    for m in store.select("emails", REAL):
+        if hit(m.get("company")) or hit(m.get("subject")):
+            say(f"mail {m['id']} | received {str(m.get('received_at'))[:16]} | kind {m.get('kind')} | due {str(m.get('due_at'))[:16]} | link {'yes' if m.get('main_link') else 'no'} | kept because {m.get('kept_because')} | {str(m.get('subject'))[:80]!r}")
+    for n in store.select("notices", REAL):
+        if hit(n.get("company")) or hit(n.get("subject")):
+            a = n.get("analysis") or {}
+            say(f"notice {n.get('notice_id')} | {str(n.get('notice_time'))[:16]} | {str(n.get('subject'))[:60]!r} | kind {a.get('kind')} | todos {[(t.get('action'), str(t.get('due'))[:16], bool(t.get('link'))) for t in a.get('todos') or []]} | attachment={n.get('has_attachment')}")
+    runs = sorted(store.select("runs", {"started_at": f"gte.{(datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()}"}), key=lambda r: str(r.get("started_at")))
+    say("runs, last 12 h (started, trigger, status, mails read/kept):")
+    for r in runs:
+        c = r.get("counts") or {}
+        say(f"  {str(r.get('started_at'))[:16]} {r.get('trigger')} {r.get('status')} {c.get('mails_scanned', '-')}/{c.get('mails_kept', '-')}")
+    return 0
+
+
 def mail_peek(secrets) -> int:
     """Reads only: the subjects of the ERP mailer's mails that today's filter skipped as not placement (last 10 days,
     subject only), and what the EY recruiter's mails ask (kind, date, link host, subject), to decide whether they're
@@ -2012,7 +2048,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

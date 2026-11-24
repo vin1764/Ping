@@ -11,7 +11,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, posted-report, company-report, repost-item, mail-audit, mail-peek, posting-cleanup, restore-items, jd-sources, chat-audit, ask-evals-real, chat-diagnose, feedback-evals, notice-forms, public-ci, live-providers, push-examples, prefs-report, forms-report, build-demo, gemini-check, functions-check, auth-sessions, profile-snapshot, profile-restore, set-dashboard-password, end-reviewer-sessions, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
+        options: [apply-sql, posted-report, company-report, repost-item, followup-evals, mail-audit, mail-peek, posting-cleanup, restore-items, jd-sources, chat-audit, ask-evals-real, chat-diagnose, feedback-evals, notice-forms, public-ci, live-providers, push-examples, prefs-report, forms-report, build-demo, gemini-check, functions-check, auth-sessions, profile-snapshot, profile-restore, set-dashboard-password, end-reviewer-sessions, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -72,7 +72,7 @@ jobs:
           DASHBOARD_PASSWORD: ${{ (inputs.task == 'set-dashboard-password' || inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.DASHBOARD_PASSWORD || '' }}
           # public-copy: their values are searched for in every blob (never printed)
           GROQ_API_KEY: ${{ inputs.task == 'public-copy' && secrets.GROQ_API_KEY || '' }}
-          GROQ_API_KEY_EVALS: ${{ inputs.task == 'public-copy' && secrets.GROQ_API_KEY_EVALS || '' }}
+          GROQ_API_KEY_EVALS: ${{ (inputs.task == 'public-copy' || inputs.task == 'followup-evals') && secrets.GROQ_API_KEY_EVALS || '' }}
           DASHBOARD_EMAIL: ${{ inputs.task == 'set-dashboard-password' && secrets.DASHBOARD_EMAIL || '' }}
           # public-copy: where the cleaned history goes (a new, empty public repository the owner made) and a token
           # that may push to it; without them the cleaned history is uploaded as a private artifact instead

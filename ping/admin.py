@@ -1822,6 +1822,50 @@ def demo_mails(secrets) -> int:
     return 0 if not left and len(mail_items) == 4 else 1
 
 
+def followup_evals(secrets) -> int:
+    """The follow-up evals with the model's own reading, EVAL KEYS ONLY (GROQ_API_KEY_EVALS, GEMINI_API_KEY_EVALS):
+    the 30 hurried-student conversations on the demo data, then your real chat history's follow-ups replayed after
+    their real previous question. Your data goes to a temp file on the runner (deleted at the end, never committed);
+    the log has scores, latency, the fallback rate and short masked questions only."""
+    import json as _json
+    import subprocess
+    import tempfile
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    roles = store.select("roles", REAL)
+    for r in roles:
+        r["deadline"] = r.get("effective_deadline") or r.get("apply_end")
+        r["pay"] = ((r.get("more_details") or {}).get("fields")) or {}
+    items = [i for i in store.select("items", REAL) if not i.get("dismissed")]
+    for i in items:
+        d = i.get("details") or {}
+        i.update({"hidden_because": d.get("hidden_because"), "subject": d.get("subject"), "kind": d.get("kind"),
+                  "notice_time": d.get("notice_time"), "pdf": d.get("pdf"), "via": d.get("via"), "mail": d.get("mail"), "todo": d.get("todo")})
+    checks = [{"notice_id": c["notice_id"], "status": c.get("status"), "context": c.get("context") if c.get("status") == "jd" else None}
+              for c in store.select("pdf_checks", {}) if not c.get("is_sample")]
+    data = {"now": datetime.now(IST).isoformat(), "lastChecked": datetime.now(IST).isoformat(),
+            "profile": (store.select("profile", {"id": "eq.1"}) or [{}])[0], "prefs": {"listOthers": True},
+            "roles": roles, "items": items, "notices": store.select("notices", REAL), "pdf_checks": checks,
+            "emails": [{k: m.get(k) for k in ("id", "received_at", "sender", "subject", "snippet", "company", "main_link", "due_at", "pdf")}
+                       for m in store.select("emails", REAL)],
+            "forms": [f for f in store.select("forms", {}) if not f.get("is_sample")]}
+    chat = sorted([{"role": m["role"], "text": m["text"], "created_at": m["created_at"]}
+                   for m in store.select("chat_messages", {"is_sample": "is.false"}, columns="role,text,created_at")],
+                  key=lambda m: m["created_at"])
+    env = {k: v for k, v in os.environ.items() if k not in ("GEMINI_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY_LIVE")}
+    root = Path(__file__).resolve().parents[1]
+    say("== the 30 hurried-student conversations (demo data) ==")
+    subprocess.run(["node", str(root / "evals" / "followups" / "run.js")], env=env, check=False)
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+        _json.dump({"data": data, "chat": chat}, fh, default=str)
+        path = fh.name
+    try:
+        say(f"== your chat history ({len(chat)} messages) ==")
+        subprocess.run(["node", str(root / "evals" / "followups" / "run.js"), "--real", path], env=env, check=False)
+    finally:
+        os.unlink(path)
+    return 0
+
+
 def repost_item(secrets) -> int:
     """Writes to Ping's own feed only: posts one message again for you (the company input: its item id), at the bottom
     of the chat (details.reposted_at, kept across rebuilds) and with a push. For a message you never saw."""
@@ -2074,7 +2118,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "followup-evals": followup_evals, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

@@ -1,0 +1,633 @@
+{
+ "about": "30 hurried-student conversations over the demo snapshot (evals/generated/demo_data.js): a question about a company, then short follow-ups that name no company ('ctc?', 'deadline kab hai', 'what all roles?', 'sde wala jd'). Each turn carries the intended reading (company, fact, source, follow-up). A turn passes when the answer names that company, answers that fact, and never asks 'Which company?' or says 'I don't have …' / 'couldn't tell'. Run by tests/js/followups.test.js (the rules alone, and the rules with the intended reading) and by evals/followups/run.js (with the model's reading, eval keys only).",
+ "fact_says": {
+  "jd": "JD|job description|responsib|requirement|role:|what you|you will|the role",
+  "ctc": "CTC|LPA|INR|₹|salary|stipend|pay|compensation|No CTC",
+  "eligibility": "eligib|CGPA|cut-?off|department|degree|backlog|can apply|open to",
+  "deadline": "\\d\\d:\\d\\d|deadline|closes|closed|no deadline|apply by",
+  "roles": "roles|role \\(|·",
+  "form": "form",
+  "test": "test|interview|assessment|no test|over",
+  "cv": "CV|resume"
+ },
+ "never": [
+  "Which company",
+  "I don't have",
+  "couldn't tell",
+  "not sure what"
+ ],
+ "conversations": [
+  {
+   "id": "H01",
+   "turns": [
+    {
+     "q": "navi jd",
+     "company": "Navi",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "ctc?",
+     "company": "Navi",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    },
+    {
+     "q": "elig?",
+     "company": "Navi",
+     "fact": "eligibility",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H02",
+   "turns": [
+    {
+     "q": "ather energy roles",
+     "company": "Ather Energy",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "deadline kab hai",
+     "company": "Ather Energy",
+     "fact": "deadline",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H03",
+   "turns": [
+    {
+     "q": "idfc first jd",
+     "company": "IDFC FIRST Bank",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "what all roles?",
+     "company": "IDFC FIRST Bank",
+     "fact": "roles",
+     "source": "any",
+     "followup": true
+    },
+    {
+     "q": "and ctc",
+     "company": "IDFC FIRST Bank",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H04",
+   "turns": [
+    {
+     "q": "hakimo ai deadline",
+     "company": "Hakimo AI",
+     "fact": "deadline",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "form?",
+     "company": "Hakimo AI",
+     "fact": "form",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H05",
+   "turns": [
+    {
+     "q": "groww test kab",
+     "company": "Groww",
+     "fact": "test",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "jd bhi bata",
+     "company": "Groww",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H06",
+   "turns": [
+    {
+     "q": "blackrock ctc",
+     "company": "BlackRock",
+     "fact": "ctc",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "cgpa cutoff?",
+     "company": "BlackRock",
+     "fact": "eligibility",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H07",
+   "turns": [
+    {
+     "q": "auro group roles",
+     "company": "Auro Group",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "deadline?",
+     "company": "Auro Group",
+     "fact": "deadline",
+     "source": "any",
+     "followup": true
+    },
+    {
+     "q": "which cv",
+     "company": "Auro Group",
+     "fact": "cv",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H08",
+   "turns": [
+    {
+     "q": "airbus india jd",
+     "company": "Airbus India",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "kitne roles hai",
+     "company": "Airbus India",
+     "fact": "roles",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H09",
+   "turns": [
+    {
+     "q": "collins aerospace ctc",
+     "company": "Collins Aerospace",
+     "fact": "ctc",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "eligible hu?",
+     "company": "Collins Aerospace",
+     "fact": "eligibility",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H10",
+   "turns": [
+    {
+     "q": "eternal roles",
+     "company": "Eternal",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "test date?",
+     "company": "Eternal",
+     "fact": "test",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H11",
+   "turns": [
+    {
+     "q": "capital one jd",
+     "company": "Capital One Services India",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "ctc kitna",
+     "company": "Capital One Services India",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H12",
+   "turns": [
+    {
+     "q": "arihant capital deadline",
+     "company": "Arihant Capital Markets",
+     "fact": "deadline",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "roles?",
+     "company": "Arihant Capital Markets",
+     "fact": "roles",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H13",
+   "turns": [
+    {
+     "q": "fischerjordan roles",
+     "company": "FischerJordan",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "jd of the frontend one",
+     "company": "FischerJordan",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H14",
+   "turns": [
+    {
+     "q": "cars24 ctc",
+     "company": "Cars24",
+     "fact": "ctc",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "and roles",
+     "company": "Cars24",
+     "fact": "roles",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H15",
+   "turns": [
+    {
+     "q": "accordion jd",
+     "company": "Accordion India",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "elig",
+     "company": "Accordion India",
+     "fact": "eligibility",
+     "source": "any",
+     "followup": true
+    },
+    {
+     "q": "deadline",
+     "company": "Accordion India",
+     "fact": "deadline",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H16",
+   "turns": [
+    {
+     "q": "finarb roles",
+     "company": "Finarb",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "ctc for data engineer",
+     "company": "Finarb",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H17",
+   "turns": [
+    {
+     "q": "slice apm jd",
+     "company": "slice",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "ctc?",
+     "company": "slice",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H18",
+   "turns": [
+    {
+     "q": "diageo jd",
+     "company": "Diageo",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "form ka deadline?",
+     "company": "Diageo",
+     "fact": "form",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H19",
+   "turns": [
+    {
+     "q": "goldman sachs ctc",
+     "company": "Goldman Sachs",
+     "fact": "ctc",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "jd?",
+     "company": "Goldman Sachs",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H20",
+   "turns": [
+    {
+     "q": "amazon jd",
+     "company": "Amazon",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "deadline kab",
+     "company": "Amazon",
+     "fact": "deadline",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H21",
+   "turns": [
+    {
+     "q": "amex test",
+     "company": "American Express",
+     "fact": "test",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "ctc?",
+     "company": "American Express",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H22",
+   "turns": [
+    {
+     "q": "ey gds roles",
+     "company": "EY Global Delivery Services India",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "jd of supply chain one",
+     "company": "EY Global Delivery Services India",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H23",
+   "turns": [
+    {
+     "q": "navi roles",
+     "company": "Navi",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "sde wala jd",
+     "company": "Navi",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    },
+    {
+     "q": "ctc for that",
+     "company": "Navi",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H24",
+   "turns": [
+    {
+     "q": "hilabs jd",
+     "company": "HILABS",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "ctc?",
+     "company": "HILABS",
+     "fact": "ctc",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H25",
+   "turns": [
+    {
+     "q": "axon developers roles",
+     "company": "Axon Developers",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "form?",
+     "company": "Axon Developers",
+     "fact": "form",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H26",
+   "turns": [
+    {
+     "q": "collins jd",
+     "company": "Collins Aerospace",
+     "fact": "jd",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "what all roles?",
+     "company": "Collins Aerospace",
+     "fact": "roles",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H27",
+   "turns": [
+    {
+     "q": "ather ctc",
+     "company": "Ather Energy",
+     "fact": "ctc",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "jd for product ownership",
+     "company": "Ather Energy",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H28",
+   "turns": [
+    {
+     "q": "idfc deadline",
+     "company": "IDFC FIRST Bank",
+     "fact": "deadline",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "which cv for apm",
+     "company": "IDFC FIRST Bank",
+     "fact": "cv",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H29",
+   "turns": [
+    {
+     "q": "blackrock roles",
+     "company": "BlackRock",
+     "fact": "roles",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "deadline?",
+     "company": "BlackRock",
+     "fact": "deadline",
+     "source": "any",
+     "followup": true
+    },
+    {
+     "q": "jd?",
+     "company": "BlackRock",
+     "fact": "jd",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  },
+  {
+   "id": "H30",
+   "turns": [
+    {
+     "q": "groww ctc",
+     "company": "Groww",
+     "fact": "ctc",
+     "source": "any",
+     "followup": false
+    },
+    {
+     "q": "aur eligibility",
+     "company": "Groww",
+     "fact": "eligibility",
+     "source": "any",
+     "followup": true
+    }
+   ]
+  }
+ ]
+}

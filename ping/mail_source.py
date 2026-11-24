@@ -33,7 +33,7 @@ from .mailbox import Attachment, Head, Mail, extract_otp
 from .matching import CompanyIndex, compact, tokens
 from .pdfs import check_attachment
 
-RULES_VERSION = 1
+RULES_VERSION = 2   # 2: a JD / role description (attachment or the mail itself) is kept whole
 KINDS = ("form", "test", "interview", "shortlist", "ppt", "offer", "announcement")
 
 OTP_RE = re.compile(r"\botp\b|one[\s-]*time[\s-]*pass(?:word|code)?|verification code|login code|"
@@ -277,11 +277,18 @@ def read(mail: Mail, attachments: list[Attachment], verdict: Verdict, index: Com
     for a in attachments[:3]:
         res = check_attachment(a.data, roll, name, a.content_type)
         checks.append({"file": (a.filename or "attachment")[:80], **{k: res.get(k) for k in (
-            "status", "matched_by", "format", "pages", "roll_like_count", "header", "my_row", "details", "error")}})
+            "status", "matched_by", "format", "pages", "roll_like_count", "header", "my_row", "details", "error")},
+            # a job description (no students in it): the whole text, for the company's roles (ping/notice_jd.py)
+            **({"context": res.get("context")} if res.get("status") == "jd" else {})})
     mine = next((c for c in checks if c["status"] == "yes"), None)
+    jd_doc = next((c for c in checks if c["status"] == "jd"), None)
+    if not jd_doc and not mine:
+        from .pdfs import ROLL_LIKE, classify as doc_kind, jd_document
+        if doc_kind(mail.text or "", len(set(ROLL_LIKE.findall((mail.text or "").upper())))) == "jd":
+            jd_doc = {"file": "(mail text)", "status": "jd", "context": jd_document(mail.text)}
     a_list = any((c.get("roll_like_count") or 0) >= 5 for c in checks)
     pdf = mine or next((c for c in checks if c["status"] == "no" and (c.get("roll_like_count") or 0) >= 5), None) \
-        or (checks[0] if checks else None)
+        or jd_doc or (checks[0] if checks else None)
     links = clean_links(mail.links)
     kind = classify(mail.subject, mail.text, links, on_a_list=bool(mine) or a_list)
     due, event, words = moments(f"{mail.subject}\n{mail.text}", mail.received, kind)

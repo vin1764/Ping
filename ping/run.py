@@ -402,6 +402,29 @@ class Runner:
         if ups:
             log(f"job descriptions: {dict(tally)}")
 
+    def _notice_jds(self, roles: list[dict]) -> dict:
+        """JD documents found on notices and in placement mail (ping/pdfs.py: kept whole, no students in them) fill
+        the JD of the company's roles that have none of their own (ping/notice_jd.py)."""
+        from . import notice_jd
+        try:
+            checks = {c["notice_id"]: c for c in self.store.select("pdf_checks", REAL) if c.get("status") == "jd"}
+            mails = [m for m in self.store.select("emails", REAL) if (m.get("pdf") or {}).get("status") == "jd"]
+        except Exception as e:
+            self.problems.append(f"reading JD documents failed: {type(e).__name__}")
+            return {}
+        if not checks and not mails:
+            return {}
+        notices = {n["id"]: n for n in self.store.select("notices", REAL) if n["id"] in checks}
+        index = CompanyIndex(roles)
+        ups, stats = notice_jd.apply(checks, notices, roles, index, mails=mails)
+        if ups:
+            try:
+                self.store.upsert("roles", ups)
+            except Exception as e:
+                self.problems.append(f"saving JDs from notices failed: {type(e).__name__}")
+        self.counts["notice_jds"] = {k: v for k, v in stats.items() if k != "companies"}
+        return stats
+
     def _jd_summaries(self, roles: list[dict]) -> None:
         """A short summary per JD (role & team, what you'd do, must-haves, location, eligibility, anything unusual),
         made once per JD text: by Gemini when it answers, else from the JD's own labelled lines."""
@@ -509,7 +532,8 @@ class Runner:
                 self.c("pdf_download_failed")
                 self.problems.append(f"notice {n['notice_id']}: attachment not downloaded ({type(e).__name__})")
                 continue
-            res = check_attachment(data, roll, profile.get("name") or "", ctype, also=[self.secrets.roll])
+            res = check_attachment(data, roll, profile.get("name") or "", ctype, also=[self.secrets.roll],
+                                   notice_kind=(n.get("analysis") or {}).get("kind"))
             res["checked_at"] = datetime.now(timezone.utc).isoformat()
             checks[n["id"]] = res
             self.c(f"pdf_{res['status']}")
@@ -614,6 +638,7 @@ class Runner:
 
     def _rebuild(self, profile) -> list[dict]:
         roles = self.store.select("roles", REAL)
+        self._notice_jds(roles)
         self._jd_summaries(roles)
         notices = [n for n in self.store.select("notices", REAL) if n.get("analysis")]
         # Re-read stored notices with today's rules (cheap: text only), so fixes apply to past notices too.
@@ -930,8 +955,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "rescan":
         from .recheck import rescan
         r = Runner(secrets, store, store_ok=ok, trigger=trigger)
-        changes = rescan(r, days=int(os.environ.get("PING_DAYS") or 14))
+        from .notice_jd import coverage
+        before = coverage(store.select("roles", REAL), store)
+        # every list notice, and every notice with a file about a company whose roles lack a JD, of the season so far
+        changes = rescan(r, days=int(os.environ.get("PING_DAYS") or 120), jds=True)
+        after = coverage(store.select("roles", REAL), store)
         print(f"\n==== re-scan: {r.rechecked['files']} files read again, {len(changes)} verdict(s) changed ====")
+        jd_files = sum(1 for c in r.rechecked["checks"].values() if c.get("status") == "jd")
+        print(f"JD documents found: {jd_files} on notices read now; roles with a real JD {before['jd']} -> {after['jd']} "
+              f"(+{after['jd'] - before['jd']}); facts the documents add to roles without them: {after['doc_facts']}")
+        for co, n in sorted(after["gained_by_company"].items()):
+            print(f"  {co}: {n} role(s) now have a JD from a notice or mail document")
         for c in changes:
             print(f"  {c['company']} | {c['subject']} ({c['kind']}, posted {c['posted']}) | {c['old']} -> {c['new']}"
                   + (f" | {c['why']}" if c.get('why') else ""))

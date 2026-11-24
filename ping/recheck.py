@@ -110,9 +110,11 @@ CHECK_FIELDS = ("status", "matched_by", "format", "pages", "text_chars", "scanne
                 "header", "my_row", "context", "details", "error", "checked_at")
 
 
-def rescan(runner, days: int = 14, company: str | None = None, log=print) -> list[dict]:
+def rescan(runner, days: int = 14, company: str | None = None, log=print, jds: bool = False) -> list[dict]:
     """Read again, from the ERP now, the attachment of every list notice (shortlist, test, room list, result) of the
     last `days` days (or every notice of one company), check it with today's code, save it, rebuild the feed.
+    jds: also every other notice with a file whose company has a role without a real JD of its own (a JD / role
+    description is kept whole and fills those roles: ping/notice_jd.py).
     Returns what changed: [{company, notice, subject, old, new}]."""
     from .items import LIST_KINDS as _  # noqa: F401  (same kinds)
     from .matching import CompanyIndex
@@ -133,6 +135,8 @@ def rescan(runner, days: int = 14, company: str | None = None, log=print) -> lis
             todo = [n for n in board if n["notice_time"] and datetime.fromisoformat(n["notice_time"]) >= since]
         roles = runner.store.select("roles", REAL)
         index = CompanyIndex(roles)
+        from .notice_jd import WEAK
+        weak = {r["company"] for r in roles if r.get("jd_source") in WEAK}
         for n in todo:
             s = stored.get(n["id"])
             if s is None:
@@ -145,14 +149,16 @@ def rescan(runner, days: int = 14, company: str | None = None, log=print) -> lis
                 new_notices.append(n)
                 s = n
             kind = (s.get("analysis") or {}).get("kind")
-            if not n["has_attachment"] or (kind not in LIST_KINDS and not company):
+            about_weak = jds and any(t.get("company") in weak for t in (s.get("analysis") or {}).get("targets", [])) \
+                or jds and index.canonical(n.get("company") or "") in weak
+            if not n["has_attachment"] or (kind not in LIST_KINDS and not company and not about_weak):
                 continue
             try:
                 data, ctype = runner.erp.notice_attachment(n["year"], str(n["notice_id"]))
             except Exception as e:
                 log(f"notice {n['id']} ({n['company']}): attachment not downloaded ({type(e).__name__})")
                 continue
-            res = check_attachment(data, roll, name, ctype, also=[runner.secrets.roll])
+            res = check_attachment(data, roll, name, ctype, also=[runner.secrets.roll], notice_kind=kind)
             res["checked_at"] = datetime.now(timezone.utc).isoformat()
             new_checks[n["id"]] = res
             before = (old_checks.get(n["id"]) or {}).get("status")

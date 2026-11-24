@@ -3,6 +3,10 @@
 Only your own row and the table heading are kept. The rest of the file
 (hundreds of other students' names) is never stored or sent anywhere.
 
+A job description (one role or several) is not a list of students: it is classified first (classify()) and kept
+whole (status "jd", the text in "context"), with any phone number or email address in it taken out. Anything with a
+roll number in it, or that reads like a list of students, is never a JD.
+
 Result status:
   yes      your roll number (or, as a fallback, your name) is in it
   no       the file was read in full, it lists students by roll number, and yours isn't there. Ping never says
@@ -191,6 +195,37 @@ def _ocr_pdf(data: bytes) -> list[str]:
     return texts
 
 
+# ---------------------------------------------------------------- what kind of document
+
+LIST_NOTICE_KINDS = ("test", "test_rooms", "shortlist", "result")
+# a list of students: never a JD, whatever else it says
+LISTY = re.compile(r"name of (the )?(student|candidate)s?|roll\s*(no|number)|room allocation|seating (plan|arrangement)|"
+                   r"list of (the )?(shortlisted|selected|eligible)? ?(students|candidates)|following students|"
+                   r"students? (are|have been) (shortlisted|selected)|s\.?\s?no\.?\s+name", re.I)
+# what a job description says: at least three different ones
+JD_CUES = [re.compile(p, re.I) for p in (
+    r"job description|\bjd\b", r"responsibilit", r"requirements?|must[- ]have|what we('re| are) looking for",
+    r"qualifications?|eligibility|who can apply", r"about (the )?(role|company|us|team)|role overview|the role",
+    r"what you('ll| will) (do|work on)|day[- ]to[- ]day|you will", r"skills?( required| set)?|competenc",
+    r"\bctc\b|compensation|stipend|salary|package", r"location|work mode|on[- ]?site|hybrid|remote",
+    r"designation|job title|position|profile:", r"experience|years? of", r"selection process|interview rounds?|hiring process")]
+PHONE_OR_MAIL = re.compile(r"(\+?91[\s\-]?)?(?<![\d\-./])\d(?:[\s\-.]?\d){9}(?![\s\-.]?\d)|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+
+def classify(text: str, roll_like_count: int) -> str:
+    """'jd' (a job description: safe to keep whole), 'list' (lists students: only your row is kept) or 'other'."""
+    if roll_like_count > 0 or LISTY.search(text or ""):
+        return "list"
+    cues = sum(1 for c in JD_CUES if c.search(text or ""))
+    return "jd" if cues >= 3 and len((text or "").strip()) >= 200 else "other"
+
+
+def jd_document(text: str) -> str:
+    """A JD's text as kept: no phone numbers or email addresses (a recruiter's contact isn't needed), tidy."""
+    from .jd import clean
+    return clean(PHONE_OR_MAIL.sub("[contact removed]", text or ""))[:60000]
+
+
 def sniff(data: bytes, content_type: str = "") -> str:
     if data[:5] == b"%PDF-":
         return "pdf"
@@ -211,8 +246,10 @@ def sniff(data: bytes, content_type: str = "") -> str:
 
 # ---------------------------------------------------------------- check
 
-def check_attachment(data: bytes, roll: str, name: str = "", content_type: str = "", also: list[str] | None = None) -> dict:
-    """also: other spellings of your roll to look for (your ERP login id when the profile has a roll of its own)."""
+def check_attachment(data: bytes, roll: str, name: str = "", content_type: str = "", also: list[str] | None = None,
+                     notice_kind: str | None = None) -> dict:
+    """also: other spellings of your roll to look for (your ERP login id when the profile has a roll of its own).
+    notice_kind: the notice's kind; a list notice's file (shortlist, test, rooms, result) is never taken for a JD."""
     roll = (roll or "").strip().upper()
     others = [r.strip().upper() for r in (also or []) if r and r.strip().upper() != roll]
     fmt = sniff(data, content_type)
@@ -224,6 +261,18 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
             doc = _read_pdf(data)
         elif fmt == "xlsx":
             doc = _read_xlsx(data)
+        elif fmt == "docx" and notice_kind not in LIST_NOTICE_KINDS:
+            # a Word file on a notice is usually a JD: read it as one, never as a list
+            from .jd import docx_text
+            text = docx_text(data)
+            result["text_chars"] = len(text.strip())
+            result["roll_like_count"] = len(set(ROLL_LIKE.findall(text.upper())))
+            if classify(text, result["roll_like_count"]) == "jd":
+                result.update(status="jd", reliability="a job description: kept whole (no students listed)",
+                              context=jd_document(text))
+            else:
+                result["error"] = "a Word file that isn't a job description"
+            return result
         else:
             result["error"] = f"not a PDF or Excel file ({fmt})"
             return result
@@ -256,6 +305,10 @@ def check_attachment(data: bytes, roll: str, name: str = "", content_type: str =
         return result
 
     result["roll_like_count"] = len(set(ROLL_LIKE.findall(all_text.upper())))
+    # a job description (no student in it): kept whole, linked to the company's roles (ping/notice_jd.py)
+    if notice_kind not in LIST_NOTICE_KINDS and classify(all_text, result["roll_like_count"]) == "jd":
+        result.update(status="jd", reliability="a job description: kept whole (no students listed)", context=jd_document(all_text))
+        return result
 
     found = None
     for r in [roll, *others]:

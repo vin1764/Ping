@@ -901,6 +901,50 @@ def push_examples(secrets) -> int:
     return 0
 
 
+def jd_sources(secrets, company: str | None = None) -> int:
+    """Reads only: everything Ping has stored about one company that could hold a JD (default RISA Labs): the role
+    page's JD, the company's notices (does the text mention a JD or a file?), each notice file's check (a JD kept
+    whole, a list, unreadable), placement mail (subject, sender's name, the attachment's kind), linked form pages.
+    Prints where each came from; never the text of a student list."""
+    import re as _re
+    want = (company or os.environ.get("PING_COMPANY") or "risa").strip().lower()
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    hit = lambda s: want in str(s or "").lower()  # noqa: E731
+    JDW = _re.compile(r"job description|\bjds?\b|role description|attached|attachment|pdf", _re.I)
+    roles = [r for r in store.select("roles", REAL) if hit(r.get("company"))]
+    say(f"roles ({len(roles)}):")
+    for r in roles:
+        say(f"  {r.get('designation')!s:50} jd_source={r.get('jd_source')} jd_text={len(r.get('jd_text') or '')} chars "
+            f"note={r.get('jd_note')!r} ERP field={str(r.get('job_description') or '')[:50]!r} form_doc={r.get('has_form_doc')} "
+            f"company_doc={r.get('has_company_doc')}")
+    notices = sorted([n for n in store.select("notices", REAL) if hit(n.get("company")) or hit(n.get("subject")) or hit(n.get("text"))],
+                     key=lambda n: str(n.get("notice_time")))
+    checks = {c["notice_id"]: c for c in store.select("pdf_checks", REAL)}
+    say(f"notices ({len(notices)}):")
+    for n in notices:
+        c = checks.get(n["id"]) or {}
+        jdw = sorted({m.group(0).lower() for m in JDW.finditer(n.get("text") or "")})
+        say(f"  {n['notice_id']} {str(n.get('notice_time'))[:16]} {n.get('company')!s:28} {str(n.get('subject'))[:50]!r} "
+            f"kind={(n.get('analysis') or {}).get('kind')} file={n.get('has_attachment')} text mentions={jdw} "
+            f"| file check: {c.get('status') or 'not checked'} {c.get('format') or ''} {c.get('pages') or ''}p "
+            f"roll-like={c.get('roll_like_count')} {c.get('error') or ''}")
+    mails = sorted([m for m in store.select("emails", REAL) if hit(m.get("company")) or hit(m.get("subject")) or hit(m.get("snippet"))],
+                   key=lambda m: str(m.get("received_at")))
+    say(f"placement mail ({len(mails)}):")
+    for m in mails:
+        p = m.get("pdf") or {}
+        who = _re.sub(r"\s*<[^>]*>", "", m.get("sender") or "")
+        say(f"  {str(m.get('received_at'))[:16]} from {who[:30]!r} {str(m.get('subject'))[:60]!r} kind={m.get('kind')} "
+            f"attachment={p.get('file')!r} {p.get('status') or ''} rules_version={m.get('rules_version')} "
+            f"mentions JD={bool(JDW.search((m.get('subject') or '') + ' ' + (m.get('snippet') or '')))}")
+    forms = [f for f in store.select("forms", REAL) if any(hit(x) for x in [f.get("company"), *(f.get("companies") or [])])]
+    say(f"form pages ({len(forms)}):")
+    for f in forms:
+        say(f"  {f.get('key')} {str(f.get('title'))[:60]!r} purpose={f.get('purpose')} due={f.get('due_at')} "
+            f"sources={[s.get('type') + ':' + str(s.get('id')) for s in (f.get('sources') or [])]}")
+    return 0
+
+
 def public_ci(secrets) -> int:
     """Reads only: the public copy's latest workflow runs (Tests, Dashboard, Ping) and whether it's non-empty, with
     PUBLIC_REPO_TOKEN. Prints the repository as 'owner / name' (the URL itself is a masked secret)."""
@@ -1618,7 +1662,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

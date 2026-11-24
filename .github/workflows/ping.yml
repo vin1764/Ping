@@ -69,6 +69,9 @@ jobs:
         if: env.SET_UP == 'true' && steps.guard.outputs.skip != 'true'
         env:
           PING_MODE: ${{ inputs.mode || 'run' }}
+          # posting in the chat and push (ping/posting.py): "on" once the posting guard's tests pass; anything else
+          # holds every new message back (saved, not posted) until it's on again
+          PING_POSTING: "on"
           PING_RUN_ROW: ${{ inputs.run_row || '' }}
           PING_COMPANY: ${{ inputs.company || '' }}
           # 'schedule' for GitHub's cron and for kick-run's hourly start, 'manual' for Check now / Run workflow

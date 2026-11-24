@@ -419,7 +419,8 @@ class Runner:
         ups, stats = notice_jd.apply(checks, notices, roles, index, mails=mails)
         if ups:
             try:
-                self.store.upsert("roles", ups)
+                for i in range(0, len(ups), 10):
+                    self.store.upsert("roles", ups[i:i + 10])
             except Exception as e:
                 self.problems.append(f"saving JDs from notices failed: {type(e).__name__}")
         self.counts["notice_jds"] = {k: v for k, v in stats.items() if k != "companies"}
@@ -616,11 +617,12 @@ class Runner:
                 if contacts:
                     self.store.upsert("contacts", contacts)
             if checks:
-                self.store.upsert("pdf_checks", [{"notice_id": k, **{f: v.get(f) for f in (
+                rows = [{"notice_id": k, **{f: v.get(f) for f in (
                     "status", "matched_by", "format", "pages", "text_chars", "scanned", "ocr", "roll_like_count",
                     "header", "my_row", "context", "details", "error", "checked_at")
-                    if f != "checked_at" or v.get(f)}} for k, v in checks.items()],
-                    key="notice_id")
+                    if f != "checked_at" or v.get(f)}} for k, v in checks.items()]
+                for i in range(0, len(rows), 5):              # a JD kept whole is big: a few rows per request
+                    self.store.upsert("pdf_checks", rows[i:i + 5], key="notice_id")
         except Exception as e:
             self.problems.append(f"saving failed: {e}")
             log(f"saving failed: {e}")

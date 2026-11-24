@@ -13,6 +13,7 @@ structure (pages, counts, how roll numbers are written) and where your roll was 
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 from .matching import compact
@@ -174,13 +175,23 @@ def rescan(runner, days: int = 14, company: str | None = None, log=print, jds: b
             runner.erp.logout()
         except Exception:
             pass
+    # saved a few rows at a time: a JD document is kept whole, and many in one request time out
+    def save(table, rows, **kw):
+        for i in range(0, len(rows), 5):
+            for attempt in range(3):
+                try:
+                    runner.store.upsert(table, rows[i:i + 5], **kw)
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        log(f"saving {table} rows {i}-{i + 5} failed: {type(e).__name__}")
+                    time.sleep(3)
     if new_notices:
-        runner.store.upsert("notices", [{k: n.get(k) for k in (
+        save("notices", [{k: n.get(k) for k in (
             "id", "year", "notice_id", "type", "subject", "company", "preview", "text", "notice_time",
             "notice_time_text", "has_attachment", "analysis")} for n in new_notices])
     if new_checks:
-        runner.store.upsert("pdf_checks", [{"notice_id": k, **{f: v.get(f) for f in CHECK_FIELDS}} for k, v in new_checks.items()],
-                            key="notice_id")
+        save("pdf_checks", [{"notice_id": k, **{f: v.get(f) for f in CHECK_FIELDS}} for k, v in new_checks.items()], key="notice_id")
     runner.now = datetime.now(timezone.utc).astimezone(runner.now.tzinfo) if getattr(runner, "now", None) else runner.now
     runner.items = runner._rebuild(profile)
     runner.rechecked = {"notices": len(todo), "files": len(new_checks), "new_notices": len(new_notices), "changes": changes,

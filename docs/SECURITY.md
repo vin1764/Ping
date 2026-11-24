@@ -100,6 +100,11 @@ Tables): sender, subject, the first 300 characters, company, kind (form / test /
 attachment only what the notice attachment check keeps: status, the table heading and your own row. Nothing from a
 mail ever changes "applied": that comes from the ERP alone.
 
+A job description (a notice's or a mail's attachment, or a mail that is itself a JD) is not a list of students: it is
+kept whole so Ask Ping and the Companies tab can use it, with every phone number and email address taken out first.
+A file is a JD only if it has no roll number and doesn't read like a list of students (ping/pdfs.py `classify`); a
+shortlist, test or room list, result, or anything else naming students keeps only your row and the heading, as above.
+
 ## Storage
 
 | bucket | owner | demo session / anyone else |

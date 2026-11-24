@@ -179,3 +179,27 @@ Judgement calls made while working unattended, one line each.
   test, so the owner sees the real format on the phone.
 - **Tap targets**: `#sheet/apply/<ms>` and `#sheet/form/<ms>` open the Today sheet for that deadline; tests and
   shortlists open their message.
+
+
+## Every source, every time; never an absence without proof (24 Nov, night)
+
+- **Attachments are classified first** (ping/pdfs.py `classify`): anything with a roll number, or that reads like a list
+  of students, is a list (only your row and the heading kept, as before); a job description / role description is kept
+  whole, with phone numbers and email addresses taken out (a recruiter's contact isn't needed), in `pdf_checks.context`
+  (no new column). A list notice's file is never taken for a JD. Mail attachments and a JD written in the mail itself
+  are kept the same way (mail rules v2).
+- **A JD document fills only roles without a real JD of their own** (none, a link Ping can't open, the popup's details);
+  one section per role when the PDF has a heading per role, else the whole PDF. The same PDF posted again is one
+  document, the first posting ("the PDF on notice 1828 (22 Nov; posted again as 1841, 1860)"). It's re-applied on every
+  run from the stored documents, so a role's own JD changing back to nothing can't lose it.
+- **One lookup for every fact** (answer_rules.js `lookup`): role page → notice text → notice files → placement mail and
+  its attachments → form pages, the named source first; every answer cites where, with a link. "Not there" only after
+  all of them, said as "Not on the ERP, in notices, or in placement mail as of 21:12". The signed-in page leaves
+  field and source questions to the function (it doesn't load notice text, mail or forms); the demo has them all.
+- **No repeats**: the last answer's lines are dropped from the new one; nothing new is one line, keeping the line with
+  the link ("As in my last answer: …").
+- **The ground truth for the generated evals is an oracle written separately** from the bot (generate.js `truth`), so
+  the bot can't grade itself; its mistakes were fixed in the oracle, never by bending the bot (Auronova ≠ Auro, a talk
+  isn't a test, a JD link Ping can't open is still a JD).
+- **The signed-in UI is audited through the app's own offline path** (the owner's saved thread), so no login is needed
+  and nobody's data is touched.

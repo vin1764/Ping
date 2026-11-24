@@ -59,7 +59,8 @@ def test_more_than_five_new_messages_are_one_grouped_message_and_one_digest_a_ru
     later = "2026-11-25T20:00:00+05:30"
     many = [form(i, later, company=f"Co{i}", link=f"https://forms.gle/{i}") for i in range(7)]
     shown, out, _ = run(many)
-    assert len(shown) == 1 and shown[0]["id"].startswith("batch:") and "7 new updates" in shown[0]["title"]
+    assert len(shown) == 1 and shown[0]["id"].startswith("batch:") and shown[0]["title"] == "Co0, Co1 +5 more — see Today"
+    assert len(shown[0]["details"]["list"][0]["rows"]) == 7          # the items themselves, never only a count
     digests = [{"id": f"digest:{i}", "level": "show", "category": "digest", "company": None, "due_at": later,
                 "title": f"digest {i}", "details": {"kind": "application"}} for i in range(3)]
     shown, _, _ = run(digests)

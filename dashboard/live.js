@@ -43,7 +43,7 @@
 
   // {kicker, line, steps|null, state: "active" | "done" | "failed"}
   function describe(run, runs, now) {
-    const kicker = run.trigger === "manual" ? "Check now" : "Hourly check";
+    const kicker = null;                 // no "Check now" / "Hourly check" label: the bubble says what happened
     if (isActive(run, now)) {
       const slow = run.stage === "queued" && (now ? new Date(now).getTime() : Date.now()) - t(run.requested_at) > QUEUED_SLOW_MS;
       return { kicker, state: "active", steps: steps(run),
@@ -55,19 +55,18 @@
     if (run.demo) {
       // the demo's first Check now finds what its snapshot's last check brought; later ones find nothing new
       const k = Number(run.new_items) || 0;
-      return { kicker, state: "done", steps: null, line: k ? `Demo: found ${k} new from the snapshot's last check`
-                                                         : "Demo: sample data, nothing new to fetch" };
+      return { kicker, state: "done", steps: null, line: k ? "" : "" };
     }
-    const n = Number(run.new_items) || 0;
-    if (n > 0) return { kicker, state: "done", steps: null, line: `Done at ${hm(run.finished_at)} — ${n} new item${n === 1 ? "" : "s"}` };
-    const prev = previousDone(run, runs);
-    return { kicker, state: "done", steps: null, line: prev ? `Done — nothing new since ${hm(prev.finished_at)}` : "Done — nothing new" };
+    // done: the page draws the new items themselves (never a count); nothing new is no message at all
+    return { kicker, state: "done", steps: null, line: "" };
   }
 
-  // in the thread: every Check now (with its progress), and an hourly run only when it brought something new
+  // in the thread: a check still going (Check now's progress), one that failed, and one that brought something new
+  // (its items, drawn by the page). A finished check with nothing new is no message: the header says "checked just now".
   function inThread(run, now) {
     if (!run || !run.stage) return false;            // rows from before live updates
-    if (run.trigger === "manual") return true;
+    if (isActive(run, now)) return run.trigger === "manual" || !!run.demo;
+    if (run.stage === "failed" || (run.status || "").startsWith("failed")) return run.trigger === "manual";
     return run.stage === "done" && Number(run.new_items) > 0;
   }
 

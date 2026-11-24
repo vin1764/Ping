@@ -691,7 +691,8 @@
     mergeRuns([row]);
     // a run that just finished: read its new messages first, so they arrive right after its "Done" line
     if (ended && row.stage === "done") { state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems(); }
-    if (ended && row.stage === "done" && Number(row.new_items) > 0) flash(`found ${row.new_items} new`);
+    // nothing new: no message, at most a short toast for a check you started here; never a bare count
+    if (ended && row.stage === "done" && live.local.has(row.id) && !runItems({ ...was, ...row }).length) toast("Nothing new", null, null, 3000);
     applyLive();
     // "check the ERP for the latest" with no company in the conversation: the last question again, on the new data
     if (ended && state.reask) {
@@ -813,7 +814,7 @@
   }
 
   // Check now, as a process in the chat: a Ping message whose steps update in place (from the run's own row, live),
-  // ending in "Done at 12:17 — 2 new items" or the reason it couldn't finish. The demo plays the same steps on its
+  // ending in the new messages themselves (or no message when there's nothing new) or the reason it couldn't finish. The demo plays the same steps on its
   // sample snapshot.
   async function checkNow() {
     if (LIVE.current(state.data.runs, liveNow()) || state.starting) return;
@@ -856,7 +857,7 @@
         Object.assign(run, { stage: "done", status: "ok", finished_at: nowDate().toISOString(), new_items: found.length });
         mergeRuns([{ ...run }]);
         stampItems();               // the demo's messages are current after its check: FACT answers stay in the page
-        if (found.length) flash(`found ${found.length} new`);
+        if (!found.length) toast("Nothing new", null, null, 3000);
       }
     };
     step();
@@ -1196,8 +1197,10 @@
     const items = onceEach(state.data.items.filter(inChat)).map((it) => ({ kind: "item", at: itemTime(it), it }));
     const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text, quote: quoteOf(m) }));
     // a Check now (with its progress) and an hourly check that brought something new
-    const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, liveNow()))
-      .map((r) => ({ kind: "run", at: r.shown_at || r.requested_at || r.started_at, run: r }));
+    // a finished check sits at its finish time (the time on the message and any time in it are the same); one that
+    // brought nothing the page can show is no message at all
+    const runs = (state.data.runs || []).filter((r) => LIVE.inThread(r, liveNow()) && (r.stage !== "done" || runItems(r).length))
+      .map((r) => ({ kind: "run", at: r.stage === "done" && r.finished_at ? r.finished_at : r.shown_at || r.requested_at || r.started_at, run: r }));
     const sorted = [...items, ...talk, ...runs].filter((e) => e.at).sort((a, b) =>
       dt(a.at) - dt(b.at) || (a.kind === "item" && b.kind === "item" ? String(a.it.sort_at || "").localeCompare(String(b.it.sort_at || "")) : 0));
     // checks in a row that found nothing: one thin line that updates in place, not a bubble each
@@ -1589,13 +1592,40 @@
       : textBubble(e.kind, e.text, e.at, false, e.quote);
   }
 
+  // what a finished check brought: the messages first seen while it ran (to a minute after it finished)
+  function runItems(run) {
+    if (run.stage !== "done") return [];
+    const ms = (v) => Date.parse(v || "") || 0;
+    const from = ms(run.started_at || run.requested_at) - 10000, to = ms(run.finished_at) + 120000;
+    return (state.data.items || []).filter((it) => inChat(it) && ms(it.first_seen) >= from && ms(it.first_seen) <= to)
+      .sort((a, b) => (dt(a.due_at || a.event_at) || 9e15) - (dt(b.due_at || b.event_at) || 9e15));
+  }
+  // one line per new message, the card's words: "Zeta Global · Form · Today 20:00 [Open form]"
+  function runItemRow(it) {
+    const c = itemCardOf(it), d = it.details || {}, due = it.due_at || it.event_at;
+    const rel = due ? relOf(due, !!it.event_at && !it.due_at) : null;
+    const link = d.todo?.link || c.forms?.[0] || null;
+    return h("div", { class: "run-item" },
+      h("button", { type: "button", class: "linklike run-what", onclick: () => goTo({ item: it.id }) },
+        // a digest / new-roles message has no one company: its own short title ("1 to apply by 20:00 (ZS Associates)")
+        ["digest", "listing"].includes(it.category) || !(c.company || it.company)
+          ? h("strong", {}, String(it.title || "").replace(/^(Reminder|Update):\s*/, "").replace(/,? (today|tonight|tomorrow),? [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d\d:\d\d/, "").slice(0, 70))
+          : [h("strong", {}, shortCo(c.company || cleanName(it.company || ""))), ` · ${KIND_WORD[c.kind] || "Update"}`],
+        rel ? h("span", { class: `cc-l2 lv-${rel.level}` }, ` · ${rel.text}`) : null),
+      link ? h("a", { class: "act-btn primary small", href: link, ...EXT }, /forms\.gle|docs\.google\.com\/forms|\/forms\//i.test(link) || d.todo?.action === "fill_form" ? "Open form" : "Open") : null);
+  }
   function runBubble(run, at) {
     const d = LIVE.describe(run, state.data.runs, liveNow());
-    return h("div", { class: `msg ping run r-${d.state}`, "data-key": `run:${run.id}`, "data-sig": runSig(run),
+    const found = d.state === "done" ? runItems(run) : [];
+    const names = [...new Set(found.map((it) => shortCo(itemCardOf(it).company || cleanName(it.company || "") || "Placement office")))];
+    const body = d.state !== "done" ? h("span", { class: "text title" }, ...placeLinks(d.line))
+      : found.length <= 3 ? h("div", { class: "run-items" }, found.map(runItemRow))
+      : h("span", { class: "text title" }, `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2} more` : ""} — `,
+          h("a", { href: "#today" }, "see Today"));
+    return h("div", { class: `msg ping run r-${d.state}`, "data-key": `run:${run.id}`, "data-sig": runSig(run) + `|${found.length}`,
                       role: d.state === "active" ? "status" : null },
-      h("div", { class: "kicker" }, h("span", { class: "k" }, "Ping"), h("span", { class: "k2" }, d.kicker),
-        d.state === "active" ? h("span", { class: "spin", "aria-hidden": "true" }) : null),
-      h("span", { class: "text title" }, ...placeLinks(d.line)),
+      d.state === "active" ? h("div", { class: "kicker" }, h("span", { class: "spin", "aria-hidden": "true" })) : null,
+      body,
       d.steps ? h("ol", { class: "steps", "aria-label": "Progress" },
         d.steps.map((st) => h("li", { class: `s-${st.state}`, "aria-current": st.state === "now" ? "step" : null }, st.label))) : null,
       h("div", { class: "foot" }, h("span", { class: "time" }, clock(at))));
@@ -1754,13 +1784,13 @@
     b.parentElement.setAttribute("aria-label", n ? `Forms, ${n} due in the next 24 hours` : "Forms");
   }
   let toastTimer = null;
-  function toast(text, action, run) {
+  function toast(text, action, run, ms = 6000) {
     let t = $("#toast");
     if (!t) { t = h("div", { id: "toast", class: "toast", role: "status", "aria-live": "polite" }); document.body.append(t); }
     t.replaceChildren(...[h("span", {}, text), action ? h("button", { type: "button", class: "linklike", onclick: () => { t.hidden = true; run(); } }, action) : null].filter(Boolean));
     t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+    toastTimer = setTimeout(() => { t.hidden = true; }, ms);
   }
   // "For you": forms for companies you're eligible for or that match your targets (a form with no known role counts)
   function formMine(f) {

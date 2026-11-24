@@ -214,9 +214,10 @@ def guard(items: list[dict], previous: dict, store, now: datetime, paused: bool 
             _hide(it, "grouped into one message")
             silenced.add(it["id"])
         report["grouped"] = len(keep)
-        names = [f"{it.get('company') or 'Placement office'}: {it.get('category') or 'update'}" for it in keep]
+        cos = list(dict.fromkeys(it.get("company") or "Placement office" for it in keep))
         items.append({"id": f"batch:{now.strftime('%Y%m%dT%H%M')}", "level": "show", "category": "update", "company": None,
-                      "title": f"{len(keep)} new updates in this check: {', '.join(names[:3])}" + (f" +{len(keep) - 3} more" if len(keep) > 3 else ""),
+                      # the items, never a bare count: "Zeta Global, ZS Associates +3 more — see Today"
+                      "title": f"{', '.join(cos[:2])}" + (f" +{len(cos) - 2} more" if len(cos) > 2 else "") + " — see Today",
                       "due_at": None, "event_at": None, "notice_id": None, "role_ids": [], "pdf_status": None, "needs_review": False,
                       "details": {"list": [{"head": None, "rows": [{"text": it.get("title") or "", "id": it["id"]} for it in keep]}],
                                   "grouped": [it["id"] for it in keep]}})

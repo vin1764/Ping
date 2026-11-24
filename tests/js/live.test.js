@@ -19,22 +19,21 @@ test("what the bubble says while it runs, when it's done, when it fails", () => 
   const going = L.describe(run({ stage: "reading notices", started_at: "2026-11-21T12:15:20+05:30" }), [], NOW);
   assert.deepStrictEqual([going.state, going.line], ["active", "Checking the ERP now… usually takes 1–2 minutes"]);
   const runs = [{ id: "a", finished_at: "2026-11-21T11:43:00+05:30", stage: "done" }];
+  // done: never a count; the page draws the items themselves (no label, no "N new items")
   const two = L.describe(run({ stage: "done", status: "ok", finished_at: "2026-11-21T12:17:05+05:30", new_items: 2 }), runs, NOW);
-  assert.strictEqual(two.line, "Done at 12:17 — 2 new items");
-  const none = L.describe(run({ stage: "done", status: "ok", started_at: "2026-11-21T12:15:20+05:30",
-                                finished_at: "2026-11-21T12:17:05+05:30", new_items: 0 }), runs, NOW);
-  assert.strictEqual(none.line, "Done — nothing new since 11:43");
+  assert.deepStrictEqual([two.state, two.line, two.kicker], ["done", "", null]);
+  assert.ok(!/new item|\d+ new/.test(JSON.stringify(two)));
   const failed = L.describe(run({ stage: "failed", status: "failed: no_otp", note: "Couldn't get into the ERP this time (no_otp); that happens." }), runs, NOW);
   assert.deepStrictEqual([failed.state, failed.line], ["failed", "Couldn't get into the ERP this time (no_otp); that happens."]);
   const slow = L.describe(run({ stage: "queued", requested_at: "2026-11-21T12:00:00+05:30" }), [], NOW);
   assert.strictEqual(slow.line, "Still waiting for GitHub to start the check…");
-  assert.strictEqual(L.describe(run({ stage: "done", demo: true, finished_at: NOW }), [], NOW).line, "Demo: sample data, nothing new to fetch");
-  assert.strictEqual(L.describe(run({ stage: "done", demo: true, finished_at: NOW, new_items: 1 }), [], NOW).line,
-    "Demo: found 1 new from the snapshot's last check");
+  assert.strictEqual(L.describe(run({ stage: "done", demo: true, finished_at: NOW, new_items: 1 }), [], NOW).line, "");
 });
 
-test("in the thread: every Check now; an hourly run only when it brought something new", () => {
+test("in the thread: a Check now while it runs or when it failed; any check only when it brought something new", () => {
   assert.ok(L.inThread(run({ stage: "queued" }), NOW));
+  assert.ok(!L.inThread(run({ stage: "done", status: "ok", finished_at: NOW, new_items: 0 }), NOW));   // nothing new: no message
+  assert.ok(L.inThread(run({ stage: "failed", status: "failed: erp" }), NOW));
   assert.ok(!L.inThread({ trigger: "schedule", stage: "done", new_items: 0 }, NOW));
   assert.ok(L.inThread({ trigger: "schedule", stage: "done", new_items: 3 }, NOW));
   assert.ok(!L.inThread({ trigger: "schedule", stage: "reading notices" }, NOW));

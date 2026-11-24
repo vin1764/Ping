@@ -848,3 +848,8 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 /* Forms: one open list, no heading; nothing open is one line */
 .forms-clear { margin: var(--s3) 0; color: var(--muted); }
 .forms-sec.open-list { margin-top: var(--s2); }
+/* a finished check: its new messages, one line each */
+.msg.run .run-items { display: flex; flex-direction: column; gap: 6px; }
+.msg.run .run-item { display: flex; align-items: center; gap: var(--s2); justify-content: space-between; }
+.msg.run .run-what { text-align: left; }
+.msg.run .act-btn.small { padding: 4px 10px; min-height: 32px; font-size: 0.85rem; }

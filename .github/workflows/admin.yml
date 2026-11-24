@@ -11,7 +11,7 @@ on:
       task:
         description: "What to do"
         type: choice
-        options: [apply-sql, posted-report, posting-cleanup, restore-items, jd-sources, chat-audit, ask-evals-real, chat-diagnose, feedback-evals, notice-forms, public-ci, live-providers, push-examples, prefs-report, forms-report, build-demo, gemini-check, functions-check, auth-sessions, profile-snapshot, profile-restore, set-dashboard-password, end-reviewer-sessions, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
+        options: [apply-sql, posted-report, mail-audit, posting-cleanup, restore-items, jd-sources, chat-audit, ask-evals-real, chat-diagnose, feedback-evals, notice-forms, public-ci, live-providers, push-examples, prefs-report, forms-report, build-demo, gemini-check, functions-check, auth-sessions, profile-snapshot, profile-restore, set-dashboard-password, end-reviewer-sessions, ask-ping-page, rearm-schedule, ask-ping-evals, relevance-evals, auth-config, cleanup-demo, demo-clock, demo-refeed, schedule-setup, schedule-status, log-scan, live-page, jd-report, demo-jd, push-setup, push-rotate, push-check, demo-mails, mail-coverage, public-copy]
 
 permissions:
   contents: write   # build-demo saves dashboard/demo-data.json back to the repo
@@ -62,7 +62,7 @@ jobs:
           ERP_SECQ_2: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.ERP_SECQ_2 || '' }}
           ERP_SECQ_3: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.ERP_SECQ_3 || '' }}
           # log-scan: to search the logs for it; mail-coverage: reads the mailbox read-only (headers, then placement mail)
-          MAIL_APP_PASSWORD: ${{ (inputs.task == 'log-scan' || inputs.task == 'mail-coverage' || inputs.task == 'public-copy') && secrets.MAIL_APP_PASSWORD || '' }}
+          MAIL_APP_PASSWORD: ${{ (inputs.task == 'log-scan' || inputs.task == 'mail-coverage' || inputs.task == 'mail-audit' || inputs.task == 'public-copy') && secrets.MAIL_APP_PASSWORD || '' }}
           # the live Gemini key only to search the logs for it; Admin never calls Gemini with it
           GEMINI_API_KEY_LIVE: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.GEMINI_API_KEY || '' }}
           PING_GITHUB_TOKEN: ${{ (inputs.task == 'log-scan' || inputs.task == 'public-copy') && secrets.PING_GITHUB_TOKEN || '' }}

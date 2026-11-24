@@ -67,3 +67,14 @@ def test_an_assignment_is_pushed_and_the_push_opens_its_message():
     it = next(i for i in build_items(ROLES, [], {}, PROFILE, NOW, [MAIL]) if i["id"] == "mail:m-bluestone")
     note = push.compose([it], {r["id"]: r for r in ROLES}, NOW)
     assert note and "Submit the assignment by" in note["title"] and note["url"] == "./#m-mail%3Am-bluestone"
+
+
+def test_a_push_held_back_by_quiet_hours_is_queued_for_the_check_window():
+    from datetime import datetime, timezone
+    from ping.push import window_start
+    at = window_start(datetime(2026, 11, 24, 20, 47, tzinfo=timezone.utc), None)          # 02:17 IST, window 06:00
+    assert at.isoformat() == "2026-11-25T06:00:00+05:30"
+    at = window_start(datetime(2026, 11, 25, 1, 0, tzinfo=timezone.utc), "07:30")         # 06:30 IST: later today
+    assert at.isoformat() == "2026-11-25T07:30:00+05:30"
+    at = window_start(datetime(2026, 11, 25, 3, 0, tzinfo=timezone.utc), "07:30")         # 08:30 IST: tomorrow
+    assert at.isoformat() == "2026-11-26T07:30:00+05:30"

@@ -1886,7 +1886,14 @@ def repost_item(secrets) -> int:
     say(f"posted again: {it.get('title')!r}")
     if note:
         res = push.send(secrets.supabase_url, secrets.supabase_key, note)
-        say(f"push: {note.get('title')!r} -> {{k: res.get(k) for k in ('status', 'sent', 'devices', 'ok', 'why', 'error')}}")
+        say(f"push: {note.get('title')!r} -> {({k: res.get(k) for k in ('status', 'sent', 'devices', 'ok', 'why', 'error')})}")
+        if res.get("why") == "quiet hours":       # held back, not dropped: sent when your check window opens
+            prof = (store.select("profile", {"id": "eq.1", "select": "check_from"}) or [{}])[0]
+            at = push.window_start(now, prof.get("check_from"))
+            store.upsert("push_queue", [{"id": f"repost:{iid}", "kind": "run", "title": note["title"], "body": note.get("body") or "",
+                                         "url": note.get("url"), "tag": note.get("tag") or iid, "send_at": at.isoformat(),
+                                         "sent_at": None, "result": None}])
+            say(f"push: quiet hours now; queued for {at.strftime('%a %d %b %H:%M')} IST, when your check window opens")
     else:
         say("push: nothing to send (compose returned nothing)")
     return 0

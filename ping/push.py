@@ -319,6 +319,15 @@ def send(base_url: str, service_key: str, body: dict, timeout: int = 30) -> dict
     return {"status": r.status_code, **out}
 
 
+def window_start(now: datetime, check_from: str | None) -> datetime:
+    """When the student's check window next opens (profile check_from, IST; default 06:00): a push held back by quiet
+    hours is queued for then, not dropped."""
+    h, m = (int(x) for x in str(check_from or "06:00")[:5].split(":"))
+    local = now.astimezone(IST)
+    at = local.replace(hour=h, minute=m, second=0, microsecond=0)
+    return at if at > local else at + timedelta(days=1)
+
+
 def reminders(items: list[dict], profile: dict, now: datetime) -> list[dict]:
     """push_queue rows for tests a list says you're on: "Groww test at 15:00 · room 304", sent at the lead time."""
     lead = timedelta(hours=float(profile.get("reminder_hours") or 2))

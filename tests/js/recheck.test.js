@@ -58,3 +58,11 @@ test("staleness note over 30 min only", () => {
 test("company names without their website", () => {
   assert.strictEqual(R.cleanNames("Auro Group([www.AuroIM.com](https://www.AuroIM.com)): Analyst"), "Auro Group: Analyst");
 });
+
+test("unresolved: the questions the page hands to the function (the model reads them first)", () => {
+  const D = require("../../evals/generated/demo_data.js")();
+  const un = (q, prev = []) => { const r = R.route(q, prev, D); return R.unresolved(q, r, r.kind === "open" ? null : R.routed(r, q, D), D); };
+  for (const q of ["ctc?", "elig?", "roles", "and jd", "process till now?"]) assert.ok(un(q), q);
+  for (const q of ["navi ctc?", "what's due tonight?", "any test today?", "deadline?"]) assert.ok(!un(q), q);
+  assert.ok(!un("ctc?", ["navi roles"]), "a follow-up the rules resolve stays on the page");
+});

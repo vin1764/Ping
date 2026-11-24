@@ -17,8 +17,9 @@ import "../_shared/answer_rules.js";
 import "../_shared/understand.js";   // the model reads the question and words the reply; the rules fetch every fact
 const Rules = (globalThis as any).PingRules;
 const U = (globalThis as any).PingUnderstand;
-// the two model steps around the rules: off until the follow-up evals pass (Admin > followup-evals), then on
-const MODEL_STEPS = (Deno.env.get("PING_MODEL_STEPS") || "off") === "on";
+// the two model steps around the rules: on since 25 Nov (Admin > followup-evals on your real history, Groq first:
+// 28/32 vs the rules' 23/32, +967 ms median, nothing broken); PING_MODEL_STEPS=off (a Supabase secret) turns them off
+const MODEL_STEPS = (Deno.env.get("PING_MODEL_STEPS") || "on") === "on";
 const UNDERSTAND_MS = 3_000;         // reading the question: past this, the rules alone route it
 const COMPOSE_MS = 2_500;            // wording the reply: past this, the rules' answer is sent as it is
 

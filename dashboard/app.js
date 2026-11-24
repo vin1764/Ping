@@ -3556,7 +3556,11 @@
     if (r.kind === "open") return { why: "open" };
     if (!hasSources(state.data) && ((r.spec?.intents || []).some((i) => SOURCE_INTENTS.includes(i)) || R.sourcesOf(question).length))
       return { why: "needs every source" };
-    return { text: R.routed(r, question, facts).text, kind: r.kind };
+    const out = R.routed(r, question, facts);
+    // "elig?", "jd of the supply chain one" that the rules can't tie to a company: the function reads it with the
+    // model first (it knows the conversation), instead of an instant "Which company?"
+    if (R.unresolved?.(question, r, out, facts)) return { why: "unresolved" };
+    return { text: out.text, kind: r.kind };
   }
 
   boot().catch((e) => mountPage(h("div", { class: "card" }, h("h1", {}, "Something went wrong"), h("p", {}, `${plainly(e)} Reloading the page usually fixes it.`))));

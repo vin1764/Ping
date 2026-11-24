@@ -1055,6 +1055,15 @@
     "\\bi(?:'?m| am) (?:on|in) (?:it|the list|there|that list)\\b", "\\bi(?:'?m| am) there\\b", "\\bcheck (?:it |that )?now\\b",
   ].join("|"), "i");
   function isRecheck(message) { return RECHECK.test(String(message || "")); }
+  // a question the rules couldn't tie to a company: no company named, none in the answer, and the answer asks
+  // "Which company?" or doesn't know a word ("elig", "supply chain"). The page doesn't answer these itself: Ask Ping's
+  // function reads them with the model first (PING_MODEL_STEPS), which finds the company the conversation is about.
+  function unresolved(question, route, out, data) {
+    if (!route || route.kind === "open") return true;
+    if (route.kind !== "fact" || (out && out.companies && out.companies.length)) return false;
+    if (matchCompanies(String(question || ""), data).hits.length) return false;
+    return !!((route.spec && route.spec.unknown && route.spec.unknown.length) || /^(?:Which company|For which company)\b/.test(String(out && out.text || "")));
+  }
 
   const ROLLISH = /^\d{2}[a-z]{2}\d{5}$/;
   function parse(text, data, ents) {
@@ -1479,7 +1488,7 @@
     return { text: `I'm not sure what you'd like me to do with that. Hide one of these from For you? ${names.map((n) => `[${n}](#ask:${encodeURIComponent(`hide ${n}`)})`).join(" ")} [No](#ask:never%20mind)` };
   }
 
-  const api = { learnCasing, lookup, sourcesOf, noRepeat, clarifyCompany, feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  const api = { unresolved, learnCasing, lookup, sourcesOf, noRepeat, clarifyCompany, feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

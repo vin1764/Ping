@@ -282,3 +282,20 @@ Decisions:
   (75%), with the model reading 5/8: its rewrite broke that re-check. Reading median 2.1 s, fell back on 6/8.
 - So PING_MODEL_STEPS stays "off": it would add ~2 s to every answer for no gain. The wiring is deployed and logged;
   it's worth re-running once a Groq eval key (GROQ_API_KEY_EVALS) is set, since Groq is the faster first choice.
+
+## 25 Nov: the model steps are on (Groq first, then flash-lite)
+
+- Rule (yours): on only if it beats the rules alone on the real-history replay and adds at most 1.5 s median.
+- The real-history set grew from 8 to 32: A, 11 real follow-ups (a company-less question within 30 min of your last
+  3 questions, or a reply to a message about one company; none of yours were replies yet); B, 21 of your own
+  questions that named one company, with its words taken out, asked after your nearest question about another.
+  Questions about a time ("what's due tonight?") aren't follow-ups (answered for every company), from this run on.
+- With the Groq eval key, paced by Groq's rate-limit headers (waits outside the timed steps): Groq read all 32.
+  Rules alone 23/32 (72%), with the model steps 28/32 (88%); A 9/11 both ways, B 14/21 → 19/21. Fixed 5, broke 0.
+  Added time (reading + wording): median 967 ms, worst 1609 ms. Wording kept 26/26.
+  The earlier "off" was flash-lite alone (2-3 s, mostly timing out) and Groq refused for the eval key's per-minute
+  limit: not what live does.
+- PING_MODEL_STEPS now defaults to "on" (a Supabase secret PING_MODEL_STEPS=off turns it off).
+- The page answers fact questions itself (instant); a question the rules can't tie to a company ("elig?", "Which
+  company?" answers) now goes to the function, where the model reads it first. Those take a function round trip
+  (a few seconds) instead of an instant "Which company?"; everything the rules answer stays instant.

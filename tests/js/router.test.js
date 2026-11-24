@@ -69,7 +69,7 @@ test("follow-ups resolve against the last turn, then route the same way", () => 
   // "nothing else?" after tests today: no other test, then the most urgent thing left today
   assert.match(reply("nothing else?", ["any tests today?"]), /^No other test today: that was the only one\. 3 roles close at 20:00 today \(in 2h 30m\), 2 not applied \(1 for you\): Slice\.$/);
   // a past deadline, by pronoun
-  assert.match(reply("when is it?", ["latest notice for harness"]), /Harness \(Software Engineer I\): closed Wed 14 Oct 12:00 \(already passed\)\.$/);
+  assert.match(reply("when is it?", ["latest notice for harness"]), /Software Engineer I closed Wed 14 Oct 12:00 \(already passed\)\.$/);
   // nothing new to go on: the model
   assert.strictEqual(route("and?", ["slice ctc"]).kind, "open");
   assert.strictEqual(route("why not?", ["am I eligible for slice"]).kind, "open");

@@ -88,7 +88,7 @@ test("forms due at the same time are one row that opens into the single ones; te
   const g = d.rows.filter((r) => r.kind === "todo");
   assert.strictEqual(g.length, 1);
   assert.strictEqual(g[0].title, "5 forms due 20:00");
-  assert.strictEqual(g[0].names, "Piramal, SLB, LTM, Auro, …");
+  assert.strictEqual(g[0].names, "Piramal, SLB +3 more");   // two names on the line, the rest counted
   assert.strictEqual(g[0].children.length, 5);
   assert.deepStrictEqual(g[0].children.find((c) => c.title === "SLB").target, { item: "f1" });
   assert.strictEqual(d.rows.filter((r) => r.kind === "test").length, 2);

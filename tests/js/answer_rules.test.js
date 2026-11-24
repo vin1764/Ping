@@ -53,7 +53,7 @@ test("a company with an open deadline: only that company, form + submission merg
 test("a company with no open deadline: says so plainly, with the last notice", () => {
   const a = ask("microsoft cv submission deadline");
   assert.strictEqual(a.kind, "company");
-  assert.match(a.text, /^No open deadline for Microsoft in the ERP data \(last checked Sat 21 Nov 17:11\)\./);
+  assert.match(a.text, /^No open deadline for Microsoft on the ERP, in notices, or in placement mail \(last checked Sat 21 Nov 17:11\)\./);
   assert.match(a.text, /Last Microsoft notice: "PPO", Wed 11 Nov 17:59\./);
   assert.match(a.text, /couldn't find your roll number/);
   assert.doesNotMatch(a.text, /not on (it|the list)/i);
@@ -125,10 +125,11 @@ test("JD questions: the stored summary (≤120 words), a link that can't be open
   assert.ok(a.text.split(/\s+/).length <= 125, a.text);          // 120 words + the "(From ...)" source line
   assert.strictEqual(R.answer("what's the JD for searce associate data engineer", d).text,
     "Searce (Associate Data Engineer): The JD is a link I can't open: https://docs.google.com/document/d/14dVgbE3ZQouUB93/edit");
-  assert.strictEqual(R.answer("what do they want for cars24", d).text, "Cars24 (Data Science): no JD on the ERP.");
+  // an absence only after every source: the role page, notices, their files, placement mail, form pages
+  assert.strictEqual(R.answer("what do they want for cars24", d).text, "No JD for Cars24 (Data Science) on the ERP, in notices, or in placement mail as of 17:11.");
   const d3 = { ...data, roles: [{ id: "j5", company: "Accenture", designation: "AI and Data", jd_source: "none", jd_note: "As mentioned in Registration Email" }] };
   assert.strictEqual(R.answer("summarise accenture's jd", d3).text,
-    'Accenture (AI and Data): no JD on the ERP (the ERP says: "As mentioned in Registration Email").');
+    'No JD for Accenture (AI and Data) on the ERP, in notices, or in placement mail as of 17:11. The ERP\'s JD field says: "As mentioned in Registration Email".');
   assert.match(R.answer("summarise google's jd", d).text, /^I don't have Google/);
   // the JD came from the ERP's details, the fuller JD is a private link; a model that sent [] for "no location"
   const d2 = { ...data, roles: [{ id: "j4", company: "Searce Inc.", designation: "Associate Data Engineer", jd_source: "detail",

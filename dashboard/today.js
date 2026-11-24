@@ -29,7 +29,7 @@
     const words = (core || c).split(" ").filter(Boolean);
     return words.slice(0, 2).join(" ") || c.trim();
   };
-  const listNames = (names, n) => names.length > n ? `${names.slice(0, n).join(", ")}, …` : names.join(", ");
+  const listNames = (names, n) => (NAMES && NAMES.namesLine ? NAMES.namesLine(names) : names.length > n ? `${names.slice(0, n).join(", ")}, …` : names.join(", "));
   const TEST_KINDS = ["test", "test_rooms", "interview", "gd"];
 
   // "in 1 h 48 m" / "in 42 m" / "in 35 s" / "in 3 days" / "over"; level: over | red (<1 h) | amber (<3 h) | plain
@@ -107,7 +107,7 @@
         ? `${mine.length}${split ? " for you" : ""} to apply by ${clock(t)}` : showOthers ? `${plural(others.length, "other role")} to apply by ${clock(t)}` : "";
       return { kind: "deadline", at: t, due: new Date(t).toISOString(), title,
                sub: mine.length && showOthers ? `${plural(others.length, "other")} not applied` : !mine.length && showOthers ? "none for you" : "",
-               names: names.length > 4 ? `${names.slice(0, 4).join(", ")} +${names.length - 4}` : names.join(", "),
+               names: NAMES && NAMES.namesLine ? NAMES.namesLine(names) : names.length > 4 ? `${names.slice(0, 4).join(", ")} +${names.length - 4}` : names.join(", "),
                mine: mine.length, others: others.length, notApplied: open.length, roleIds: rs.map((r) => r.id), applied: applied.length,
                total: rs.length, left: mine.length, done: !open.length, quiet: open.length > 0 && !mine.length && !showOthers,
                digestId: digest ? digest.id : null,
@@ -201,6 +201,23 @@
   }
 
   const NOTICE_MAX = 6;
+  // a notice's subject as a short label: "CDC Placement Schedule for 24th" -> "schedule · 24 Nov"; "[URGENT] : CDC |
+  // NOMURA | Additonal Details" -> "Additional Details"; never cut off mid-word
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function shortSubject(subject, company, at) {
+    let t = String(subject || "").replace(/\[[^\]]*\]|\((urgent|important)\)/gi, " ").replace(/\badditonal\b/gi, "Additional")
+      .replace(/(^|[\s|:])(cdc|iit\s*kgp|iit\s*kharagpur|placement)(?=$|[\s|:])/gi, "$1 ").replace(/[|:]+/g, " ").replace(/\s+/g, " ").trim();
+    const co = String(company || "").split(/\s+/)[0];
+    if (co && co.length >= 3) t = t.replace(new RegExp(`^${co.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b\\s*`, "i"), "").trim();
+    if (/\bschedule\b/i.test(t)) {
+      const d = t.match(/\b(\d{1,2})(st|nd|rd|th)?\b/), when = new Date(at || Date.now());
+      const mon = MON[Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", month: "numeric" }).format(when)) - 1];
+      const day = d ? Number(d[1]) : Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "numeric" }).format(when));
+      return `schedule · ${day} ${mon}`;
+    }
+    if (t.length > 30) t = t.slice(0, 31).replace(/\s+\S*$/, "").replace(/\s+(of|and|for|the|to|in|on|with|&)$/i, "");
+    return t || "notice";
+  }
   function notices(list, day, items, inChat) {
     const today = (list || []).filter((n) => n.notice_time && dayOf(ms(n.notice_time)) === day)
       .sort((a, b) => ms(a.notice_time) - ms(b.notice_time));
@@ -213,12 +230,15 @@
                      dueAt: what?.due ? ms(what.due) : null, list: what?.list || null };
       const many = /multiple|several|various/i.test(n.company || "");
       // one company: "ICICI Lombard · deadline extended to 20:00"
-      if (!many) return { ...base, title: `${cleanName(n.company)} · ${what ? what.one : n.subject || "notice"}`, sub: posted };
+      const generic = /^(cdc|placement|career development|training)/i.test(n.company || "") || !n.company;
+      const label = what ? what.one : shortSubject(n.subject, n.company, n.notice_time);
+      if (!many) return { ...base, title: generic && /^schedule/.test(label) ? `CDC ${label}` : `${cleanName(n.company)} · ${label}`, sub: posted };
       // several: "Deadlines extended to 20:00 · 18 companies", then which ones
       const names = noticeCompanies(n), asks = noticeAsks(n);
       const who = names.length ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ")) : "several companies";
       const count = names.length ? ` · ${names.length} compan${names.length === 1 ? "y" : "ies"}` : "";
-      return { ...base, title: `${what ? what.many : n.subject || "Notice"}${count}`, companies: names, asks, sub: posted, names: who };
+      const lab = what ? what.many : shortSubject(n.subject, "", n.notice_time);
+      return { ...base, title: `${/^schedule/.test(lab) ? `CDC ${lab}` : lab}${count}`, companies: names, asks, sub: posted, names: who };
     });
     if (today.length > NOTICE_MAX) rows.push({ kind: "more", at: ms(today[NOTICE_MAX].notice_time),
       title: `+${today.length - NOTICE_MAX} more notices today`, sub: "", target: { feed: true } });
@@ -318,7 +338,7 @@
              sub: `${word[0].toUpperCase()}${word.slice(1)}s ${verb} ${day} ${clock(at)} · ${c.all} in all` };
   }
 
-  const api = { build, countdown, nextCheck, clock, dayOf, cleanName, shortName, erpLink, formLinks, orderCards, filterCards, sheetCounts, sheetTitle };
+  const api = { build, shortSubject, countdown, nextCheck, clock, dayOf, cleanName, shortName, erpLink, formLinks, orderCards, filterCards, sheetCounts, sheetTitle };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingToday = api;
 })(typeof window !== "undefined" ? window : globalThis);

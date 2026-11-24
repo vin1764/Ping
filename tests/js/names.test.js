@@ -10,10 +10,10 @@ test("a website in brackets is dropped from the display name", () => {
 });
 
 test("other brackets, spacing and empty names", () => {
-  assert.strictEqual(cleanName("Axis Bank  Ltd"), "Axis Bank Ltd");
+  assert.strictEqual(cleanName("Axis Bank  Ltd"), "Axis Bank");   // never "Ltd" / "Private Limited" on screen
   assert.strictEqual(cleanName("Tata Steel (Jamshedpur)"), "Tata Steel (Jamshedpur)");
   assert.strictEqual(cleanName("BIU (Business Intelligence Unit)"), "BIU (Business Intelligence Unit)");
-  assert.strictEqual(cleanName("  Flipspaces Technology Labs Pvt. Ltd. "), "Flipspaces Technology Labs Pvt. Ltd.");
+  assert.strictEqual(cleanName("  Flipspaces Technology Labs Pvt. Ltd. "), "Flipspaces Technology Labs");
   assert.strictEqual(cleanName("(www.only.com)"), "(www.only.com)");   // nothing left: keep the raw name
   assert.strictEqual(cleanName(null), "");
 });

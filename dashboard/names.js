@@ -13,7 +13,21 @@
            .replace(/\s*\(([^()]*)\)/g, (m, inner) => (URLISH.test(inner) ? "" : m));          // (www.x.com)
     } while (s !== prev);
     s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:])/g, "$1").trim();
+    // never "Private Limited" / "Pvt Ltd" / "Limited" on screen
+    for (let i = 0; i < 2; i++) s = s.replace(/[\s,]+(private\s+limited|pvt\.?\s*ltd\.?|pvt\.?|limited|ltd\.?|llp|inc\.?|corporation|corp\.?)\s*$/i, "").trim();
     return s || raw.trim();
+  }
+  // in a list of names on one line: the name without a generic last word ("Intellimation.ai Software" ->
+  // "Intellimation.ai", "Waterfly Technologies" -> "Waterfly")
+  function shortName(name) {
+    const s = displayName(name);
+    const t = s.replace(/\s+(software|technologies|technology|solutions|services|systems|india|global|labs? pvt)\s*$/i, "").trim();
+    return t.includes(" ") || t.length >= 4 ? t : s;
+  }
+  // "Intellimation.ai, Auro +2 more": at most two names on a line
+  function namesLine(names, n = 2) {
+    const list = [...new Set((names || []).map(shortName).filter(Boolean))];
+    return list.length <= n ? list.join(", ") : `${list.slice(0, n).join(", ")} +${list.length - n} more`;
   }
   // "Company — Role" rows inside messages: the company part, cleaned the same way
   function cleanRowText(text) {
@@ -28,7 +42,7 @@
     if (words.length < 2 || s !== s.toUpperCase() || !/[A-Z]{4,}/.test(s)) return s;
     return words.map((w) => (w.length <= 3 || /\d/.test(w) || ACRONYMS.has(w.replace(/[^A-Z]/g, "")) ? w : w[0] + w.slice(1).toLowerCase())).join(" ");
   }
-  const api = { cleanName, cleanRowText, displayName };
+  const api = { cleanName, cleanRowText, displayName, shortName, namesLine };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingNames = api;
 })(typeof window !== "undefined" ? window : globalThis);

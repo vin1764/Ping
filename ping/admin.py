@@ -50,7 +50,7 @@ import re
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -901,6 +901,93 @@ def push_examples(secrets) -> int:
     return 0
 
 
+def _real_facts(secrets) -> Path:
+    """The real data in the shape Ask Ping's rules read (as the function builds it), written to the runner's temp
+    folder only (never committed, never printed): roles, items, notices with their text, the files' checks (a JD's
+    text; a student list's never), placement mail, form pages."""
+    import json as _json
+    import tempfile
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    runs = sorted(store.select("runs", REAL), key=lambda r: str(r.get("started_at") or ""), reverse=True)
+    roles = []
+    for r in store.select("roles", REAL):
+        rel = r.get("relevance") or {}
+        roles.append({**{k: r.get(k) for k in ("id", "company", "designation", "job_description", "jd_text", "jd_source", "jd_url",
+                                               "jd_note", "jd_summary", "applied", "eligible", "ctc", "currency", "cgpa_cutoff", "bond", "allowed")},
+                      "deadline": r.get("effective_deadline") or r.get("apply_end"), "pay": (r.get("more_details") or {}).get("fields") or {},
+                      "cv": rel.get("best_cv") if rel.get("relevant") else None, "for_you": rel.get("relevant"),
+                      "jd_location": (r.get("jd_summary") or {}).get("location")})
+    items = []
+    for i in store.select("items", REAL):
+        if i.get("dismissed"):
+            continue
+        d = i.get("details") or {}
+        items.append({**{k: i.get(k) for k in ("id", "company", "category", "title", "due_at", "event_at", "level", "pdf_status", "role_ids",
+                                               "notice_id", "first_seen", "sort_at", "done")},
+                      "hidden_because": d.get("hidden_because"), "subject": d.get("subject"), "venue": d.get("venue"), "kind": d.get("kind"),
+                      "notice_time": d.get("notice_time"), "pdf": d.get("pdf"), "via": d.get("via"), "mail": d.get("mail"), "todo": d.get("todo")})
+    notices = [{k: n.get(k) for k in ("id", "notice_id", "year", "company", "subject", "text", "notice_time", "has_attachment")}
+               for n in store.select("notices", REAL)]
+    checks = [{"notice_id": c["notice_id"], "status": c.get("status"), "context": c.get("context") if c.get("status") == "jd" else None}
+              for c in store.select("pdf_checks", REAL)]
+    mails = []
+    for m in store.select("emails", REAL):
+        p = m.get("pdf") or {}
+        mails.append({**{k: m.get(k) for k in ("id", "received_at", "sender", "subject", "snippet", "company", "main_link", "due_at")},
+                      "pdf": {"status": p.get("status"), "file": p.get("file"), "context": p.get("context") if p.get("status") == "jd" else None} if p else None})
+    forms = [{k: f.get(k) for k in ("key", "company", "companies", "title", "description", "link", "final_url", "due_at", "purpose", "closed")}
+             for f in store.select("forms", REAL)]
+    prof = (store.select("profile", {"id": "eq.1"}) or [{}])[0]
+    now = datetime.now(timezone.utc).isoformat()
+    last = runs[0].get("finished_at") or runs[0].get("started_at") if runs else None
+    facts = {"now": now, "lastChecked": last, "profile": {k: prof.get(k) for k in ("cgpa", "department", "degree", "active_backlogs")},
+             "prefs": {"listOthers": prof.get("list_other_roles") is not False}, "roles": roles, "items": items, "notices": notices,
+             "pdf_checks": checks, "emails": mails, "forms": forms}
+    out = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()) / "ping_real_facts.json"
+    out.write_text(_json.dumps(facts, default=str))
+    return out
+
+
+def _old_rules(rev: str = "b1f809e") -> str | None:
+    """The rules as they were at rev (for the before numbers), in a temp folder."""
+    import subprocess
+    import tempfile
+    d = Path(tempfile.mkdtemp())
+    for f in ("answer_rules.js", "help.js"):
+        r = subprocess.run(["git", "show", f"{rev}:supabase/functions/_shared/{f}"], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode:
+            return None
+        (d / f).write_text(r.stdout)
+    return str(d / "answer_rules.js")
+
+
+def ask_evals_real(secrets) -> int:
+    """Reads only: the self-generated Ask Ping evals (evals/generated/generate.js) on the real data, with today's rules
+    and with the rules before this round (b1f809e): questions, % correct, false absences, repeats, the failures."""
+    import subprocess
+    facts = _real_facts(secrets)
+    gen = str(ROOT / "evals" / "generated" / "generate.js")
+    old = _old_rules()
+    if old:
+        say("==== before (rules at b1f809e)")
+        subprocess.run(["node", gen, str(facts), "--show=0"], cwd=ROOT, env={**os.environ, "PING_RULES": old})
+    say("==== now")
+    return subprocess.run(["node", gen, str(facts), "--show=40"], cwd=ROOT).returncode
+
+
+def chat_audit(secrets) -> int:
+    """Reads only: every absence-style answer the live bot gave in the owner's chat history, asked again now with the
+    same earlier questions against today's data and rules, and checked against the data itself; lists the wrong ones."""
+    import json as _json
+    import subprocess
+    facts = _real_facts(secrets)
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    chat = sorted(store.select("chat_messages", REAL), key=lambda m: str(m.get("created_at")))
+    path = facts.parent / "ping_real_chat.json"
+    path.write_text(_json.dumps([{k: m.get(k) for k in ("role", "text", "created_at")} for m in chat], default=str))
+    return subprocess.run(["node", str(ROOT / "evals" / "generated" / "audit_chat.js"), str(facts), str(path)], cwd=ROOT).returncode
+
+
 def jd_sources(secrets, company: str | None = None) -> int:
     """Reads only: everything Ping has stored about one company that could hold a JD (default RISA Labs): the role
     page's JD, the company's notices (does the text mention a JD or a file?), each notice file's check (a JD kept
@@ -1662,7 +1749,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

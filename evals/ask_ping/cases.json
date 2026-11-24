@@ -339,7 +339,7 @@
    "question": "where is the Diageo job located",
    "checks": {
     "must_contain": [
-     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain"
+     "don't have|do not have|not in the data|not in your data|isn't in|is not in|no information|not listed|doesn't include|does not include|not available|couldn't find|could not find|no record|not mentioned|doesn't show|does not show|doesn't say|does not say|not specified|no data|isn't mentioned|isn't listed|not provided|doesn't mention|does not mention|does not contain|doesn't contain|No location for"
     ],
     "must_not_contain": [
      "bangalore",
@@ -847,7 +847,7 @@
    "question": "what do they want for cars24 data science",
    "checks": {
     "must_contain": [
-     "Cars24 (Data Science): no JD on the ERP"
+     "No JD for Cars24 (Data Science) on the ERP, in notices, or in placement mail"
     ],
     "must_not_contain": [
      "What you'd do",
@@ -855,7 +855,7 @@
      "(-)"
     ]
    },
-   "why": "Cars24's JD field is '-' with no file, link or details: no JD on the ERP.",
+   "why": "Cars24's JD field is '-' with no file, link or details, and no notice or mail has one: Ping says it looked everywhere.",
    "no_ai": true
   },
   {

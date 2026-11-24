@@ -2478,7 +2478,9 @@
             .replace(/ (by|until) \d\d:\d\d$/, "").replace(/ · submit (your )?CVs?$/i, " · CV submission");
       const rel = r.kind === "more" ? null : done ? { text: "✓ done", level: "done" } : due ? relOf(due, r.kind === "test") : null;
       const l3 = r.kind === "test" ? String(r.sub || "").split(" · ").filter((x) => !/^\d\d:\d\d$/.test(x)).join(" · ")
-        : r.kind === "todo" && !r.group ? (r.sub || "").replace(/^\d\d:\d\d · /, "").replace(/^.*?\(([^)]+)\).*$/, "$1").replace(/^(fill the form|submit.*)$/i, "")
+        // a to-do's line 3 is its role only: the task is on line 1 and the time on line 2 ("fill the form by Tue 24 Nov
+        // 23:59." says both again)
+        : r.kind === "todo" && !r.group ? ((r.sub || "").match(/\(([^)]+)\)/) || [])[1] || ""
         : r.names || "";
       const body = [h("span", { class: "t-title" }, what, status),
                     rel ? h("span", { class: `t-sub cc-l2 lv-${rel.level}`, ...(rel.level !== "over" && rel.level !== "done" && due ? { "data-rel": dt(due).toISOString(), "data-event": r.kind === "test" ? "1" : null } : {}) }, rel.text) : null,
@@ -2492,8 +2494,13 @@
     // "Done today: 11 applied ✓ · 2 forms filled ✓": one collapsed line, the done rows inside
     const doneLine = () => m.doneLine ? h("details", { class: "today-done" }, h("summary", {}, m.doneLine),
       h("div", { class: "today-list" }, m.done.map(row))) : null;
-    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), doneLine(), tomorrowLine(m.tomorrow));
-    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, m.rows.map(row)), doneLine(), tomorrowLine(m.tomorrow));
+    // "+19 more notices today": not something to act on, so a quiet link at the bottom, not a row
+    const more = m.rows.find((r) => r.kind === "more");
+    const moreLink = more ? h("p", { class: "today-more" }, h("a", { href: "#feed", class: "muted small" },
+      `${more.title.replace(/^\+/, "")} in All updates ›`)) : null;
+    const rows = m.rows.filter((r) => r.kind !== "more");
+    if (m.empty) return h("div", { class: "today" }, head, h("p", { class: "today-empty" }, m.emptyText), doneLine(), tomorrowLine(m.tomorrow), moreLink);
+    return h("div", { class: "today" }, head, h("div", { class: "today-list" }, rows.map(row)), doneLine(), tomorrowLine(m.tomorrow), moreLink);
   }
   // a tap on Today: the chat message it came from, else the role, the notice or the company
   function goTo(t) {
@@ -3017,10 +3024,12 @@
     const s = r.jd_summary, text = tidyText(r.jd_text || r.job_description || "");
     const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     const linkShut = r.jd_source === "link-unreadable" || (r.jd_source === "detail" && r.jd_url);
-    const from = { attachment: "the JD file on the ERP", link: "the JD link", detail: "the ERP's role details", inline: "the ERP's job description" }[r.jd_source];
+    const from = { attachment: "the JD file on the ERP", link: "the JD link", detail: "the ERP's role details", inline: "the ERP's job description",
+                   notice: r.jd_note || "a notice's PDF", mail: r.jd_note || "placement mail" }[r.jd_source];
     const srcLink = r.jd_url ? h("a", { href: r.jd_url, target: "_blank", rel: "noopener",
-      title: r.jd_source === "attachment" ? "Opens on the ERP; you need to be logged in to the ERP in this browser" : null },
-      r.jd_source === "attachment" ? "Open the JD file on the ERP" : linkShut ? "The full JD link (Ping couldn't open it)" : "Open the JD link") : null;
+      title: ["attachment", "notice"].includes(r.jd_source) ? "Opens on the ERP; you need to be logged in to the ERP in this browser" : null },
+      r.jd_source === "attachment" ? "Open the JD file on the ERP" : r.jd_source === "notice" ? "Open the PDF on the ERP"
+        : linkShut ? "The full JD link (Ping couldn't open it)" : "Open the JD link") : null;
     const body = [];
     if (r.jd_source === "link-unreadable") {
       body.push(h("p", { style: "margin:0" }, "The JD is a link Ping can't open (private or gone). "), srcLink);
@@ -3277,9 +3286,18 @@
         subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time,
         via: i.details?.via, mail: i.details?.mail, todo: i.details?.todo })),
       notices: data.notices || [],
+      // the other sources a fact can be in (the demo has them; the signed-in page asks the function, which reads them)
+      pdf_checks: (data.pdf_checks || []).map((c) => ({ notice_id: c.notice_id, status: c.status, context: c.status === "jd" ? c.context : null })),
+      emails: data.emails || [], forms: data.forms || [],
+      // never the same answer twice in a row
+      lastAnswer: [...(state.chat || [])].reverse().find((m) => m.role !== "me")?.text || null,
       platform: thisPlatform(), installed: standalone(),
     };
   }
+  // the page has every source for a fact (notice text and files, mail, form pages) only in the demo; otherwise a
+  // question about a field or a source goes to the function, which reads them all
+  const hasSources = (data) => !!(data && (data.notices || []).some((n) => n.text) && data.emails && data.forms && data.pdf_checks);
+  const SOURCE_INTENTS = ["jd", "pay", "eligible", "location", "notice", "mail"];
   const previousQuestions = (question) => state.chat.filter((m) => m.role === "me" && m.text !== question).map((m) => m.text).reverse().slice(0, 4);
   function answerLocally(question, data) {
     const R = window.PingRules;
@@ -3302,6 +3320,8 @@
     const facts = factsOf(state.data);
     const r = R.route(question, previousQuestions(question), facts);
     if (r.kind === "open") return { why: "open" };
+    if (!hasSources(state.data) && ((r.spec?.intents || []).some((i) => SOURCE_INTENTS.includes(i)) || R.sourcesOf(question).length))
+      return { why: "needs every source" };
     return { text: R.routed(r, question, facts).text, kind: r.kind };
   }
 

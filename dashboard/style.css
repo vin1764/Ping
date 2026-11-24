@@ -823,3 +823,5 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .pgroup { margin: var(--s5) 0 var(--s2); font-size: var(--t-xs); line-height: 16px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
 .pgroup:first-of-type { margin-top: var(--s3); }
 .cv-sum > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--accent); }
+.today-more { margin: var(--s2) 0 0; }
+.today-more a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; display: inline-flex; min-height: 44px; align-items: center; }

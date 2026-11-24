@@ -312,24 +312,14 @@ Deno.serve(async (req) => {
   const [items, roles, profile] = await Promise.all([
     sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
-    sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400),
+    sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400),
     sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1),
   ]);
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
-  // "summarise X's JD" / "what's the JD for X" / "what do they want for X": the summary Ping made of the JD's own text
-  // (ping/jd.py, stored on the role), the same with or without Gemini, so no model call and no invention
-  if (Rules.intentsOf(ask).has("jd")) {
-    const jdData = (q: string) => Rules.answer(q, { now: asOf, lastChecked: null, items: [], notices: [],
-      roles: (roles.data || []).map((r: any) => ({ ...r, deadline: r.effective_deadline })) });
-    let jd = jdData(ask);
-    if (jd.kind === "intent" && lastQuestion) jd = jdData(`${ask} ${lastQuestion}`);   // "and their JD?"
-    if (jd.kind !== "intent") {
-      console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "jd-summary", kind: jd.kind, ms: Date.now() - t0 }));
-      return json({ answer: saved ? `${saved}\n\n${jd.text}` : jd.text, model: "jd-summary", ...(saved ? { prefs, prefs_changed: true } : {}) });
-    }
-  }
+  // JD questions go through the router like every other fact (its lookup reads the role page, the notices and their
+  // files, placement mail and form pages, and knows the conversation): no separate shortcut
   // ---- the router: FACT questions are answered here by rules, with no model call (answer_rules.js route)
   const hasTargets = !!prefs.targets && prefs.feed_mode !== "all";
   const rmarks = hasTargets
@@ -340,7 +330,7 @@ Deno.serve(async (req) => {
       "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
       "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,sort_at").eq("dismissed", false)
       .order("first_seen", { ascending: false }).limit(1000),
-    sb.from("notices").select("notice_id,company,subject,notice_time").order("notice_time", { ascending: false }).limit(1000),
+    sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).limit(1000),
     sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1),
   ]);
   for (const [name, r] of [["items(rules)", allItems], ["notices(rules)", allNotices], ["runs", lastRun]] as const) {
@@ -360,6 +350,8 @@ Deno.serve(async (req) => {
     // help answers ("how do I install?") give the steps for the asker's own device
     platform: Rules.platformOf(req.headers.get("user-agent") || ""),
   };
+  // the last answer Ping gave in this thread: never the same answer twice in a row
+  factsData.lastAnswer = [...kept].reverse().find((m) => m.role !== "me")?.text || null;
   // the questions before this one, newest first (follow-ups resolve against them)
   const previous = [...kept].reverse().filter((m) => m.role === "me").map((m) => m.text);
   // a question in a reply that names no company is about the quoted message's companies; a statement is routed on
@@ -378,8 +370,33 @@ Deno.serve(async (req) => {
     factsData.roles = factsData.roles.map((r: any) => byId.has(r.id)
       ? { ...r, pay: byId.get(r.id).more_details?.fields || {}, allowed: byId.get(r.id).allowed, backlog_rule: byId.get(r.id).backlog_rule } : r);
   };
+  // every source a fact can be in, for the companies asked about: the notices' text and files, placement mail, the
+  // form pages (answer_rules.js lookup); a source not loaded would make an absence answer wrong
+  const withSources = async (hits: any[]) => {
+    const raw = [...new Set(hits.flatMap((e: any) => [...e.raw]))];
+    if (!raw.length) return;
+    const word = (hits[0]?.words || []).find((w: string) => w.length >= 4) || "";
+    const like = word ? `,text.ilike.%${word.replace(/[%_,()]/g, "")}%` : "";
+    const [nt, em, fo] = await Promise.all([
+      sb.from("notices").select("id,notice_id,year,company,subject,text,notice_time,has_attachment")
+        .or(`company.in.(${raw.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})${like}`).order("notice_time", { ascending: false }).limit(40),
+      sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400),
+      sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400),
+    ]);
+    for (const [name, r] of [["notices(sources)", nt], ["emails(sources)", em], ["forms(sources)", fo]] as const) {
+      if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
+    }
+    const ids = (nt.data || []).map((n: any) => n.id);
+    const ck = ids.length ? await sb.from("pdf_checks").select("notice_id,status,context").in("notice_id", ids) : { data: [] as any[] };
+    const byId = new Map((nt.data || []).map((n: any) => [n.id, n]));
+    factsData.notices = [...(nt.data || []), ...factsData.notices.filter((n: any) => !byId.has(n.id))];
+    // a student list's check keeps only your row: its text never leaves here; a JD's text does
+    factsData.pdf_checks = (ck.data || []).map((c: any) => ({ notice_id: c.notice_id, status: c.status, context: c.status === "jd" ? c.context : null }));
+    factsData.emails = (em.data || []).map((m: any) => ({ ...m, pdf: m.pdf ? { status: m.pdf.status, file: m.pdf.file, context: m.pdf.status === "jd" ? m.pdf.context : null } : null }));
+    factsData.forms = fo.data || [];
+  };
   if (routed.kind !== "open") {
-    await withDetails(routed.spec?.hits || []);
+    await Promise.all([withDetails(routed.spec?.hits || []), withSources(routed.spec?.hits || [])]);
     const out = Rules.routed(routed, ask, factsData);
     console.log(JSON.stringify({ event: "answered", key: keyName, role, model: "rules", route: routed.kind, why: routed.why,
       intents: routed.spec?.intents || [], kind: out.kind, ms: Date.now() - t0 }));

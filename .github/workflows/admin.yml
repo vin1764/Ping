@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           # public-copy rewrites the whole history: it needs every commit
-          fetch-depth: ${{ inputs.task == 'public-copy' && '0' || '1' }}
+          fetch-depth: ${{ (inputs.task == 'public-copy' || inputs.task == 'ask-evals-real') && '0' || '1' }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"

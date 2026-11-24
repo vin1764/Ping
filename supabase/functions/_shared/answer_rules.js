@@ -73,6 +73,11 @@
     "use using used help look looking try go going make take put say think best good better fine sure wait start end let lets " +
     "share send link links portal website site mail email notification notifications message messages question answer " +
     "summarise summarize summary summaries jd jds description descriptions they them their would role's " +
+    // where to look (a source is never a company) and Hinglish / chat fillers
+    "notice notices circular circulars cdc pdf pdfs attachment attachments attached file files doc docs document documents " +
+    "inbox gmail outlook drive mails emails mailed page pages search searched look looked " +
+    "kya hai hain ka ki ke ko mein mai bhi aur kuch koi kab kahan kaha kitna kitni kitne batao bata bta btao bhejo dekh dekho " +
+    "wala wali vala abhi kaun kon konsa konsi yaar bro bhai na nahi nhi haan ha toh plz plss pls ? " +
     "relevant anywhere located location based office city many number count cut off cutoff cgpa cg departments department " +
     "branch branches degree degrees backlog backlogs joining bonus bonuses take home breakdown breakup brekdown esop esops stock " +
     "retention relocation base fixed variable gross score scores marks rank percentile contact contacts phone poc spoc coordinator " +
@@ -143,12 +148,19 @@
       let hit = null;
       for (const t of toks) {
         if (used.has(t) || STOP.has(t) || /^\d+$/.test(t)) continue;
-        if ((t === w0 && t.length >= 2) || (t.length >= 5 && w0.length > t.length && w0.startsWith(t)) || editClose(t, w0) ||
+        if ((t === w0 && t.length >= 2) || (t.length === 2 && t === e.words[0] && /^[a-z]{2}$/.test(t)) || (t.length >= 5 && w0.length > t.length && w0.startsWith(t)) || editClose(t, w0) ||
             (t.length >= 3 && e.words.length >= 3 && t === initials)) { hit = t; break; }
         const want = ALIASES[t];
         if (want && want.some((w) => e.key.includes(w) || e.key.replace(/ /g, "").includes(w.replace(/ /g, "")))) { hit = t; break; }
       }
       if (hit) { hits.push(e); hit.split(" ").forEach((x) => used.add(x)); }
+    }
+    // "Deloitte Touche Tohmatsu India" asked: that company, not also "Deloitte" (the name that matches more words wins)
+    if (hits.length > 1) {
+      const tok = new Set(toks);
+      const score = (e) => (e.words || []).filter((w) => tok.has(w)).length;
+      const best = Math.max(...hits.map(score));
+      if (best >= 2) return { hits: hits.filter((e) => score(e) === best), used };
     }
     return { hits, used };
   }
@@ -158,7 +170,7 @@
     const q = norm(question);
     const has = (re) => re.test(q);
     const out = new Set();
-    if (has(/\b(which|what|best)\s+(cv|resume)\b|\bapply\s+with\b|\bcv\s+(for|to use)\b/)) out.add("whichcv");
+    if (has(/\b(which|what|best|konsa|kaunsa|konsi|kaunsi)\s+(cv|resume)\b|\b(kon|kaun) sa (cv|resume)\b|\bapply\s+with\b|\bcv\s+(for|to use|konsa|kaunsa)\b/)) out.add("whichcv");
     // "summarise X's JD", "what's the JD for X", "what do they want for X", "job description of X"
     if (has(/\bjds?\b|\bjob desc\w*|\bwhat do they (want|look|need)|\bwhat (is|s) the role\b|\bwhat would i do\b|\bsummari[sz]e\b/)) {
       out.add("jd");
@@ -174,6 +186,7 @@
     if (has(/\b(bond|take ?home|joining|bonus\w*|esops?|stocks?|retention|relocation|base salary|break ?(down|up)|brekdown)\b/)) out.add("pay");
     if (has(/\bcut ?offs?\b|\bcgpa\b|\bcg\b|\b(departments?|branch\w*|degrees?)\b.*\b(apply|allowed|eligible|can)\b|\bwho can apply\b/)) out.add("eligible");
     if (has(/\b(notices?|announcements?|circulars?)\b/)) out.add("notice");
+    if (has(/\bforms?\b(?! (is|are) )|\bpreference form\b/) && !has(/\bjd\b/)) out.add("form");
     // placement mail: "any mails for X", "did I get a test link for Y", "what's due from mail"
     if (has(/\b(e ?mails?|mails?|mailed|inbox|via email)\b/) || has(/\b(test|assessment|oa|interview|meeting) links?\b/)) out.add("mail");
     if (has(/\b(what|which) roles\b|\broles? (does|do|at|in)\b|\bopenings?\b|\bpositions?\b/) && !out.has("deadline")) out.add("roles");
@@ -295,6 +308,8 @@
     const linkNote = role.jd_url && role.jd_source === "detail" ? `\nThe full JD is a link I can't open: ${role.jd_url}` : "";
     const one = (v) => (Array.isArray(v) ? v.filter(Boolean).join("; ") : v ? String(v) : "");
     if (!s) {
+      if (role.jd_text && ["notice", "mail"].includes(role.jd_source))
+        return `${who}: the JD is in ${role.jd_note || "a notice's file"}${role.jd_url ? ` — [open](${role.jd_url})` : ""}.\n${String(role.jd_text).split(/\s+/).slice(0, 60).join(" ")}…`;
       if (role.jd_text) return `${who}: ${String(role.jd_text).split(/\s+/).slice(0, 90).join(" ")}…` + linkNote;
       const note = String(role.jd_note || "").trim();
       // the ERP's own words when they say something ("As mentioned in Registration Email"), not "-" or "NA"
@@ -313,25 +328,196 @@
     if (odd.length) lines.push(`Unusual: ${odd.slice(0, 3).join("; ")}`);
     // at most 120 words: drop from the end of the longest lists first
     let out = lines;
+    // at most 7 lines (8 with where it came from): the last "what you'd do" points go first
+    while (out.length > 7 && out.some((l, k) => k > 1 && l.startsWith("- "))) {
+      const i = out.findLastIndex((l) => l.startsWith("- "));
+      out = out.filter((_, k) => k !== i);
+    }
     while (words(out.join(" ")) > 120 && out.length > 2) {
       const i = out.findLastIndex((l) => l.startsWith("- "));
       out = out.filter((_, k) => k !== (i > 1 ? i : out.length - 1));
     }
     const src = role.jd_source === "attachment" ? "the JD file on the ERP" : role.jd_source === "link" ? "the JD link"
-      : role.jd_source === "detail" ? "the ERP's role details" : "the ERP's job description";
+      : role.jd_source === "detail" ? "the ERP's role details"
+      : ["notice", "mail"].includes(role.jd_source) ? `${role.jd_note || "a notice's file"}${role.jd_url ? ` — [open](${role.jd_url})` : ""}`
+      : "the ERP's job description";
     return out.join("\n") + `\n(From ${src}.)` + linkNote;
   }
 
+  // ---------------------------------------------------------------- one lookup, every source
+  // A fact about a company (its JD, CTC, eligibility, location, deadline) is looked for in this order: the role page
+  // (the companies list), the notices' text, the notices' files (a JD PDF kept whole: ping/notice_jd.py), placement
+  // mail and its attachments, the form pages. Every answer says where it came from, with a link; an answer that says
+  // something isn't there is given only after every source was looked at ("Not on the ERP, in notices, or in
+  // placement mail as of 21:12"). A source the student names is looked at first.
+  const DM = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short" });
+  const dayMon = (iso) => (iso ? DM.format(new Date(iso)) : "");
+  const hhmm = (iso) => (iso ? new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso)) : "now");
+  const FIELD = {
+    jd: { word: "JD", re: /job descriptions?|\bjds?\b|role descriptions?|roles? (and|&) responsibilit\w*|key responsibilit\w*/i },
+    pay: { word: "CTC", re: /\bctc\b|\blpa\b|\bstipend\b|\bcompensation\b|\bsalary\b|\bpackage\b/i },
+    eligible: { word: "eligibility", re: /eligib\w*|\bcgpa\b|\bcpi\b|who can apply|branches? allowed|open to (all )?(branches|departments)/i },
+    location: { word: "location", re: /\blocations?\b|\bbased (in|at)\b|\bon-?site\b|\brelocat\w*/i },
+    deadline: { word: "deadline", re: /\bdeadline\b|\blast date\b|\bapply by\b|\btill\b|\buntil\b/i },
+  };
+  const ATTACHED = /\b(attached|attachment|pfa|enclosed|find the (jd|file|pdf))\b/i;
+  const SOURCE_RE = { notice: /\b(notices?|circulars?|cdc)\b/, attachment: /\b(pdfs?|attachments?|attached|files?|docs?|documents?)\b/,
+                      mail: /\b(e ?mails?|mails?|inbox|gmail|outlook)\b/, form: /\b(forms? (page|link)s?|google forms?)\b/,
+                      erp: /\b(erp|portal|companies list|role page)\b/ };
+  const SOURCE_WORD = { erp: "on the ERP", notice: "in notices", attachment: "in notice files", mail: "in placement mail", form: "on form pages" };
+  function sourcesOf(question) { const q = norm(question); return Object.keys(SOURCE_RE).filter((k) => SOURCE_RE[k].test(q)); }
+  const noticeFile = (n) => (n && n.year && n.notice_id != null
+    ? `https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=${encodeURIComponent(n.year)}&id=${n.notice_id}` : null);
+  function aboutEnt(ent, text, company) {
+    if (company && ent.raw.has(company)) return true;
+    const w = (ent.words || []).find((x) => x.length >= 4);
+    return !!w && new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(norm(text || ""));
+  }
+  function sentence(text, re) {
+    const t = String(text || "").replace(/\s+/g, " ");
+    const m = t.match(new RegExp(`[^.!?\\n]{0,90}(?:${re.source})[^.!?\\n]{0,90}`, "i"));
+    return m ? m[0].trim().slice(0, 160) : "";
+  }
+  function lookup(ent, field, data, first = []) {
+    const F = FIELD[field];
+    const found = [];
+    const roles = (data.roles || []).filter((r) => ent.raw.has(r.company));
+    // 1. the role page (the companies list and the role's own details / JD file / JD link)
+    const has = { jd: (r) => ["inline", "attachment", "link", "detail"].includes(r.jd_source) && (r.jd_text || r.jd_summary),
+                  pay: (r) => !!Number(r.ctc) || Object.entries(r.pay || {}).some(([k, v]) => /ctc|salary|stipend|take ?home|fixed/i.test(k) && /\d/.test(String(v))),
+                  eligible: (r) => r.cgpa_cutoff != null || (r.allowed || []).length > 0,
+                  location: (r) => !!r.jd_location, deadline: (r) => !!r.deadline }[field] || (() => false);
+    const onPage = roles.filter(has);
+    if (onPage.length) found.push({ where: "erp", label: "the companies list", roles: onPage });
+    // 2-3. the notices and their files (a JD PDF Ping kept whole, or a notice that says the JD is attached)
+    const notices = (data.notices || []).filter((n) => aboutEnt(ent, `${n.subject || ""} ${n.text || ""}`, n.company))
+      .sort((a, b) => String(b.notice_time || "").localeCompare(String(a.notice_time || "")));
+    const seenFile = new Set();
+    for (const r of roles.filter((x) => ["notice", "mail"].includes(x.jd_source) && (field === "jd" || F.re.test(x.jd_text || "")))) {
+      const key = r.jd_note || r.jd_url;
+      if (seenFile.has(key)) { found.find((f) => f.key === key).roles.push(r); continue; }
+      seenFile.add(key);
+      found.push({ where: r.jd_source === "mail" ? "mail" : "attachment", key, label: r.jd_note || "a notice's file", link: r.jd_url,
+                   roles: [r], snippet: field === "jd" ? "" : sentence(r.jd_text, F.re) });
+    }
+    for (const n of notices) {
+      const text = `${n.subject || ""}. ${n.text || n.preview || ""}`;
+      const chk = (data.pdf_checks || []).find((c) => c.notice_id === n.id);
+      const file = n.has_attachment || chk ? noticeFile(n) : null;
+      const label = `the PDF on notice ${n.notice_id} (${dayMon(n.notice_time)})`;
+      if ([...seenFile].some((k) => String(k).includes(`notice ${n.notice_id} `) || String(k).includes(`id=${n.notice_id}`))) continue;
+      if (chk?.status === "jd" && (field === "jd" || F.re.test(chk.context || ""))) {
+        found.push({ where: "attachment", label, link: file, at: n.notice_time, snippet: field === "jd" ? "" : sentence(chk.context, F.re) });
+      } else if (F.re.test(text)) {
+        const inFile = file && ATTACHED.test(text);
+        found.push({ where: inFile ? "attachment" : "notice", label: inFile ? label : `notice ${n.notice_id} (${dayMon(n.notice_time)})`,
+                     link: file || null, at: n.notice_time, snippet: inFile && field === "jd" ? "" : sentence(text, F.re), said: inFile && chk?.status !== "jd" });
+      }
+    }
+    // 4. placement mail and its attachments
+    for (const m of (data.emails || []).filter((x) => aboutEnt(ent, `${x.subject || ""} ${x.snippet || ""}`, x.company))) {
+      const t = `${m.subject || ""}. ${m.snippet || ""}`;
+      const doc = m.pdf?.status === "jd";
+      if ((doc && (field === "jd" || F.re.test(m.pdf.context || ""))) || F.re.test(t)) {
+        const who = String(m.sender || "").replace(/\s*<[^>]*>/g, "").trim() || "placement mail";
+        found.push({ where: "mail", label: `the ${dayMon(m.received_at)} mail from ${who}${doc && m.pdf.file && m.pdf.file !== "(mail text)" ? " (PDF attached)" : ""}`,
+                     link: m.main_link || null, at: m.received_at, snippet: doc && field === "jd" ? "" : sentence(doc ? m.pdf.context : t, F.re) });
+      }
+    }
+    // 5. the form pages linked for the company
+    for (const f of (data.forms || []).filter((x) => [x.company, ...(x.companies || [])].some((c) => c && aboutEnt(ent, c, c)))) {
+      if (F.re.test(`${f.title || ""} ${f.description || ""}`) || (field === "deadline" && f.due_at && new Date(f.due_at) > data.now))
+        found.push({ where: "form", label: `the form "${f.title || "form"}"`, link: f.final_url || f.link || null, at: f.due_at,
+                     snippet: field === "deadline" && f.due_at ? `due ${when(f.due_at)}` : "" });
+    }
+    // the same notice posted again (same subject, a file each): one entry, the first posting, "posted again as 1860"
+    const files = found.filter((f) => f.where === "attachment" && f.at && /notice \d+/.test(f.label));
+    for (const f of files) {
+      const twin = files.find((g) => g !== f && !g.dup && !f.dup && g.at > f.at && g.said === f.said);
+      if (twin) { twin.dup = true; f.label = f.label.replace(/\)$/, `; posted again as ${twin.label.match(/notice (\d+)/)[1]} on ${dayMon(twin.at)})`); }
+    }
+    for (let i = found.length - 1; i >= 0; i--) if (found[i].dup) found.splice(i, 1);
+    const order = ["erp", "notice", "attachment", "mail", "form"];
+    const firsts = first.flatMap((x) => (x === "notice" ? ["notice", "attachment"] : [x]));
+    const rank = (w) => (firsts.includes(w) ? -10 + firsts.indexOf(w) : order.indexOf(w));
+    found.sort((a, b) => rank(a.where) - rank(b.where));
+    return { found, searched: ["erp", "notice", "attachment", "mail", "form"] };
+  }
+  // "Not on the ERP, in notices, or in placement mail as of 21:12"
+  const asOfLine = (data) => `as of ${hhmm(data.lastChecked || data.now)}`;
+  function absentLine(field, name, data) {
+    return `No ${FIELD[field].word} for ${name} on the ERP, in notices, or in placement mail ${asOfLine(data)}.`;
+  }
+  function foundLine(f, field, name, n = 1) {
+    const what = field === "jd" ? (n > 1 ? "JDs are" : "JD is") : `${FIELD[field].word} is`;
+    const open = f.link ? ` — [open](${f.link})` : "";
+    const quote = f.snippet ? `: "${f.snippet}"` : "";
+    if (f.said) return `${name}: ${f.label.replace(/^the PDF on /, "")} says the ${FIELD[field].word} is attached${open}.`;
+    return `${name} ${what} in ${f.label}${quote}${open}.`;
+  }
+  // the answer about the source the student named ("on mail?"): found there, or not there (then where it is)
+  function namedSourceLine(field, name, lk, named) {
+    const looked = named.flatMap((x) => (x === "notice" ? ["notice", "attachment"] : x === "attachment" ? ["attachment", "mail"] : [x]));
+    const hit = lk.found.find((f) => looked.includes(f.where));
+    if (hit) return null;
+    const where = named.map((s) => SOURCE_WORD[s]).filter(Boolean).join(" or ");
+    return where ? `Nothing ${where} for the ${name} ${FIELD[field].word}.` : null;
+  }
+
   function jdForCompany(ent, question, data) {
-    let roles = (data.roles || []).filter((r) => ent.raw.has(r.company));
+    const all = (data.roles || []).filter((r) => ent.raw.has(r.company));
+    let roles = all;
     // a role named in the question narrows it ("searce associate data engineer")
     const q = new Set(tokensOf(question));
-    const scored = roles.map((r) => [r, keyWords(r.designation).filter((w) => q.has(w) && !LEGAL.has(w)).length]);
+    const initialsOf = (d) => String(d || "").toLowerCase().replace(/\([^)]*\)/g, " ").split(/[^a-z0-9]+/).filter((w) => w && !["of", "and", "the", "in", "for", "us"].includes(w)).map((w) => w[0]).join("");
+    const abbr = (r) => [...q].reduce((n, t) => n + (t.length >= 2 && /^[a-z]+$/.test(t) && !STOP.has(t) ? (initialsOf(r.designation) === t ? 2 : 0) : 0), 0);
+    const scored = roles.map((r) => [r, keyWords(r.designation).filter((w) => q.has(w) && !LEGAL.has(w) && !MINOR.test(w)).length + abbr(r)]);
     const best = Math.max(0, ...scored.map((x) => x[1]));
-    if (best > 0) roles = scored.filter((x) => x[1] === best).map((x) => x[0]);
-    if (!roles.length) return `I don't have a ${ent.name} role on your companies list.`;
-    const shown = roles.slice(0, 3).map((r) => jdAnswer(r, ent.name));
-    return shown.join("\n\n") + (roles.length > 3 ? `\n\n+${roles.length - 3} more ${ent.name} roles: name one to see its JD.` : "");
+    const named = best > 0;
+    if (named) roles = scored.filter((x) => x[1] === best).map((x) => x[0]);
+    const sources = sourcesOf(question);
+    const lk = lookup(ent, "jd", data, sources);
+    const lines = [];
+    const miss = sources.length ? namedSourceLine("jd", ent.name, lk, sources) : null;
+    if (miss) lines.push(miss);
+    if (!all.length) {
+      const f = lk.found[0];
+      return [...lines, f ? foundLine(f, "jd", ent.name) : `I don't have a ${ent.name} role on your companies list, and no ${ent.name} JD in notices or placement mail ${asOfLine(data)}.`].join("\n");
+    }
+    const own = roles.filter((r) => ["inline", "attachment", "link", "detail", "link-unreadable"].includes(r.jd_source) && (r.jd_text || r.jd_summary || r.jd_url));
+    // one role (or a role named): its JD, then where it came from
+    if (roles.length === 1 || (named && roles.length <= 2)) {
+      // a source named that doesn't have it: that first, then where it is in one line (the summary is one ask away)
+      if (miss && own.length) {
+        const first = jdAnswer(roles[0], ent.name).split("\n")[0];
+        return [...lines, `It's on the ERP: ${first.replace(/:$/, "")}`, `Ask "${ent.name} jd" for the summary.`].join("\n");
+      }
+      const out = roles.map((r) => jdAnswer(r, ent.name));
+      const r0 = roles[0];
+      if (!own.length && !["notice", "mail"].includes(r0.jd_source)) {
+        const f = lk.found.find((x) => x.where !== "erp");
+        const note = String(r0.jd_note || "").trim();
+        const said = /[a-z]{3}/i.test(note) && !/^(n\/?a|nil|none|no jd on the erp)$/i.test(note) ? ` The ERP's JD field says: "${note.slice(0, 80)}".` : "";
+        out.splice(0, out.length, f ? foundLine(f, "jd", `${ent.name} (${r0.designation})`) : absentLine("jd", `${ent.name} (${r0.designation})`, data) + said);
+      }
+      return [...lines, ...out].join("\n\n");
+    }
+    // several roles: one line per source, never one line per role saying the same thing
+    const docs = lk.found.filter((f) => f.where !== "erp");
+    const byDoc = docs.filter((f) => f.roles);
+    for (const f of byDoc) {
+      const n = f.roles.length;
+      lines.push(`${ent.name}: ${n === roles.length ? `${n === 1 ? "the" : `all ${n}`}` : `${n} of ${roles.length}`} role${n === 1 ? "" : "s"}' JD${n === 1 ? "" : "s"} in ${f.label}${f.link ? ` — [open](${f.link})` : ""}.`);
+    }
+    if (!byDoc.length && docs.length) lines.push(foundLine(docs[0], "jd", ent.name, roles.length));
+    if (own.length) lines.push(`${ent.name}: ${own.length === roles.length ? `all ${own.length}` : `${own.length} of ${roles.length}`} roles have a JD on the ERP. Ask for a role by name to see it.`);
+    const covered = new Set([...byDoc.flatMap((f) => f.roles.map((r) => r.id)), ...own.map((r) => r.id)]);
+    const rest = roles.filter((r) => !covered.has(r.id));
+    if (rest.length && !docs.length) lines.push(rest.length === roles.length
+      ? `${ent.name}: ${roles.length} roles, ${absentLine("jd", ent.name, data).replace(/^No JD for .*? (on the ERP)/, "no JD $1")}`
+      : `${ent.name}: ${rest.length} more role${rest.length === 1 ? "" : "s"} with no JD on the ERP, in notices, or in placement mail ${asOfLine(data)}.`);
+    if (byDoc.length || own.length) lines.push("Ask for a role by name to see its JD.");
+    return [...new Set(lines)].join("\n");
   }
 
   // ---------------------------------------------------------------- one company: the parts asked about
@@ -342,9 +528,10 @@
     ["retention", /retention/, /retention/i], ["relocation", /relocation/, /relocation/i], ["esop", /esops?|stocks?/, /esop|stock/i],
     ["base", /\bbase\b|\bfixed\b/, /base|fixed/i], ["variable", /variable|incentive/, /variable|incentive/i]];
   // roles of a company, narrowed by role words in the question ("same for analyst role?")
+  const MINOR = /^(i|ii|iii|iv|v|vi|1|2|3|a|an)$/;
   function narrow(roles, question) {
     const q = new Set(tokensOf(question || ""));
-    const scored = roles.map((r) => [r, keyWords(r.designation).filter((w) => q.has(w) && !LEGAL.has(w)).length]);
+    const scored = roles.map((r) => [r, keyWords(r.designation).filter((w) => q.has(w) && !LEGAL.has(w) && !MINOR.test(w)).length]);
     const best = Math.max(0, ...scored.map((x) => x[1]));
     return best > 0 ? scored.filter((x) => x[1] === best).map((x) => x[0]) : roles;
   }
@@ -410,9 +597,17 @@
 
     if (intents.has("score")) lines.push(`I don't have your scores: the ERP doesn't publish test scores or ranks for ${ent.name}.`);
     if (intents.has("contact")) lines.push(`I don't have contact details for ${ent.name}: Ping leaves out names and phone numbers from notices.`);
+    const sources = sourcesOf(question);
+    // a fact not on the role page: every other source is looked at before saying it isn't there
+    const elsewhere = (field) => {
+      const lk = lookup(ent, field, data, sources);
+      const miss = sources.length ? namedSourceLine(field, ent.name, lk, sources) : null;
+      const f = lk.found.find((x) => x.where !== "erp");
+      return [miss, f ? foundLine(f, field, ent.name) : absentLine(field, ent.name, data)].filter(Boolean).join("\n");
+    };
     if (intents.has("location")) {
       const locs = roles.map((r) => r.jd_location && `${label(ent, r)}: ${r.jd_location}`).filter(Boolean);
-      lines.push(locs.length ? locs.join("\n") : `I don't have a job location for ${ent.name}: the ERP's role details don't give one.`);
+      lines.push(locs.length ? [...new Set(locs)].slice(0, 3).join("\n") : elsewhere("location"));
     }
     if (intents.has("whichcv")) {
       const withCv = roles.filter((r) => r.cv);
@@ -420,8 +615,45 @@
         : `No CV suggestion for ${ent.name} yet (it comes from your targets and CVs on the Profile page).`);
     }
     if (intents.has("roles")) lines.push(`${ent.name} roles (${all.length}):\n` + all.map((r) => `- ${r.designation}${r.ctc ? ` · CTC ${money(r.ctc, r.currency || "INR")}` : ""}${r.deadline ? ` · ${new Date(r.deadline) > now ? "closes" : "closed"} ${when(r.deadline)}` : ""}${r.applied ? " · ✓ applied" : ""}`).join("\n"));
-    if (intents.has("pay")) lines.push(roles.length ? roles.map((r) => payLinesFor(ent, r, spec.payQuestion || question)).join("\n") : `No pay details for ${ent.name} in the data.`);
-    if (intents.has("eligible")) lines.push(roles.length ? roles.map((r) => eligibleLine(ent, r, data, question)).join("\n") : `No ${ent.name} role in your companies list.`);
+    if (intents.has("form") && !intents.has("pay") && !intents.has("eligible")) {
+      const now2 = data.now.getTime();
+      const fs = (data.forms || []).filter((f) => [f.company, ...(f.companies || [])].some((c) => c && aboutEnt(ent, c, c)));
+      const todos = items.filter((i) => i.todo?.action === "fill_form" && i.due_at);
+      const open2 = [...fs.filter((f) => f.due_at && new Date(f.due_at).getTime() > now2 && !f.closed).map((f) => ({ at: f.due_at, link: f.final_url || f.link, what: f.purpose || "form" })),
+                     ...todos.filter((i) => new Date(i.due_at).getTime() > now2).map((i) => ({ at: i.due_at, link: i.todo.link, what: "form" }))]
+        .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+      const seen = new Set();
+      const ofs = open2.filter((f) => !seen.has(f.link || f.at) && seen.add(f.link || f.at));
+      const past = [...fs.map((f) => f.due_at), ...todos.map((i) => i.due_at)].filter((t) => t && new Date(t).getTime() <= now2).sort().pop();
+      lines.push(ofs.length ? ofs.slice(0, 2).map((f) => `${ent.name} ${String(f.what).toLowerCase() === "form" ? "form" : `${String(f.what).toLowerCase()} form`}: due ${when(f.at)}${relTime(new Date(f.at).getTime(), data.now)}${f.link ? ` — [open](${f.link})` : ""}.`).join("\n")
+        : past ? `No open ${ent.name} form: the last one closed ${when(past)}.` : `No ${ent.name} form on the ERP, in notices, or in placement mail ${asOfLine(data)}.`);
+      return lines.join("\n");
+    }
+    const hasPay = (r) => !!Number(r.ctc) || Object.entries(r.pay || {}).some(([k, v]) => /ctc|salary|stipend|take ?home|fixed/i.test(k) && /\d/.test(String(v)));
+    if (intents.has("pay")) {
+      const withPay = roles.filter(hasPay);
+      // the CTC in one line ("15 L for SE I, SE II FS; 30 L for 2 roles"); the breakup only when asked for
+      const pq = norm(`${spec.payQuestion || ""} ${question}`);
+      const breakup = PART.some(([, inQ]) => inQ.test(pq)) || /\b(break ?(up|down)|brekdown|details?|full|all|esops?|bonus\w*|bond)\b/.test(pq);
+      const numOf = (r, re) => Number(String(Object.entries(r.pay || {}).find(([k, v]) => re.test(k) && /^\s*[\d,.]+\s*$/.test(String(v)))?.[1] || "").replace(/,/g, "")) || 0;
+      const ctcOf = (r) => Number(r.ctc) || numOf(r, /1st year ctc/i) || numOf(r, /^ctc$/i) || numOf(r, /gross/i) || numOf(r, /fixed take home/i);
+      const byCtc = new Map();
+      // the breakup's own "Total CTC: ₹36 LPA" when it differs from the first-year figure
+      const totalOf = (r) => (String(Object.entries(r.pay || {}).find(([k]) => /ctc break ?up/i.test(k))?.[1] || "").match(/total ctc\s*[:\-]?\s*(₹?\s*[\d.,]+\s*(?:lpa|l\b|lakhs?|cr))/i) || [])[1];
+      for (const r of withPay) {
+        const k = (ctcOf(r) ? money(ctcOf(r), r.currency || "INR") : "not given") + (totalOf(r) ? `, total CTC ${totalOf(r).replace(/\s+/g, " ")}` : "");
+        byCtc.set(k, [...(byCtc.get(k) || []), r.designation]);
+      }
+      lines.push(withPay.length && !breakup ? `${ent.name} CTC: ${[...byCtc.entries()].map(([k, v]) => `${k} (${v.length > 2 ? `${v.length} roles` : v.join(", ")})`).join("; ")}.`
+        + (withPay.length < roles.length ? ` No CTC on the ERP for ${roles.length - withPay.length} more.` : "")
+        : withPay.length ? withPay.map((r) => payLinesFor(ent, r, spec.payQuestion || question)).join("\n")
+        + (withPay.length < roles.length ? `\n${roles.length - withPay.length} more ${ent.name} role${roles.length - withPay.length === 1 ? "" : "s"}: no CTC on the ERP.` : "")
+        : elsewhere("pay"));
+    }
+    if (intents.has("eligible")) {
+      const known = roles.filter((r) => r.cgpa_cutoff != null || (r.allowed || []).length);
+      lines.push(known.length ? roles.map((r) => eligibleLine(ent, r, data, question)).join("\n") : roles.length ? elsewhere("eligible") : `No ${ent.name} role in your companies list.`);
+    }
     if (intents.has("applied")) {
       const ap = roles.filter((r) => r.applied).map((r) => r.designation);
       lines.push(!roles.length ? `No ${ent.name} role in your companies list.` : ap.length ? `Yes, you applied to ${ent.name}: ${names(ap, 4)}.`
@@ -444,7 +676,7 @@
         const mineRow = /\b(room|slot|seat)\b/.test(norm(question)) ? ev.filter((i) => i.pdf?.details?.room || i.pdf?.details?.slot).slice(0, 1) : [];
         // a bare "when is it?" asks for both: say "no test" only when there's no deadline answer either
         if (ev.length) lines.push(testLines(mineRow.length ? mineRow : ev.slice(0, 3), now).join("\n"));
-        else if (!intents.has("deadline")) lines.push(`No test, shortlist or result for ${ent.name} in the data.`);
+        else if (!intents.has("deadline")) lines.push(`No test, shortlist or result for ${ent.name} in notices or placement mail ${asOfLine(data)}.`);
       }
     }
     if (intents.has("notice")) {
@@ -460,8 +692,14 @@
       if (mine.length) lines.unshift(`${ent.name}: open deadlines (last checked ${checked}):\n` + mine.map((m) => deadlineLine(m, now, false)).join("\n"));
       else {
         const closed = roles.filter((r) => r.deadline && new Date(r.deadline) <= now).sort((a, b) => String(b.deadline).localeCompare(String(a.deadline))).slice(0, 3);
-        lines.unshift(`No open deadline for ${ent.name} in the ERP data (last checked ${checked}).` +
-          (closed.length ? "\n" + closed.map((r) => `${label(ent, r)}: closed ${when(r.deadline)} (already passed).`).join("\n") : ""));
+        const later = lookup(ent, "deadline", data, sources).found.filter((f) => f.where === "form" && f.at && new Date(f.at) > now);
+        const inel = roles.filter((r) => r.eligible === false && r.deadline && new Date(r.deadline) > now);
+        if (inel.length) lines.unshift(...inel.slice(0, 2).map((r) => `${label(ent, r)}: closes ${when(r.deadline)}${relTime(new Date(r.deadline).getTime(), data.now)}, but the ERP marks you not eligible.`));
+        else
+        if (later.length) lines.unshift(...later.slice(0, 2).map((f) => `${ent.name}: ${f.label} is due ${when(f.at)}${f.link ? ` — [open](${f.link})` : ""}.`));
+        else lines.unshift(`No open deadline for ${ent.name} on the ERP, in notices, or in placement mail (last checked ${checked}).` +
+          (closed.length === 1 ? ` ${closed[0].designation} closed ${when(closed[0].deadline)} (already passed).`
+            : closed.length ? ` ${closed.length} roles closed, the last on ${when(closed[0].deadline)} (already passed).` : ""));
       }
     }
     const short = intents.has("pay") || intents.has("eligible") || intents.has("location") || intents.has("score") || intents.has("contact") ||
@@ -475,7 +713,26 @@
     const mine = items.filter((i) => i.pdf_status === "yes" || i.pdf_status === "no")
       .sort((a, b) => String(b.event_at || b.due_at || "").localeCompare(String(a.event_at || a.due_at || "")))[0];
     if (mine && !short) lines.push(mine.title);
-    return lines.join("\n");
+    return intents.has("roles") ? lines.join("\n") : compactLines(lines.join("\n"), ent, question);
+  }
+  // At most 3 lines unless the question asks for detail: the same line for several roles is said once ("AiPrise (4
+  // roles): no CG cut-off given"), then the most useful lines first (the answer, then status; the last notice last)
+  function compactLines(text, ent, question) {
+    let lines = String(text).split("\n").filter((l) => l.trim());
+    const pre = `${ent.name} (`;
+    const groups = new Map();
+    for (const l of lines) {
+      const m = l.startsWith(pre) ? l.match(/^(.*?) \((.+?)\): (.*)$/) : null;
+      const k = m ? m[3] : `\u0000${l}`;
+      groups.set(k, [...(groups.get(k) || []), m ? m[2] : null]);
+    }
+    lines = [...groups.entries()].map(([rest, rs]) => (rest.startsWith("\u0000") ? rest.slice(1)
+      : rs.length > 1 ? `${ent.name} (${rs.length} roles): ${rest}` : `${ent.name} (${rs[0]}): ${rest}`));
+    if (/\b(details?|all|every|full|list|breakup|breakdown)\b/.test(norm(question)) || lines.length <= 3) return lines.join("\n");
+    // the answer first, then the last notice, then whether you applied
+    const rank = (l) => (/^Last .* notice:|^No .* notice in the data/.test(l) ? 1 : /^You (haven't )?applied|^You applied/.test(l) ? 2 : 0);
+    return lines.map((l, i) => [l, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).slice(0, 3)
+      .sort((a, b) => a[1] - b[1]).map((x) => x[0]).join("\n");
   }
 
   // ---------------------------------------------------------------- no company: lists for a time
@@ -693,7 +950,7 @@
   // with these facts). Follow-ups ("and slice?", "and tomorrow?", "nothing else?") are resolved against the last turn
   // first, then routed the same way.
   const FACT = ["whichcv", "deadline", "test", "shortlist", "pay", "eligible", "applied", "notice", "roles", "location", "score",
-                "contact", "foryou", "jd", "mail"];
+                "contact", "foryou", "jd", "mail", "form"];
   const ACK = /^(ok(ay)?|k|kk|thanks?|thank you|thx|ty|cool|great|nice|got it|alright|fine|sure|perfect|noted|done|never ?mind|no thanks|nope|leave it|keep it)[\s.!]*$/i;
   const OPEN = /\b(why|how come|explain|compare|comparison|versus|vs|better|difference|differ|should i|recommend|suggest\w*|advice|advise|tips?|prepare|preparation|tell me (more )?about|what do you think|worth|pros|cons|opinion|which (one|company|role|offer) (is|should|would)|(make|give|draft) me a plan|plan (for|my)|prioriti[sz]e|summari[sz]e (this|my|the|today|tonight)( \w+)? (week|day|deadlines|tonight|today)|in (two|three|\d) (lines|sentences|points))\b/;
   const ELSE = /\b(nothing|anything|what|something|any|whats) else\b|\bany ?more\b|\bothers?\s*$|^else$/;
@@ -808,18 +1065,25 @@
                why: companies.length ? `re-check: ${companies.join(", ")}` : "re-check: no company in the topic",
                resolved: `${text} [re-check${companies.length ? `: ${companies.join(", ")}` : ""}]` };
     }
-    const follow = prevQs.length && (FOLLOW.test(q) || isElse || PRONOUN.test(q) || cur.toks.length <= 2 ||
+    // a question with no company of its own that asks only about a field or a source ("check notices for JD",
+    // "and mail?", "what about CTC", "jd kya hai"): it's about the topic company
+    const ATTR = ["jd", "pay", "eligible", "location", "roles", "applied", "shortlist", "test", "whichcv", "deadline", "notice", "mail"];
+    const bare = !cur.hits.length && !cur.unknown.length && !cur.range &&
+      ([...cur.intents].some((i) => ATTR.includes(i)) || sourcesOf(text).length);
+    const follow = prevQs.length && (FOLLOW.test(q) || isElse || PRONOUN.test(q) || cur.toks.length <= 2 || bare ||
       (!cur.intents.size && !cur.hits.length && !cur.unknown.length));
     if (follow) {
       // the last question that had something to go on (a company, an intent or a time)
       const prev = prevQs.map((p) => parse(String(p).replace(/^(ok(ay)?|alright|cool|thanks|great)[,.!]+\s*/i, ""), data, ents))
         .find((p) => p.intents.size || p.hits.length || p.range) || null;
       if (prev) {
-        const ownIntents = [...cur.intents].filter((i) => i !== "count");
-        const intents = ownIntents.length && !(isElse && !cur.hits.length) ? cur.intents : new Set([...prev.intents, ...cur.intents]);
+        // a source word ("mail", "notices") says where to look, not what to answer
+        const ownIntents = [...cur.intents].filter((i) => i !== "count" && !(["mail", "notice"].includes(i) && prev.hits.length && !cur.hits.length));
+        const intents = ownIntents.length && !(isElse && !cur.hits.length) ? new Set(ownIntents)
+          : new Set([...prev.intents, ...[...cur.intents].filter((i) => !["mail", "notice"].includes(i) || !prev.hits.length)]);
         const hits = cur.hits.length ? cur.hits : prev.hits;
         const range = cur.range || (cur.hits.length ? null : prev.range);
-        const news = cur.hits.length || cur.range || ownIntents.length || isElse ||
+        const news = cur.hits.length || cur.range || ownIntents.length || isElse || sourcesOf(text).length ||
           cur.toks.some((t) => hits.some((e) => (data.roles || []).some((r) => e.raw.has(r.company) && keyWords(r.designation).includes(t))));
         if (!news) return { kind: "open", why: "follow-up with nothing new", spec: { ents, intents: [...prev.intents], hits: prev.hits, range: prev.range, unknown: [] }, resolved: prevQs[0] };
         spec = { ents, intents: [...intents], hits, range, unknown: cur.hits.length ? cur.unknown : [], else: isElse,
@@ -838,8 +1102,29 @@
     if (spec.hits.length && cur.toks.length <= 4) return { kind: "fact", spec, why: why || "a company", resolved };
     return { kind: "open", spec, why: why || "no fact intent", resolved };
   }
+  // Never the same answer twice in a row: lines already in the last answer are dropped; nothing left -> one line
+  // saying nothing new was found (where the student asked to look, if they named a place)
+  function noRepeat(out, last, question) {
+    if (!last || !out?.text || ["ack", "recheck", "act", "help"].includes(out.kind)) return out;
+    const key = (l) => norm(String(l).replace(/^\s*[-•]\s*/, "").replace(/^(As in my last answer|As before): /, "")).trim();
+    const prev = new Set(String(last).split("\n").map(key).filter((k) => k.length > 12));
+    const lines = String(out.text).split("\n");
+    const fresh = lines.filter((l) => !prev.has(key(l)));
+    if (fresh.length === lines.length) return out;
+    const where = sourcesOf(question).map((x) => SOURCE_WORD[x]).filter(Boolean);
+    // where the answer is (a line with its link) stays findable in one line, never the whole answer again
+    const linkLine = lines.find((l) => prev.has(key(l)) && /\]\((https?:|#)/.test(l));
+    const one = linkLine ? String(linkLine).replace(/^\s*[-•]\s*/, "") : "";
+    if (!fresh.some((l) => key(l).length > 2))
+      return { ...out, text: one ? `As in my last answer: ${one}` : where.length ? `Still nothing new ${where.join(" or ")}: my last answer stands.` : "Nothing new since my last answer." };
+    const text = fresh.join("\n").replace(/^\n+|\n+$/g, "").replace(/\n{3,}/g, "\n\n");
+    return { ...out, text: one && !/\]\((https?:|#)/.test(text) ? `${text}\nAs before: ${one}` : text };
+  }
   // the reply for a routed message that the model doesn't answer
   function routed(r, question, data) {
+    return noRepeat(routedOnce(r, question, data), data && data.lastAnswer, question);
+  }
+  function routedOnce(r, question, data) {
     if (r.kind === "ack") return { kind: "ack", companies: [], text: "👍" };
     // a re-check is done by the page (a live, read-only ERP fetch for that company); here only what it's doing,
     // never the old answer again as if it were fresh
@@ -1098,7 +1383,7 @@
     return { text: `I'm not sure what you'd like me to do with that. Hide one of these from For you? ${names.map((n) => `[${n}](#ask:${encodeURIComponent(`hide ${n}`)})`).join(" ")} [No](#ask:never%20mind)` };
   }
 
-  const api = { feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
+  const api = { lookup, sourcesOf, noRepeat, feedbackLike, feedbackOf, applyFeedback, feedbackLine, pinned, describeLists, clarify, answer, route, routed, prefsLike, isRecheck, recheckAnswer, staleNote, cleanNames, helpTopic, helpAnswer, platformOf, asksToAct, numbersIn, unsupportedNumbers, dueBlocks, urgentLine, matchCompanies, intentsOf, entities, shortName, deadlineEntries, jdAnswer, timeRange };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingRules = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -23,6 +23,8 @@ async function call(prompt, ms) {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${GROQ}` },
         body: JSON.stringify({ model: GROQ_MODEL, temperature: 0.2, max_tokens: 700, reasoning_effort: "low", include_reasoning: false,
                                messages: [{ role: "user", content: prompt }] }) });
+      noteLimits(r.headers);
+      if (r.status === 429) limited++;
       if (r.ok) { const o = await r.json(); const text = o?.choices?.[0]?.message?.content?.trim(); if (text) return { text, model: "groq" }; }
     } catch (_) {}
   }
@@ -38,6 +40,26 @@ async function call(prompt, ms) {
   return { error: "no answer" };
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The eval key's per-minute limits (Groq's free tier) are far below what one student asks, so the runner waits for
+// them BEFORE a timed step (never inside it): the latency measured is what one question takes, not the queue.
+let limited = 0, waited = 0;
+const lim = { tokens: Infinity, tokensAt: 0, reqs: Infinity, reqsAt: 0 };
+const secs = (v) => { let t = 0; for (const [, n, u] of String(v || "").matchAll(/([\d.]+)(ms|s|m|h)/g)) t += +n * { ms: 0.001, s: 1, m: 60, h: 3600 }[u]; return t; };
+function noteLimits(h) {
+  const now = Date.now(), tk = h.get("x-ratelimit-remaining-tokens"), rq = h.get("x-ratelimit-remaining-requests");
+  if (tk != null) { lim.tokens = +tk; lim.tokensAt = now + secs(h.get("x-ratelimit-reset-tokens")) * 1000; }
+  if (rq != null) { lim.reqs = +rq; lim.reqsAt = now + secs(h.get("x-ratelimit-reset-requests")) * 1000; }
+  const ra = h.get("retry-after"); if (ra) { lim.tokensAt = Math.max(lim.tokensAt, now + +ra * 1000); lim.tokens = 0; }
+}
+async function pace() {                                   // room for one more call (a prompt + 700 tokens out), or wait
+  if (!GROQ) return sleep(400);
+  const now = Date.now();
+  let until = 0;
+  if (lim.tokens < 2500) until = Math.max(until, lim.tokensAt);
+  if (lim.reqs < 2) until = Math.max(until, lim.reqsAt);
+  if (until > now) { const ms = Math.min(until - now + 250, 65000); waited += ms; await sleep(ms); lim.tokens = Infinity; lim.reqs = Infinity; }
+  else await sleep(400);
+}
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const mask = (q) => String(q).replace(/\b\d{2}[A-Z]{2}\d{5}\b/g, "▒").slice(0, 60);
 
@@ -50,15 +72,15 @@ async function hurried() {
     const turns = [];
     const res = await S.run(spec, c, data, "model", async (turn, asked, said) => {
       const history = asked.flatMap((q, i) => [{ role: "me", text: q }, { role: "ping", text: said[i] }]);
+      await pace();
       const r = await U.understand({ question: turn.q, turns: history, data, Rules: R, call: (p) => call(p, 3000), capMs: 3000 });
       lat.push(r.ms);
-      await sleep(400);                                     // the eval key's per-minute limit
       return r;
     });
     for (const t of res) {                                  // the worded reply and its check, on each answer
+      await pace();
       const w = await U.compose({ question: t.q, answer: t.text, data, companyNames: R.entities(data).map((e) => e.name), call: (p) => call(p, 2500), capMs: 2500 });
       composed.push(w);
-      await sleep(400);
     }
     after.push(res);
   }
@@ -83,16 +105,16 @@ async function real(file) {
     const turn = { company: c.company, fact: null };
     const rb = R.route(c.ask, c.previous, d);
     const tb = rb.kind === "open" ? "(couldn't tell)" : R.routed(rb, c.ask, d).text;
+    await pace();
     const u = await U.understand({ question: c.q, turns: c.history, data, Rules: R, call: (p) => call(p, 3000), capMs: 3000 });
-    await sleep(400);
     const q = u.u ? U.augment(c.ask, u.u, d, R) : c.ask;
     const ra = R.route(q, c.previous, d);
     let ta = ra.kind === "open" ? "(couldn't tell)" : R.routed(ra, q, d).text;
     let w = { ms: 0, used: false, why: "not run" };
     if (ra.kind !== "open" && ra.kind !== "recheck") {
+      await pace();
       w = await U.compose({ question: c.q, answer: ta, data: d, companyNames: names, call: (p) => call(p, 2500), capMs: 2500 });
       if (w.used) ta = w.text;
-      await sleep(400);
     }
     const why = S.check(spec, turn, ta);
     out.push({ ...c, okB: !S.check(spec, turn, tb).length, okA: !why.length, why, read: u, worded: w, added: (u.ms || 0) + (w.ms || 0) });
@@ -115,6 +137,7 @@ async function real(file) {
     const by = {}; for (const x of rs) { const k = x.read.model || "none (fell back)"; by[k] = (by[k] || 0) + 1; }
     console.log(`  added time per question (reading + wording): median ${median(added)} ms, worst ${Math.max(0, ...added)} ms`);
     console.log(`    reading: median ${median(read)} ms; wording: median ${median(worded)} ms; who answered the reading: ${JSON.stringify(by)}`);
+    console.log(`  Groq eval key: ${limited} calls refused for its rate limit; ${Math.round(waited / 1000)} s waited between questions (not counted)`);
     console.log(`  fell back to the rules alone: reading ${rs.filter((x) => x.read.fell).length}/${rs.length}; wording kept ${rs.filter((x) => x.worded.used).length}/${rs.filter((x) => x.worded.why !== "not run" && x.worded.why !== "short").length}`);
     const better = rs.filter((x) => x.okA && !x.okB), worse = rs.filter((x) => !x.okA && x.okB);
     console.log(`  the model steps fixed ${better.length} and broke ${worse.length}`);
@@ -125,6 +148,7 @@ async function real(file) {
     const okA = (xs) => xs.filter((x) => x.okA).length, okB = (xs) => xs.filter((x) => x.okB).length;
     const reasons = [];
     if (!GROQ) reasons.push("no Groq eval key: live calls Groq first, so this run doesn't measure what live would do");
+    else if ((by.groq || 0) < rs.length / 2) reasons.push(`Groq answered only ${by.groq || 0} of ${rs.length} readings (${limited} refused for the eval key's rate limit): not what live does`);
     if (okA(rs) <= okB(rs)) reasons.push(`doesn't beat the rules alone (${okA(rs)} vs ${okB(rs)})`);
     if (median(added) > 1500) reasons.push(`adds ${median(added)} ms median (over 1500)`);
     console.log(reasons.length ? `VERDICT: keep PING_MODEL_STEPS off: ${reasons.join("; ")}` : "VERDICT: turn PING_MODEL_STEPS on");

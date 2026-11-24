@@ -1824,8 +1824,8 @@ def demo_mails(secrets) -> int:
 
 def followup_evals(secrets) -> int:
     """The follow-up evals with the model's own reading, EVAL KEYS ONLY (GROQ_API_KEY_EVALS, GEMINI_API_KEY_EVALS):
-    the 30 hurried-student conversations on the demo data, then your real chat history's follow-ups replayed after
-    their real previous question. Your data goes to a temp file on the runner (deleted at the end, never committed);
+    your real chat history's follow-ups (evals/followups/real_cases.js), with the turn-on verdict; the 30
+    hurried-student conversations on the demo data too when the company input is "hurried". Your data goes to a temp file on the runner (deleted at the end, never committed);
     the log has scores, latency, the fallback rate and short masked questions only."""
     import json as _json
     import subprocess
@@ -1854,8 +1854,6 @@ def followup_evals(secrets) -> int:
                   key=lambda m: m["created_at"])
     env = {k: v for k, v in os.environ.items() if k not in ("GEMINI_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY_LIVE")}
     root = Path(__file__).resolve().parents[1]
-    say("== the 30 hurried-student conversations (demo data) ==")
-    subprocess.run(["node", str(root / "evals" / "followups" / "run.js")], env=env, check=False)
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
         _json.dump({"data": data, "chat": chat}, fh, default=str)
         path = fh.name
@@ -1864,6 +1862,11 @@ def followup_evals(secrets) -> int:
         subprocess.run(["node", str(root / "evals" / "followups" / "run.js"), "--real", path], env=env, check=False)
     finally:
         os.unlink(path)
+    # the 30 made-up conversations: on request only (company input "hurried"); the Groq eval key's free tier allows a
+    # few calls a minute, and the real replay above is the one the turn-on rule is decided on
+    if (os.environ.get("PING_COMPANY") or "").strip().lower() == "hurried":
+        say("== the 30 hurried-student conversations (demo data) ==")
+        subprocess.run(["node", str(root / "evals" / "followups" / "run.js")], env=env, check=False)
     return 0
 
 

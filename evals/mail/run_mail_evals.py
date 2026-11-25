@@ -2,7 +2,8 @@
 
     python evals/mail/run_mail_evals.py      -> evals/mail/results.json and evals/mail/REPORT.md
 
-Checks: nothing of the 10 other mails is stored, and none of their bodies is even fetched; the OTP never is; the mail
+Checks: nothing of the 10 other mails is stored; a body is fetched only when the headers leave it open (read once in
+memory to decide, rules v3), never for the OTP, bulk, job-board or account mail; the OTP never is stored; the mail
 that repeats an ERP notice becomes "also mailed to you" on that notice, not a message of its own; the form's deadline
 is extracted; the roll number is found in the mailed PDF shortlist (only your row and the table heading kept).
 """
@@ -46,7 +47,10 @@ def main() -> int:
         v = mail_source.scope(parse_head(m["uid"], m["raw"], None), index)
         r = by_subject.get(m["subject"])
         item = next((it for it in items if r and it["id"] == f"mail:{r['id']}"), None)
-        per_mail.append({"uid": m["uid"], "label": m["label"], "placement": m["placement"], "kept": v.keep,
+        # kept: what the scan stored (a platform's bulk mail is kept once its body shows a test link; the headers
+        # alone said "bulk, unless the body has a test link")
+        per_mail.append({"uid": m["uid"], "label": m["label"], "placement": m["placement"], "kept": r is not None,
+                         "head": v.because + (f":{v.signal}" if v.signal else ""),
                          "because": v.because + (f":{v.signal}" if v.signal else ""),
                          "body_read": m["uid"] in imap.bodies_read, "stored": r is not None,
                          "kind": r and r["kind"], "company": r and r["company"], "due_at": r and r["due_at"],
@@ -60,8 +64,12 @@ def main() -> int:
     shortlist = next(r for r in rows if r["subject"].startswith("Goldman Sachs"))
     checks = {
         "no noise stored": not any(m["subject"] in stored for m in noise),
-        "no noise body fetched": not ({m["uid"] for m in noise} & set(imap.bodies_read)),
+        # rules v3: a mail whose headers leave it open is read once in memory to decide (the body check), never
+        # stored; one the headers settle (OTP, bulk, job board, account mail) is never fetched
+        "noise bodies read only to decide": all(p["head"].endswith(":body") for p in per_mail
+                                                if not p["placement"] and p["body_read"]),
         "OTP never stored": OTP_CODE not in stored and "OTP" not in stored,
+        "OTP body never fetched": not any(p["body_read"] for p in per_mail if "otp" in p["head"]),
         "read-only (no IMAP writes)": imap.writes == [],
         "ERP duplicate deduped": f"mail:{dup['id']}" not in {it["id"] for it in items}
                                  and (groww["details"].get("mail") or {}).get("note") == "also mailed to you",

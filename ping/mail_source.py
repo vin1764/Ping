@@ -59,7 +59,8 @@ FACT_RE = re.compile(r"ctc|stipend|lpa|salary|eligib|cgpa|venue|location|round|s
 JOB_BOARDS = ("linkedin", "naukri", "indeed", "glassdoor", "internshala", "instahyre", "foundit", "monster",
               "apna", "cutshort", "wellfound", "angel", "timesjobs", "shine", "iimjobs", "hirist")
 MAIL_HOSTS = ("gmail", "googlemail", "outlook", "hotmail", "yahoo", "live", "icloud", "proton", "protonmail",
-              "rediffmail", "zoho", "mail", "email", "ac", "edu", "co", "com", "in", "org", "net", "io")
+              "rediffmail", "zoho", "mail", "email", "ac", "edu", "co", "com", "in", "org", "net", "io",
+              "example")      # a reserved name (RFC 2606): the address a fixture uses in place of a real mailbox
 NOT_PLACEMENT = re.compile(
     r"security alert|sign[\s-]*in attempt|new sign[\s-]*in|password|verify your (?:e-?mail|account)|receipt|invoice|"
     r"\border\b.{0,40}\b(?:confirmed|shipped|placed|delivered|dispatched)|refund|"

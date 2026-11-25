@@ -411,3 +411,14 @@ number found only in history and replaced its groups "9876" and "3210" as plain 
 43210", which then no longer read as a phone number. Now well-known made-up numbers count as fake, today's numbers
 are compared as bare digits too, and a history number (or a group of it) is replaced only where it stands alone,
 never inside a longer number.
+
+## 25 Nov: Tests had been red since the mail v3 rules; the mail eval is brought up to v3
+
+The Tests workflow failed on every push since mail rules v3 (24 Nov) on two checks of `evals/mail/run_mail_evals.py`,
+both written for v2: "no noise body fetched" (v3 reads a body once, in memory, when the headers leave it open: the
+body check) and "all 10 placement mails kept", judged by the headers alone (a platform's bulk mail is kept once its
+body shows a test link; the scan did keep all 10). The pipeline was right; the eval now checks what v3 promises: no
+other mail is stored, a body is read only when the headers leave it open, never the OTP's (or a bulk, job-board or
+account mail's), and every placement mail is stored. Deploys had gone out meanwhile with every other test passing;
+from now on the Tests run is checked before calling a change live. The fixture's coordinator address is an
+example.com one, and `example` (a reserved name) reads like a mailbox's host, not a company's domain.

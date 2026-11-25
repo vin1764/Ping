@@ -125,3 +125,12 @@ def test_a_line_from_older_rules_is_written_again():
     old = {"d": {"details": {"summary": ", IIT Kharagpur.", "summary_by": "rules", "summary_key": S.source_key(item(id="d", details={"notice_key": "k"}), RISA_TEXT), "label": "Info"}}}
     S.apply([it], old, {"k": {"text": RISA_TEXT}}, {}, None, log=lambda *_: None)
     assert it["details"]["summary"] != ", IIT Kharagpur." and it["details"]["rules_v"] == S.RULES_V
+
+
+def test_a_notice_that_lists_students_never_goes_to_a_model():
+    offer = item(id="o", category="offer", company="Slice", due_at="2026-11-23T23:59:00+05:30", details={"notice_key": "k"})
+    w = FakeWriter(["A Student, accept the offer by Mon 23 Nov 23:59."])
+    S.apply([offer], {}, {"k": {"text": "SLICE has extended the offer to the following student(s): A Student"}}, {}, w, log=lambda *_: None)
+    assert w.prompts == [] and offer["details"]["summary_by"] == "rules"
+    assert "Student" not in offer["details"]["summary"] and offer["details"]["summary"].startswith("Offers are out")
+    assert "Never name a student" in S.PROMPT

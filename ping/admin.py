@@ -2060,8 +2060,8 @@ def summaries_backfill(secrets) -> int:
             by[b] = by.get(b, 0) + 1
         say(f"  lines by: {by}")
         if scope == "yours":
-            say("  before -> after (10, your newest text cards first):")
-            show = [it for it in SUM.order(pick) if not (it.get("details") or {}).get("todo")][:10]
+            say("  before -> after (10, your newest cards first; to-dos too, whose line is kept for the record):")
+            show = SUM.order(pick)[:10]
             for it in show:
                 d = it["details"]
                 say(f"   [{d.get('label')}] {it.get('company') or ''}")

@@ -25,7 +25,7 @@ import requests
 
 from .config import IST
 
-RULES_V = 2                     # the rules' line: a card written by older rules gets it again
+RULES_V = 3                     # the rules' line: a card written by older rules gets it again
 MAX_CHARS = 100                 # two lines of a card at 390 px, never cut
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("PING_GROQ_MODEL") or "openai/gpt-oss-120b"
@@ -38,7 +38,7 @@ PROMPT = """You write the one line a student sees for a placement notice in thei
 Say what changed and what the student must do, in plain words: one sentence, at most 15 words, under 95 characters.
 If the notice is for a group, start with who ("Shortlisted students: ..."). Don't start with the company's name: it is
 shown already. Use only facts in the notice. {due_rule}
-No quotes, no emoji, no "Dear students", no [URGENT].
+Never name a student or any other person. No quotes, no emoji, no "Dear students", no [URGENT].
 
 Company: {company}
 Type: {label}
@@ -268,8 +268,10 @@ def rules_line(it: dict, text: str) -> str:
         return line if len(line) <= MAX_CHARS else f"Deadline moved to {due}."
     if lab == "Talk" and ev:
         return f"Pre-placement talk on {ev}."
-    if lab == "Offer" and not due:
-        return "Offers are out: tap to see the list."
+    if lab == "Offer":
+        return f"Offers are out: tap to see the list (accept by {due})." if due else "Offers are out: tap to see the list."
+    if lab == "Result":
+        return "Results are out: tap to see the list."
     if lab in ("Test", "Interview") and ev:
         venue = d.get("venue")
         line = f"{lab} on {ev}" + (f", {venue}" if venue and len(venue) < 30 else "") + "."
@@ -348,10 +350,17 @@ def tidy(line: str, company: str | None) -> str:
     return line
 
 
+LISTS = {"Offer", "Shortlist", "Result"}
+
+
 def summarize(it: dict, text: str, writer: Writer | None) -> dict:
     """{summary, summary_by, label, summary_key, summary_why?}: the model's line if it passes the check, else the rules'."""
     lab = label(it)
     out = {"label": lab, "summary_key": source_key(it, text)}
+    if lab in LISTS:
+        # a notice that lists students (offers, shortlists, results) never goes to a model: its line would name
+        # them (25 Nov: an offer card named the student on the list). The rules' line says what to check.
+        return {**out, "summary": rules_line(it, text), "summary_by": "rules", "rules_v": RULES_V}
     if writer and writer.room():
         due = fmt(it.get("due_at") or it.get("event_at"))
         prompt = PROMPT.format(due_rule=f"If you give the deadline or time, write it exactly as: {due}." if due else

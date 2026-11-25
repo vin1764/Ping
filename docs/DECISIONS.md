@@ -430,3 +430,8 @@ example.com one, and `example` (a reserved name) reads like a mailbox's host, no
   students who are eligible and have applied for ... are required to" into "Applicants must", skips list headings
   ("Important Instructions: 1."), and past the first sentence takes only one that says what to do, else the
   subject. Lines written by older rules are written again (`rules_v`); the backfill rewrites every card it picks.
+- **No names on a card.** The second backfill's model lines all passed the check, but the PPO card read
+  "<a student's name>, accept the offer by 23.11.26.": the name was in the notice, so the fact check let it through.
+  Notices that list students (Offer, Shortlist, Result) now never go to a model; their line is the rules' ("Offers
+  are out: tap to see the list (accept by ...)", "The shortlist is out: check it for your name."). The prompt also
+  says never to name a person. The backfill was run again to rewrite that card.

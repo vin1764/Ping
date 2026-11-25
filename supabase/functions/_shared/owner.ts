@@ -13,7 +13,7 @@ export function json(body: unknown, status = 200) {
 
 // Uses the caller's own login token, so Row Level Security applies exactly as in the dashboard:
 // the owner reads only real rows, a demo session only the anonymised demo rows.
-function client(req: Request) {
+export function client(req: Request) {
   const auth = req.headers.get("Authorization") ?? "";
   const key = Deno.env.get("PING_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
   return createClient(Deno.env.get("SUPABASE_URL")!, key, { global: { headers: { Authorization: auth } } });
@@ -22,8 +22,7 @@ function client(req: Request) {
 // Who is calling: the owner (real rows), a one-click demo session (anonymous sign-in: the anonymised demo
 // rows only, read-only, by the database's own rules), or nobody.
 // Both checks are asked at once (one round trip, not two); the owner check still wins, as before.
-export async function caller(req: Request) {
-  const sb = client(req);
+export async function caller(req: Request, sb = client(req)) {
   const [owner, demo] = await Promise.all([sb.rpc("is_ping_owner"), sb.rpc("is_ping_demo")]);
   if (!owner.error && owner.data === true) return { sb, role: "owner" as const };
   return !demo.error && demo.data === true ? { sb, role: "demo" as const } : null;

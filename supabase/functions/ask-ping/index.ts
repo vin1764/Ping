@@ -5,7 +5,7 @@
 // Limits that matter on Supabase's free plan: a request may use about 2 s of CPU and must finish
 // within 150 s. So dates are formatted with one shared formatter (making a new one per date was the
 // slow part), each Gemini call has its own timeout, and the whole answer has a 100 s budget.
-import { caller, cors, json } from "../_shared/owner.ts";
+import { caller, client, cors, json } from "../_shared/owner.ts";
 import { asksToAct, fitPrompt, glance, stripRefusal, todayNote, wantsLists } from "./wording.ts";
 import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
@@ -99,13 +99,18 @@ function payLines(md: any): string {
 }
 
 // The student profile the answers use (department, CGPA, backlogs, lists): read each time, never kept
-const studentProfile = (sb: any) => sb.from("profile")
-  .select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1);
+const STUDENT = "department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles";
+const studentProfile = (sb: any) => sb.from("profile").select(STUDENT).limit(1);
+const FIELDS = "targets,reminder_hours,list_other_roles,feed_mode,check_every_minutes,check_from,check_to";
+const LISTS = "not_interested_companies,interested_companies,hidden_roles,shown_roles,prefs_undo";
+// the profile row once, with every column the three reads used to ask for separately (preferences, lists, student)
+const PROFILE_ALL = [...new Set(`${FIELDS},cvs,${LISTS},${STUDENT}`.split(","))].join(",");
+const only = (row: any, cols: string) => row ? Object.fromEntries(cols.split(",").map((k) => [k, row[k] ?? null])) : row;
 
 // The data an answer is built from: the same reads as before, now asked at once, and the heavy ones (roles, items,
 // notices, mail, forms) from this instance's copy while its freshness key matches the database (cache.ts). The probe
 // (the latest run; the number and newest of your undismissed items) and the student profile are read every time.
-async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>) {
+async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>, pre: { run: Promise<any>; fresh: Promise<any>; profile: Promise<any> }) {
   const heavy = () => Promise.all([
     T.read("items(feed)", sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150)),
@@ -120,12 +125,7 @@ async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>) {
   ]);
   const kept = peek(scope);
   const pHeavy = kept ? null : heavy();                 // no copy to try: read it all now, beside the probe
-  const [run, fresh, profile] = await Promise.all([
-    T.read("runs", sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1)),
-    T.read("freshness", sb.from("items").select("first_seen", { count: "exact" }).eq("dismissed", false)
-      .order("first_seen", { ascending: false }).limit(1)),
-    T.read("profile(student)", studentProfile(sb)),
-  ]);
+  const [run, fresh, profile] = await Promise.all([pre.run, pre.fresh, pre.profile]);
   const key = run.error || fresh.error ? null : freshKey(run.data?.[0], fresh.count ?? null, fresh.data?.[0]?.first_seen ?? null);
   let parts: any[];
   let cached = false;
@@ -152,7 +152,20 @@ Deno.serve(async (req) => {
   }
   const t0 = Date.now();
   const T = timer();
-  const who = await caller(req);
+  // Reads that are the same whoever asks start with the login check, not after it: the database's own rules decide
+  // what this caller gets (the owner its rows, a demo session the demo rows and its own chat, anyone else nothing)
+  const sb0 = client(req);
+  const body = await req.json().catch(() => ({}));
+  const question = String(body?.question || "");
+  const asking = body?.marks !== true && !!question && question.length <= 500;
+  const none = Promise.resolve(null as any);
+  const pProfile = T.read("profile", sb0.from("profile").select(PROFILE_ALL).limit(1));
+  const pThread = asking ? T.read("thread", sb0.from("chat_messages").select("role,text,created_at")
+    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2)) : none;
+  const pRun = asking ? T.read("runs", sb0.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1)) : none;
+  const pFresh = asking ? T.read("freshness", sb0.from("items").select("first_seen", { count: "exact" }).eq("dismissed", false)
+    .order("first_seen", { ascending: false }).limit(1)) : none;
+  const who = await caller(req, sb0);
   if (!who) return json({ error: "not allowed" }, 403);
   const { sb, role } = who;
   const claim = req.headers.get("x-ping-evals");
@@ -170,28 +183,30 @@ Deno.serve(async (req) => {
   // Groq: its own live and evals keys, like Gemini (an eval never uses the live key; no evals key: no Groq in evals)
   const groqKey = keyName === "evals" ? Deno.env.get("GROQ_API_KEY_EVALS") || "" : Deno.env.get("GROQ_API_KEY") || "";
   if (!key) return json({ error: "GEMINI_API_KEY is not set for this function" }, 500);
-  const body = await req.json().catch(() => ({}));
   T.lap("auth");
 
   // Everything this request reads that doesn't depend on what's asked goes out at once (one wait, not ten): who the
   // demo session is, the preferences and lists, the demo limit, the thread, and the data the answer is built from
   // (the heavy part from this instance's copy while it's still current: cache.ts).
-  const FIELDS = "targets,reminder_hours,list_other_roles,feed_mode,check_every_minutes,check_from,check_to";
-  const LISTS = "not_interested_companies,interested_companies,hidden_roles,shown_roles,prefs_undo";
-  const question = String(body?.question || "");
-  const asking = body?.marks !== true && !!question && question.length <= 500;
-  const none = Promise.resolve(null as any);
   const pUser = role === "demo" ? T.read("auth_user", sb.auth.getUser()) : none;
-  const pBase = T.read("profile", sb.from("profile").select(`${FIELDS},cvs`).limit(1));
-  const pOwn = role === "demo" ? T.read("session_prefs", sb.from("session_prefs").select(FIELDS).limit(1)) : none;
-  const pBaseLists = T.read("profile_lists", sb.from("profile").select(LISTS).limit(1));
-  const pOwnLists = role === "demo" ? T.read("session_lists", sb.from("session_prefs").select(LISTS).limit(1)) : none;
+  // the profile row, read once (pProfile); before Admin > apply-sql added the newer columns, the three reads as before
+  const pAll = pProfile.then((r: any) => r.error ? null : r);
+  const pBase = pAll.then((r: any) => r ? { data: (r.data || []).map((x: any) => only(x, `${FIELDS},cvs`)), error: null }
+    : T.read("profile", sb.from("profile").select(`${FIELDS},cvs`).limit(1)));
+  const pBaseLists = pAll.then((r: any) => r ? { data: (r.data || []).map((x: any) => only(x, LISTS)), error: null }
+    : T.read("profile_lists", sb.from("profile").select(LISTS).limit(1)));
+  const pStudent = pAll.then((r: any) => r ? { data: (r.data || []).map((x: any) => only(x, STUDENT)), error: null }
+    : T.read("profile(student)", studentProfile(sb)));
+  // a demo session's own preferences and lists: one row, read once
+  const pOwnAll = role === "demo" ? T.read("session_prefs", sb.from("session_prefs").select(`${FIELDS},${LISTS}`).limit(1)) : none;
+  const pOwn = pOwnAll.then((r: any) => !r ? null : r.error ? T.read("session_prefs", sb.from("session_prefs").select(FIELDS).limit(1))
+    : { data: (r.data || []).map((x: any) => only(x, FIELDS)), error: null });
+  const pOwnLists = pOwnAll.then((r: any) => !r ? null : r.error ? T.read("session_lists", sb.from("session_prefs").select(LISTS).limit(1))
+    : { data: (r.data || []).map((x: any) => only(x, LISTS)), error: null });
   // the demo's limit counts a question: only for a question this function will answer
   const pTake = asking && role === "demo" ? T.read("demo_limit", sb.rpc("demo_take_question")) : none;
-  const pThread = asking ? T.read("thread", sb.from("chat_messages").select("role,text,created_at")
-    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2)) : none;
   const scope = role === "owner" ? "owner" : "demo";
-  const pData = asking ? loadData(sb, scope, T) : none;
+  const pData = asking ? loadData(sb, scope, T, { run: pRun, fresh: pFresh, profile: pStudent }) : none;
 
   // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
   // own changes on top (session_prefs: never the owner's profile, never another session's).

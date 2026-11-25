@@ -171,10 +171,19 @@
   // the same message from several reads (the window, the open items, a moved one): one copy, the fullest
   function mergeItems(...lists) {
     const map = new Map();
-    // a full row replaces a lean one; a lean one never replaces a full one; the later read wins otherwise
-    for (const list of lists) for (const it of list || []) if (!(it.__lean && map.has(it.id) && !map.get(it.id).__lean)) map.set(it.id, it);
+    // a full row replaces a lean one; a lean one never replaces a full one; the later read wins otherwise, keeping
+    // whether it was read as part of the chat's window (__win: drawn in the chat)
+    for (const list of lists) for (const it of list || []) {
+      const prev = map.get(it.id);
+      if (it.__lean && prev && !prev.__lean) continue;
+      if (prev?.__win) it.__win = true;
+      map.set(it.id, it);
+    }
     return [...map.values()];
   }
+  // rows read as part of the chat's window: the chat draws them (whatever their notice's time); the open items read
+  // for To do and Today alone don't come into the chat
+  const inWindow = (rows) => { for (const r of rows || []) r.__win = true; return rows; };
   // a lean history row shaped like a message (its details with the fields the page reads)
   function leanItem(r) {
     const { hidden_because, subject, venue, kind, notice_time, pdf, via, mail, todo, form, posted_at, reposted_at, ...rest } = r;
@@ -235,7 +244,7 @@
     async recentItems() {
       const rows = await this.q("items", (q) => q.order("first_seen", { ascending: false }).order("id", { ascending: false }).limit(WINDOW));
       this.itemsFrom = rows.length >= WINDOW ? rows[rows.length - 1].first_seen : null;
-      return rows;
+      return inWindow(rows);
     }
     // the next WINDOW older messages (scrolling up); [] when there are none
     async olderItems() {
@@ -243,7 +252,7 @@
       const rows = await this.q("items", (q) => q.lt("first_seen", this.itemsFrom).order("first_seen", { ascending: false })
         .order("id", { ascending: false }).limit(WINDOW));
       this.itemsFrom = rows.length >= WINDOW ? rows[rows.length - 1].first_seen : null;
-      return rows;
+      return inWindow(rows);
     }
     // messages first seen before the window but posted (again) inside it: they're drawn there (details.posted_at,
     // reposted_at). The times are compared as text by the database, so a day's margin; the page keeps the right ones.
@@ -252,7 +261,7 @@
       const since = new Date(Date.parse(from) - 86400000).toISOString();
       const rows = await this.all("items", (q) => q.lt("first_seen", from).or(`details->>posted_at.gte.${since},details->>reposted_at.gte.${since}`)
         .order("id", { ascending: true })).catch(() => []);
-      return rows.filter((it) => Math.max(Date.parse(it.details?.posted_at || "") || 0, Date.parse(it.details?.reposted_at || "") || 0) >= Date.parse(from));
+      return inWindow(rows.filter((it) => Math.max(Date.parse(it.details?.posted_at || "") || 0, Date.parse(it.details?.reposted_at || "") || 0) >= Date.parse(from)));
     }
     // what To do and Today list, asked for directly: not dismissed, with a deadline from a week ago on or an event
     // from two days ago on (a past one stays in their "Past due" for a week)
@@ -263,11 +272,11 @@
     // a live update: what changed since the page loaded it, the same window (newer messages, moved ones, open items)
     async items() {
       const from = this.itemsFrom;
-      const [inWindow, moved, open] = await Promise.all([
+      const [win, moved, open] = await Promise.all([
         from ? this.all("items", (q) => q.gte("first_seen", from).order("first_seen", { ascending: true }).order("id", { ascending: true }))
           : this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true })),
         this.movedSince(from), this.openItems()]);
-      return mergeItems(inWindow, moved, open);
+      return mergeItems(inWindow(win), moved, open);
     }
     // the whole history, lean (no list rows or form pages): Ask Ping's answers on this page, the Updates list,
     // "which lists am I on"; read once, when first needed
@@ -1364,7 +1373,8 @@
   function threadEntries() {
     // from where the loaded window starts: older open items (To do's) aren't drawn out of place
     const inWin = (at) => !state.winFrom || (Date.parse(at) || 0) >= state.winFrom;
-    const items = onceEach(state.data.items.filter(inChat)).map((it) => ({ kind: "item", at: itemTime(it), it })).filter((e) => inWin(e.at));
+    const items = onceEach(state.data.items.filter(inChat)).map((it) => ({ kind: "item", at: itemTime(it), it }))
+      .filter((e) => e.it.__win || inWin(e.at));
     const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text, quote: quoteOf(m) }));
     // a Check now (with its progress) and an hourly check that brought something new
     // a finished check sits at its finish time (the time on the message and any time in it are the same); one that

@@ -43,10 +43,17 @@ def iso(d):
 def seed(store):
     """2,500 messages over 40 days (oldest first), 1,200 chat messages, a run, and the four that matter."""
     items = []
-    for i in range(N_ITEMS - 4):
+    n = N_ITEMS - 4
+    for i in range(n):
         at = NOW - timedelta(days=40) + timedelta(minutes=23 * i)
+        seen = at
+        if i >= n - 300:
+            # like a first check: 300 notices of the last two weeks found at once (one first-seen time, their own
+            # notice times spread over the weeks before; the chat draws them at their notice's time)
+            seen = NOW - timedelta(days=2)
+            at = NOW - timedelta(days=16) + timedelta(hours=(i - (n - 300)))
         items.append({"id": f"notice:2026-2027:{10000 + i}:0", "level": "show", "category": "update", "company": f"Company {i % 90}",
-                      "title": f"Company {i % 90} update number {i}", "first_seen": iso(at), "sort_at": iso(at),
+                      "title": f"Company {i % 90} update number {i}", "first_seen": iso(seen), "sort_at": iso(at),
                       "details": {"notice_time": iso(at)}, "dismissed": False, "is_sample": False})
     items += [
         # the newest message
@@ -78,7 +85,7 @@ def seed(store):
                             "sources": [], "deadline_history": [], "is_sample": False}], key="key")
     chat = []
     for i in range(N_CHAT):
-        at = NOW - timedelta(days=30) + timedelta(minutes=35 * i)
+        at = NOW - timedelta(days=60) + timedelta(minutes=35 * i)       # a month or two back (the window's messages fill the chat)
         chat.append({"role": "me" if i % 2 == 0 else "ping", "text": f"chat line {i}", "created_at": iso(at), "is_sample": False})
     chat.append({"role": "me", "text": "NEWEST-CHAT what's due?", "created_at": iso(NOW - timedelta(minutes=3)), "is_sample": False})
     for k in range(0, len(chat), 500):
@@ -168,6 +175,12 @@ def test_a_long_history_opens_fast_and_shows_what_matters(replica):
               f"rows read: {sum(n for _, n in rows_read)} in {len(rows_read)} requests")
         assert opened < 2.0, f"the chat took {opened:.2f} s to open"
         thread = page.inner_text("#thread")
+        # a full screen of history: the window's messages are drawn even when their notices are older than the window
+        drawn = page.locator("#thread [data-key]").count()
+        assert drawn >= 50, f"only {drawn} messages drawn"
+        # the first check's notices (found at once two days ago, each drawn at its notice's time) are in the chat; the
+        # newest of them is 3.5 days old, so it is among the last messages drawn, before today's
+        assert f"update number {N_ITEMS - 5}" in thread, "the first check's notices are missing from the chat"
         # the newest message, the newest chat line, the to-do found minutes ago and the repost are in the chat
         # (a to-do's card shows its company and task: the companies are the markers)
         for want in ("NEWEST-MESSAGE", "NEWEST-CHAT", "Todoco Newfound", "Repostco Againnow"):
@@ -201,5 +214,44 @@ def test_a_long_history_opens_fast_and_shows_what_matters(replica):
             page.wait_for_timeout(400)
         after = page.locator("#thread [data-key]").count()
         assert after > before, (before, after)
+        assert not errs, errs[:3]
+        br.close()
+
+
+def test_a_message_arriving_while_you_read_further_up_moves_nothing(replica):
+    """Live updates with the window: reading further up, a new message arrives (here by a focus catch-up; the replica
+    has no Realtime): what you read stays put, the pill says '↓ 1 new' and takes you there."""
+    fake, base = replica
+    from ping.store import SupabaseStore
+    store = SupabaseStore(fake.url, fs.SECRET)
+    with sync_api.sync_playwright() as p:
+        exe = os.environ.get("PING_CHROMIUM") or ("/opt/pw-browsers/chromium" if Path("/opt/pw-browsers/chromium").exists() else None)
+        br = p.chromium.launch(executable_path=exe)
+        page = br.new_context(viewport={"width": 390, "height": 844}, service_workers="block").new_page()
+        errs = []
+        page.on("pageerror", lambda e: errs.append(str(e)))
+        page.route(base + "sb/**", lambda route: route.fulfill(response=route.fetch(url=fake.url + route.request.url.split("/sb", 1)[1])))
+        page.goto(base)
+        page.wait_for_selector("form.login", timeout=30000)
+        page.fill("#login-email", "student@example.com")
+        page.fill("#login-pw", STUDENT["DASHBOARD_PASSWORD"])
+        page.click("form.login button.btn")
+        page.wait_for_selector("#thread >> text=NEWEST-MESSAGE", timeout=30000)
+        page.evaluate("() => { const t = document.querySelector('#thread'); t.scrollTop = t.scrollHeight; }")
+        page.wait_for_timeout(300)
+        page.evaluate("() => { document.querySelector('#thread').scrollTop = 300; }")
+        page.wait_for_timeout(400)
+        anchor = page.evaluate("""() => { const t = document.querySelector('#thread'), top = t.getBoundingClientRect().top;
+            const n = [...t.querySelectorAll('[data-key]')].find(n => n.getBoundingClientRect().bottom > top);
+            return { key: n.dataset.key, y: n.getBoundingClientRect().top }; }""")
+        text = "LIVE-WHILE-READING arrives further down"
+        store._req("POST", "chat_messages", json=[{"role": "ping", "text": text, "is_sample": False}], headers={"Prefer": "return=minimal"})
+        page.evaluate("() => window.dispatchEvent(new Event('focus'))")
+        page.wait_for_function("t => [...document.querySelectorAll('.msg .text')].some(n => n.innerText === t)", arg=text, timeout=10000)
+        page.wait_for_timeout(500)
+        y = page.evaluate("k => document.querySelector(`[data-key=\"${CSS.escape(k)}\"]`).getBoundingClientRect().top", anchor["key"])
+        assert abs(y - anchor["y"]) < 2, f"what you were reading moved ({anchor['y']:.0f} -> {y:.0f} px)"
+        pill = page.locator("#jump")
+        assert pill.is_visible() and pill.inner_text() == "↓ 1 new", pill.inner_text() if pill.is_visible() else "hidden"
         assert not errs, errs[:3]
         br.close()

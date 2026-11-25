@@ -317,3 +317,25 @@ Decisions:
   one, the card is posted first; nothing is pushed for a message you hid. Silent runs queue reminders too.
 - Admin chat-gaps lists every open to-do you were never shown (held back, or past the page's first 1,000) and, with
   "post", posts them at the bottom (grouped above 5); repost-item takes several ids and pushes only once per message.
+
+## 25 Nov: Ask Ping speed (the function, not the model)
+
+10 live demo questions, Admin ask-latency, each stage timed by the function itself (timing in every answer):
+
+| | before | after |
+|---|---|---|
+| median (as the page waits) | 4.1 s | 2.2 s |
+| worst | 8.5 s (cold) | 4.7 s (cold, just deployed) |
+| inside the function, median | 4.0 s | 2.0 s |
+
+- Where it went: ~14 database round trips of ~150 ms one after another (login check 2, preferences 4, demo limit,
+  thread, two batches of data, sources 2) and `roles` (every JD) at 0.7 s; the model steps were ~0.8 s of it.
+- Now: the login checks at once; the profile row read once (not three times), a demo session's preferences once; every
+  read that doesn't depend on the question in one batch, started with the login check; roles, items, notices, mail
+  and forms (and the For you marks) kept 5 min per instance, used only while the latest run and your undismissed
+  items match (cache.ts); a short one-line reply isn't reworded; a warm-up every minute 05:30-01:29 IST (pg_cron).
+- The answers didn't change: the rules' answers' fingerprints matched on 8 of 10; "elig?" and "jd of ather energy"
+  carry the time they were asked ("last checked 06:14", "as of 06:14") and differ only there. Real-history replay
+  after the change: rules 23/30, with the model steps 28/30, fixed 5, broke 0 (as before).
+- The page shows your question at once and the typing dots as soon as it goes to the function (or after 150 ms of
+  deciding), and saves the question while asking instead of before.

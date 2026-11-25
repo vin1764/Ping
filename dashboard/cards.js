@@ -89,7 +89,26 @@
     return out ? out[0].toUpperCase() + out.slice(1) : "";
   }
 
-  const api = { relDeadline, cleanTitle, span };
+  // The card's type, never a vague "Update": the run stores it (ping/summaries.py label, details.label); this is the
+  // same rule for a card written before that.
+  const SUBMIT = { assignment: "Assignment", documents: "Documents", cv: "CV submission" };
+  function typeLabel(it) {
+    const d = (it && it.details) || {}, todo = d.todo || {}, a = todo.action, title = String((it && it.title) || "");
+    const cat = it && it.category, kind = d.kind;
+    if (d.label) return d.label;
+    if (a === "fill_form" || d.form || /\bfill (in )?the form\b/i.test(title)) return "Form";
+    if (a === "submit") return SUBMIT[todo.task] || (/\bcv\b|resume/i.test(title) ? "CV submission" : /assignment|case|task/i.test(title) ? "Assignment" : "Documents");
+    if (cat === "result") return "Result";
+    if (cat === "shortlist" || kind === "shortlist") return "Shortlist";
+    if (cat === "ppt" || /pre-placement talk|\bppt\b/i.test(title)) return "Talk";   // a talk is often stored as a timed event
+    if (kind === "interview" || (/\binterview/i.test(title) && (cat === "test" || cat === "todo"))) return "Interview";
+    if (cat === "test" || kind === "test" || kind === "test_rooms" || a === "take_test") return "Test";
+    if (cat === "deadline" || /deadline (extended|moved|changed)|extended to|moved to|postponed|preponed/i.test(title)) return "Deadline change";
+    if (cat === "offer" || a === "accept_offer") return "Offer";
+    return "Info";
+  }
+
+  const api = { relDeadline, cleanTitle, span, typeLabel };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.PingCards = api;
 })(typeof window !== "undefined" ? window : globalThis);

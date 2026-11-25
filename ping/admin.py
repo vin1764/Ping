@@ -2002,6 +2002,81 @@ def repost_item(secrets) -> int:
 PAGE_ROWS = 1000      # what the page read of the items before 25 Nov (the database API's cap per request)
 
 
+def summaries_backfill(secrets) -> int:
+    """Card lines (ping/summaries.py) for your open items and every card of the last 7 days, written once and
+    silently: only the items' details change (label, summary); nothing is posted, nothing is pushed. The model:
+    Groq first, flash-lite as fallback, paced; your cards first. Prints the fact check's rejection rate and 10
+    before/after examples (the old line 2: the card's title; the new one). The demo's cards get the rules' line.
+    SUMMARY_CALLS: the most model calls (default 150); company input "dry" (or SUMMARY_DRY=1): print, write nothing."""
+    from . import summaries as SUM
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    now = datetime.now(timezone.utc)
+    week = (now - timedelta(days=7)).isoformat()
+    dry = os.environ.get("SUMMARY_DRY") == "1" or os.environ.get("PING_COMPANY", "").strip().lower() == "dry"
+    total = 0
+    for scope, filt in (("yours", REAL), ("demo", {"is_sample": "is.true"})):
+        items = store.select("items", filt)
+        def wanted(it):
+            if it.get("dismissed") or it.get("level") == "hidden" and not it.get("posted_at"):
+                return False
+            due = it.get("due_at") or it.get("event_at")
+            open_ = bool(due) and str(due) > now.isoformat() and not it.get("done")
+            return open_ or str(it.get("first_seen") or "") >= week or str(it.get("posted_at") or "") >= week
+        pick = [it for it in items if SUM.wants(it) and wanted(it)]
+        nids = sorted({it.get("notice_id") for it in pick if it.get("notice_id")})
+        notices = {}
+        for i in range(0, len(nids), 100):
+            for n in store.select("notices", {**filt, "notice_id": f"in.({','.join(str(x) for x in nids[i:i + 100])})"}):
+                notices[n["id"]] = n
+                notices.setdefault(str(n["notice_id"]), n)
+        mids = sorted({m for it in pick if ((it.get("details") or {}).get("mail") or {}).get("id")
+                       for m in (it["details"]["mail"]["id"], f'sample:{it["details"]["mail"]["id"]}')})
+        emails = {}
+        for i in range(0, len(mids), 50):
+            ids = ",".join(f'"{m}"' for m in mids[i:i + 50])
+            for e in store.select("emails", {"id": f"in.({ids})", "select": "id,subject,snippet,main_link,received_at"}):
+                emails[e["id"]] = e
+        before = {it["id"]: json.loads(json.dumps(it.get("details") or {})) for it in pick}
+        titles = {it["id"]: it.get("title") or "" for it in pick}
+        writer = SUM.Writer(os.environ.get("GROQ_API_KEY", ""), os.environ.get("GEMINI_API_KEY_LIVE", ""),
+                            budget=int(os.environ.get("SUMMARY_CALLS") or 150), seconds=1500) if scope == "yours" else None
+        # every picked card gets its line now (none kept from before unless its text is unchanged)
+        stats = SUM.apply(pick, {it["id"]: {"details": before[it["id"]]} for it in pick}, notices, emails, writer, log=say)
+        changed = [it for it in pick if {k: (it.get("details") or {}).get(k) for k in ("summary", "label")}
+                   != {k: before[it["id"]].get(k) for k in ("summary", "label")}]
+        say(f"{scope}: {len(items)} items, {len(pick)} open or from the last 7 days, {len(changed)} lines new or changed "
+            f"({len(notices) and len({n['id'] for n in notices.values()})} notices, {len(emails)} mails read)")
+        if writer:
+            tried = writer.stats["model"] + writer.stats["rejected"]
+            say(f"  model: {writer.stats['model']} kept, {writer.stats['rejected']} rejected by the fact check"
+                f" ({(100 * writer.stats['rejected'] / tried) if tried else 0:.0f}% of {tried} answers), {writer.stats['failed']} failed, "
+                f"{writer.stats['skipped_budget']} left for the next run; by {writer.stats['by']}; why rejected {writer.stats['why']}")
+            for it in [x for x in pick if (x.get("details") or {}).get("summary_why")][:8]:
+                d = it["details"]
+                say(f"  rejected: {d.get('summary_model')!r} ({d['summary_why']}) -> rules: {d['summary']!r}")
+        by = {}
+        for it in pick:
+            b = (it.get("details") or {}).get("summary_by")
+            by[b] = by.get(b, 0) + 1
+        say(f"  lines by: {by}")
+        if scope == "yours":
+            say("  before -> after (10, your newest text cards first):")
+            show = [it for it in SUM.order(pick) if not (it.get("details") or {}).get("todo")][:10]
+            for it in show:
+                d = it["details"]
+                say(f"   [{d.get('label')}] {it.get('company') or ''}")
+                say(f"     before: {titles[it['id']][:160]}")
+                say(f"     after:  {d.get('summary')}  ({d.get('summary_by')})")
+        if dry:
+            continue
+        for it in changed:
+            store._req("PATCH", "items", params={"id": f"eq.{it['id']}"}, json={"details": it["details"]},
+                       headers={"Prefer": "return=minimal"})
+        total += len(changed)
+    say(f"{'(dry run) ' if dry else ''}{total} cards updated silently (details only: no message posted, no push)")
+    return 0
+
+
 def chat_gaps(secrets) -> int:
     """Every open to-do (a form, an assignment, documents, a test, an interview, an offer, a list you're on) still ahead
     that you were never shown in the chat: held back by the posting guard (a re-read, a backfill), or past the oldest
@@ -2299,7 +2374,7 @@ def main() -> int:
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
              "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "chat-gaps": chat_gaps, "ask-latency": ask_latency, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
-             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "followup-evals": followup_evals, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
+             "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "followup-evals": followup_evals, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit, "summaries-backfill": summaries_backfill}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")
         return 2

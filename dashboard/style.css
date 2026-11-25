@@ -770,6 +770,13 @@ label.tick { display: inline-flex; align-items: center; justify-content: center;
 .cc-l2.lv-today { color: var(--soon); font-weight: 600; }
 .cc-l2.lv-over, .cc-l2.lv-none, .cc-l2.lv-done { color: var(--muted); }
 .cc-l3 { font-size: var(--t-sm); color: var(--muted); }
+/* a text card's line 2: one plain sentence, wrapped (never one line cut with "…"), written to fit two lines */
+.cc-sum { font-size: var(--t-sm); line-height: 20px; color: var(--ink); white-space: normal; overflow-wrap: break-word; min-width: 0; margin-top: 1px; }
+.msg.item.past .cc-sum { color: var(--muted); }
+.cc-type { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; }
+/* the whole notice / mail behind ⋯ */
+.full-text { margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.full-text .full-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--t-sm); line-height: 1.45; max-height: 60vh; overflow: auto; }
 .cc-act { display: flex; align-items: center; gap: var(--s2); margin-top: 6px; min-height: 44px; }
 .cc-act .cc-gap { flex: 1; }
 .cc-act .act-btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; text-decoration: none; }

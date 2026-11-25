@@ -371,3 +371,43 @@ these changes fails (the newest message never appears).
 - Line order: the paged reads have a fixed order (roles in ERP order, items newest first then by id); before, rows
   came in storage order, which moves as the hourly run updates them. Three demo answers ("slice ctc breakdown",
   "navi roles", "is phyagents test today") have the same lines in another order; nothing else changed.
+
+## 25 Nov: card line 2 is a one-sentence summary, the label is the card's type
+
+Update, notice, mail-only and digest cards showed the raw title on one line, cut with "…", under a vague "Update".
+Now:
+- **Type, not "Update".** Form, Assignment, Documents, CV submission, Deadline change, Shortlist, Test, Interview,
+  Talk, Offer, Result, Info. The run stores it (`details.label`, `ping/summaries.py label`); the page uses the same
+  rule (`cards.js typeLabel`) for a card written before.
+- **RISA Labs "CV submission" was wrong.** The 25 Nov notice says shortlisted students submit the *assignment*; the
+  run's to-do had `task: assignment`, but the page's sheet card (`itemCardOf`) called anything with "submi…" in it
+  a CV submission. It now reads the to-do's task.
+- **Line 2 is written once, at run time.** Groq first, flash-lite as fallback, paced (2.2 s between Groq calls, at
+  most 25 calls a run), your own cards first, then the newest. The line is stored on the card; the page never calls
+  a model. A card whose text, deadline and type are unchanged keeps its line (a hash of the three).
+- **Fact check.** The model's line is kept only if every date, time, weekday, number, link and capitalised name in it
+  is in the notice (or is the card's own deadline). Otherwise, or if both models fail, the rules' line: the to-do's
+  template ("Submit the assignment by Fri 27 Nov 23:59."), the deadline change with its role, the test's time and
+  place, or the notice's most useful whole sentence (one that says what to do, never the signature or a list's
+  heading), with [URGENT], CDC, pipes, "Dear students" and a leading company name removed. Never "…": a sentence
+  that doesn't fit is not used.
+- **Two lines, never cut.** The line wraps (no ellipsis) and is written to fit two lines at 390 px (100 characters at
+  most). To keep a text card to three lines, its type and status pill move to the footer when the company's name
+  fills line 1. A digest's names list holds as many names as fit one line, then "+N".
+- **The whole text behind ⋯ / a tap**: the notice (read when opened) or the mail's subject, summary and link.
+- **To-do cards** keep their three lines (who · what, when, role).
+- **Backfill**: Admin `summaries-backfill` writes lines for open cards and the last 7 days' cards, silently (only
+  `details` changes; nothing is posted or pushed), and prints the fact check's rejection rate and 10 before/after
+  examples. The demo's cards get the rules' line (no model calls for the demo), also whenever its rows are loaded.
+- **UI audit** (`setup/ui_audit.js`) now runs at 390 px and 1280 px and flags a summary that ends in "…", overflows,
+  doesn't end as a sentence ends (cut mid-word) or takes more than two lines.
+- The backfill uses the live keys, like the hourly run: it writes what you see, it isn't an eval.
+
+## 25 Nov: the public copy's test failed on its own scrubbing
+
+Public CI (Tests) failed on the copy's head: `tests/test_notice_jd.py` checks that a made-up phone number ("98765
+43210") is removed from a JD. The history held "9876543210" and a grouped form of it; the copy treated it as a real
+number found only in history and replaced its groups "9876" and "3210" as plain text, inside the test's "98765
+43210", which then no longer read as a phone number. Now well-known made-up numbers count as fake, today's numbers
+are compared as bare digits too, and a history number (or a group of it) is replaced only where it stands alone,
+never inside a longer number.

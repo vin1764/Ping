@@ -36,3 +36,15 @@ test("titles: only what the first line doesn't already say", () => {
   assert.equal(C.cleanTitle("Test slot booking", "Groww", ["test"]), "Slot booking");
   assert.equal(C.cleanTitle("", "Groww"), "");
 });
+
+test("the card's type is never a vague Update, and an assignment is not a CV submission", () => {
+  const t = (category, details = {}, title = "") => C.typeLabel({ category, details, title });
+  assert.equal(t("todo", { todo: { action: "submit", task: "assignment" } }, "RISA Labs: submit the assignment by Fri 27 Nov 23:59"), "Assignment");
+  assert.equal(t("todo", { todo: { action: "submit", task: "cv" } }), "CV submission");
+  assert.equal(t("todo", { todo: { action: "fill_form" } }), "Form");
+  assert.equal(t("deadline", {}, "BLUESTONE (3 roles) deadline extended to Mon 23 Nov 20:00"), "Deadline change");
+  assert.equal(t("shortlist"), "Shortlist");
+  assert.equal(t("test", { kind: "test" }), "Test");
+  assert.equal(t("info"), "Info");
+  assert.equal(t("info", { label: "Form" }), "Form");   // the run's stored label wins
+});

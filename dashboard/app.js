@@ -131,6 +131,7 @@
   class DemoSource {
     constructor(data) { this.d = data; this.kind = "demo"; }
     async load() { return this.d; }
+    async mail(id) { return (this.d.emails || []).find((m) => m.id === id || m.id === `sample:${id}`) || null; }
     async notice(noticeId) {
       const n = this.d.notices.find((x) => x.notice_id === noticeId);
       return { notice: n, check: n && this.d.pdf_checks.find((c) => c.notice_id === n.id) };
@@ -310,6 +311,12 @@
     }
     // live updates (see startLive): the latest runs, and the items again once a run has finished
     async liveRuns() { return this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)); }
+    async mail(id) {
+      // a demo row's mail is stored as "sample:<id>"
+      const { data, error } = await this.sb.from("emails").select("id,subject,snippet,main_link,received_at").in("id", [id, `sample:${id}`]).limit(1);
+      if (error) throw new Error(`emails: ${error.message}`);
+      return (data || [])[0] || null;
+    }
     async notice(noticeId) {
       const [n] = await this.q("notices", (q) => q.eq("notice_id", noticeId).limit(1));
       const checks = n ? await this.q("pdf_checks", (q) => q.eq("notice_id", n.id)) : [];
@@ -1799,7 +1806,7 @@
         // a digest / new-roles message has no one company: its own short title ("1 to apply by 20:00 (ZS Associates)")
         ["digest", "listing"].includes(it.category) || !(c.company || it.company)
           ? h("strong", {}, String(it.title || "").replace(/^(Reminder|Update):\s*/, "").replace(/,? (today|tonight|tomorrow),? [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d\d:\d\d/, "").slice(0, 70))
-          : [h("strong", {}, shortCo(c.company || cleanName(it.company || ""))), ` · ${KIND_WORD[c.kind] || "Update"}`],
+          : [h("strong", {}, shortCo(c.company || cleanName(it.company || ""))), ` · ${c.word || KIND_WORD[c.kind] || CARDS.typeLabel(it)}`],
         rel ? h("span", { class: `cc-l2 lv-${rel.level}` }, ` · ${rel.text}`) : null),
       link ? h("a", { class: "act-btn primary small", href: link, ...EXT }, /forms\.gle|docs\.google\.com\/forms|\/forms\//i.test(link) || d.todo?.action === "fill_form" ? "Open form" : "Open") : null);
   }
@@ -2272,6 +2279,27 @@
     const year = String(d.notice_key || "").replace(/^sample:/, "").split(":")[0];
     return year ? `https://erp.iitkgp.ac.in/TrainingPlacementSSO/AdmFilePDF.htm?type=NOTICE&year=${encodeURIComponent(year)}&id=${it.notice_id}` : null;
   }
+  // line 2 of a text card the run hasn't written a summary for yet: the title as one plain sentence, whole
+  function sumFallback(it, company, task) {
+    const t = CARDS.cleanTitle(String(it.title || "").replace(/^[^:]{2,60}:\s*/, ""), company, [task]);
+    return t ? (/[.!?]$/.test(t) ? t : `${t}.`) : "New notice: tap to read it.";
+  }
+  // the whole notice (or the mail's subject and summary) behind ⋯ / a tap, read when opened, never cut
+  const fullCache = new Map();
+  function fullText(it) {
+    const d = it.details || {};
+    const box = h("div", { class: "full-text" });
+    const show = (head, text) => box.replaceChildren(head ? h("div", { class: "muted small" }, head) : null, h("div", { class: "full-body" }, text || ""));
+    const key = it.notice_id ? `n:${it.notice_id}` : d.mail?.id ? `m:${d.mail.id}` : null;
+    if (!key) return null;
+    if (fullCache.has(key)) { const [a, b] = fullCache.get(key); show(a, b); return box; }
+    show("", "Loading the full text…");
+    const read = it.notice_id ? state.src.notice(it.notice_id).then((r) => r.notice && [`Notice · ${r.notice.subject || ""} · ${when(r.notice.notice_time)}`, r.notice.text || r.notice.preview || ""])
+      : (state.src.mail ? state.src.mail(d.mail.id) : Promise.resolve(null)).then((m) => [`Email · ${d.mail.subject || m?.subject || ""}${d.mail.received_at ? ` · ${when(d.mail.received_at)}` : ""}`,
+          [m?.snippet || d.mail.summary || "", m?.main_link || d.mail.link || ""].filter(Boolean).join("\n")]);
+    read.then((v) => { if (v) { fullCache.set(key, v); show(...v); } else box.remove(); }).catch(() => show("", "Couldn't load the full text. Tap Notice to open it."));
+    return box;
+  }
   function itemBubble(it, at) {
     const past = isPast(it);
     const kind = msgKind(it), d = it.details || {};
@@ -2283,7 +2311,7 @@
       : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" || it.category === "digest" ? "Reminder" : "Deadline")
       : kind === "test" ? ({ shortlist: "Shortlist", result: "Result" }[it.category] || "Test")
       : kind === "new" ? "New" : d.todo?.action === "fill_form" ? "Form" : d.todo?.action === "take_test" ? "Test"
-      : it.category === "offer" ? "Offer" : it.category === "ppt" ? "Talk" : "Update";
+      : it.category === "offer" ? "Offer" : it.category === "ppt" ? "Talk" : CARDS.typeLabel(it);
     const open = state.open.has(it.id);
     // placement mail: "via email" on a message only the mail has; "also mailed" on an ERP message the mail repeated;
     // a form / test / meeting link from the mail right on the message
@@ -2295,14 +2323,16 @@
     // button; the full message, its list, where it came from and its links are behind ⋯ (or a tap on the message)
     const digest = (d.list || []).some((g) => (g.rows || []).length);
     const company = shortCo(it.company) || ((it.title || "").match(/^(?:Update - )?([^:(]{2,40}?)(?: deadline| test| form)?:/) || [])[1] || "";
-    const task = d.todo?.action === "fill_form" || /fill the form/i.test(it.title || "") ? "Form"
-      : /\bsubmi(t|ssion)\b.*\bcv\b|\bcv submission\b/i.test(it.title || "") ? "CV submission"
-      : it.category === "shortlist" || d.kind === "shortlist" ? "Shortlist" : it.category === "result" ? "Result"
-      : kind === "test" || d.todo?.action === "take_test" ? (d.kind === "interview" || /interview/i.test(it.title || "") ? "Interview" : "Test")
-      : /deadline (extended|moved)|extended to/i.test(it.title || "") ? "Extended" : /time moved/i.test(it.title || "") ? "Time moved"
-      : it.category === "ppt" || /pre-placement talk/i.test(it.title || "") ? "Talk" : it.category === "offer" ? "Offer"
-      : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" ? "Reminder" : "Application") : kind === "new" ? "New roles" : "Update";
-    const event = ["Test", "Interview", "Shortlist", "Result", "Talk", "Time moved"].includes(task);
+    // the type, never a vague "Update": Form, Assignment, Deadline change, Shortlist, Test, Info... (stored by the run)
+    const typed = CARDS.typeLabel(it);
+    const task = typed !== "Info" ? typed
+      : kind === "test" ? (/interview/i.test(it.title || "") ? "Interview" : "Test")
+      : kind === "soon" ? (d.role === "reminder" || it.category === "reminder" ? "Reminder" : "Application") : kind === "new" ? "New roles" : typed;
+    const event = ["Test", "Interview", "Shortlist", "Result", "Talk"].includes(task);
+    // a card that carries a notice's or a mail's text (not a to-do, not a list): line 2 is its one-sentence summary,
+    // written by the run (details.summary), wrapped to two lines and never cut; the whole text is behind ⋯ / a tap
+    const textCard = !digest && !d.todo?.action && it.category !== "reminder" && !it.needs_review;
+    const summary = textCard ? (d.summary || sumFallback(it, company, task)) : "";
     const rel = due ? relOf(due, event) : null;
     const listed = digest ? (d.list || []).flatMap((g) => g.collapsed ? [] : (g.rows || []).map((r) => FORMS.cleanName(cleanName(cleanRowText(r.text).split(/ — | deadline\b|:| \(/)[0].trim())))) : [];
     const names = [...new Set(listed)];
@@ -2320,7 +2350,10 @@
     const role = withoutCo(roleIn(it.title) || "", company);
     const place = [d.pdf?.details?.room ? `Room ${d.pdf.details.room}` : ""].filter(Boolean).join("");
     const plain = CARDS.cleanTitle(it.title, company, [task]);
-    const l3 = digest ? (names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", "))
+    const fitNames = (list, room = 34) => { const out = [];
+      for (const n of list) { if (out.length && [...out, n].join(", ").length > room) break; out.push(n); }
+      return out.length < list.length ? `${out.join(", ")} +${list.length - out.length}` : out.join(", "); };
+    const l3 = digest ? fitNames(names)
       : [/^\d+ roles?$/.test(role) ? "" : role, place].filter(Boolean).join(" · ") || (!rel ? plain : "");
     const stop = (ev) => ev.stopPropagation();
     const primary = past ? null
@@ -2337,17 +2370,21 @@
         : h("div", { class: "card-c chat-c" }, h("div", { class: "cc-text" },
             h("div", { class: "cc-l1" }, digest ? h("strong", { class: "co" }, headline || label) : h("strong", { class: "co" }, company || label),
               digest || !company || company.length + task.length > 26 ? null : h("span", { class: "cc-task" }, ` · ${task}`)),
-            !digest && company && company.length + task.length > 26 ? h("div", { class: "cc-l2 cc-task2" }, `${task}${rel ? ` · ${rel.text}` : ""}`, status) : null,
-            !digest && company && company.length + task.length > 26 ? null
+            textCard ? h("div", { class: "cc-sum", "data-summary": d.summary ? d.summary_by || "run" : "page" }, summary)
+            : !digest && company && company.length + task.length > 26 ? h("div", { class: "cc-l2 cc-task2" }, `${task}${rel ? ` · ${rel.text}` : ""}`, status) : null,
+            textCard || (!digest && company && company.length + task.length > 26) ? null
             : rel ? h("div", { class: `cc-l2 lv-${rel.level}`, ...(!past && rel.level !== "over" ? { "data-rel": dt(due).toISOString(), "data-event": event ? "1" : null } : {}) },
               past && rel.level !== "over" ? `${rel.text} · ${pastLabel.toLowerCase()}` : rel.text, status)
               : !digest ? h("div", { class: "cc-l2" }, String(it.title || "").replace(/^[^:]{2,60}:\s*/, "")) : null,
-            l3 && (rel || digest) ? h("div", { class: "cc-l3" }, l3) : null)),
+            digest && l3 ? h("div", { class: "cc-sum" }, l3) : !textCard && l3 && rel ? h("div", { class: "cc-l3" }, l3) : null)),
       // "Which company is that? Tap to choose.": the choices are on the message, not under Details
       review ? h("div", { class: "onb-actions choose", role: "group", "aria-label": "Which company" },
         d.candidates.map((c) => h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { company: c }); } }, shortCo(c))),
         h("button", { type: "button", class: "chip", onclick: (ev) => { ev.stopPropagation(); fix(it, { ignore: true }); } }, "None of these")) : null,
-      h("div", { class: "cc-act foot" }, primary, h("span", { class: "cc-gap" }), h("span", { class: "time" }, clock(at)),
+      // a text card keeps 3 lines: its status pill, and its type when line 1 is full, sit by the time
+      h("div", { class: "cc-act foot" }, primary, h("span", { class: "cc-gap" }),
+        textCard && company && company.length + task.length > 26 ? h("span", { class: "cc-type" }, task) : null,
+        textCard ? status : null, h("span", { class: "time" }, clock(at)),
         h("button", { type: "button", class: "cc-more expand", "aria-expanded": String(open), "aria-label": open ? "Less" : "More about this message" }, open ? "▴" : "⋯")));
     const toggle = (ev) => {
       if (ev.target.closest("a, button:not(.cc-more), .more, summary, details")) return;
@@ -2361,6 +2398,7 @@
     // the detail: the whole message, its list, where it came from, every link
     if (open) bubble.append(h("div", { class: "cc-detail chat-detail" },
       review ? null : h("span", { class: "text title" }, retitle(it)),
+      textCard ? fullText(it) : null,
       // a form posted again: one line on the message, not a new message
       d.extended?.length ? h("div", { class: "ext-line" }, `Deadline extended: ${when(d.extended[0].from)} → ${when(d.extended[d.extended.length - 1].to)}`) : null,
       listBlock(it),
@@ -2995,7 +3033,7 @@
     const link = d.todo?.link || mailLinks(it)[0];
     const card = cardC({
       key: `feed:${it.id}`, cls: `item ${cls}${it.done ? " done" : ""}`, company: c.company || cleanName(it.company || "") || "Placement office",
-      task: it.needs_review ? "Question" : KIND_WORD[c.kind] || "Update", at: due || undefined, event: !!it.event_at && !it.due_at,
+      task: it.needs_review ? "Question" : c.word || KIND_WORD[c.kind] || CARDS.typeLabel(it), at: due || undefined, event: !!it.event_at && !it.due_at,
       status: it.done ? h("span", { class: "pill applied" }, "✓ done") : null,
       l3: c.roleName || (due ? "" : (d.candidates || []).reduce((t, x) => t.split(x).join(shortCo(x)), String(it.title || "").replace(/^[^:]{2,60}:\s*/, ""))),
       primary: link ? h("a", { class: "act-btn primary", href: link, ...EXT }, /forms\.gle|docs\.google\.com\/forms|\/forms\//i.test(link) || d.todo?.link ? "Open form"
@@ -3220,7 +3258,10 @@
       : /fill the form/i.test(it.title || "") || d.todo?.action === "fill_form" ? "form"
       : /submi/i.test(`${it.title} ${d.subject || ""}`) ? "submission" : it.category === "todo" ? "to-do" : "notice";
     const row = d.pdf?.details || {}, m = role ? markOf(role) : null, due = it.due_at || it.event_at;
-    return { item: it, role, company: cleanName(it.company), roleName: role?.designation || roleIn(it.title), due, at: due ? +dt(due) : 0, kind,
+    // the word on the card: what the to-do is (an assignment is not a CV submission: 25 Nov, RISA Labs "submit the
+    // assignment" read "CV submission" because any "submi..." meant a CV), else the type
+    const word = ["submission", "to-do", "notice"].includes(kind) ? CARDS.typeLabel(it) : KIND_WORD[kind];
+    return { item: it, role, company: cleanName(it.company), roleName: role?.designation || roleIn(it.title), due, at: due ? +dt(due) : 0, kind, word,
              applied: role ? !!role.applied : null, list: st === "yes" ? "on" : st === "no" ? "off" : null, done: !!it.done,
              mine: role && targetsOn() ? !!m?.relevant : null, reason: m?.relevant ? m.reason || "" : "", cv: m?.relevant ? m.best_cv || "" : "",
              place: [row.room ? `Room ${row.room}` : "", row.slot ? `Slot ${row.slot}` : "", !row.room && d.venue ? d.venue : ""].filter(Boolean).join(" · "),
@@ -3244,11 +3285,11 @@
     // a Today to-do: "Not for me" (its form, or the item itself when it has no form)
     const nfmKey = c.formKey || (c.item && !c.role && !["test", "interview", "notice", "shortlist"].includes(c.kind) ? `item:${c.item.id}` : null);
     const nfm = (menu) => nfmKey ? h("button", { type: "button", class: `act-btn${menu ? "" : " ghost nfm-btn"}`,
-      onclick: () => { setNotForMe(nfmKey, true, { label: `${c.company || "this"} ${String(KIND_WORD[c.kind] || "to-do").toLowerCase()}` }); closeSheet(); } }, "Not for me") : null;
+      onclick: () => { setNotForMe(nfmKey, true, { label: `${c.company || "this"} ${String(c.word || KIND_WORD[c.kind] || "to-do").toLowerCase()}` }); closeSheet(); } }, "Not for me") : null;
     return cardC({
       key: `sheet:${c.kind}:${c.role?.id || c.item?.id || c.company}`, cls: `act-card${c.mine === false && !c.applied ? " other" : ""}`,
       attrs: { "data-kind": c.kind }, lead: c.formKey ? formTick(c.formKey) : null,
-      company: c.company || "Notice", task: KIND_WORD[c.kind] || c.kind, at: c.due || null, event, status, l3, primary, tail: nfm(false),
+      company: c.company || "Notice", task: c.word || KIND_WORD[c.kind] || c.kind, at: c.due || null, event, status, l3, primary, tail: nfm(false),
       detail: () => [
         nfmKey ? h("div", { class: "ac-links cc-links nfm-menu" }, nfm(true)) : null,
         c.roleName ? ccRow("Role", c.roleName) : null,

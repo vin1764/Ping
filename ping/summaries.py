@@ -35,7 +35,7 @@ WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 PROMPT = """You write the one line a student sees for a placement notice in their chat.
 Say what changed and what the student must do, in plain words: one sentence, at most 15 words, under 95 characters.
-If the notice is for a group, start with who ("APM Growth applicants: ..."). Don't start with the company's name: it is
+If the notice is for a group, start with who ("Shortlisted students: ..."). Don't start with the company's name: it is
 shown already. Use only facts in the notice. If you give the deadline, write it exactly as: {due}.
 No quotes, no emoji, no "Dear students", no [URGENT].
 
@@ -65,6 +65,8 @@ def label(it: dict) -> str:
         return "Result"
     if cat == "shortlist" or kind == "shortlist":
         return "Shortlist"
+    if cat == "ppt" or re.search(r"pre-placement talk|\bppt\b", title, re.I):
+        return "Talk"                                  # a talk is often stored as a timed event, like a test
     if kind == "interview" or re.search(r"\binterview", title, re.I) and cat in ("test", "todo"):
         return "Interview"
     if cat == "test" or kind in ("test", "test_rooms") or a == "take_test":
@@ -73,8 +75,6 @@ def label(it: dict) -> str:
         return "Deadline change"
     if cat == "offer" or a == "accept_offer":
         return "Offer"
-    if cat == "ppt" or re.search(r"pre-placement talk|\bppt\b", title, re.I):
-        return "Talk"
     return "Info"
 
 
@@ -87,8 +87,8 @@ def source_text(it: dict, notices: dict | None = None, emails: dict | None = Non
     if n and (n.get("text") or n.get("preview")):
         return f"{n.get('subject') or ''}\n{n.get('text') or n.get('preview')}".strip()
     m = d.get("mail") or {}
-    mid = str(it.get("id", "")).removeprefix("mail:")
-    e = (emails or {}).get(mid) or {}
+    mid = str(m.get("id") or str(it.get("id", "")).removeprefix("sample:").removeprefix("mail:"))
+    e = (emails or {}).get(mid) or (emails or {}).get(f"sample:{mid}") or {}
     parts = [e.get("subject"), e.get("snippet"), m.get("subject"), m.get("summary"), it.get("title")]
     return "\n".join(dict.fromkeys(p for p in parts if p)).strip()
 
@@ -199,19 +199,39 @@ def _clean(s: str, company: str | None) -> str:
     s = re.sub(r"\s+", " ", s).strip(" -:,.")
     if company:
         for name in {company, re.sub(r"\s*\(.*?\)", "", company), company.split()[0]}:
-            if len(name) >= 3:
+            if len(name) >= 3 and name.lower() not in PLAIN:
                 s = re.sub(rf"^\s*{re.escape(name)}\b[\s:,-]*", "", s, flags=re.I)
     s = re.sub(r"^(update|notice|info|information)\b\s*[:-]?\s*", "", s, flags=re.I).strip()
     return s[:1].upper() + s[1:] if s else s
 
 
+# a sentence that says nothing to act on: the office's signature, a list's heading, a link left out of the demo
+JUNK = re.compile(r"iit kharagpur|career development|regards|thanking you|for more details|following students?|"
+                  r"\(s\):|removed\]|please find|attached (here)?with|^link\b", re.I)
+LEAD = re.compile(r"^(note\s*:\s*|please note that|kindly note that|this is to inform (all )?(the )?(students )?that|it is to inform (you )?that|"
+                  r"we are pleased to inform (you )?that|note that)\s+", re.I)
+ACT = re.compile(r"\b(must|required|requested|advised|complete|fill|submit|register|attend|report|join|deadline|"
+                 r"will be held|scheduled|rescheduled|postponed|preponed|venue|shortlist|selected|extended)\b|\bby \d", re.I)
+
+
 def _sentence(s: str) -> str:
-    """The first whole sentence that fits; never a cut one."""
-    for part in re.split(r"(?<=[.!?])\s+", s):
-        part = part.strip()
-        if 12 <= len(part) <= MAX_CHARS:
-            return part if part[-1] in ".!?" else part + "."
-    return ""
+    """The whole sentence that best says what to do (or what changed), shortest lead-in dropped; never a cut one,
+    never the signature or a list's heading."""
+    best, score = "", -1
+    for k, part in enumerate(re.split(r"(?<=[.!?])\s+", s)):
+        part = LEAD.sub("", part.strip()).strip()
+        part = re.sub(r"\s*\([^)]{0,60}\)", "", part).strip() if len(part) > MAX_CHARS else part
+        if not part or not part[0].isalnum() or part.endswith(":") or JUNK.search(part) or len(part.split()) < 4:
+            continue
+        if not 12 <= len(part) <= MAX_CHARS:
+            continue
+        sc = 2 * bool(ACT.search(part)) + bool(_times(part) or _dates(part))
+        if sc > score:
+            best, score = part, sc
+    if not best:
+        return ""
+    best = best[:1].upper() + best[1:]
+    return best if best[-1] in ".!?" else best + "."
 
 
 def rules_line(it: dict, text: str) -> str:
@@ -220,17 +240,27 @@ def rules_line(it: dict, text: str) -> str:
     due, ev = fmt(it.get("due_at")), fmt(it.get("event_at"))
     lab = label(it)
     a, task = todo.get("action"), todo.get("task")
-    if a == "fill_form" and due:
-        return f"Fill the form by {due}."
+    if a == "fill_form":
+        return f"Fill the form by {due}." if due else "Fill the form (no deadline given: see the notice)."
     if a == "submit" and due:
         return {"assignment": f"Submit the assignment by {due}.", "documents": f"Submit the documents by {due}.",
-                "cv": f"Submit your CV by {due}."}.get(task, f"Submit it by {due}.")
+                "cv": f"Submit your CV by {due}."}.get(task, f"Submit what the notice asks for by {due}.")
     if a == "take_test" and due:
         return f"Take the test by {due}."
     if a == "accept_offer" and due:
         return f"Accept the offer by {due}."
     if lab == "Deadline change" and due:
-        return f"Deadline moved to {due}."
+        title = str(it.get("title") or "")
+        co = str(it.get("company") or "")
+        title = title[len(co):] if co and title.startswith(co) else title
+        role = (re.search(r"\(([^)]{3,40})\)", title) or [None, ""])[1]
+        role = "" if re.fullmatch(r"\d+ roles?|you've applied|urgent", role, re.I) else role
+        line = f"{role}: deadline moved to {due}." if role else f"Deadline moved to {due}."
+        return line if len(line) <= MAX_CHARS else f"Deadline moved to {due}."
+    if lab == "Talk" and ev:
+        return f"Pre-placement talk on {ev}."
+    if lab == "Offer" and not due:
+        return "Offers are out: tap to see the list."
     if lab in ("Test", "Interview") and ev:
         venue = d.get("venue")
         line = f"{lab} on {ev}" + (f", {venue}" if venue and len(venue) < 30 else "") + "."

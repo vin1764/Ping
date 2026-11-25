@@ -4,6 +4,9 @@
 //   - raw notice titles ([URGENT], "CDC |"), IDs (notice numbers, sample: keys, UUIDs) on a collapsed card
 //   - "Pvt Ltd" / "Private Limited" / "Limited" / "Ltd" on screen
 //   - collapsed cards taller than 3 lines of text plus one button row
+//   - a text card's summary (line 2) cut: ending in "…" / "...", hidden overflow, not ending as a sentence ends
+//     (cut mid-word), or longer than 2 lines; a digest's list longer than 2 lines
+// At 390 px (a phone) and 1280 px (desktop).
 // The signed-in view: the demo is loaded once, its saved thread is marked as the owner's, and the page is opened
 // offline, so it renders as the signed-in owner (no Demo badge, the owner's code paths) without anyone's login.
 //   node setup/ui_audit.js [url]          (default: a local build on http://localhost:8799/)
@@ -33,9 +36,20 @@ const AUDIT = () => {
     // 3. raw titles, IDs
     if (/\[URGENT\]|\bCDC \||\s\|\s/.test(text)) say("raw notice title", c);
     if (/\bnotice \d{3,}\b|\bsample:|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(text)) say("an ID on a card", c);
-    // 5. height: 3 lines of text
-    const lines = Math.round(head.getBoundingClientRect().height / 22);
+    // 5. height: 3 lines of text (a text card: line 1 and a summary of at most 2 lines)
+    const sum = c.querySelector(".cc-sum");
+    const lines = sum ? [...head.children].filter((e) => e !== sum).reduce((n, e) => n + Math.round(e.getBoundingClientRect().height / 22), 0)
+        + Math.round(sum.getBoundingClientRect().height / 20)
+      : Math.round(head.getBoundingClientRect().height / 22);
     if (c.matches(".card-c") && lines > 3) say(`${lines} lines of text`, c);
+    // 6. the summary: whole, a sentence, at most 2 lines
+    if (sum && vis(sum)) {
+      const t = (sum.innerText || "").trim(), sl = Math.round(sum.getBoundingClientRect().height / 20);
+      if (/(…|\.\.\.)$/.test(t)) say("summary ends in …", sum);
+      else if (sum.scrollHeight > sum.clientHeight + 1 || sum.scrollWidth > sum.clientWidth + 1) say("summary cut (overflow)", sum);
+      else if (sum.dataset.summary && !/[.!?)"”]$/.test(t)) say("summary cut mid-word", sum);
+      if (sl > 2) say(`summary on ${sl} lines`, sum);
+    }
     if (c.matches(".today-row") && lines > 3) say(`${lines} lines`, c);
   }
   // 4. legal suffixes anywhere on screen (outside an opened detail)
@@ -48,6 +62,7 @@ const AUDIT = () => {
   return [...new Set(out)];
 };
 
+const WIDTHS = [390, 1280];
 (async () => {
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
@@ -55,6 +70,12 @@ const AUDIT = () => {
   const errs = []; p.on("pageerror", (e) => errs.push(e.message));
   const flags = [];
   async function sweep(mode) {
+    for (const w of WIDTHS) {
+      await p.setViewportSize({ width: w, height: w > 600 ? 900 : 844 }); await p.waitForTimeout(300);
+      await sweepAt(`${mode} ${w}px`);
+    }
+  }
+  async function sweepAt(mode) {
     for (const hash of SCREENS) {
       console.error(`${mode} ${hash}`);
       await p.evaluate((h) => { location.hash = h; }, hash); await p.waitForTimeout(800);

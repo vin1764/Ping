@@ -59,7 +59,7 @@ def seed(store):
         # the newest message
         {"id": "notice:2026-2027:99001:0", "level": "show", "category": "update", "company": "Newestco",
          "title": "NEWEST-MESSAGE Newestco update", "first_seen": iso(NOW - timedelta(minutes=1)), "sort_at": iso(NOW - timedelta(minutes=1)),
-         "details": {"notice_time": iso(NOW - timedelta(minutes=2))}, "dismissed": False, "is_sample": False},
+         "details": {"notice_time": iso(NOW - timedelta(minutes=2)), "label": "Info", "summary": "NEWEST-MESSAGE is the newest notice.", "summary_by": "rules"}, "dismissed": False, "is_sample": False},
         # a to-do found minutes ago, due in 2 days
         {"id": "mail:new-todo", "level": "always", "category": "todo", "company": "Todoco Newfound",
          "title": "Todoco: submit the assignment NEW-TODO", "first_seen": iso(NOW - timedelta(minutes=5)), "sort_at": iso(NOW - timedelta(minutes=5)),
@@ -180,7 +180,7 @@ def test_a_long_history_opens_fast_and_shows_what_matters(replica):
         assert drawn >= 50, f"only {drawn} messages drawn"
         # the first check's notices (found at once two days ago, each drawn at its notice's time) are in the chat; the
         # newest of them is 3.5 days old, so it is among the last messages drawn, before today's
-        assert f"update number {N_ITEMS - 5}" in thread, "the first check's notices are missing from the chat"
+        assert f"number {N_ITEMS - 5}" in thread.lower(), "the first check's notices are missing from the chat"
         # the newest message, the newest chat line, the to-do found minutes ago and the repost are in the chat
         # (a to-do's card shows its company and task: the companies are the markers)
         for want in ("NEWEST-MESSAGE", "NEWEST-CHAT", "Todoco Newfound", "Repostco Againnow"):

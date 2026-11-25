@@ -428,7 +428,15 @@ def add_forms(data: dict) -> dict:
 
 
 def load_to_db(store, data: dict) -> dict:
-    """Replace the demo rows a one-click demo session sees (is_sample = true). Real rows are never touched."""
+    """Replace the demo rows a one-click demo session sees (is_sample = true). Real rows are never touched.
+    Every demo card gets its type and line 2 first (ping/summaries.py, the rules' line: no model call)."""
+    from . import summaries
+    notices = {}
+    for n in data.get("notices") or []:
+        notices[n["id"]] = n
+        notices.setdefault(str(n.get("notice_id")), n)
+    summaries.apply(data.get("items") or [], {i["id"]: i for i in data.get("items") or []}, notices,
+                    {e["id"]: e for e in data.get("emails") or []}, None, log=lambda *_: None)
     counts = {}
     for table in ("items", "pdf_checks", "notices", "roles", "runs", "contacts", "emails", "forms"):
         try:

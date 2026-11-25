@@ -117,6 +117,33 @@ def cv_prompt() -> dict:
     }
 
 
+def card_line_prompt() -> dict:
+    src = (ROOT / "ping" / "summaries.py").read_text(encoding="utf-8")
+    return {
+        "title": "Card line (line 2 of an update / notice / mail card)",
+        "where": "`ping/summaries.py` (`PROMPT`, used by `summarize`), called from the hourly run on GitHub Actions and by "
+                 "the Admin task `summaries-backfill`",
+        "when": ("Once per card, when the card is new or its notice's text, deadline or type changes; the line is stored "
+                 "with the card and the page never calls a model. Your own cards first."),
+        "input": ("`{label}`: the card's type (Form, Assignment, Deadline change, Test, Info...); `{company}`; `{due}`: the "
+                  "card's deadline or time as the cards write it; `{text}`: that one notice's text (or the mail's subject "
+                  "and summary), first 2,500 characters."),
+        "output": (f"One sentence, at most {_py_constant(src, 'MAX_CHARS')} characters. Kept only if every date, time, "
+                   "number, link and capitalised name in it is in the notice (or is the card's own deadline); otherwise, "
+                   "or when the models fail, the rules' line (the to-do's template, or the notice's most useful whole "
+                   "sentence, cleaned)."),
+        "models": [_one(r'GROQ_MODEL = os\.environ\.get\("PING_GROQ_MODEL"\) or "([^"]+)"', src, "the card-line Groq model"),
+                   _py_constant(src, "LITE")],
+        "settings": ["Groq first (`GROQ_API_KEY`), Gemini flash-lite as fallback (`GEMINI_API_KEY`)",
+                     f"paced: one Groq call every {_py_constant(src, 'PACE_S')} s (the free tier's 30 a minute); a 429 "
+                     "waits its retry-after once",
+                     "temperature: 0.2; timeout 12 s per call",
+                     "at most `PING_SUMMARY_CALLS` (default 25) calls a run; cards left over get the rules' line now "
+                     "and the model's on the next run"],
+        "prompt": _py_constant(src, "PROMPT"),
+    }
+
+
 def ask_ping_prompt() -> dict:
     src = ASK_TS.read_text(encoding="utf-8")
     gemini = _one(r'const PRIMARY = Deno\.env\.get\("PING_CHAT_MODEL"\) \|\| "([^"]+)"', src, "PRIMARY")
@@ -203,7 +230,7 @@ def render() -> str:
         "eligibility, the feed) is rules, with no model involved.",
         "",
     ]
-    for i, p in enumerate((notice_prompt(), relevance_prompt(), cv_prompt(), ask_ping_prompt(), *understand_prompts()), 1):
+    for i, p in enumerate((notice_prompt(), relevance_prompt(), cv_prompt(), card_line_prompt(), ask_ping_prompt(), *understand_prompts()), 1):
         lines += [
             f"## {i}. {p['title']}", "",
             f"- **Where it runs:** {p['where']}",

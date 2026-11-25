@@ -89,7 +89,38 @@ CV text:
 >>>
 ````
 
-## 4. Ask Ping (the chat on the dashboard)
+## 4. Card line (line 2 of an update / notice / mail card)
+
+- **Where it runs:** `ping/summaries.py` (`PROMPT`, used by `summarize`), called from the hourly run on GitHub Actions and by the Admin task `summaries-backfill`
+- **When:** Once per card, when the card is new or its notice's text, deadline or type changes; the line is stored with the card and the page never calls a model. Your own cards first.
+- **Input:** `{label}`: the card's type (Form, Assignment, Deadline change, Test, Info...); `{company}`; `{due}`: the card's deadline or time as the cards write it; `{text}`: that one notice's text (or the mail's subject and summary), first 2,500 characters.
+- **Expected output:** One sentence, at most 100 characters. Kept only if every date, time, number, link and capitalised name in it is in the notice (or is the card's own deadline); otherwise, or when the models fail, the rules' line (the to-do's template, or the notice's most useful whole sentence, cleaned).
+- **Models, in fallback order:** `openai/gpt-oss-120b` → `gemini-3.1-flash-lite`
+- Groq first (`GROQ_API_KEY`), Gemini flash-lite as fallback (`GEMINI_API_KEY`)
+- paced: one Groq call every 2.2 s (the free tier's 30 a minute); a 429 waits its retry-after once
+- temperature: 0.2; timeout 12 s per call
+- at most `PING_SUMMARY_CALLS` (default 25) calls a run; cards left over get the rules' line now and the model's on the next run
+
+**Prompt, verbatim:**
+
+````text
+You write the one line a student sees for a placement notice in their chat.
+Say what changed and what the student must do, in plain words: one sentence, at most 15 words, under 95 characters.
+If the notice is for a group, start with who ("Shortlisted students: ..."). Don't start with the company's name: it is
+shown already. Use only facts in the notice. If you give the deadline, write it exactly as: {due}.
+No quotes, no emoji, no "Dear students", no [URGENT].
+
+Company: {company}
+Type: {label}
+Notice:
+<<<
+{text}
+>>>
+
+Reply with the line only.
+````
+
+## 5. Ask Ping (the chat on the dashboard)
 
 - **Where it runs:** `supabase/functions/ask-ping/index.ts` (`const prompt`), a Supabase Edge Function; the Groq and Gemini keys are Supabase function secrets and never reach the browser
 - **When:** Only OPEN questions typed in the dashboard chat (summaries, "why", comparisons, advice, a follow-up with nothing new): every message is routed first (`route()` in `supabase/functions/_shared/answer_rules.js`), and FACT questions (what's due, tests and rooms, shortlists, CTC and its parts, bond, eligibility, which CV, applied, notices, a company's roles, counts), feedback ("X not relevant", "undo"), requests to act and "ok" are answered by rules with no model call. If no model answers, or the reply has a number that isn't in its FACTS, the rules answer instead. Demo sessions: 15 questions per session per hour, 100 per hour for all demo sessions together.
@@ -196,7 +227,7 @@ ${convo || "(this is the first message)"}
 Question: ${ask}${replyNote}
 ````
 
-## 5. Ask Ping: reading the question
+## 6. Ask Ping: reading the question
 
 - **Where it runs:** `supabase/functions/_shared/understand.js` (`prompt`), called by `supabase/functions/ask-ping/index.ts` before the rules route the question
 - **When:** Every chat question that isn't feedback. The answer is never the model's: it only says what the question is about, and the rules fetch and say every fact.
@@ -228,7 +259,7 @@ ${convo || "(none)"}
 Message: ${question}
 ````
 
-## 6. Ask Ping: wording the reply
+## 7. Ask Ping: wording the reply
 
 - **Where it runs:** `supabase/functions/_shared/understand.js` (`composePrompt`), called by `supabase/functions/ask-ping/index.ts` after the rules answered
 - **When:** Every rules answer of 40 characters or more.

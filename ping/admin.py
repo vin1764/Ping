@@ -538,6 +538,59 @@ def ask_as_demo(url: str, questions: list[str]) -> list[tuple[str, int, float, s
         out.append((q, a.status_code, time.monotonic() - t, a.text[:1500]))
     return out
 
+LATENCY_QUESTIONS = ["slice ctc breakdown", "what's due tomorrow", "navi roles", "elig?", "jd of ather energy",
+                     "which cv for aiprise", "process till now?", "any interviews for groww?", "ctc?",
+                     "is phyagents test today"]
+
+
+def ask_latency(secrets) -> int:
+    """Read-only: 10 questions from a fresh one-click demo session (demo data, evals keys), timed per stage by the
+    function itself (timing: stages, reads, cold), then the same 10 with the model steps off (no_ai) for the rules'
+    answers' fingerprints, to compare across versions. Prints a table and the medians."""
+    import statistics
+    from .evals_key import eval_headers
+    url = secrets.supabase_url.rstrip("/")
+    rows = []
+    for label, extra in (("timed", {}), ("rules only", {"no_ai": True})):
+        hdr, _ = sa.demo_session(url, os.environ.get("SUPABASE_PUBLISHABLE_KEY", ""))
+        for q in LATENCY_QUESTIONS:
+            t = time.monotonic()
+            r = requests.post(f"{url}/functions/v1/ask-ping", timeout=180, json={"question": q, **extra},
+                              headers={**hdr, **eval_headers()})
+            ms = int((time.monotonic() - t) * 1000)
+            try:
+                b = r.json()
+            except ValueError:
+                b = {"error": r.text[:200]}
+            rows.append({"set": label, "q": q, "status": r.status_code, "client": ms, **b})
+            time.sleep(1.5)
+    med = lambda xs: int(statistics.median(xs)) if xs else 0
+    timed = [x for x in rows if x["set"] == "timed"]
+    say("per request (timed set): client ms | function ms | cold | route | model | slowest stages")
+    for x in timed:
+        tm = x.get("timing") or {}
+        st = sorted((tm.get("stages") or {}).items(), key=lambda kv: -kv[1])[:4]
+        say(f"  {x['q'][:28]:28} | {x['client']:5} | {tm.get('total', '-'):>5} | {'cold' if tm.get('cold') else 'warm':4} | "
+            f"{x.get('route', x.get('error', '?'))!s:5} | {x.get('model', '-')!s:28} | " + ", ".join(f"{k} {v}" for k, v in st))
+    cl = [x["client"] for x in timed]
+    fn = [(x.get("timing") or {}).get("total") for x in timed if x.get("timing")]
+    say(f"\nclient: median {med(cl)} ms, worst {max(cl) if cl else 0} ms; inside the function: median {med(fn)} ms, "
+        f"worst {max(fn) if fn else 0} ms; outside it (network, gateway, boot): median "
+        f"{med([x['client'] - x['timing']['total'] for x in timed if x.get('timing')])} ms; cold starts "
+        f"{sum(1 for x in timed if (x.get('timing') or {}).get('cold'))}/{len(timed)}")
+    for key in ("stages", "reads"):
+        names = sorted({k for x in timed for k in ((x.get("timing") or {}).get(key) or {})})
+        say(f"{key} (median / worst ms over the requests that had it):")
+        for n in names:
+            v = [(x["timing"][key] or {}).get(n) for x in timed if x.get("timing") and n in (x["timing"].get(key) or {})]
+            say(f"  {n:22} {med(v):6} / {max(v):6}  ({len(v)} requests)")
+    say("\nrules' answers (model steps off), fingerprints to compare across versions:")
+    for x in rows:
+        if x["set"] == "rules only":
+            say(f"  {x['q'][:28]:28} -> {x.get('rules_hash') or x.get('route') or x.get('error')}  ({x['client']} ms)")
+    return 0
+
+
 def functions_check(secrets) -> int:
     token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
     if not token:
@@ -2128,7 +2181,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-latency": ask_latency, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
              "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "followup-evals": followup_evals, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

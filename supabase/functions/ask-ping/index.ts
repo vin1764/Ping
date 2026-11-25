@@ -11,6 +11,7 @@ import { cvsText, markRoles, service } from "./marks.ts";
 import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
 import { chatComplete } from "../_shared/openai_compat.ts";
+import { timer } from "./timing.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
@@ -98,6 +99,7 @@ function payLines(md: any): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const t0 = Date.now();
+  const T = timer();
   const who = await caller(req);
   if (!who) return json({ error: "not allowed" }, 403);
   const { sb, role } = who;
@@ -117,12 +119,14 @@ Deno.serve(async (req) => {
   const groqKey = keyName === "evals" ? Deno.env.get("GROQ_API_KEY_EVALS") || "" : Deno.env.get("GROQ_API_KEY") || "";
   if (!key) return json({ error: "GEMINI_API_KEY is not set for this function" }, 500);
   const body = await req.json().catch(() => ({}));
+  T.lap("auth");
 
   // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
   // own changes on top (session_prefs: never the owner's profile, never another session's).
-  const uid = role === "demo" ? (await sb.auth.getUser()).data.user?.id : null;
+  const uid = role === "demo" ? (await T.read("auth_user", sb.auth.getUser())).data.user?.id : null;
+  T.lap("auth");
   const FIELDS = "targets,reminder_hours,list_other_roles,feed_mode,check_every_minutes,check_from,check_to";
-  let base = await sb.from("profile").select(`${FIELDS},cvs`).limit(1);
+  let base = await T.read("profile", sb.from("profile").select(`${FIELDS},cvs`).limit(1));
   // before Admin > apply-sql has added the newer columns, read the ones that exist
   if (base.error) base = await sb.from("profile").select("targets,reminder_hours,list_other_roles,cvs").limit(1) as any;
   // CV summaries (never the files): the owner's, or the demo's made-up ones
@@ -132,7 +136,7 @@ Deno.serve(async (req) => {
   let prefs: Prefs = pick(base.data?.[0]);
   if (role === "demo") {
     // the session's own answers on top of the demo profile, field by field
-    let own = await sb.from("session_prefs").select(FIELDS).limit(1);
+    let own = await T.read("session_prefs", sb.from("session_prefs").select(FIELDS).limit(1));
     if (own.error) own = await sb.from("session_prefs").select("targets,reminder_hours,list_other_roles").limit(1) as any;
     const o: any = own.data?.[0] || {};
     for (const k of FIELDS.split(",")) if (o[k] != null) (prefs as any)[k] = o[k];
@@ -142,14 +146,15 @@ Deno.serve(async (req) => {
   const LISTS = "not_interested_companies,interested_companies,hidden_roles,shown_roles,prefs_undo";
   const emptyLists = { not_interested_companies: [], interested_companies: [], hidden_roles: [], shown_roles: [], prefs_undo: null } as any;
   const listsOf = (o: any) => Object.fromEntries(LISTS.split(",").map((k) => [k, o?.[k] ?? emptyLists[k]]));
-  let baseLists = await sb.from("profile").select(LISTS).limit(1);
+  let baseLists = await T.read("profile_lists", sb.from("profile").select(LISTS).limit(1));
   if (baseLists.error) baseLists = await sb.from("profile").select("not_interested_companies,interested_companies").limit(1) as any;
   let fbLists: any = listsOf(baseLists.data?.[0]);
   if (role === "demo") {
-    const own = await sb.from("session_prefs").select(LISTS).limit(1);
+    const own = await T.read("session_lists", sb.from("session_prefs").select(LISTS).limit(1));
     const o: any = own.data?.[0] || {};
     for (const k of LISTS.split(",")) if (o[k] != null) fbLists[k] = o[k];
   }
+  T.lap("prefs");
   const saveLists = async (next: any) => {
     if (role === "owner") {
       const up = await sb.from("profile").update(next).eq("id", 1).select("id");
@@ -184,7 +189,7 @@ Deno.serve(async (req) => {
   // Demo sessions share the Gemini quota with everyone trying the demo: 15 questions per session per hour and
   // 100 per hour for all demo sessions together (counted in the database; no question text is kept).
   if (role === "demo") {
-    const { data: take, error: takeErr } = await sb.rpc("demo_take_question");
+    const { data: take, error: takeErr } = await T.read("demo_limit", sb.rpc("demo_take_question"));
     if (takeErr) console.error(JSON.stringify({ event: "demo_limit_check_failed", error: takeErr.message }));
     else if (take && take.ok === false) {
       console.log(JSON.stringify({ event: "demo_limited", why: take.why, session: take.session, all: take.all }));
@@ -197,6 +202,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  T.lap("demo_limit");
   // "piramal not relevant", "hide Groww", "show Zeta again", "undo": by rules (works with the model down), saved,
   // one line back with an Undo button
   if (Rules.feedbackLike(question)) {
@@ -300,8 +306,9 @@ Deno.serve(async (req) => {
   // The thread so far, from the database (never from the page): this login's last messages, oldest first.
   // The owner reads its own thread; a demo session only its own messages (database rules). The page saves the
   // new question before asking, so it's dropped here if it's the newest message.
-  const thread = await sb.from("chat_messages").select("role,text,created_at")
-    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2);
+  T.lap("prefs_parse");
+  const thread = await T.read("thread", sb.from("chat_messages").select("role,text,created_at")
+    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2));
   if (thread.error) console.error(JSON.stringify({ event: "read_failed", table: "chat_messages", error: thread.error.message }));
   const earlier = (thread.data || []).slice();
   if (earlier[0]?.role === "me" && earlier[0].text.trim() === question.trim()) earlier.shift();
@@ -316,12 +323,14 @@ Deno.serve(async (req) => {
   }
   const lastQuestion = [...kept].reverse().find((m) => m.role === "me")?.text || "";
 
+  T.lap("thread");
   const [items, roles, profile] = await Promise.all([
-    sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
-      .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150),
-    sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400),
-    sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1),
+    T.read("items(feed)", sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
+      .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150)),
+    T.read("roles", sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400)),
+    T.read("profile(student)", sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1)),
   ]);
+  T.lap("core_reads");
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
@@ -332,14 +341,16 @@ Deno.serve(async (req) => {
   const rmarks = hasTargets
     ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks
     : new Map();
+  T.lap("marks");
   const [allItems, allNotices, lastRun] = await Promise.all([
-    sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
+    T.read("items(rules)", sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
       "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
       "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,sort_at").eq("dismissed", false)
-      .order("first_seen", { ascending: false }).limit(1000),
-    sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).limit(1000),
-    sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1),
+      .order("first_seen", { ascending: false }).limit(1000)),
+    T.read("notices(rules)", sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).limit(1000)),
+    T.read("runs", sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1)),
   ]);
+  T.lap("rules_reads");
   for (const [name, r] of [["items(rules)", allItems], ["notices(rules)", allNotices], ["runs", lastRun]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
@@ -391,17 +402,20 @@ Deno.serve(async (req) => {
     }
     return { error: "no model answer" };
   };
+  T.lap("build_facts");
   const understood = MODEL_STEPS && !noAiEarly && (groqKey || key) && !Rules.feedbackLike(ask)
     ? await U.understand({ question: ask, turns: kept.map((m) => ({ role: m.role, text: m.text })), data: factsData, Rules,
                            call: (p: string) => modelCall(p, UNDERSTAND_MS), capMs: UNDERSTAND_MS })
     : null;
   const askUnderstood = understood?.u ? U.augment(askRoute, understood.u, factsData, Rules) : askRoute;
+  T.lap("model_read");
   const routed = Rules.route(askUnderstood, previous, factsData);
+  T.lap("route");
   // the details a FACT answer about a company needs (pay, bond, departments, backlogs), for those companies only
   const withDetails = async (hits: any[]) => {
     const raw = [...new Set(hits.flatMap((e: any) => [...e.raw]))];
     if (!raw.length) return;
-    const d = await sb.from("roles").select("id,more_details,allowed,backlog_rule,contract").in("company", raw).limit(60);
+    const d = await T.read("roles(details)", sb.from("roles").select("id,more_details,allowed,backlog_rule,contract").in("company", raw).limit(60));
     if (d.error) console.error(JSON.stringify({ event: "read_failed", table: "roles(facts)", error: d.error.message }));
     const byId = new Map((d.data || []).map((x: any) => [x.id, x]));
     factsData.roles = factsData.roles.map((r: any) => byId.has(r.id)
@@ -415,16 +429,16 @@ Deno.serve(async (req) => {
     const word = (hits[0]?.words || []).find((w: string) => w.length >= 4) || "";
     const like = word ? `,text.ilike.%${word.replace(/[%_,()]/g, "")}%` : "";
     const [nt, em, fo] = await Promise.all([
-      sb.from("notices").select("id,notice_id,year,company,subject,text,notice_time,has_attachment")
-        .or(`company.in.(${raw.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})${like}`).order("notice_time", { ascending: false }).limit(40),
-      sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400),
-      sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400),
+      T.read("notices(sources)", sb.from("notices").select("id,notice_id,year,company,subject,text,notice_time,has_attachment")
+        .or(`company.in.(${raw.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})${like}`).order("notice_time", { ascending: false }).limit(40)),
+      T.read("emails(sources)", sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400)),
+      T.read("forms(sources)", sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400)),
     ]);
     for (const [name, r] of [["notices(sources)", nt], ["emails(sources)", em], ["forms(sources)", fo]] as const) {
       if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
     }
     const ids = (nt.data || []).map((n: any) => n.id);
-    const ck = ids.length ? await sb.from("pdf_checks").select("notice_id,status,context").in("notice_id", ids) : { data: [] as any[] };
+    const ck = ids.length ? await T.read("pdf_checks(sources)", sb.from("pdf_checks").select("notice_id,status,context").in("notice_id", ids)) : { data: [] as any[] };
     const byId = new Map((nt.data || []).map((n: any) => [n.id, n]));
     factsData.notices = [...(nt.data || []), ...factsData.notices.filter((n: any) => !byId.has(n.id))];
     // a student list's check keeps only your row: its text never leaves here; a JD's text does
@@ -434,20 +448,30 @@ Deno.serve(async (req) => {
   };
   if (routed.kind !== "open") {
     await Promise.all([withDetails(routed.spec?.hits || []), withSources(routed.spec?.hits || [])]);
+    T.lap("sources");
     const out = Rules.routed(routed, askUnderstood, factsData);
+    T.lap("answer");
     // 3. the model words the reply from the rules' answer only; kept if every date, time, number, name, status and
     //    link in it is in that answer and no link is dropped (U.verify), else the rules' answer as it is
     const names = Rules.entities(factsData).map((e: any) => e.name);
+    let callMs = 0;
     const composed = MODEL_STEPS && !noAiEarly && (groqKey || key) && out.recheck === undefined
       ? await U.compose({ question: ask, answer: out.text, data: factsData, companyNames: names,
-                          call: (p: string) => modelCall(p, COMPOSE_MS), capMs: COMPOSE_MS })
+                          call: async (p: string) => { const s = Date.now(); try { return await modelCall(p, COMPOSE_MS); } finally { callMs = Date.now() - s; } },
+                          capMs: COMPOSE_MS })
       : null;
+    T.lap("model_reply");
+    if (composed && composed.ms) T.move("model_reply", "fact_check", Math.max(0, composed.ms - callMs));
     const text = composed?.used ? composed.text : out.text;
+    const timing = T.out();
+    // the rules' answer's fingerprint (before any rewording): Admin > ask-latency compares it across versions
+    const rulesHash = [...new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(out.text)))]
+      .slice(0, 6).map((b) => b.toString(16).padStart(2, "0")).join("");
     console.log(JSON.stringify({ event: "answered", key: keyName, role, model: composed?.used ? `rules+${composed.model}` : "rules",
       route: routed.kind, why: routed.why, intents: routed.spec?.intents || [], kind: out.kind,
       understood: understood ? { ok: !!understood.u, ms: understood.ms, model: understood.model, why: understood.why, added: askUnderstood !== askRoute } : null,
-      composed: composed ? { used: composed.used, ms: composed.ms, why: composed.why || null } : null, ms: Date.now() - t0 }));
-    return json({ answer: saved ? `${saved}\n\n${text}` : text, model: composed?.used ? `rules+${composed.model}` : "rules", route: routed.kind,
+      composed: composed ? { used: composed.used, ms: composed.ms, why: composed.why || null } : null, ms: Date.now() - t0, timing }));
+    return json({ answer: saved ? `${saved}\n\n${text}` : text, model: composed?.used ? `rules+${composed.model}` : "rules", route: routed.kind, timing, rules_hash: rulesHash,
                   understood: understood ? { ...understood.u, ms: understood.ms, fell: understood.fell, why: understood.why } : null,
                   asked_as: askUnderstood, composed: composed ? { used: composed.used, ms: composed.ms, why: composed.why || null } : null,
                   ...(out.recheck !== undefined ? { recheck: out.recheck, companies: out.companies } : {}),

@@ -363,3 +363,11 @@ messages and 1,201 chat messages; the newest message, a to-do found minutes ago 
 bottom of the chat, a form posted 20 days ago and still open is in To do (not drawn 20 days up in the chat); the chat
 opens in 0.28 s here, reading 407 rows in 11 requests; scrolling up reads older ones. The same test on the page before
 these changes fails (the newest message never appears).
+- Live check (Admin live-page on the published page, a demo session): 14/14 after two fixes it caught. Scrolling up
+  reads earlier messages only on a scroll upward (the page moving itself to the bottom set it off and redrew the
+  chat as a message arrived), and every message read as part of the window is drawn whatever its notice's time (a
+  first check finds two weeks of notices at once; the time filter hid most of the window). Its Check now step
+  expected the wording from before 24 Nov and now checks for the items bubble or the "Nothing new" toast.
+- Line order: the paged reads have a fixed order (roles in ERP order, items newest first then by id); before, rows
+  came in storage order, which moves as the hourly run updates them. Three demo answers ("slice ctc breakdown",
+  "navi roles", "is phyagents test today") have the same lines in another order; nothing else changed.

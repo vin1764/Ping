@@ -2015,7 +2015,7 @@ def chat_gaps(secrets) -> int:
         if it.get("dismissed") or not posting.actionable(it, now) or it["id"] in skip:
             continue
         held = it["id"] in silenced and it.get("level") == "hidden" and "grouped" not in str((it.get("details") or {}).get("hidden_because"))
-        unseen = it["id"] not in seen_window and posting.in_chat(it) and not (it.get("details") or {}).get("reposted_at")
+        unseen = it["id"] not in seen_window and posting.in_chat(it)      # a repost of it was just as unseen
         if not (held or unseen):
             continue
         k = posting.post_key(it)

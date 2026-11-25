@@ -2373,8 +2373,16 @@
     const rp = state.replyTo;
     if (rp) { mine.reply_to = rp.key; mine.reply_quote = { sender: rp.sender, text: rp.text }; clearReply(); }
     const backQuote = { reply_to: msgKey("me", mine.created_at), reply_quote: { sender: "You", text: q.slice(0, 160) } };
-    // a FACT question: answered at once from the page's own data, no typing bubble (in the demo, once the roles'
-    // details are in: they arrive within a second of opening)
+    // the question shows at once; the typing dots too if deciding takes more than a moment (the roles' details still
+    // loading) and as soon as it goes to Ask Ping's function. A FACT question answered here never shows them.
+    appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
+    thread.scrollTop = thread.scrollHeight;
+    let wait = null;
+    const dots = () => wait || (wait = appendToday(inner, h("div", { class: "msg ping typing enter", role: "status", "aria-label": "Ping is typing" },
+      h("span", { class: "dot" }), h("span", { class: "dot" }), h("span", { class: "dot" }))), thread.scrollTop = thread.scrollHeight, wait);
+    const dotsSoon = setTimeout(dots, 150);
+    // a FACT question: answered at once from the page's own data (in the demo, once the roles' details are in: they
+    // arrive within a second of opening)
     if (state.details) { state.startDetails?.(); await state.details; }
     // "check again", "are you sure?", "I got a call": the previous question, read again from the ERP now
     const RR = window.PingRules;
@@ -2386,11 +2394,14 @@
     const kind = !rp ? kindAnswer(q) : null;
     const feedback = !kind && !!RR?.feedbackLike(q);
     const direct = rp && P && !feedback ? P.answer(q, rp.anchor, { isFilled: (k) => !!FORMS?.isFilled(state.formStatus, k), when }) : null;
+    const noDots = () => { clearTimeout(dotsSoon); wait?.remove(); };
+    if (direct?.recheck) noDots();
     if (direct?.recheck) return recheckFlow(q, { kind: "recheck", companies: rp.anchor.companies }, mine, { input, inner, thread, btn }, backQuote);
     const named = rp && RR ? RR.matchCompanies(q, factsOf(state.data), RR.entities(factsOf(state.data))).hits.length : 0;
     const qRoute = rp && !named && rp.anchor.companies.length ? `${q} ${rp.anchor.companies.map((c) => RR.shortName(c)).join(" ")}` : q;
     const replyCtx = rp ? { sender: rp.anchor.sender, text: rp.anchor.text, companies: rp.anchor.companies } : null;
     const rr = RR && state.data && !feedback && !kind ? RR.route(qRoute, previousQuestions(q), factsOf(state.data)) : null;
+    if (rr?.kind === "recheck") noDots();
     if (rr?.kind === "recheck") return recheckFlow(q, rr, mine, { input, inner, thread, btn }, rp ? backQuote : null);
     // forms: "which forms haven't I filled?", "did I fill the Groww form?", "mark the Piramal form as filled" (the
     // last ticks it: your own record, never the ERP or the form)
@@ -2400,8 +2411,8 @@
     const local = kind ? { text: kind } : direct?.text ? { text: direct.text } : fq ? { text: fq.text } : feedback ? {} : localFact(qRoute);
     if (local.text) local.text = withStale(local.text, rr);
     if (local.text) {
+      clearTimeout(dotsSoon); wait?.remove();
       state.chat.push(mine);
-      appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
       const reply = { role: "ping", text: local.text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString(), ...(rp ? backQuote : {}) };
       state.chat.push(reply);
       const b = textBubble("ping", reply.text, reply.created_at, true, quoteOf(reply));
@@ -2418,9 +2429,7 @@
       return;
     }
     state.chat.push(mine);
-    appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
-    const wait = appendToday(inner, h("div", { class: "msg ping typing enter", role: "status", "aria-label": "Ping is typing" },
-      h("span", { class: "dot" }), h("span", { class: "dot" }), h("span", { class: "dot" })));
+    clearTimeout(dotsSoon); dots();
     // a long answer never looks frozen: after 4 s the dots say so
     const slow = setTimeout(() => {
       if (!wait.isConnected) return;
@@ -2428,8 +2437,9 @@
       wait.append(h("span", { class: "thinking" }, "still thinking…"));
     }, 4000);
     thread.scrollTop = thread.scrollHeight;
-    // saved before asking: Ask Ping reads the thread (for follow-ups like "nothing else?") from the database
-    await state.src.addChat(mine).catch(() => {});
+    // saved while asking (not before: one wait less): Ask Ping reads the thread from the database and leaves out the
+    // question itself if it's already there, so the answer is the same either way
+    const savedQ = state.src.addChat(mine).catch(() => {});
     let answer;
     state.sending = (state.sending || 0) + 1;
     // the typing bubble shows at least briefly, even for an answer that comes back at once
@@ -2619,8 +2629,7 @@
   async function recheckFlow(q, rr, mine, { input, inner, thread, btn }, backQuote = null) {
     const R = window.PingRules;
     const release = () => { state.waiting = false; btn.removeAttribute("aria-busy"); btn.replaceChildren(ICON_SEND()); btn.disabled = !input.value.trim(); };
-    state.chat.push(mine);
-    appendToday(inner, textBubble("me", q, mine.created_at, true, quoteOf(mine)));
+    state.chat.push(mine);                         // the question is on screen already (send)
     await state.src.addChat(mine).catch(() => {});
     const company = rr.companies[0] || null;
     const name = company ? R.shortName(company) : "";

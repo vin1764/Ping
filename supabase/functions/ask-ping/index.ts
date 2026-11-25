@@ -12,6 +12,7 @@ import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
 import { chatComplete } from "../_shared/openai_compat.ts";
 import { timer } from "./timing.ts";
+import { freshKey, keep, peek } from "./cache.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
@@ -23,6 +24,7 @@ const U = (globalThis as any).PingUnderstand;
 const MODEL_STEPS = (Deno.env.get("PING_MODEL_STEPS") || "on") === "on";
 const UNDERSTAND_MS = 3_000;         // reading the question: past this, the rules alone route it
 const COMPOSE_MS = 2_500;            // wording the reply: past this, the rules' answer is sent as it is
+const SHORT_REPLY = 160;             // a one-line reply this short is sent as the rules wrote it (no rewording)
 
 // Gemini, for the big-context jobs (re-marking every role when your targets change: one call for all of them,
 // cached in role_marks). flash-lite first: flash-latest answered 0 of 7 calls on 23 Nov.
@@ -96,8 +98,58 @@ function payLines(md: any): string {
     .map(([k, v]) => `${k}: ${String(v).trim()}`).join("; ").slice(0, 1200);
 }
 
+// The student profile the answers use (department, CGPA, backlogs, lists): read each time, never kept
+const studentProfile = (sb: any) => sb.from("profile")
+  .select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1);
+
+// The data an answer is built from: the same reads as before, now asked at once, and the heavy ones (roles, items,
+// notices, mail, forms) from this instance's copy while its freshness key matches the database (cache.ts). The probe
+// (the latest run; the number and newest of your undismissed items) and the student profile are read every time.
+async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>) {
+  const heavy = () => Promise.all([
+    T.read("items(feed)", sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
+      .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150)),
+    T.read("roles", sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400)),
+    T.read("items(rules)", sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
+      "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
+      "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,sort_at").eq("dismissed", false)
+      .order("first_seen", { ascending: false }).limit(1000)),
+    T.read("notices(rules)", sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).limit(1000)),
+    T.read("emails", sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400)),
+    T.read("forms", sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400)),
+  ]);
+  const kept = peek(scope);
+  const pHeavy = kept ? null : heavy();                 // no copy to try: read it all now, beside the probe
+  const [run, fresh, profile] = await Promise.all([
+    T.read("runs", sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1)),
+    T.read("freshness", sb.from("items").select("first_seen", { count: "exact" }).eq("dismissed", false)
+      .order("first_seen", { ascending: false }).limit(1)),
+    T.read("profile(student)", studentProfile(sb)),
+  ]);
+  const key = run.error || fresh.error ? null : freshKey(run.data?.[0], fresh.count ?? null, fresh.data?.[0]?.first_seen ?? null);
+  let parts: any[];
+  let cached = false;
+  if (kept && key && kept.key === key) { parts = kept.data; cached = true; }
+  else {
+    parts = await (pHeavy || heavy());
+    keep(scope, parts.some((r: any) => r.error) ? null : key, parts);
+  }
+  type Rows = { data: any[] | null; error: any };
+  const [items, roles, allItems, allNotices, emails, forms] = parts as Rows[];
+  return { items, roles, allItems, allNotices, emails, forms, lastRun: run, profile, key: cached || key ? key : null, cached };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  // the scheduler's warm-up during check hours (sql/schedule.sql, ping-ask-warm): keeps an instance booted, with its
+  // connection to the database open, so a question doesn't wait for a cold start. Reads nothing, answers nothing.
+  const cron = Deno.env.get("PING_CRON_SECRET") || "";
+  if (cron && req.headers.get("x-ping-cron") === cron && req.headers.get("x-ping-warm") === "1") {
+    const t = Date.now();
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/`, { headers: { apikey: Deno.env.get("PING_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "" } })
+      .then((r) => r.body?.cancel()).catch(() => {});
+    return json({ warm: true, ms: Date.now() - t, ...timer().out() });
+  }
   const t0 = Date.now();
   const T = timer();
   const who = await caller(req);
@@ -121,12 +173,30 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   T.lap("auth");
 
+  // Everything this request reads that doesn't depend on what's asked goes out at once (one wait, not ten): who the
+  // demo session is, the preferences and lists, the demo limit, the thread, and the data the answer is built from
+  // (the heavy part from this instance's copy while it's still current: cache.ts).
+  const FIELDS = "targets,reminder_hours,list_other_roles,feed_mode,check_every_minutes,check_from,check_to";
+  const LISTS = "not_interested_companies,interested_companies,hidden_roles,shown_roles,prefs_undo";
+  const question = String(body?.question || "");
+  const asking = body?.marks !== true && !!question && question.length <= 500;
+  const none = Promise.resolve(null as any);
+  const pUser = role === "demo" ? T.read("auth_user", sb.auth.getUser()) : none;
+  const pBase = T.read("profile", sb.from("profile").select(`${FIELDS},cvs`).limit(1));
+  const pOwn = role === "demo" ? T.read("session_prefs", sb.from("session_prefs").select(FIELDS).limit(1)) : none;
+  const pBaseLists = T.read("profile_lists", sb.from("profile").select(LISTS).limit(1));
+  const pOwnLists = role === "demo" ? T.read("session_lists", sb.from("session_prefs").select(LISTS).limit(1)) : none;
+  // the demo's limit counts a question: only for a question this function will answer
+  const pTake = asking && role === "demo" ? T.read("demo_limit", sb.rpc("demo_take_question")) : none;
+  const pThread = asking ? T.read("thread", sb.from("chat_messages").select("role,text,created_at")
+    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2)) : none;
+  const scope = role === "owner" ? "owner" : "demo";
+  const pData = asking ? loadData(sb, scope, T) : none;
+
   // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
   // own changes on top (session_prefs: never the owner's profile, never another session's).
-  const uid = role === "demo" ? (await T.read("auth_user", sb.auth.getUser())).data.user?.id : null;
-  T.lap("auth");
-  const FIELDS = "targets,reminder_hours,list_other_roles,feed_mode,check_every_minutes,check_from,check_to";
-  let base = await T.read("profile", sb.from("profile").select(`${FIELDS},cvs`).limit(1));
+  const uid = role === "demo" ? (await pUser)?.data?.user?.id : null;
+  let base = await pBase;
   // before Admin > apply-sql has added the newer columns, read the ones that exist
   if (base.error) base = await sb.from("profile").select("targets,reminder_hours,list_other_roles,cvs").limit(1) as any;
   // CV summaries (never the files): the owner's, or the demo's made-up ones
@@ -136,21 +206,20 @@ Deno.serve(async (req) => {
   let prefs: Prefs = pick(base.data?.[0]);
   if (role === "demo") {
     // the session's own answers on top of the demo profile, field by field
-    let own = await T.read("session_prefs", sb.from("session_prefs").select(FIELDS).limit(1));
+    let own = await pOwn;
     if (own.error) own = await sb.from("session_prefs").select("targets,reminder_hours,list_other_roles").limit(1) as any;
     const o: any = own.data?.[0] || {};
     for (const k of FIELDS.split(",")) if (o[k] != null) (prefs as any)[k] = o[k];
   }
   // Your feedback lists (hidden / always-shown companies and roles): the owner's profile, or for a demo session its
   // own copy on top of the demo profile's
-  const LISTS = "not_interested_companies,interested_companies,hidden_roles,shown_roles,prefs_undo";
   const emptyLists = { not_interested_companies: [], interested_companies: [], hidden_roles: [], shown_roles: [], prefs_undo: null } as any;
   const listsOf = (o: any) => Object.fromEntries(LISTS.split(",").map((k) => [k, o?.[k] ?? emptyLists[k]]));
-  let baseLists = await T.read("profile_lists", sb.from("profile").select(LISTS).limit(1));
+  let baseLists = await pBaseLists;
   if (baseLists.error) baseLists = await sb.from("profile").select("not_interested_companies,interested_companies").limit(1) as any;
   let fbLists: any = listsOf(baseLists.data?.[0]);
   if (role === "demo") {
-    const own = await T.read("session_lists", sb.from("session_prefs").select(LISTS).limit(1));
+    const own = await pOwnLists;
     const o: any = own.data?.[0] || {};
     for (const k of LISTS.split(",")) if (o[k] != null) fbLists[k] = o[k];
   }
@@ -175,7 +244,6 @@ Deno.serve(async (req) => {
     const { prefs_undo: _u, ...shown } = fbLists;
     return json({ prefs, marks: Object.fromEntries(marks), lists: shown });
   }
-  const question = String(body?.question || "");
   if (!question || question.length > 500) return json({ error: "ask a question (max 500 characters)" }, 400);
   // a reply: the message it quotes travels on its own (it never counts against the question's length)
   const reply = body?.reply && typeof body.reply === "object" ? {
@@ -189,7 +257,7 @@ Deno.serve(async (req) => {
   // Demo sessions share the Gemini quota with everyone trying the demo: 15 questions per session per hour and
   // 100 per hour for all demo sessions together (counted in the database; no question text is kept).
   if (role === "demo") {
-    const { data: take, error: takeErr } = await T.read("demo_limit", sb.rpc("demo_take_question"));
+    const { data: take, error: takeErr } = await pTake;
     if (takeErr) console.error(JSON.stringify({ event: "demo_limit_check_failed", error: takeErr.message }));
     else if (take && take.ok === false) {
       console.log(JSON.stringify({ event: "demo_limited", why: take.why, session: take.session, all: take.all }));
@@ -307,8 +375,7 @@ Deno.serve(async (req) => {
   // The owner reads its own thread; a demo session only its own messages (database rules). The page saves the
   // new question before asking, so it's dropped here if it's the newest message.
   T.lap("prefs_parse");
-  const thread = await T.read("thread", sb.from("chat_messages").select("role,text,created_at")
-    .order("created_at", { ascending: false }).limit(HISTORY_TURNS + 2));
+  const thread = await pThread;
   if (thread.error) console.error(JSON.stringify({ event: "read_failed", table: "chat_messages", error: thread.error.message }));
   const earlier = (thread.data || []).slice();
   if (earlier[0]?.role === "me" && earlier[0].text.trim() === question.trim()) earlier.shift();
@@ -324,13 +391,11 @@ Deno.serve(async (req) => {
   const lastQuestion = [...kept].reverse().find((m) => m.role === "me")?.text || "";
 
   T.lap("thread");
-  const [items, roles, profile] = await Promise.all([
-    T.read("items(feed)", sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
-      .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150)),
-    T.read("roles", sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400)),
-    T.read("profile(student)", sb.from("profile").select("department,degree,cgpa,active_backlogs,interested_companies,not_interested_companies,targets,list_other_roles").limit(1)),
-  ]);
-  T.lap("core_reads");
+  const D = (await pData) as Awaited<ReturnType<typeof loadData>>;
+  const { items, roles, allItems, allNotices, lastRun, emails: emailsAll, forms: formsAll } = D;
+  // preferences just saved from this message: the student profile is read again after the save, as before
+  const profile = parsed.kind !== "none" && parsed.kind !== "show" ? await T.read("profile(student)", studentProfile(sb)) : D.profile;
+  T.lap("data_reads");
   for (const [name, r] of [["items", items], ["roles", roles], ["profile", profile]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
@@ -338,19 +403,15 @@ Deno.serve(async (req) => {
   // files, placement mail and form pages, and knows the conversation): no separate shortcut
   // ---- the router: FACT questions are answered here by rules, with no model call (answer_rules.js route)
   const hasTargets = !!prefs.targets && prefs.feed_mode !== "all";
-  const rmarks = hasTargets
-    ? (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks
+  // the "For you" marks (the role_marks cache, keyed by the roles' text and your targets): kept with the data copy
+  const marksKey = hasTargets && D.key ? `${scope}|${D.key}|${prefs.targets}|${cvs}` : null;
+  const keptMarks = marksKey ? peek(`marks:${scope}`) : null;
+  const rmarks: Map<string, any> = hasTargets
+    ? (keptMarks && keptMarks.key === marksKey ? keptMarks.data
+      : (await markRoles((roles.data || []).filter((r: any) => r.eligible !== false), prefs.targets!, [], "", 0, cvs)).marks)
     : new Map();
+  if (hasTargets && rmarks.size && !(keptMarks && keptMarks.key === marksKey)) keep(`marks:${scope}`, marksKey, rmarks);
   T.lap("marks");
-  const [allItems, allNotices, lastRun] = await Promise.all([
-    T.read("items(rules)", sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
-      "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
-      "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,sort_at").eq("dismissed", false)
-      .order("first_seen", { ascending: false }).limit(1000)),
-    T.read("notices(rules)", sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).limit(1000)),
-    T.read("runs", sb.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1)),
-  ]);
-  T.lap("rules_reads");
   for (const [name, r] of [["items(rules)", allItems], ["notices(rules)", allNotices], ["runs", lastRun]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
   }
@@ -417,7 +478,7 @@ Deno.serve(async (req) => {
     if (!raw.length) return;
     const d = await T.read("roles(details)", sb.from("roles").select("id,more_details,allowed,backlog_rule,contract").in("company", raw).limit(60));
     if (d.error) console.error(JSON.stringify({ event: "read_failed", table: "roles(facts)", error: d.error.message }));
-    const byId = new Map((d.data || []).map((x: any) => [x.id, x]));
+    const byId = new Map<any, any>((d.data || []).map((x: any) => [x.id, x]));
     factsData.roles = factsData.roles.map((r: any) => byId.has(r.id)
       ? { ...r, pay: byId.get(r.id).more_details?.fields || {}, allowed: byId.get(r.id).allowed, backlog_rule: byId.get(r.id).backlog_rule } : r);
   };
@@ -428,12 +489,9 @@ Deno.serve(async (req) => {
     if (!raw.length) return;
     const word = (hits[0]?.words || []).find((w: string) => w.length >= 4) || "";
     const like = word ? `,text.ilike.%${word.replace(/[%_,()]/g, "")}%` : "";
-    const [nt, em, fo] = await Promise.all([
-      T.read("notices(sources)", sb.from("notices").select("id,notice_id,year,company,subject,text,notice_time,has_attachment")
-        .or(`company.in.(${raw.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})${like}`).order("notice_time", { ascending: false }).limit(40)),
-      T.read("emails(sources)", sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400)),
-      T.read("forms(sources)", sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400)),
-    ]);
+    const nt = await T.read("notices(sources)", sb.from("notices").select("id,notice_id,year,company,subject,text,notice_time,has_attachment")
+        .or(`company.in.(${raw.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})${like}`).order("notice_time", { ascending: false }).limit(40));
+    const em = emailsAll, fo = formsAll;          // read with the rest of the data (the same reads)
     for (const [name, r] of [["notices(sources)", nt], ["emails(sources)", em], ["forms(sources)", fo]] as const) {
       if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
     }
@@ -455,7 +513,8 @@ Deno.serve(async (req) => {
     //    link in it is in that answer and no link is dropped (U.verify), else the rules' answer as it is
     const names = Rules.entities(factsData).map((e: any) => e.name);
     let callMs = 0;
-    const composed = MODEL_STEPS && !noAiEarly && (groqKey || key) && out.recheck === undefined
+    const short = out.text.length <= SHORT_REPLY && !out.text.includes("\n");
+    const composed = MODEL_STEPS && !noAiEarly && (groqKey || key) && out.recheck === undefined && !short
       ? await U.compose({ question: ask, answer: out.text, data: factsData, companyNames: names,
                           call: async (p: string) => { const s = Date.now(); try { return await modelCall(p, COMPOSE_MS); } finally { callMs = Date.now() - s; } },
                           capMs: COMPOSE_MS })
@@ -483,6 +542,7 @@ Deno.serve(async (req) => {
   let names = mentioned(ask, companies).slice(0, 6);
   if (!names.length && lastQuestion) names = mentioned(lastQuestion, companies).slice(0, 6);
   const since = new Date(asOf.getTime() - 21 * 86_400_000).toISOString();
+  // the role details the rules' facts need (withDetails) are read beside these, not after them
   const [detail, lists, notices] = await Promise.all([
     names.length
       ? sb.from("roles").select("company,designation,more_details,bond,contract,backlog_rule,cgpa_cutoff,allowed," +
@@ -495,6 +555,7 @@ Deno.serve(async (req) => {
       ? sb.from("notices").select("company,subject,notice_time,text").in("company", names.map((n) => n.toUpperCase())
           .concat(names)).order("notice_time", { ascending: false }).limit(6)
       : Promise.resolve({ data: [] as any[], error: null }),
+    withDetails(routed.spec?.hits || []),
   ]);
   for (const [name, r] of [["roles(details)", detail], ["list results", lists], ["notices", notices]] as const) {
     if (r.error) console.error(JSON.stringify({ event: "read_failed", table: name, error: r.error.message }));
@@ -527,7 +588,6 @@ Deno.serve(async (req) => {
     ? Rules.dueBlocks(factsData, asOf.getTime(), asOf.getTime() + 7 * 86_400_000).join("\n\n") : "";
   // what the rules make of this question (the router's reading of it, a follow-up included): the model phrases, the
   // rules count
-  await withDetails(routed.spec?.hits || []);
   const ruledFacts = routed.spec && (routed.spec.intents?.length || routed.spec.hits?.length)
     ? Rules.answer(ask, factsData, routed.spec).text : "";
   const roleLines = (roles.data || []).map((r) =>
@@ -656,8 +716,11 @@ ${convo || "(this is the first message)"}
 Question: ${ask}${replyNote}`;
 
   // every model try ("groq/openai/gpt-oss-120b:200:1830ms"), so the page's checks can score each provider
-  const done = (answer: string, model: string, extra: Record<string, unknown> = {}) =>
-    json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, tried, ...extra, ...(saved ? { prefs, prefs_changed: true } : {}) });
+  T.lap("open_prep");
+  const done = (answer: string, model: string, extra: Record<string, unknown> = {}) => {
+    T.lap("open_model");
+    return json({ answer: saved ? `${saved}\n\n${answer}` : answer, model, tried, timing: T.out(), ...extra, ...(saved ? { prefs, prefs_changed: true } : {}) });
+  };
   const tried: string[] = [];
   // one call: the answer, or why there is none ("busy" may be retried)
   const call = async (model: string, limit: number): Promise<{ answer?: string; busy: boolean }> => {

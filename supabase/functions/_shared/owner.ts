@@ -21,10 +21,10 @@ function client(req: Request) {
 
 // Who is calling: the owner (real rows), a one-click demo session (anonymous sign-in: the anonymised demo
 // rows only, read-only, by the database's own rules), or nobody.
+// Both checks are asked at once (one round trip, not two); the owner check still wins, as before.
 export async function caller(req: Request) {
   const sb = client(req);
-  const owner = await sb.rpc("is_ping_owner");
+  const [owner, demo] = await Promise.all([sb.rpc("is_ping_owner"), sb.rpc("is_ping_demo")]);
   if (!owner.error && owner.data === true) return { sb, role: "owner" as const };
-  const demo = await sb.rpc("is_ping_demo");
   return !demo.error && demo.data === true ? { sb, role: "demo" as const } : null;
 }

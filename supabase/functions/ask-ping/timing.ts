@@ -17,7 +17,8 @@ export function timer() {
       last = n;
     },
     // a database read (a query builder is a thenable): its own time, whatever runs beside it
-    read<T>(name: string, q: PromiseLike<T>): Promise<T> {
+    // deno-lint-ignore no-explicit-any
+    read(name: string, q: PromiseLike<any>): Promise<any> {
       const s = Date.now();
       return Promise.resolve(q).then((r) => { reads[name] = (reads[name] || 0) + (Date.now() - s); return r; });
     },

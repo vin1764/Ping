@@ -1714,7 +1714,8 @@ def schedule_setup(secrets) -> int:
         end $$;""")
     say("the same secret stored in the database's Vault as ping_cron_secret")
     sql = (ROOT / "sql" / "schedule.sql").read_text(encoding="utf-8").replace("{{FUNCTION_URL}}", _function_url(secrets, "kick-run")) \
-        .replace("{{PUSH_URL}}", _function_url(secrets, "send-push"))
+        .replace("{{PUSH_URL}}", _function_url(secrets, "send-push")) \
+        .replace("{{ASK_URL}}", _function_url(secrets, "ask-ping"))
     sa.run_sql(secrets.supabase_url, token, sql)
     jobs = sa.run_sql(secrets.supabase_url, token, "select jobname, schedule, active from cron.job order by jobname")
     for j in jobs:

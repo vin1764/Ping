@@ -1472,7 +1472,14 @@
       if (quick.hidden !== !jump.hidden) quick.hidden = !jump.hidden;
     };
     thread.addEventListener("scroll", syncJump, { passive: true });
-    thread.addEventListener("scroll", () => { if (thread.scrollTop < 150 && thread.scrollHeight > thread.clientHeight) loadEarlier(); }, { passive: true });
+    // scrolling up near the top reads earlier messages: only a scroll upward (yours), never the page moving to the
+    // bottom or a short thread sitting near its top
+    let lastTop = thread.scrollTop;
+    thread.addEventListener("scroll", () => {
+      const up = thread.scrollTop < lastTop;
+      lastTop = thread.scrollTop;
+      if (up && thread.scrollTop < 150 && thread.scrollHeight - thread.clientHeight > 300) loadEarlier();
+    }, { passive: true });
     live.newCount = 0;
     live.firstNew = null;
     live.syncJump = syncJump;

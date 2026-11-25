@@ -172,6 +172,21 @@ def check(line: str, text: str, it: dict) -> str | None:
     dates = _dates(line) - _dates(allowed)
     if dates:
         return f"date not in the notice: {sorted(dates)[0]}"
+    # a card with a deadline or time names only that day (25 Nov: a form due Fri 27 Nov read "by 23 Nov", the
+    # notice's older date)
+    own = set()
+    for x in (it.get("due_at"), it.get("event_at")):
+        if x:
+            t = datetime.fromisoformat(str(x).replace("Z", "+00:00")).astimezone(IST)
+            own.add((t.day, t.month))
+    other = _dates(line) - own
+    if own and other:
+        return f"date is not the card's: {sorted(other)[0]}"
+    # who it's for ("Shortlisted students: ..."): those words are the notice's
+    who = re.match(r"^([^:]{3,40}):", line)
+    for w in re.findall(r"[a-z]{4,}", (who.group(1) if who else "").lower()):
+        if w not in PLAIN and w not in low:
+            return f"who not in the notice: {w}"
     wd_ok = {fmt(x)[:3].lower() for x in (it.get("due_at"), it.get("event_at")) if x}
     for w in re.findall(r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\b", line):
         if w[:3].lower() not in wd_ok and not re.search(rf"\b{w}", allowed, re.I):

@@ -435,3 +435,8 @@ example.com one, and `example` (a reserved name) reads like a mailbox's host, no
   Notices that list students (Offer, Shortlist, Result) now never go to a model; their line is the rules' ("Offers
   are out: tap to see the list (accept by ...)", "The shortlist is out: check it for your name."). The prompt also
   says never to name a person. The backfill was run again to rewrite that card.
+- **A card's line names only its own day.** In the third backfill the RISA Labs form (due Fri 27 Nov 23:59) got
+  "Submit CV via Google Form by 8:00 PM, 23 Nov 2026": the notice's older date, so the check passed it. A card with
+  a deadline or time now rejects any other date, and a "who:" prefix ("Shortlisted students: ...") must use the
+  notice's words. Result of the backfill on your cards (9 open or from the last 7 days): 7 model lines kept, 0
+  rejected, 2 rules lines (the offer and the shortlist, which never go to a model); 7 updated silently.

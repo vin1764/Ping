@@ -134,3 +134,11 @@ def test_a_notice_that_lists_students_never_goes_to_a_model():
     assert w.prompts == [] and offer["details"]["summary_by"] == "rules"
     assert "Student" not in offer["details"]["summary"] and offer["details"]["summary"].startswith("Offers are out")
     assert "Never name a student" in S.PROMPT
+
+
+def test_a_card_with_a_deadline_names_only_that_day_and_who_comes_from_the_notice():
+    it = item(due_at=DUE)
+    text = RISA_TEXT + " The earlier deadline was 23rd November 2026, 8:00 PM."
+    assert S.check("Submit your CV via the form by 8:00 PM, 23 Nov 2026.", text, it).startswith("date is not the card's")
+    assert S.check("Fill this form by Fri 27 Nov 23:59.", text, it) is None
+    assert S.check("Finalists: fill this form by Fri 27 Nov 23:59.", text, it).startswith("who not in the notice")

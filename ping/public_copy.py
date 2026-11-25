@@ -120,14 +120,20 @@ def _numbers_today() -> set[str]:
         if not f or f.endswith("demo-data.json"):
             continue
         try:
-            out |= set(_ten_digit_numbers((ROOT / f).read_text(encoding="utf-8")))
+            found = _ten_digit_numbers((ROOT / f).read_text(encoding="utf-8"))
+            out |= set(found) | {re.sub(r"\D", "", n) for n in found}     # "98765 43210" is "9876543210" too
         except (UnicodeDecodeError, OSError):
             continue
     return out
 
 
+# well-known made-up numbers (a fixture's "98765 43210", "1234567890", "9999999999"): never anyone's
+MADE_UP = {"9876543210", "0123456789", "1234567890", "9898989898"}
+
+
 def _fake(n: str) -> bool:
-    return re.sub(r"\D", "", n).startswith("90000")
+    d = re.sub(r"\D", "", n)
+    return d.startswith("90000") or d in MADE_UP or len(set(d)) == 1
 
 
 # an institute roll number (22XY10042); the made-up ones used in today's tests are kept
@@ -161,7 +167,7 @@ def history_values(repo: Path) -> tuple[set[str], set[str], set[str]]:
             continue                                  # replaced by today's clean snapshot anyway
         names |= {text[a:b] for a, b in deny_hits(text)}
         for n in _ten_digit_numbers(text):
-            if n not in today and not _fake(n):
+            if n not in today and re.sub(r"\D", "", n) not in today and not _fake(n):
                 numbers.add(n)
                 numbers |= {g for g in re.split(r"[\s\-.]+", n) if len(g) >= 4}
         rolls |= {r for r in ROLL_RE.findall(text) if r not in rolls_today}
@@ -189,7 +195,10 @@ def make(target: Path, clean_demo: bytes, pairs: list[tuple[str, str]]) -> None:
     names, numbers, rolls = history_values(target)
     # the denylist's own idea of a word: a run of letters (so "Name_2" and "Name2" count, as in deny_hits)
     lines += [f"regex:(?<![A-Za-z]){re.escape(n)}(?![A-Za-z])==>[name]" for n in sorted(names, key=len, reverse=True)]
-    lines += [f"literal:{n}==>{'9000000000' if len(re.sub(r'[^0-9]', '', n)) >= 10 else '90000'}"
+    # a number (or a group of it) only where it stands alone, never the digits inside a longer number (25 Nov: the
+    # groups "9876" and "3210" of a history number were replaced inside a test's "98765 43210", which then no longer
+    # read as a phone number, and the public copy's test failed)
+    lines += [f"regex:(?<![0-9]){re.escape(n)}(?![0-9])==>{'9000000000' if len(re.sub(r'[^0-9]', '', n)) >= 10 else '90000'}"
               for n in sorted(numbers, key=len, reverse=True)]
     lines += [f"literal:{r}==>22XY00000" for r in sorted(rolls)]
     say(f"also replacing {len(names)} name(s), {len(numbers)} phone number(s) or parts and {len(rolls)} roll "
@@ -232,7 +241,7 @@ def check(target: Path, secrets: dict[str, str]) -> list[str]:
             leaks["a denylisted name"] = leaks.get("a denylisted name", 0) + 1
         if not path.endswith("demo-data.json") and any(r not in rolls_today for r in ROLL_RE.findall(text)):
             leaks["a roll number not in today's files"] = leaks.get("a roll number not in today's files", 0) + 1
-        if not path.endswith("demo-data.json") and any(n not in today and not _fake(n) for n in _ten_digit_numbers(text)):
+        if not path.endswith("demo-data.json") and any(n not in today and re.sub(r"\D", "", n) not in today and not _fake(n) for n in _ten_digit_numbers(text)):
             leaks["a ten-digit number not in today's files"] = leaks.get("a ten-digit number not in today's files", 0) + 1
         low = text.lower()
         if PERSONAL_MAIL.search(text):

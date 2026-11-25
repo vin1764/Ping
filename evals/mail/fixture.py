@@ -111,7 +111,7 @@ def mails() -> list[dict]:
         ("8", P, "placement-office announcement", CDC, "Placement season 2026-27: guidelines for students",
          "Dear students,\nPlease read the attached placement guidelines. Dress code is formal for all interviews.\nCDC",
          {}, {"kind": "announcement", "company": None}),
-        ("9", P, "company with a typo, form link", "Campus Coordinator <someone@example.com>",
+        ("9", P, "company with a typo, form link", "Campus Coordinator <coordinator@example.com>",
          "Acenture hiring: registration deadline for campus drive",
          "Register for the Accenture campus drive at https://forms.office.com/r/AccDrive26 before 10:00 AM, "
          "23rd November 2026.", {},

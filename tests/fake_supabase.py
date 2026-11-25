@@ -60,6 +60,119 @@ def available() -> bool:
     return psycopg is not None and os.path.exists(f"{PG_BIN}/initdb") and shutil.which("runuser") is not None
 
 
+
+# ---------------------------------------------------------------- the data API's query language (a small PostgREST)
+MAX_ROWS = 1000                 # Supabase's default: the most rows one request returns
+_ID = re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def _colsql(expr: str, types: dict) -> str:
+    """A column or a JSON path ("details->>posted_at", "details->pdf") as SQL; anything else is refused."""
+    parts = re.split(r"(->>|->)", expr.strip())
+    col = parts[0]
+    if not _ID.match(col):
+        raise ValueError(f"bad column {expr!r}")
+    out = f'"{col}"'
+    for i in range(1, len(parts), 2):
+        key = parts[i + 1]
+        if not re.match(r"^[A-Za-z0-9_]+$", key):
+            raise ValueError(f"bad path {expr!r}")
+        out += f"{parts[i]}'{key}'"
+    return out
+
+
+def _selsql(select: str, types: dict) -> str:
+    """'*', or columns and JSON paths, each optionally renamed ("alias:details->>kind"); "count" isn't a column."""
+    if select.strip() in ("", "*"):
+        return "*"
+    out = []
+    for term in select.split(","):
+        term = term.strip()
+        if not term:
+            continue
+        alias, _, expr = term.rpartition(":") if ":" in term and not term.startswith(":") else ("", "", term)
+        if "::" in term:                      # a cast ("x::text"): left as it is
+            alias, expr = "", term
+        name = alias or re.split(r"->>|->", expr)[-1]
+        if not _ID.match(name):
+            raise ValueError(f"bad select {term!r}")
+        out.append(f'{_colsql(expr, types)} as "{name}"')
+    return ", ".join(out)
+
+
+def _cast(col: str, types: dict) -> str:
+    """The parameter's cast to the column's own type (JSON text paths compare as text, as in PostgREST)."""
+    if "->>" in col:
+        return "%s"
+    if "->" in col:
+        return "%s::jsonb"
+    t = types.get(col)
+    return f"cast(%s as {t})" if t else "%s"
+
+
+def _cond(col: str, v: str, types: dict, neg: bool = False):
+    """One filter ("due_at", "gte.2026-11-25T00:00:00Z") as SQL and its parameters."""
+    op, _, val = v.partition(".")
+    if op == "not":
+        return _cond(col, val, types, not neg)
+    c = _colsql(col, types)
+    p = _cast(col, types)
+    ops = {"eq": "=", "neq": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+    if op in ops:
+        sql, ps = f"{c} {ops[op]} {p}", [val]
+    elif op in ("like", "ilike"):
+        sql, ps = f"{c}::text {op} %s", [val.replace("*", "%")]
+    elif op == "in":
+        vals = [x.strip().strip('"') for x in _split(val.strip("()"))]
+        sql, ps = f"{c}::text = any(%s)", [vals]
+    elif op == "is" and val in ("true", "false", "null"):
+        sql, ps = f"{c} is {val}", []
+    else:
+        return "", []
+    return (f"not ({sql})" if neg else sql), ps
+
+
+def _split(s: str) -> list[str]:
+    """Split on commas outside parentheses and quotes."""
+    out, depth, cur, q = [], 0, "", False
+    for ch in s:
+        if ch == '"':
+            q = not q
+        if ch == "(" and not q:
+            depth += 1
+        if ch == ")" and not q:
+            depth -= 1
+        if ch == "," and depth == 0 and not q:
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _logic(kind: str, v: str, types: dict):
+    """or=(a.gte.1,b.is.null,and(c.eq.2,d.lt.3)) as SQL."""
+    parts, params = [], []
+    for term in _split(v.strip()[1:-1] if v.strip().startswith("(") else v):
+        term = term.strip()
+        m = re.match(r"^(not\.)?(or|and)\((.*)\)$", term)
+        if m:
+            sql, ps = _logic(m.group(2), "(" + m.group(3) + ")", types)
+            sql = f"not {sql}" if m.group(1) else sql
+        else:
+            # "col.op.value" where col may be a JSON path with dots in no part
+            m2 = re.match(r"^([a-z_][a-z0-9_]*(?:->>?[A-Za-z0-9_]+)*)\.(.*)$", term)
+            if not m2:
+                raise ValueError(f"bad filter {term!r}")
+            sql, ps = _cond(m2.group(1), m2.group(2), types)
+        if sql:
+            parts.append(sql)
+            params += ps
+    joiner = " or " if kind == "or" else " and "
+    return "(" + joiner.join(parts or ["true"]) + ")", params
+
 class FakeSupabase:
     def __init__(self):
         self.anonymous_enabled = True
@@ -104,6 +217,17 @@ class FakeSupabase:
     def conn(self):
         return psycopg.connect(host=self.sock, port=self.port, user="postgres", dbname="postgres", autocommit=True)
 
+    max_rows = MAX_ROWS
+
+    def column_types(self, table: str) -> dict:
+        """{column: its type} (for typed comparisons in filters), read once per table."""
+        cache = self.__dict__.setdefault("_types", {})
+        if table not in cache:
+            rows = self.as_role("postgres", {}, "select column_name, udt_name from information_schema.columns "
+                                "where table_schema = 'public' and table_name = %s", (table,))
+            cache[table] = {c: t for c, t in rows}
+        return cache[table]
+
     def as_role(self, role: str, claims: dict, sql: str, params=()):
         with self.conn() as c:
             with c.transaction():
@@ -130,9 +254,11 @@ def _handler(fake: FakeSupabase):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, body):
+        def _send(self, code, body, headers=None):
             data = b"" if code == 204 else json.dumps(body, default=str).encode()   # 204 has no body (as Supabase)
             self.send_response(code)
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
@@ -315,20 +441,36 @@ def _handler(fake: FakeSupabase):
             exists = fake.as_role("postgres", {}, "select to_regclass(%s) is not null", (f"public.{table}",))[0][0]
             if not exists:
                 return self._send(404, {"code": "PGRST205", "message": f"Could not find the table 'public.{table}'"})
-            where, params = self._filters(q)
+            types = fake.column_types(table)
+            where, params = self._filters(q, types)
             if method == "GET":
-                limit = f" limit {int(q['limit'])}" if "limit" in q else ""
+                # like Supabase's API: at most MAX_ROWS rows a request, whatever limit or range is asked
+                n, off = fake.max_rows, 0
+                if "limit" in q:
+                    n = min(n, int(q["limit"]))
+                if "offset" in q:
+                    off = int(q["offset"])
                 rng = self.headers.get("Range")
                 if rng and "-" in rng:
                     a, b = (int(x) for x in rng.split("-"))
-                    limit = f" limit {b - a + 1} offset {a}"
+                    off, n = a, min(fake.max_rows, b - a + 1)
                 order = ""
                 if "order" in q:
-                    col, _, dirn = q["order"].partition(".")
-                    order = f" order by {re.sub(r'[^a-z_]', '', col)} {'desc' if dirn.startswith('desc') else 'asc'}"
-                rows = fake.as_role(role, claims, f"select coalesce(jsonb_agg(t), '[]') from (select * from public.{table}"
-                                    f"{where}{order}{limit}) t", params)
-                return self._send(200, rows[0][0])
+                    parts = []
+                    for term in q["order"].split(","):
+                        col, _, dirn = term.partition(".")
+                        nulls = " nulls first" if "nullsfirst" in dirn else " nulls last" if "nullslast" in dirn else ""
+                        parts.append(f"{_colsql(col, types)} {'desc' if dirn.startswith('desc') else 'asc'}{nulls}")
+                    order = " order by " + ", ".join(parts)
+                sel = _selsql(q.get("select", "*"), types)
+                rows = fake.as_role(role, claims, f"select coalesce(jsonb_agg(t), '[]') from (select {sel} from public.{table}"
+                                    f"{where}{order} limit {n} offset {off}) t", params)
+                out = rows[0][0]
+                headers = {}
+                if "count=exact" in (self.headers.get("Prefer") or ""):
+                    total = fake.as_role(role, claims, f"select count(*) from public.{table}{where}", params)[0][0]
+                    headers["Content-Range"] = f"{off}-{off + len(out) - 1 if out else off}/{total}"
+                return self._send(200, out, headers)
             if method == "POST":
                 body = self._body()
                 body = body if isinstance(body, list) else [body]
@@ -356,23 +498,20 @@ def _handler(fake: FakeSupabase):
             self._send(405, {"message": "method"})
 
         @staticmethod
-        def _filters(q):
+        def _filters(q, types=None):
             conds, params = [], []
             for k, v in q.items():
-                if k in ("select", "limit", "order", "on_conflict", "columns"):
+                if k in ("select", "limit", "offset", "order", "on_conflict", "columns"):
                     continue
-                col = re.sub(r"[^a-z_]", "", k)
-                op, _, val = v.partition(".")
-                if op == "eq":
-                    conds.append(f"{col}::text = %s")
-                    params.append(val)
-                elif op == "gte":
-                    conds.append(f"{col}::text >= %s")
-                    params.append(val)
-                elif op == "is" and val in ("true", "false", "null"):
-                    conds.append(f"{col} is {val}")
-                elif v == "not.is.true":
-                    conds.append(f"{col} is not true")
+                if k in ("or", "and"):
+                    sql, ps = _logic(k, v, types or {})
+                    conds.append(sql)
+                    params += ps
+                    continue
+                sql, ps = _cond(k, v, types or {})
+                if sql:
+                    conds.append(sql)
+                    params += ps
             return (" where " + " and ".join(conds) if conds else ""), params
 
     return H

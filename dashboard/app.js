@@ -99,7 +99,11 @@
     return p;
   }
   class OfflineSource {
-    constructor(snap) { this.s = snap; this.kind = snap.kind || "real"; this.demo = !!snap.demo; this.offline = true; }
+    constructor(snap) {
+      this.s = snap; this.kind = snap.kind || "real"; this.demo = !!snap.demo; this.offline = true;
+      // where the saved chat starts (older open items in the copy stay out of it, as online)
+      this.itemsFrom = snap.itemsFrom || null; this.chatFrom = snap.chatFrom || null;
+    }
     async load() { return unpackDemo(this.s.data); }   // a saved copy in the demo file's packed form works too
     async chat() { return this.s.chat || []; }
     async readAt() { return this.s.readAt || null; }
@@ -162,6 +166,23 @@
   const DEMO_OWN = ["targets", "reminder_hours", "list_other_roles", "feed_mode", "check_every_minutes", "check_from", "check_to"];
   // One class for both logins: the owner (real rows) and a one-click demo session (an anonymous sign-in that the
   // database only lets read the anonymised demo rows and its own chat).
+  // how many messages the chat reads at a time (newest first, then older ones as you scroll up)
+  const WINDOW = 200;
+  // the same message from several reads (the window, the open items, a moved one): one copy, the fullest
+  function mergeItems(...lists) {
+    const map = new Map();
+    // a full row replaces a lean one; a lean one never replaces a full one; the later read wins otherwise
+    for (const list of lists) for (const it of list || []) if (!(it.__lean && map.has(it.id) && !map.get(it.id).__lean)) map.set(it.id, it);
+    return [...map.values()];
+  }
+  // a lean history row shaped like a message (its details with the fields the page reads)
+  function leanItem(r) {
+    const { hidden_because, subject, venue, kind, notice_time, pdf, via, mail, todo, form, posted_at, reposted_at, ...rest } = r;
+    const details = Object.fromEntries(Object.entries({ hidden_because, subject, venue, kind, notice_time, pdf, via, mail, todo, form, posted_at, reposted_at })
+      .filter(([, v]) => v != null));
+    return { ...rest, details, __lean: true };
+  }
+
   class SupabaseSource {
     constructor(sb, demo = false) {
       this.sb = sb; this.kind = demo ? "demo" : "real"; this.demo = demo; this.chatOk = true;
@@ -176,10 +197,10 @@
     // every row, a page at a time: the database's API returns at most 1,000 rows per request whatever limit is asked,
     // so a single read of a longer table silently stops at the oldest 1,000 (25 Nov: the newest messages, BlueStone's
     // and RISA Labs' assignments, never reached the chat, To do or Today)
-    async all(table, fn, page = 1000) {
+    async all(table, fn, cols = "*", page = 1000) {
       const out = [];
       for (let from = 0; from < 20000; from += page) {
-        let query = this.sb.from(table).select("*");
+        let query = this.sb.from(table).select(cols);
         if (fn) query = fn(query);
         const { data, error } = await query.range(from, from + page - 1);
         if (error) throw new Error(`${table}: ${error.message}`);
@@ -188,9 +209,15 @@
       }
       return out;
     }
+    // What the page opens with: never the whole history (it grows every hour). The chat's newest WINDOW messages (and
+    // any posted again since), the open items To do and Today list (asked for directly: a deadline or event still
+    // ahead or just past, not dismissed), roles, profile, runs, notices, forms. Older messages come as you scroll up
+    // (olderItems / olderChat); the whole history only when something needs it (history(): Ask Ping's answers on the
+    // page, the Updates list, a company's page).
     async load() {
-      const [items, roles, profile, runs, notices] = await Promise.all([
-        this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true })),
+      const [recent, open, roles, profile, runs, notices] = await Promise.all([
+        this.recentItems(),
+        this.openItems(),
         this.all("roles", (q) => q.order("id", { ascending: true })),
         this.q("profile"),
         this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
@@ -198,14 +225,66 @@
         this.sb.from("notices").select("notice_id,year,company,subject,notice_time,preview,kind:analysis->>kind,targets:analysis->targets,todos:analysis->todos").order("notice_time", { ascending: false }).limit(1000)
           .then((r) => r.data || [], () => []),
       ]);
-      const forms = await this.forms();
+      const [forms, moved] = await Promise.all([this.forms(), this.movedSince(this.itemsFrom)]);
+      const items = mergeItems(recent, moved, open);
       // the demo is a snapshot: its profile row carries the time it was taken
       return { items, roles, profile: profile[0] || {}, runs, notices, forms,
                generated_at: this.demo ? profile[0]?.updated_at : undefined };
     }
-    // the forms list (the hourly run builds it) and your ticks (your own rows: form_status)
-    async forms() { return this.all("forms", (q) => q.order("due_at", { ascending: true }).order("key", { ascending: true })).catch(() => []); }
-    async formStatus() { return this.q("form_status").catch(() => []); }
+    // the newest WINDOW messages; itemsFrom: the oldest one's first_seen (null: there are no older ones)
+    async recentItems() {
+      const rows = await this.q("items", (q) => q.order("first_seen", { ascending: false }).order("id", { ascending: false }).limit(WINDOW));
+      this.itemsFrom = rows.length >= WINDOW ? rows[rows.length - 1].first_seen : null;
+      return rows;
+    }
+    // the next WINDOW older messages (scrolling up); [] when there are none
+    async olderItems() {
+      if (!this.itemsFrom) return [];
+      const rows = await this.q("items", (q) => q.lt("first_seen", this.itemsFrom).order("first_seen", { ascending: false })
+        .order("id", { ascending: false }).limit(WINDOW));
+      this.itemsFrom = rows.length >= WINDOW ? rows[rows.length - 1].first_seen : null;
+      return rows;
+    }
+    // messages first seen before the window but posted (again) inside it: they're drawn there (details.posted_at,
+    // reposted_at). The times are compared as text by the database, so a day's margin; the page keeps the right ones.
+    async movedSince(from) {
+      if (!from) return [];
+      const since = new Date(Date.parse(from) - 86400000).toISOString();
+      const rows = await this.all("items", (q) => q.lt("first_seen", from).or(`details->>posted_at.gte.${since},details->>reposted_at.gte.${since}`)
+        .order("id", { ascending: true })).catch(() => []);
+      return rows.filter((it) => Math.max(Date.parse(it.details?.posted_at || "") || 0, Date.parse(it.details?.reposted_at || "") || 0) >= Date.parse(from));
+    }
+    // what To do and Today list, asked for directly: not dismissed, with a deadline from a week ago on or an event
+    // from two days ago on (a past one stays in their "Past due" for a week)
+    async openItems() {
+      const due = new Date(Date.now() - 7 * 86400000).toISOString(), ev = new Date(Date.now() - 2 * 86400000).toISOString();
+      return this.all("items", (q) => q.eq("dismissed", false).or(`due_at.gte.${due},event_at.gte.${ev}`).order("id", { ascending: true }));
+    }
+    // a live update: what changed since the page loaded it, the same window (newer messages, moved ones, open items)
+    async items() {
+      const from = this.itemsFrom;
+      const [inWindow, moved, open] = await Promise.all([
+        from ? this.all("items", (q) => q.gte("first_seen", from).order("first_seen", { ascending: true }).order("id", { ascending: true }))
+          : this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true })),
+        this.movedSince(from), this.openItems()]);
+      return mergeItems(inWindow, moved, open);
+    }
+    // the whole history, lean (no list rows or form pages): Ask Ping's answers on this page, the Updates list,
+    // "which lists am I on"; read once, when first needed
+    async history() {
+      return this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true }),
+        "id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen,sort_at," +
+        "dismissed,done,needs_review,hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
+        "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,form:details->form," +
+        "posted_at:details->>posted_at,reposted_at:details->>reposted_at").then((rows) => rows.map(leanItem));
+    }
+    // the forms list (the hourly run builds it): the ones still open or closed in the last two weeks (To do's folds)
+    async forms() {
+      const since = new Date(Date.now() - 14 * 86400000).toISOString();
+      return this.all("forms", (q) => q.or(`due_at.gte.${since},due_at.is.null`).order("due_at", { ascending: true }).order("key", { ascending: true })).catch(() => []);
+    }
+    // your ticks (your own rows: form_status), every page of them
+    async formStatus() { return this.all("form_status", (q) => q.order("form_key", { ascending: true })).catch(() => []); }
     // a tick (true / false) or a patch ({ not_for_me, not_for_me_reason }): only those columns change
     async setFormStatus(key, filled) {
       const { data: { session } } = await this.sb.auth.getSession();
@@ -214,7 +293,7 @@
       if (error) throw new Error(error.message);
       return row;
     }
-    async formMerges() { return this.q("form_merges").catch(() => []); }
+    async formMerges() { return this.all("form_merges", (q) => q.order("a", { ascending: true })).catch(() => []); }
     async formMerge(a, b, choice) {
       const { data: { session } } = await this.sb.auth.getSession();
       const { error } = await this.sb.from("form_merges").upsert({ owner_id: session?.user?.id, a, b, choice }, { onConflict: "owner_id,a,b" });
@@ -222,7 +301,6 @@
     }
     // live updates (see startLive): the latest runs, and the items again once a run has finished
     async liveRuns() { return this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)); }
-    async items() { return this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true })); }
     async notice(noticeId) {
       const [n] = await this.q("notices", (q) => q.eq("notice_id", noticeId).limit(1));
       const checks = n ? await this.q("pdf_checks", (q) => q.eq("notice_id", n.id)) : [];
@@ -320,11 +398,29 @@
       }
     }
     // The thread lives in the chat_messages table; if it isn't there yet (sql/chat.sql not run), this browser keeps it.
-    async chat() {
-      let { data, error } = await this.sb.from("chat_messages").select("role,text,created_at,reply_to,reply_quote").order("created_at").limit(1000);
-      if (error) ({ data, error } = await this.sb.from("chat_messages").select("role,text,created_at").order("created_at").limit(1000));
+    // the newest WINDOW messages of the thread (oldest first); chatFrom: the oldest one's time (null: none older).
+    // since: only the ones after it (a live update)
+    async chat(since = null) {
+      const read = (cols) => {
+        let q = this.sb.from("chat_messages").select(cols);
+        if (since) return q.gt("created_at", since).order("created_at", { ascending: true }).limit(WINDOW);
+        return q.order("created_at", { ascending: false }).limit(WINDOW);
+      };
+      let { data, error } = await read("role,text,created_at,reply_to,reply_quote");
+      if (error) ({ data, error } = await read("role,text,created_at"));
       if (error) { this.chatOk = false; return store.get("ping-chat", []); }
-      return data;
+      if (since) return data;
+      this.chatFrom = data.length >= WINDOW ? data[data.length - 1].created_at : null;
+      return data.reverse();
+    }
+    // the next WINDOW older messages of the thread (scrolling up), oldest first
+    async olderChat() {
+      if (!this.chatFrom || !this.chatOk) return [];
+      const { data, error } = await this.sb.from("chat_messages").select("role,text,created_at,reply_to,reply_quote")
+        .lt("created_at", this.chatFrom).order("created_at", { ascending: false }).limit(WINDOW);
+      if (error) return [];
+      this.chatFrom = data.length >= WINDOW ? data[data.length - 1].created_at : null;
+      return data.reverse();
     }
     async addChat(m) {
       if (this.chatOk) {
@@ -582,6 +678,7 @@
       stampItems();
       state.chat = await state.src.chat();
       state.readAt = await state.src.readAt();
+      noteWindow();
       if (state.src.kind !== "real") {
         const run = (state.data.runs || [])[0] || {};
         const snap = dt(state.data.generated_at || run.finished_at || run.started_at)?.getTime() || null;
@@ -605,12 +702,58 @@
     window.addEventListener("offline", () => status("Offline: you can read your thread; messages you send wait until you're back online."));
   }
 
+  // The chat shows what's loaded from where both windows start (messages and the thread: the later of their oldest);
+  // the open items To do and Today read can be older and are never drawn out of place in the chat
+  function noteWindow() {
+    const a = state.src?.itemsFrom, b = state.src?.chatFrom;
+    const t = [a, b].filter(Boolean).map((x) => Date.parse(x));
+    state.winFrom = t.length ? Math.max(...t) : null;
+  }
+  const hasEarlier = () => !!(state.src?.olderItems && (state.src.itemsFrom || state.src.chatFrom));
+  // every message the page has (the window, open items, older pages, and the whole history once read)
+  function knownItems() { return state.history ? mergeItems(state.history, state.data.items) : state.data.items; }
+  // the whole history (lean), read once when something needs it; again after a check brought new messages
+  function ensureHistory() {
+    if (!state.src?.history) return Promise.resolve();
+    if (!state.historyP) state.historyP = state.src.history().then((rows) => { state.history = withoutHeld(rows); })
+      .catch(() => { state.historyP = null; });
+    return state.historyP;
+  }
+  function forgetHistory() { state.history = null; state.historyP = null; }
+  // scrolling up: more of what's loaded first, then the next page of older messages
+  async function loadEarlier() {
+    if (state.loadingEarlier) return;
+    const all = threadEntries();
+    const shown = state.renderCount || THREAD_WINDOW;
+    if (all.length > shown) { state.renderCount = shown + THREAD_WINDOW; return redrawAnchored(); }
+    if (!hasEarlier() || !state.src.olderItems) return;
+    state.loadingEarlier = true;
+    try {
+      const [items, chat] = await Promise.all([state.src.olderItems(), state.src.olderChat()]);
+      state.data.items = mergeItems(withoutHeld(items), state.data.items);
+      state.chat = [...chat.filter((m) => !state.chat.some((x) => msgKey(x.role, x.created_at) === msgKey(m.role, m.created_at))), ...state.chat];
+      noteWindow();
+      state.renderCount = shown + THREAD_WINDOW;
+      redrawAnchored();
+    } finally { state.loadingEarlier = false; }
+  }
+  // redraw the chat with the message at the top staying where it is
+  function redrawAnchored() {
+    const thread = $("#thread");
+    const first = thread && [...thread.querySelectorAll("[data-key]")].find((n) => n.getBoundingClientRect().bottom > thread.getBoundingClientRect().top);
+    const key = first?.dataset.key, off = first ? first.getBoundingClientRect().top - thread.getBoundingClientRect().top : 0;
+    route();
+    const t2 = $("#thread"), n = key && t2?.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    if (t2 && n) t2.scrollTop += n.getBoundingClientRect().top - t2.getBoundingClientRect().top - off;
+  }
+
   // the copy of the thread the app opens offline (owner or demo session; the static ?demo=1 copy doesn't need one)
   let snapTimer = null;
   function saveSnapshot() {
     if (!state.data || state.offline || !state.src?.sb) return;
     clearTimeout(snapTimer);
     snapTimer = setTimeout(() => kv.set("snap", { kind: state.src.kind, demo: !!state.src.demo, data: state.data, chat: state.chat,
+      itemsFrom: state.src.itemsFrom || null, chatFrom: state.src.chatFrom || null,
       readAt: state.readAt, asOf: state.asOf, savedAt: new Date().toISOString() }), 1500);
   }
   // messages written while offline, asked in order once the connection is back
@@ -678,10 +821,11 @@
     try {
       const before = LIVE.lastFinished(state.data.runs)?.id;
       mergeRuns(await state.src.liveRuns(), true);
-      const chat = await state.src.chat();
+      const last = state.chat.length ? state.chat[state.chat.length - 1].created_at : null;
+      const chat = state.src.chatFrom !== undefined && last ? await state.src.chat(last) : await state.src.chat();
       for (const m of chat || []) addChatRow(m);
       if (LIVE.lastFinished(state.data.runs)?.id !== before) {
-        state.data.items = withoutHeld(await state.src.items()); stampItems();
+        state.data.items = withoutHeld(await state.src.items()); stampItems(); forgetHistory();
         if (state.src.forms) state.data.forms = await state.src.forms();
       }
       await loadTicks(true);
@@ -705,7 +849,7 @@
     const ended = ["done", "failed"].includes(row.stage) && (!was || !["done", "failed"].includes(was.stage));
     mergeRuns([row]);
     // a run that just finished: read its new messages first, so they arrive right after its "Done" line
-    if (ended && row.stage === "done") { state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems(); }
+    if (ended && row.stage === "done") { state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems(); forgetHistory(); }
     // nothing new: no message, at most a short toast for a check you started here; never a bare count
     if (ended && row.stage === "done" && live.local.has(row.id) && !runItems({ ...was, ...row }).length) toast("Nothing new", null, null, 3000);
     applyLive();
@@ -1218,7 +1362,9 @@
       });
   }
   function threadEntries() {
-    const items = onceEach(state.data.items.filter(inChat)).map((it) => ({ kind: "item", at: itemTime(it), it }));
+    // from where the loaded window starts: older open items (To do's) aren't drawn out of place
+    const inWin = (at) => !state.winFrom || (Date.parse(at) || 0) >= state.winFrom;
+    const items = onceEach(state.data.items.filter(inChat)).map((it) => ({ kind: "item", at: itemTime(it), it })).filter((e) => inWin(e.at));
     const talk = state.chat.map((m) => ({ kind: m.role, at: m.created_at, text: m.text, quote: quoteOf(m) }));
     // a Check now (with its progress) and an hourly check that brought something new
     // a finished check sits at its finish time (the time on the message and any time in it are the same); one that
@@ -1253,7 +1399,7 @@
   function viewChat() {
     const all = threadEntries();
     const { readAt, unread } = unreadOf(all);
-    let cut = state.showAll ? 0 : Math.max(0, all.length - THREAD_WINDOW);
+    let cut = state.showAll ? 0 : Math.max(0, all.length - (state.renderCount || THREAD_WINDOW));
     if (unread.length) cut = Math.min(cut, all.indexOf(unread[0]));
     if (state.jumpItem) { const j = all.findIndex((e) => e.kind === "item" && e.it.id === state.jumpItem); if (j >= 0) cut = Math.min(cut, j); }
     const entries = all.slice(Math.max(0, cut));
@@ -1264,12 +1410,9 @@
       `an anonymised snapshot of a real run, shown as it was on ${when(state.asOf)}. Fake roll number, name and CGPA; ` +
       "other students and all real mail removed (the 4 mails marked \u201cvia email\u201d are made-up samples).");
     if (!all.length) inner.append(h("p", { class: "empty" }, "No messages yet. Ping posts here after its first check (about 10 minutes)."));
-    if (cut > 0) inner.append(h("button", { type: "button", class: "pill-btn ghost earlier", onclick: () => {
-      const first = entries[0] && entryKey(entries[0]);
-      state.showAll = true;
-      route();
-      requestAnimationFrame(() => document.querySelector(`[data-key="${CSS.escape(first)}"]`)?.scrollIntoView({ block: "start" }));
-    } }, `Show ${cut} earlier message${cut === 1 ? "" : "s"}`));
+    // scrolling up draws (and reads) earlier messages on its own; the button does the same
+    if (cut > 0 || hasEarlier()) inner.append(h("button", { type: "button", class: "pill-btn ghost earlier", onclick: () => loadEarlier() },
+      cut > 0 ? `Show ${Math.min(cut, THREAD_WINDOW)} earlier message${Math.min(cut, THREAD_WINDOW) === 1 ? "" : "s"}` : "Load earlier messages"));
     for (const e of entries) {
       const day = dayLabel(e.at);
       // one section per day: its header sticks to the top while you scroll through that day
@@ -1289,6 +1432,8 @@
       placeholder: "Ask Ping: what's due tomorrow?", "aria-label": "Message Ping" });
     const btn = sendButton(true);
     input.addEventListener("input", () => { if (!state.waiting) btn.disabled = !input.value.trim(); });
+    // about to ask: the whole history (for the page's own answers) is read now, not when you press send
+    input.addEventListener("focus", () => { ensureHistory(); }, { once: true });
     const ask = (text) => { input.value = text; btn.disabled = false; form.requestSubmit(); };
     const quick = h("div", { class: "chips", role: "group", "aria-label": "Quick questions" }, QUICK.map((c) =>
       h("button", { type: "button", class: "chip", onclick: () => {
@@ -1327,6 +1472,7 @@
       if (quick.hidden !== !jump.hidden) quick.hidden = !jump.hidden;
     };
     thread.addEventListener("scroll", syncJump, { passive: true });
+    thread.addEventListener("scroll", () => { if (thread.scrollTop < 150 && thread.scrollHeight > thread.clientHeight) loadEarlier(); }, { passive: true });
     live.newCount = 0;
     live.firstNew = null;
     live.syncJump = syncJump;
@@ -2248,8 +2394,8 @@
   }
 
   let itemMap = null;
-  const itemById = () => (itemMap && itemMap.src === state.data.items ? itemMap.map
-    : (itemMap = { src: state.data.items, map: new Map(state.data.items.map((i) => [i.id, i])) }).map);
+  const itemById = () => (itemMap && itemMap.src === state.data.items && itemMap.hist === state.history ? itemMap.map
+    : (itemMap = { src: state.data.items, hist: state.history, map: new Map(knownItems().map((i) => [i.id, i])) }).map);
   let roleMap = null;
   const roleById = () => (roleMap && roleMap.src === state.data.roles ? roleMap.map
     : (roleMap = { src: state.data.roles, map: new Map(state.data.roles.map((r) => [r.id, r])) }).map);
@@ -2384,6 +2530,8 @@
     // a FACT question: answered at once from the page's own data (in the demo, once the roles' details are in: they
     // arrive within a second of opening)
     if (state.details) { state.startDetails?.(); await state.details; }
+    // the page's own answers need the whole history (read once, usually while you typed)
+    if (state.src?.history && !state.history) await ensureHistory();
     // "check again", "are you sure?", "I got a call": the previous question, read again from the ERP now
     const RR = window.PingRules;
     // replying: the quoted message answers some questions by itself ("which of these haven't I applied to?", "which
@@ -2491,7 +2639,7 @@
   // Phone: swipe a bubble right (or long-press it) to reply. PC: the arrow on a bubble (hover or keyboard), or
   // right-click / long-press. The quoted message shows above the box (✕ or Esc cancels) and becomes the topic.
   function sourceOf(key) {
-    if (key.startsWith("item:")) return state.data.items.find((i) => `item:${i.id}` === key) || null;
+    if (key.startsWith("item:")) return itemById().get(key.slice(5)) || null;
     const m = state.chat.find((x) => msgKey(x.role, x.created_at) === key);
     return m ? { ...m, key } : null;
   }
@@ -2656,7 +2804,7 @@
       text = R.recheckAnswer(rc, liveNow(), listLinkFor(company)).text;
       if (rc.demo) text = text.replace(/^I checked the ERP for (.+?) just now \((.*?)\)\./, "Demo: Ping can't log in to the ERP here, so this is the snapshot's reading of $1 ($2).");
       if (rc.status === "done" && !rc.demo) {        // the feed may have changed (a verdict, a new notice): read it again
-        state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems();
+        state.data.items = withoutHeld(await state.src.items().catch(() => state.data.items)); stampItems(); forgetHistory();
       }
     }
     const reply = { role: "ping", text, created_at: new Date(Math.max(Date.now(), Date.parse(mine.created_at) + 1)).toISOString(), ...(backQuote || {}) };
@@ -2804,7 +2952,8 @@
   function sortNewest(a, b) { return String(itemTime(b) || "").localeCompare(String(itemTime(a) || "")); }
 
   function viewFeed() {
-    const items = state.data.items.filter((i) => !i.dismissed);
+    if (!state.history && state.src?.history) { const at = location.hash; ensureHistory().then(() => { if (location.hash === at) viewFeed(); }); }
+    const items = knownItems().filter((i) => !i.dismissed);
     const counts = { always: 0, show: 0, hidden: 0 };
     items.forEach((i) => { counts[i.level] = (counts[i.level] || 0) + 1; });
     const filters = [["visible", "For you", counts.always + counts.show], ["always", LEVELS.always, counts.always],
@@ -2955,11 +3104,11 @@
 
   // the companies you're on a shortlist / test list of (from the lists Ping read), for the one status chip
   function shortlistedSet() {
-    const key = state.data.items;
-    if (state.slCache?.key === key) return state.slCache.set;
+    const key = knownItems();
+    if (state.slCache?.src === state.data.items && state.slCache?.hist === state.history) return state.slCache.set;
     const set = new Set(key.filter((it) => (it.category === "shortlist" || it.category === "test" || ["shortlist", "test", "test_rooms"].includes(it.details?.kind))
       && (it.details?.pdf?.status || it.pdf_status) === "yes").map((it) => cleanName(it.company).toLowerCase()));
-    state.slCache = { key, set };
+    state.slCache = { src: state.data.items, hist: state.history, set };
     return set;
   }
   // a role: the company and one status chip, the role, the next deadline; pay, criteria and the JD are one tap away
@@ -3156,7 +3305,7 @@
   }
   // what each Today row opens
   function openRowSheet(r) {
-    const items = (r.itemIds || []).map((id) => state.data.items.find((i) => i.id === id)).filter(Boolean);
+    const items = (r.itemIds || []).map((id) => itemById().get(id)).filter(Boolean);
     if (r.kind === "deadline") {
       const roles = (r.roleIds || []).map((id) => roleById().get(id)).filter(Boolean);
       const cards = roles.map((x) => roleCard(x, { chat: r.digestId }));
@@ -3226,7 +3375,7 @@
     const pay = Object.entries(f).filter(([k, v]) => v && /ctc|salary|gross|base|stipend|bonus|esop|joining|relocation|bond|variable|retention/i.test(k)
       && String(v).length < 400);
     const e = r.eligibility || {}, mk = markOf(r), dl = deadlineOf(r);
-    const updates = state.data.items.filter((i) => i.company === r.company && !i.dismissed).sort(sortNewest).slice(0, 8);
+    const updates = knownItems().filter((i) => i.company === r.company && !i.dismissed).sort(sortNewest).slice(0, 8);
     const depts = new Set((r.allowed || []).map((a) => a.department));
     const close = h("button", { type: "button", class: "close", "aria-label": "Close", onclick: () => sheet.close() }, "×");
     sheet.replaceChildren(
@@ -3314,7 +3463,9 @@
 
   function viewCompany(name) {
     const roles = sortRoles([...(byCompany().get(name) || [])], "all");
-    const items = state.data.items.filter((i) => i.company === name && i.level !== "hidden").sort(sortNewest);
+    // a company's whole history: the page draws again once it's read (the first time only)
+    if (!state.history && state.src?.history) { const at = location.hash; ensureHistory().then(() => { if (location.hash === at) route(); }); }
+    const items = knownItems().filter((i) => i.company === name && i.level !== "hidden").sort(sortNewest);
     mountPage(
       h("p", { class: "page-links" }, h("a", { href: "#companies" }, "← Companies")),
       h("h1", {}, name ? cleanName(name) : "Not found"),
@@ -3543,7 +3694,7 @@
         return { ...r, deadline: r.effective_deadline || r.apply_end, for_you: targetsOn() ? !!m?.relevant : undefined,
                  cv: m?.relevant ? m.best_cv : null, pay: r.more_details?.fields || {}, jd_location: r.jd_summary?.location || null };
       }),
-      items: (data.items || []).filter((i) => !i.dismissed).map((i) => ({ ...i, hidden_because: i.details?.hidden_because,
+      items: (data === state.data ? knownItems() : data.items || []).filter((i) => !i.dismissed).map((i) => ({ ...i, hidden_because: i.details?.hidden_because,
         subject: i.details?.subject, venue: i.details?.venue, pdf: i.details?.pdf, kind: i.details?.kind, notice_time: i.details?.notice_time,
         via: i.details?.via, mail: i.details?.mail, todo: i.details?.todo })),
       notices: data.notices || [],
@@ -3577,6 +3728,8 @@
     if (!R || !state.data) return { why: "no rules" };
     if (R.prefsLike(question)) return { why: "preferences" };
     if (!LIVE.messagesCurrent(state.data.runs, state.itemsRun)) return { why: "stale" };
+    // without the whole history the page would answer from part of it: Ask Ping's function answers instead
+    if (state.src?.history && !state.history) return { why: "history not read" };
     if (targetsOn() && !state.marks?.size && !state.data.roles.some((r) => r.relevance)) return { why: "no marks" };
     const facts = factsOf(state.data);
     const r = R.route(question, previousQuestions(question), facts);

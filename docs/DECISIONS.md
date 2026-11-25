@@ -339,3 +339,27 @@ Decisions:
   after the change: rules 23/30, with the model steps 28/30, fixed 5, broke 0 (as before).
 - The page shows your question at once and the typing dots as soon as it goes to the function (or after 150 ms of
   deciding), and saves the question while asking instead of before.
+
+## 25 Nov: every read past 1,000 rows, and a page that doesn't load the whole history
+
+The database's API returns at most 1,000 rows a request, whatever limit is asked. Every read was checked:
+
+| where | read | before | now |
+|---|---|---|---|
+| page | items (chat, To do, Today) | every row, oldest first in one request (cut at 1,000) | the newest 200 + the ones posted again since + the open ones (not dismissed, deadline from a week ago on / event from two days ago on), asked directly; older 200 at a time as you scroll up |
+| page | chat_messages | oldest 1,000 | the newest 200, older 200 at a time as you scroll up; a live update asks only for the ones after the last |
+| page | whole history (Ask Ping on the page, Updates, company pages, "lists you're on") | every open | lean, read once when first needed (the question box focused, Updates or a company opened); the page's own answers wait for it, or Ask Ping's function answers |
+| page | roles, form_status, form_merges | one request | every page |
+| page | forms | one request | open or closed in the last 14 days, every page |
+| page | notices (Today's "Latest"), runs | newest 1,000 / 30 | unchanged: the newest are what's shown |
+| ask-ping | items (rules), notices, emails, forms, roles (4 places) | newest 1,000 / 400 | every page (the first two at once); kept 5 min per instance (cache.ts) |
+| ask-ping | role_marks | `limit(5000)` (cut at 1,000) | only the current roles' hashes, asked in chunks |
+| ask-ping | open-path lists (60), notices for named companies (6), items(feed) 150, thread 14 | top-N on purpose | unchanged |
+| send-push, kick-run | profile, runs, push_queue (10 due), push_subscriptions, form_status (1) | one row or a few | unchanged |
+| hourly run, Admin tasks | `SupabaseStore.select` | already a page at a time | unchanged; the direct reads are single rows (profile, snapshots, counts) |
+
+Test: tests/test_page_big_history.py (the local replica, whose API now cuts at 1,000 rows like Supabase's): 2,500
+messages and 1,201 chat messages; the newest message, a to-do found minutes ago and one posted again now are at the
+bottom of the chat, a form posted 20 days ago and still open is in To do (not drawn 20 days up in the chat); the chat
+opens in 0.28 s here, reading 407 rows in 11 requests; scrolling up reads older ones. The same test on the page before
+these changes fails (the newest message never appears).

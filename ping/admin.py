@@ -1235,6 +1235,19 @@ def public_ci(secrets) -> int:
     for r in runs:
         say(f"  {r['name']:10} {r['event']:9} {r['status']:10} {r.get('conclusion')!s:9} {r['head_sha'][:7]} {r['created_at']}")
     bad = [r for r in runs if r["head_sha"] == sha and r["status"] == "completed" and r.get("conclusion") not in ("success", "skipped")]
+    # why a run failed: the failed steps and the end of each failed job's log (the public copy's own log)
+    for r in bad:
+        jobs = requests.get(f"{api}/actions/runs/{r['id']}/jobs", headers=hdr, timeout=30).json().get("jobs") or []
+        for j in jobs:
+            if j.get("conclusion") in ("success", "skipped"):
+                continue
+            steps = [st["name"] for st in j.get("steps") or [] if st.get("conclusion") == "failure"]
+            say(f"{r['name']} / {j['name']}: failed at {', '.join(steps) or '?'}")
+            log = requests.get(f"{api}/actions/jobs/{j['id']}/logs", headers=hdr, timeout=60)
+            lines = [re.sub(r"^\S+Z ", "", x) for x in log.text.splitlines()] if log.ok else []
+            keep = [x for x in lines if re.search(r"FAILED|Error|error|assert|failed|passed|not ok|# fail", x)][-40:]
+            for x in keep or lines[-40:]:
+                say(f"    {x[:220]}")
     return 1 if bad else 0
 
 

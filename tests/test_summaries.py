@@ -97,3 +97,31 @@ def test_no_room_left_means_the_rules_line_now_and_the_model_next_run():
 def test_the_date_format_matches_the_cards():
     assert S.fmt(DUE) == "Fri 27 Nov 23:59"
     assert S.fmt(datetime(2026, 12, 3, 9, 5, tzinfo=IST).isoformat()) == "Thu 3 Dec 09:05"
+
+
+def test_real_lines_the_check_got_wrong_on_25_nov():
+    it = item(due_at=DUE)
+    # a sentence's first word is not a name; a time after a date is not a date
+    assert S.check("Review the shortlist and fill this form by Fri 27 Nov 23:59.", RISA_TEXT + " Review it.", it) is None
+    assert S.check("Fill the form by Fri 27 Nov 23:59.", RISA_TEXT, it) is None
+    assert S._dates("by Mon 23 Nov 20:00") == {(23, 11)}
+    assert S._dates("at 6.30 pm on 23.11.26") == {(23, 11)}
+    # an acronym at the start is still checked
+    assert S.check("SDE applicants: fill this form by Fri 27 Nov 23:59.", RISA_TEXT, it).startswith("name not")
+
+
+def test_the_rules_line_compresses_the_offices_lead_in_and_skips_list_headings():
+    text = ("Urgent\nImportant Instructions: 1. All the students who are eligible and have applied for the Management "
+            "Trainee and Content roles at BLUESTONE are required to submit the assignment by 27th November 2026, 11:59 PM. "
+            "2. Late entries will not be taken.")
+    line = S.rules_line(item(company="BLUESTONE"), text)
+    assert line == "Applicants must submit the assignment by 27th November 2026, 11:59 PM.", line
+    mail = "Design a RAG System for File Search | Example AI PM Interview\nThe small talk is done. Now the design round."
+    assert S.rules_line(item(company="Example"), mail).startswith("Design a RAG System for File Search")
+
+
+def test_a_line_from_older_rules_is_written_again():
+    it = item(id="d", details={"notice_key": "k"})
+    old = {"d": {"details": {"summary": ", IIT Kharagpur.", "summary_by": "rules", "summary_key": S.source_key(item(id="d", details={"notice_key": "k"}), RISA_TEXT), "label": "Info"}}}
+    S.apply([it], old, {"k": {"text": RISA_TEXT}}, {}, None, log=lambda *_: None)
+    assert it["details"]["summary"] != ", IIT Kharagpur." and it["details"]["rules_v"] == S.RULES_V

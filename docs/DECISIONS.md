@@ -422,3 +422,11 @@ other mail is stored, a body is read only when the headers leave it open, never 
 account mail's), and every placement mail is stored. Deploys had gone out meanwhile with every other test passing;
 from now on the Tests run is checked before calling a change live. The fixture's coordinator address is an
 example.com one, and `example` (a reserved name) reads like a mailbox's host, not a company's domain.
+- **What the first real backfill showed (25 Nov, 9 of your cards).** Most "rejections" were the fact check's fault:
+  a sentence's first word ("Review", "Prepare", "Accept") was taken for a name, and "Mon 23 Nov 20:00" read as
+  the date "Nov 20". Fixed (an all-caps first word such as "SDE" is still checked). The prompt's "(no deadline)"
+  placeholder was copied into a line; now a card without a deadline is told to give one only if the notice states
+  it. A line rejected only for length gets one shorter retry. The rules' line now turns the office's "All the
+  students who are eligible and have applied for ... are required to" into "Applicants must", skips list headings
+  ("Important Instructions: 1."), and past the first sentence takes only one that says what to do, else the
+  subject. Lines written by older rules are written again (`rules_v`); the backfill rewrites every card it picks.

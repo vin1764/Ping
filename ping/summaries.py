@@ -25,6 +25,7 @@ import requests
 
 from .config import IST
 
+RULES_V = 2                     # the rules' line: a card written by older rules gets it again
 MAX_CHARS = 100                 # two lines of a card at 390 px, never cut
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("PING_GROQ_MODEL") or "openai/gpt-oss-120b"
@@ -36,7 +37,7 @@ WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 PROMPT = """You write the one line a student sees for a placement notice in their chat.
 Say what changed and what the student must do, in plain words: one sentence, at most 15 words, under 95 characters.
 If the notice is for a group, start with who ("Shortlisted students: ..."). Don't start with the company's name: it is
-shown already. Use only facts in the notice. If you give the deadline, write it exactly as: {due}.
+shown already. Use only facts in the notice. {due_rule}
 No quotes, no emoji, no "Dear students", no [URGENT].
 
 Company: {company}
@@ -132,9 +133,9 @@ def _dates(s: str) -> set[tuple[int, int]]:
     mon = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
     for d_, m in re.findall(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?{mon}", s, re.I):
         out.add((int(d_), MONTHS[m[:3].lower()]))
-    for m, d_ in re.findall(rf"\b{mon}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b", s, re.I):
+    for m, d_ in re.findall(rf"\b{mon}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?![:.]\d)", s, re.I):
         out.add((int(d_), MONTHS[m[:3].lower()]))
-    for d_, m in re.findall(r"\b(\d{1,2})[./-](\d{1,2})(?:[./-]\d{2,4})?\b", s):
+    for d_, m in re.findall(r"\b(\d{1,2})[./-](\d{1,2})(?:[./-]\d{2,4})?\b(?!\s*[ap]\.?\s?m\b)(?![:.]\d)", s, re.I):
         if 1 <= int(m) <= 12:
             out.add((int(d_), int(m)))
     return out
@@ -180,7 +181,9 @@ def check(line: str, text: str, it: dict) -> str | None:
         if n not in allowed:
             return f"number not in the notice: {n}"
     # names: every capitalised word (a company, a role, a place) is in the notice
-    words = re.findall(r"\b[A-Z][A-Za-z0-9&+-]*\b", line)
+    starts = {m.start(1) for m in re.finditer(r"(?:^|[.:;!?]\s+)\W*([A-Z])", line)}
+    words = [m.group(0) for m in re.finditer(r"\b[A-Z][A-Za-z0-9&+-]*\b", line)
+             if m.start() not in starts or (m.group(0).isupper() and len(m.group(0)) > 1)]   # "SDE" still checked
     for w in words:
         lw = w.lower()
         if lw in PLAIN or lw[:3] in MONTHS or lw[:3] in WEEKDAYS:
@@ -207,25 +210,31 @@ def _clean(s: str, company: str | None) -> str:
 
 # a sentence that says nothing to act on: the office's signature, a list's heading, a link left out of the demo
 JUNK = re.compile(r"iit kharagpur|career development|regards|thanking you|for more details|following students?|"
-                  r"\(s\):|removed\]|please find|attached (here)?with|^link\b", re.I)
+                  r"\(s\):|removed\]|please find|attached (here)?with|^link\b|instructions?\s*:|\b\d{1,2}\.$", re.I)
+# "All the students who are eligible and have applied for the X roles at Y are required to ..." -> "Applicants must ..."
+APPLICANTS = re.compile(r"^all (?:the )?(?:eligible )?students,? (?:who|that) (?:are eligible and )?(?:have )?applied"
+                        r"(?: on erp)?,? for .{0,120}? (?:are|is) (?:required|requested|advised|expected) to\s+", re.I)
 LEAD = re.compile(r"^(note\s*:\s*|please note that|kindly note that|this is to inform (all )?(the )?(students )?that|it is to inform (you )?that|"
                   r"we are pleased to inform (you )?that|note that)\s+", re.I)
 ACT = re.compile(r"\b(must|required|requested|advised|complete|fill|submit|register|attend|report|join|deadline|"
                  r"will be held|scheduled|rescheduled|postponed|preponed|venue|shortlist|selected|extended)\b|\bby \d", re.I)
 
 
-def _sentence(s: str) -> str:
+def _sentence(s: str, need_action: bool = False) -> str:
     """The whole sentence that best says what to do (or what changed), shortest lead-in dropped; never a cut one,
     never the signature or a list's heading."""
     best, score = "", -1
     for k, part in enumerate(re.split(r"(?<=[.!?])\s+", s)):
         part = LEAD.sub("", part.strip()).strip()
+        part = APPLICANTS.sub("Applicants must ", part)
         part = re.sub(r"\s*\([^)]{0,60}\)", "", part).strip() if len(part) > MAX_CHARS else part
         if not part or not part[0].isalnum() or part.endswith(":") or JUNK.search(part) or len(part.split()) < 4:
             continue
         if not 12 <= len(part) <= MAX_CHARS:
             continue
         sc = 2 * bool(ACT.search(part)) + bool(_times(part) or _dates(part))
+        if sc == 0 and (k > 0 or need_action):
+            continue                                   # past the first sentence, only one that says what to do
         if sc > score:
             best, score = part, sc
     if not best:
@@ -268,12 +277,13 @@ def rules_line(it: dict, text: str) -> str:
     if lab == "Shortlist":
         st = (d.get("pdf") or {}).get("status") or it.get("pdf_status")
         return "You're on the shortlist." if st == "yes" else "The shortlist is out: check it for your name."
-    first = _sentence(_clean(text.split("\n", 1)[-1] if "\n" in text else text, it.get("company")))
+    body = _clean(text.split("\n", 1)[-1] if "\n" in text else text, it.get("company"))
+    subj = _sentence(_clean(text.split("\n", 1)[0], it.get("company")))
+    subj = subj if subj and len(subj.split()) >= 3 and not JUNK.search(subj) else ""
+    # a sentence that says what to do; else the subject; else the body's first sentence
+    first = _sentence(body, need_action=True) or subj or _sentence(body)
     if first:
         return first
-    subj = _sentence(_clean(text.split("\n", 1)[0], it.get("company")))
-    if subj and len(subj.split()) >= 3:
-        return subj
     title = _sentence(_clean(it.get("title") or "", it.get("company")))
     if title:
         return title
@@ -343,11 +353,21 @@ def summarize(it: dict, text: str, writer: Writer | None) -> dict:
     lab = label(it)
     out = {"label": lab, "summary_key": source_key(it, text)}
     if writer and writer.room():
-        res = writer.call(PROMPT.format(due=fmt(it.get("due_at") or it.get("event_at")) or "(no deadline)",
-                                        company=it.get("company") or "", label=lab, text=text[:2500]))
+        due = fmt(it.get("due_at") or it.get("event_at"))
+        prompt = PROMPT.format(due_rule=f"If you give the deadline or time, write it exactly as: {due}." if due else
+                               "Give a date or time only if the notice states it.",
+                               company=it.get("company") or "", label=lab, text=text[:2500])
+        res = writer.call(prompt)
         if res:
             line, by = tidy(res[0], it.get("company")), res[1]
             why = check(line, text, it)
+            if why and why.startswith("too long") and writer.room():      # once more, shorter
+                again = writer.call(prompt + f"\n\nYour line was {len(line)} characters. Write it again in at most 12 words.")
+                if again:
+                    line2 = tidy(again[0], it.get("company"))
+                    why2 = check(line2, text, it)
+                    if not why2 or not why2.startswith("too long"):
+                        line, by, why = line2, again[1], why2
             if not why:
                 writer.stats["model"] += 1
                 writer.stats["by"][by] = writer.stats["by"].get(by, 0) + 1
@@ -364,7 +384,7 @@ def summarize(it: dict, text: str, writer: Writer | None) -> dict:
         out["summary_pending"] = True                     # the next run tries the model again
     if writer:
         writer.stats["rules"] += 1
-    return {**out, "summary": rules_line(it, text), "summary_by": "rules"}
+    return {**out, "summary": rules_line(it, text), "summary_by": "rules", "rules_v": RULES_V}
 
 
 # ---------------------------------------------------------------- which cards, in which order
@@ -393,8 +413,9 @@ def apply(items: list[dict], previous: dict, notices: dict, emails: dict, writer
         before = (previous.get(it["id"]) or {}).get("details") or {}
         text = source_text(it, notices, emails)
         key = source_key(it, text)
-        if before.get("summary") and before.get("summary_key") == key and not before.get("summary_pending"):
-            for k in ("summary", "summary_by", "label", "summary_key", "summary_why", "summary_model"):
+        stale = before.get("summary_by") == "rules" and before.get("rules_v") != RULES_V
+        if before.get("summary") and before.get("summary_key") == key and not before.get("summary_pending") and not stale:
+            for k in ("summary", "summary_by", "label", "summary_key", "summary_why", "summary_model", "rules_v"):
                 if before.get(k) is not None:
                     d[k] = before[k]
             continue
@@ -410,7 +431,7 @@ def apply(items: list[dict], previous: dict, notices: dict, emails: dict, writer
         _, text = by_id[id(it)]
         res = summarize(it, text, writer)
         d = it["details"]
-        for k in ("summary_why", "summary_model", "summary_pending"):
+        for k in ("summary_why", "summary_model", "summary_pending", "rules_v"):
             d.pop(k, None)
         d.update(res)
     stats = writer.stats if writer else {}

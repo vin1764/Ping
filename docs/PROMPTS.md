@@ -107,7 +107,7 @@ CV text:
 You write the one line a student sees for a placement notice in their chat.
 Say what changed and what the student must do, in plain words: one sentence, at most 15 words, under 95 characters.
 If the notice is for a group, start with who ("Shortlisted students: ..."). Don't start with the company's name: it is
-shown already. Use only facts in the notice. If you give the deadline, write it exactly as: {due}.
+shown already. Use only facts in the notice. {due_rule}
 No quotes, no emoji, no "Dear students", no [URGENT].
 
 Company: {company}

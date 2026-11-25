@@ -2040,8 +2040,8 @@ def summaries_backfill(secrets) -> int:
         titles = {it["id"]: it.get("title") or "" for it in pick}
         writer = SUM.Writer(os.environ.get("GROQ_API_KEY", ""), os.environ.get("GEMINI_API_KEY_LIVE", ""),
                             budget=int(os.environ.get("SUMMARY_CALLS") or 150), seconds=1500) if scope == "yours" else None
-        # every picked card gets its line now (none kept from before unless its text is unchanged)
-        stats = SUM.apply(pick, {it["id"]: {"details": before[it["id"]]} for it in pick}, notices, emails, writer, log=say)
+        # every picked card gets its line written now (none kept from an earlier run)
+        stats = SUM.apply(pick, {}, notices, emails, writer, log=say)
         changed = [it for it in pick if {k: (it.get("details") or {}).get(k) for k in ("summary", "label")}
                    != {k: before[it["id"]].get(k) for k in ("summary", "label")}]
         say(f"{scope}: {len(items)} items, {len(pick)} open or from the last 7 days, {len(changed)} lines new or changed "

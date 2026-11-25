@@ -85,7 +85,14 @@ def replacements(real_name: str | None) -> list[tuple[str, str, str]]:
         pairs.append(("name", r"\s+".join(re.escape(w) for w in real_name.split()), FAKE_NAME))
     if url:
         pairs.append(("project address", re.escape(url), "https://YOUR-PROJECT.supabase.co"))
+    # anyone's personal mailbox address (Gmail, Outlook...) in any commit -> an example.com one (25 Nov: a campus
+    # coordinator's address in an old test fixture); the fixtures use example.com today
+    pairs.append(("personal mailbox addresses", PERSONAL_MAIL.pattern, "someone@example.com"))
     return pairs
+
+
+# a personal mailbox's address (Gmail, Outlook...): replaced in every commit, and a leak if one is left
+PERSONAL_MAIL = re.compile(r"[a-z0-9._%+-]+@(?:gmail|googlemail|yahoo|ymail|hotmail|outlook|live|icloud|me|proton|protonmail|rediffmail|aol)\.[a-z]{2,}(?:\.[a-z]{2,})?", re.I)
 
 
 def _blobs(repo: Path):
@@ -228,6 +235,8 @@ def check(target: Path, secrets: dict[str, str]) -> list[str]:
         if not path.endswith("demo-data.json") and any(n not in today and not _fake(n) for n in _ten_digit_numbers(text)):
             leaks["a ten-digit number not in today's files"] = leaks.get("a ten-digit number not in today's files", 0) + 1
         low = text.lower()
+        if PERSONAL_MAIL.search(text):
+            leaks["a personal mailbox's address (gmail, outlook...)"] = leaks.get("a personal mailbox's address (gmail, outlook...)", 0) + 1
         if BANNED in low:
             leaks["the banned word"] = leaks.get("the banned word", 0) + 1
         for name, v in secrets.items():

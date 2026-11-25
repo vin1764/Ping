@@ -15,6 +15,12 @@ export function peek(scope: string): Entry | null {
   return e && Date.now() - e.at <= TTL_MS ? e : null;
 }
 
+// nothing kept at all (a fresh instance): the heavy reads start before the login check is back
+export function empty(): boolean {
+  for (const e of store.values()) if (Date.now() - e.at <= TTL_MS) return false;
+  return true;
+}
+
 export function keep(scope: string, key: string | null, data: any) {
   if (!key) { store.delete(scope); return; }
   store.set(scope, { key, at: Date.now(), data });

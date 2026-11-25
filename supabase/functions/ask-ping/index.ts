@@ -12,7 +12,7 @@ import { describe, parsePrefs, type Prefs } from "./prefs.ts";
 import { evalsProof } from "./evals_key.ts";
 import { chatComplete } from "../_shared/openai_compat.ts";
 import { timer } from "./timing.ts";
-import { freshKey, keep, peek } from "./cache.ts";
+import { empty, freshKey, keep, peek } from "./cache.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
@@ -110,8 +110,8 @@ const only = (row: any, cols: string) => row ? Object.fromEntries(cols.split(","
 // The data an answer is built from: the same reads as before, now asked at once, and the heavy ones (roles, items,
 // notices, mail, forms) from this instance's copy while its freshness key matches the database (cache.ts). The probe
 // (the latest run; the number and newest of your undismissed items) and the student profile are read every time.
-async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>, pre: { run: Promise<any>; fresh: Promise<any>; profile: Promise<any> }) {
-  const heavy = () => Promise.all([
+// the heavy reads (the same for owner and demo callers; the database's rules decide which rows come back)
+const heavyReads = (sb: any, T: ReturnType<typeof timer>) => Promise.all([
     T.read("items(feed)", sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150)),
     T.read("roles", sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400)),
@@ -123,8 +123,13 @@ async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>, pre
     T.read("emails", sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400)),
     T.read("forms", sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400)),
   ]);
+
+async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>,
+                        pre: { run: Promise<any>; fresh: Promise<any>; profile: Promise<any>; heavy: Promise<any[]> | null }) {
+  const heavy = () => heavyReads(sb, T);
   const kept = peek(scope);
-  const pHeavy = kept ? null : heavy();                 // no copy to try: read it all now, beside the probe
+  // no copy to try: read it all now, beside the probe (on a fresh instance it started with the login check)
+  const pHeavy = kept ? null : pre.heavy || heavy();
   const [run, fresh, profile] = await Promise.all([pre.run, pre.fresh, pre.profile]);
   const key = run.error || fresh.error ? null : freshKey(run.data?.[0], fresh.count ?? null, fresh.data?.[0]?.first_seen ?? null);
   let parts: any[];
@@ -165,6 +170,8 @@ Deno.serve(async (req) => {
   const pRun = asking ? T.read("runs", sb0.from("runs").select("started_at,finished_at").order("started_at", { ascending: false }).limit(1)) : none;
   const pFresh = asking ? T.read("freshness", sb0.from("items").select("first_seen", { count: "exact" }).eq("dismissed", false)
     .order("first_seen", { ascending: false }).limit(1)) : none;
+  // a fresh instance has nothing kept: the heavy reads start now too, rather than after the login check
+  const pEarly = asking && empty() ? heavyReads(sb0, T) : null;
   const who = await caller(req, sb0);
   if (!who) return json({ error: "not allowed" }, 403);
   const { sb, role } = who;
@@ -206,7 +213,7 @@ Deno.serve(async (req) => {
   // the demo's limit counts a question: only for a question this function will answer
   const pTake = asking && role === "demo" ? T.read("demo_limit", sb.rpc("demo_take_question")) : none;
   const scope = role === "owner" ? "owner" : "demo";
-  const pData = asking ? loadData(sb, scope, T, { run: pRun, fresh: pFresh, profile: pStudent }) : none;
+  const pData = asking ? loadData(sb, scope, T, { run: pRun, fresh: pFresh, profile: pStudent, heavy: pEarly }) : none;
 
   // The caller's preferences: the owner's profile row, or for a demo session the demo profile with that session's
   // own changes on top (session_prefs: never the owner's profile, never another session's).

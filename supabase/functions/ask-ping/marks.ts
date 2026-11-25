@@ -1,6 +1,7 @@
 // "For you" marks inside the function: the same as ping/relevance.py (same hashes, same prompt, same cache table),
 // so a preference said in the chat re-marks the roles at once, and the hourly run then finds them cached.
 // The role_marks cache holds hashes only and is read/written with the service key; callers never see it.
+import { inChunks } from "../_shared/pages.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 // Kept identical to ping/relevance.py PROMPT (tests/test_prompts_doc.py checks it).
@@ -70,7 +71,9 @@ export async function markRoles(roles: any[], targets: string, models: string[],
   const labels = cvs.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2).split(":")[0]);
   const hashes = new Map<string, string>();
   for (const r of roles) hashes.set(r.id, await roleHash(r));
-  const { data: rows } = await svc.from("role_marks").select("role_hash,relevant,reason,jd_missing,best_cv").eq("targets_hash", th).limit(5000);
+  // only these roles' marks (asked in chunks): all marks for these targets could pass the API's 1,000 rows a request
+  const { data: rows } = await inChunks((part) => svc.from("role_marks").select("role_hash,relevant,reason,jd_missing,best_cv")
+    .eq("targets_hash", th).in("role_hash", part), [...new Set(hashes.values())]);
   const byHash = new Map((rows || []).map((x: any) => [x.role_hash, x]));
   const todo = roles.filter((r) => !byHash.has(hashes.get(r.id)!));
   for (const r of roles) {

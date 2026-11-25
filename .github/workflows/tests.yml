@@ -33,4 +33,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: cd supabase/functions && deno test -A ask-ping
+      - run: cd supabase/functions && deno test -A ask-ping _shared/pages_test.ts

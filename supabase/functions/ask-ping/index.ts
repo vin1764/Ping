@@ -13,6 +13,7 @@ import { evalsProof } from "./evals_key.ts";
 import { chatComplete } from "../_shared/openai_compat.ts";
 import { timer } from "./timing.ts";
 import { empty, freshKey, keep, peek } from "./cache.ts";
+import { pageAll } from "../_shared/pages.ts";
 // answers from the data without the AI (shared with the dashboard, which loads the same file)
 import "../_shared/help.js";          // what Ping says about itself (docs/HELP.md), read by answer_rules.js
 import "../_shared/answer_rules.js";
@@ -114,14 +115,15 @@ const only = (row: any, cols: string) => row ? Object.fromEntries(cols.split(","
 const heavyReads = (sb: any, T: ReturnType<typeof timer>) => Promise.all([
     T.read("items(feed)", sb.from("items").select("level,category,title,company,due_at,event_at,first_seen,details")
       .neq("level", "hidden").eq("dismissed", false).order("first_seen", { ascending: false }).limit(150)),
-    T.read("roles", sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").limit(400)),
-    T.read("items(rules)", sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
+    // every row (a page at a time: the API returns at most 1,000 a request); the rules need a company's whole history
+    T.read("roles", pageAll(() => sb.from("roles").select("id,company,designation,job_description,jd_text,jd_source,jd_url,jd_note,jd_summary,applied,effective_deadline,eligible,ctc,currency,cgpa_cutoff,bond").order("id"), 1)),
+    T.read("items(rules)", pageAll(() => sb.from("items").select("id,company,category,title,due_at,event_at,level,pdf_status,role_ids,notice_id,first_seen," +
       "hidden_because:details->>hidden_because,subject:details->>subject,venue:details->>venue,kind:details->>kind," +
       "notice_time:details->>notice_time,pdf:details->pdf,via:details->>via,mail:details->mail,todo:details->todo,sort_at").eq("dismissed", false)
-      .order("first_seen", { ascending: false }).limit(1000)),
-    T.read("notices(rules)", sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).limit(1000)),
-    T.read("emails", sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).limit(400)),
-    T.read("forms", sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").limit(400)),
+      .order("first_seen", { ascending: false }).order("id"))),
+    T.read("notices(rules)", pageAll(() => sb.from("notices").select("id,notice_id,year,company,subject,notice_time,has_attachment").order("notice_time", { ascending: false }).order("id"), 1)),
+    T.read("emails", pageAll(() => sb.from("emails").select("id,received_at,sender,subject,snippet,company,main_link,due_at,pdf").order("received_at", { ascending: false }).order("id"), 1)),
+    T.read("forms", pageAll(() => sb.from("forms").select("key,company,companies,title,description,link,final_url,due_at,purpose").order("key"), 1)),
   ]);
 
 async function loadData(sb: any, scope: string, T: ReturnType<typeof timer>,
@@ -255,8 +257,8 @@ Deno.serve(async (req) => {
     return up.error?.message || "";
   };
 
-  const classifiable = async () => (await sb.from("roles")
-    .select("id,company,designation,job_description,jd_text,more_details,eligible").limit(400)).data?.filter((r: any) => r.eligible !== false) || [];
+  const classifiable = async () => (await pageAll(() => sb.from("roles")
+    .select("id,company,designation,job_description,jd_text,more_details,eligible").order("id"), 1)).data?.filter((r: any) => r.eligible !== false) || [];
 
   // The page asks for the "For you" marks of the caller's current targets (cache only, no Gemini) to split its lists.
   if (body?.marks === true) {
@@ -296,7 +298,7 @@ Deno.serve(async (req) => {
   // "piramal not relevant", "hide Groww", "show Zeta again", "undo": by rules (works with the model down), saved,
   // one line back with an Undo button
   if (Rules.feedbackLike(question)) {
-    const fbRoles = (await sb.from("roles").select("id,company,designation").limit(400)).data || [];
+    const fbRoles = (await pageAll(() => sb.from("roles").select("id,company,designation").order("id"), 1)).data || [];
     const prevQ = (await sb.from("chat_messages").select("role,text").order("created_at", { ascending: false }).limit(4)).data || [];
     const fbData = { roles: fbRoles, items: [], notices: [] };
     const prevCos = prevQ.filter((m: any) => m.role === "me" && m.text.trim() !== question.trim()).slice(0, 1)
@@ -336,7 +338,7 @@ Deno.serve(async (req) => {
   const parsed = parsePrefs(question, prefs);
   let saved = "";
   if (parsed.kind === "show") {
-    const allRoles = (await sb.from("roles").select("id,company,designation").limit(400)).data || [];
+    const allRoles = (await pageAll(() => sb.from("roles").select("id,company,designation").order("id"), 1)).data || [];
     const line = `Your preferences${role === "demo" ? " (this demo session only)" : ""}: ${describe(prefs)}; ${Rules.describeLists(fbLists, allRoles)}.` +
       (fbLists.not_interested_companies?.length || fbLists.hidden_roles?.length || fbLists.interested_companies?.length || fbLists.shown_roles?.length
         ? " Say \"reset\" to clear them all, or \"show X again\" for one." : "");

@@ -783,6 +783,16 @@ class Runner:
                              and (it["id"] not in previous or (it.get("details") or {}).get("posted_at") == self.now.isoformat())]
         self.new_in_chat = len(self.new_messages)
         self.counts["new_in_chat"] = self.new_in_chat
+        # each update / notice / mail card's line: what changed and what to do, written once here (the model, then
+        # the fact check, else the rules; ping/summaries.py) and kept with the card; never on page load
+        try:
+            from . import summaries as SUM
+            writer = SUM.Writer(os.environ.get("GROQ_API_KEY", ""), os.environ.get("GEMINI_API_KEY", ""),
+                                budget=int(os.environ.get("PING_SUMMARY_CALLS") or 25), seconds=150)
+            self.counts["card_lines"] = SUM.apply(items, previous, {n["id"]: n for n in notices}, {e["id"]: e for e in emails or []},
+                                                  writer, only=posting.in_chat, log=log)
+        except Exception as e:                                     # a card without a line still shows its title
+            self.problems.append(f"card lines not written: {type(e).__name__}: {str(e)[:120]}")
         stamp = datetime.now(timezone.utc).isoformat()
         # role eligibility + effective deadline, for the dashboard
         dls = effective_deadlines(roles, notices, CompanyIndex(roles))

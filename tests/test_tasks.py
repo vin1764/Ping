@@ -78,3 +78,61 @@ def test_a_push_held_back_by_quiet_hours_is_queued_for_the_check_window():
     assert at.isoformat() == "2026-11-25T07:30:00+05:30"
     at = window_start(datetime(2026, 11, 25, 3, 0, tzinfo=timezone.utc), "07:30")         # 08:30 IST: tomorrow
     assert at.isoformat() == "2026-11-26T07:30:00+05:30"
+
+
+# ---------------------------------------------------------------- 25 Nov: a re-scan's future to-do gets a card + reminder
+def _guarded(items, previous, store, now, **kw):
+    return posting.guard(items, previous, store, now, log=lambda *_: None, **kw)
+
+
+def test_a_rescan_finds_a_future_assignment_one_card_and_a_reminder_that_opens_it():
+    from ping import push
+    from ping.store import MemoryStore
+    store = MemoryStore()
+    store.set_state("posted_keys", ["seed"])
+    prev = {"seed": {"id": "seed", "level": "show", "category": "update"}}
+    items = _guarded(build_items(ROLES, [], {}, PROFILE, NOW, [MAIL]), prev, store, NOW, silent=["mail rules re-read"])
+    card = next(i for i in items if i["id"] == "mail:m-bluestone")
+    assert card["level"] != "hidden" and posting.in_chat(card)                     # one card, even in a silent run
+    assert card["details"]["posted_at"] == NOW.isoformat()                         # drawn now, at the bottom
+    # its reminder (2 h before) opens that card
+    later = datetime(2026, 11, 27, 21, 0, tzinfo=IST)
+    rows, first = push.with_cards(push.mail_reminders(items, PROFILE, NOW), items, NOW)
+    assert first == [] and [r["url"] for r in rows if r["id"] == "reminder:mail:m-bluestone"] == ["./#m-mail%3Am-bluestone"]
+    # the next run (a re-scan again): the same card, not posted twice
+    prev2 = {it["id"]: it for it in items}
+    again = _guarded(build_items(ROLES, [], {}, PROFILE, later - timedelta(hours=60), [MAIL]), prev2, store,
+                     later - timedelta(hours=60), silent=["re-scan"])
+    assert sum(1 for i in again if i["id"] == "mail:m-bluestone" and i["level"] != "hidden") == 1
+
+
+def test_a_rescan_stays_silent_for_a_past_or_an_already_announced_todo():
+    from ping import push
+    from ping.store import MemoryStore
+    prev = {"seed": {"id": "seed", "level": "show", "category": "update"}}
+    # past: its deadline went before Ping found it
+    store = MemoryStore()
+    store.set_state("posted_keys", ["seed"])
+    after = datetime(2026, 11, 28, 9, 0, tzinfo=IST)
+    items = _guarded(build_items(ROLES, [], {}, PROFILE, after, [MAIL]), prev, store, after, silent=["re-scan"])
+    assert all(not posting.in_chat(i) or i.get("level") == "hidden" for i in items if i["id"] == "mail:m-bluestone")
+    assert push.with_cards(push.mail_reminders(items, PROFILE, after), items, after)[0] == []
+    # already announced (its company, task, deadline and link posted before)
+    store = MemoryStore()
+    first = build_items(ROLES, [], {}, PROFILE, NOW, [MAIL])
+    store.set_state("posted_keys", [posting.post_key(next(i for i in first if i["id"] == "mail:m-bluestone"))])
+    items = _guarded(first, prev, store, NOW, silent=["re-scan"])
+    it = next(i for i in items if i["id"] == "mail:m-bluestone")
+    assert it["level"] == "hidden" and "re-scan" in it["details"]["hidden_because"]
+
+
+def test_a_reminder_without_a_card_gets_one_first_and_one_you_hid_gets_none():
+    from ping import push
+    base = {"category": "todo", "company": "Acme", "due_at": DUE, "details": {"via": "email", "todo": {"action": "submit", "link": "x"}}}
+    rows = [{"id": "reminder:a", "url": "./#m-a"}, {"id": "reminder:b", "url": "./#m-b"}, {"id": "reminder:c", "url": "./#m-c"}]
+    items = [{**base, "id": "a", "level": "hidden", "details": {**base["details"], "hidden_because": "an older message found again: saved, not posted"}},
+             {**base, "id": "b", "level": "hidden", "details": {**base["details"], "hidden_because": "marked not interested"}},
+             {**base, "id": "c", "level": "hidden", "details": {**base["details"], "hidden_because": "grouped into one message", "grouped_in": "batch:1"}}]
+    keep, first = push.with_cards(rows, items, NOW)
+    assert [i["id"] for i in first] == ["a"]                                  # its card is posted first
+    assert {r["id"]: r["url"] for r in keep} == {"reminder:a": "./#m-a", "reminder:c": "./#m-batch%3A1"}   # b: you hid it

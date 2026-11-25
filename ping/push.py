@@ -328,6 +328,38 @@ def window_start(now: datetime, check_from: str | None) -> datetime:
     return at if at > local else at + timedelta(days=1)
 
 
+# hidden because you said so (not interested, not for you, hidden): no reminder at all
+_YOURS = re.compile(r"not interested|not for you|you hid|you said|not relevant|\bothers\b", re.I)
+
+
+def with_cards(rows: list[dict], items: list[dict], now: datetime) -> tuple[list[dict], list[dict]]:
+    """A reminder push goes out only for a message that has a card in the chat, and tapping it opens that card: the
+    message's own card, the grouped message it went into, or the copy of it that was posted (same company, task,
+    deadline and link). A reminder whose message has no card yet: the card is posted first (returned, to be made
+    visible now). One hidden because you said so: no reminder. Returns (rows to queue, messages to post first)."""
+    from . import posting
+    by_id = {it["id"]: it for it in items}
+    shown = {}
+    for it in items:
+        if posting.in_chat(it):
+            shown.setdefault(posting.post_key(it), it["id"])
+    keep, post_first = [], []
+    for r in rows:
+        iid = r["id"].split(":", 1)[1] if r["id"].startswith("reminder:") else ""
+        it = by_id.get(iid)
+        if not it:
+            continue
+        d = it.get("details") or {}
+        card = iid if posting.in_chat(it) else d.get("grouped_in") or shown.get(posting.post_key(it))
+        if not card:
+            if it.get("dismissed") or _YOURS.search(str(d.get("hidden_because") or "")):
+                continue
+            card = iid
+            post_first.append(it)
+        keep.append({**r, "url": f"./#m-{quote(str(card), safe='')}"})
+    return keep, post_first
+
+
 def reminders(items: list[dict], profile: dict, now: datetime) -> list[dict]:
     """push_queue rows for tests a list says you're on: "Groww test at 15:00 · room 304", sent at the lead time."""
     lead = timedelta(hours=float(profile.get("reminder_hours") or 2))

@@ -173,10 +173,25 @@
       if (error) throw new Error(`${table}: ${error.message}`);
       return data;
     }
+    // every row, a page at a time: the database's API returns at most 1,000 rows per request whatever limit is asked,
+    // so a single read of a longer table silently stops at the oldest 1,000 (25 Nov: the newest messages, BlueStone's
+    // and RISA Labs' assignments, never reached the chat, To do or Today)
+    async all(table, fn, page = 1000) {
+      const out = [];
+      for (let from = 0; from < 20000; from += page) {
+        let query = this.sb.from(table).select("*");
+        if (fn) query = fn(query);
+        const { data, error } = await query.range(from, from + page - 1);
+        if (error) throw new Error(`${table}: ${error.message}`);
+        out.push(...(data || []));
+        if (!data || data.length < page) break;
+      }
+      return out;
+    }
     async load() {
       const [items, roles, profile, runs, notices] = await Promise.all([
-        this.q("items", (q) => q.order("first_seen", { ascending: true }).limit(3000)),
-        this.q("roles", (q) => q.limit(2000)),
+        this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true })),
+        this.all("roles", (q) => q.order("id", { ascending: true })),
         this.q("profile"),
         this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)),
         // the latest notices, one line each on Today (the full text is read when one is opened)
@@ -189,7 +204,7 @@
                generated_at: this.demo ? profile[0]?.updated_at : undefined };
     }
     // the forms list (the hourly run builds it) and your ticks (your own rows: form_status)
-    async forms() { return this.q("forms", (q) => q.order("due_at", { ascending: true }).limit(2000)).catch(() => []); }
+    async forms() { return this.all("forms", (q) => q.order("due_at", { ascending: true }).order("key", { ascending: true })).catch(() => []); }
     async formStatus() { return this.q("form_status").catch(() => []); }
     // a tick (true / false) or a patch ({ not_for_me, not_for_me_reason }): only those columns change
     async setFormStatus(key, filled) {
@@ -207,7 +222,7 @@
     }
     // live updates (see startLive): the latest runs, and the items again once a run has finished
     async liveRuns() { return this.q("runs", (q) => q.order("id", { ascending: false }).limit(30)); }
-    async items() { return this.q("items", (q) => q.order("first_seen", { ascending: true }).limit(3000)); }
+    async items() { return this.all("items", (q) => q.order("first_seen", { ascending: true }).order("id", { ascending: true })); }
     async notice(noticeId) {
       const [n] = await this.q("notices", (q) => q.eq("notice_id", noticeId).limit(1));
       const checks = n ? await this.q("pdf_checks", (q) => q.eq("notice_id", n.id)) : [];
@@ -1159,6 +1174,7 @@
   const itemTime = (it) => {
     const d = it.details || {};
     if (d.reposted_at) return d.reposted_at;                       // posted again for you (Admin > repost-item)
+    if (d.posted_at) return d.posted_at;                           // when it was posted: at the bottom, never back-dated
     // found hours after its notice was posted (the ERP listed it late) and still ahead: in the thread where you'll see
     // it, when Ping found it, not up in the history at the notice's time (24 Nov, BlueStone)
     const nt = d.notice_time, fs = it.first_seen, due = it.due_at || it.event_at;
@@ -1605,7 +1621,9 @@
     if (run.stage !== "done") return [];
     const ms = (v) => Date.parse(v || "") || 0;
     const from = ms(run.started_at || run.requested_at) - 10000, to = ms(run.finished_at) + 120000;
-    return (state.data.items || []).filter((it) => inChat(it) && ms(it.first_seen) >= from && ms(it.first_seen) <= to)
+    // posted by this run (a to-do held back before and posted now carries this run's time in posted_at)
+    const at = (it) => ms(it.details?.posted_at || it.first_seen);
+    return (state.data.items || []).filter((it) => inChat(it) && at(it) >= from && at(it) <= to)
       .sort((a, b) => (dt(a.due_at || a.event_at) || 9e15) - (dt(b.due_at || b.event_at) || 9e15));
   }
   // one line per new message, the card's words: "Zeta Global · Form · Today 20:00 [Open form]"

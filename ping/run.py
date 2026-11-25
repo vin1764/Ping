@@ -295,11 +295,23 @@ class Runner:
         """Push (docs/PUSH.md): at most one notification for this run's most urgent new for-you message, test-day
         reminders queued for pg_cron, and the optional for-you email. Never fails the run."""
         from . import push, posting
-        if not self.store_ok or posting.paused() or getattr(self, "silent_reasons", None):
+        # a silent run (a re-scan, a re-read) still posts a future to-do you've never been shown (ping/posting.py): its
+        # push and its reminders go out like any other run's; nothing else it found is new
+        if not self.store_ok or posting.paused():
             return
         new = getattr(self, "new_messages", [])
         try:
             rows = push.reminders(items, profile, self.now) + push.mail_reminders(items, profile, self.now)
+            # every reminder opens a card in the chat; a message without one gets its card first
+            rows, first = push.with_cards(rows, items, self.now)
+            for it in first:
+                d = {**(it.get("details") or {}), "posted_at": self.now.isoformat()}
+                d.pop("hidden_because", None)
+                it.update(level="show" if it.get("level") == "hidden" else it.get("level"), details=d)
+                self.store.upsert("items", [{k: v for k, v in it.items() if k != "updated_at"}])
+                new.append(it)
+            if first:
+                self.counts["cards_posted_for_reminders"] = len(first)
             if rows:
                 sent = {r["id"] for r in self.store.select("push_queue", {"kind": "eq.reminder", "sent_at": "not.is.null"})}
                 rows = [r for r in rows if r["id"] not in sent]
@@ -744,10 +756,13 @@ class Runner:
         except Exception as e:                        # e.g. before Admin > apply-sql made the forms tables
             self.problems.append(f"forms list not built: {type(e).__name__}: {str(e)[:120]}")
         # a message posted again for you (Admin > repost-item) keeps that time across rebuilds
+        # and a card keeps the time it was posted (details.posted_at: drawn there, never back-dated) and the grouped
+        # message it went into
         for it in items:
-            again = ((previous.get(it["id"]) or {}).get("details") or {}).get("reposted_at")
-            if again:
-                it.setdefault("details", {})["reposted_at"] = again
+            before = (previous.get(it["id"]) or {}).get("details") or {}
+            for k in ("reposted_at", "posted_at", "grouped_in"):
+                if before.get(k) and not (it.get("details") or {}).get(k):
+                    it.setdefault("details", {})[k] = before[k]
         # the posting guard (ping/posting.py): what this run may post at all
         from . import posting
         try:
@@ -762,8 +777,10 @@ class Runner:
                     it["level"] = "hidden"
                     it.setdefault("details", {})["hidden_because"] = "not posted: the posting guard failed"
         # what the chat shows that it didn't show before (role cards and reminders live inside the digests)
-        self.new_messages = [it for it in items if it["id"] not in previous and it.get("level") != "hidden"
-                             and it.get("category") not in ("apply", "reminder") and not it.get("dismissed")]
+        # (a future to-do held back by an earlier run and posted now counts too: its posted_at is this run's time)
+        self.new_messages = [it for it in items if it.get("level") != "hidden" and not it.get("dismissed")
+                             and it.get("category") not in ("apply", "reminder")
+                             and (it["id"] not in previous or (it.get("details") or {}).get("posted_at") == self.now.isoformat())]
         self.new_in_chat = len(self.new_messages)
         self.counts["new_in_chat"] = self.new_in_chat
         stamp = datetime.now(timezone.utc).isoformat()

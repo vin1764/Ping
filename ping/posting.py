@@ -3,15 +3,24 @@ message is "posted" the first run it is visible. Before that, it passes these, i
 
   paused      PING_POSTING isn't "on": nothing new is posted or pushed; it's held and looked at again once posting
               is back (the run still reads and saves everything)
-  silent      a re-scan, a backfill or a rule-version re-read: the data is updated, nothing is posted or pushed
+  silent      a re-scan, a backfill or a rule-version re-read: the data is updated, nothing is posted or pushed,
+              EXCEPT a future to-do you've never been shown (below)
   past        its deadline / time had already passed when Ping found it: never posted. This covers a message the
               chat didn't show before and would now show only as a past one (the page keeps a past message in the
               history when Ping posted it while it mattered; one that was hidden for another reason, and then had
               its reason changed to "deadline gone", would otherwise appear at its notice's time: 24 Nov, notice 1830)
-  backfill    a new message about something more than a day old (a re-split notice, a re-read): saved, not posted
+  backfill    a new message about something more than a day old (a re-split notice, a re-read): saved, not posted,
+              EXCEPT a future to-do you've never been shown (below)
   posted      the same company, task, deadline and form link was posted before, whatever the message's id: never again
   cap         at most one digest a run; more than 5 new messages in one run become one grouped message
 
+A future to-do you've never been shown (a form, an assignment or documents to submit, a test or interview, an offer to
+accept, or anything that names you), still ahead and never announced (its company, task, deadline and link not posted
+before) gets one card when Ping finds it, even in a silent run or a backfill; held back by an earlier run, it gets
+its card on the next one (25 Nov: RISA Labs and BlueStone assignments, found by re-reads, never in the chat). Only
+"paused" holds it back. More than 5 at once are one grouped message, as always.
+Every card posted is drawn at the time it's posted (details.posted_at), at the bottom of the chat, never back-dated
+to its notice's or mail's time.
 A message held back is recorded (state "silenced_ids"), so the next run, which rebuilds it, keeps it back too. The
 very first run (nothing saved yet) builds the thread you start with, history included: there is nothing to repeat.
 Every run also collapses repeats (collapse_repeats): messages the chat would draw with the same key and the same
@@ -78,8 +87,28 @@ def is_past(it: dict, now: datetime) -> bool:
 
 
 def chat_time(it: dict):
-    """Where the chat draws a message: its notice's / mail's own time, else when Ping first saw it."""
-    return (it.get("details") or {}).get("notice_time") or it.get("first_seen") or it.get("sort_at")
+    """Where the chat draws a message: when it was posted (again), else its notice's / mail's own time, else when Ping
+    first saw it."""
+    d = it.get("details") or {}
+    return d.get("reposted_at") or d.get("posted_at") or d.get("notice_time") or it.get("first_seen") or it.get("sort_at")
+
+
+# the things to do: a card of their own when they're ahead and you've never been shown them
+ACTION_CATEGORIES = {"todo", "test", "interview", "form", "offer"}
+ACTION_TASKS = {"fill_form", "submit", "take_test", "accept_offer", "attend", "interview", "register"}
+
+
+def actionable(it: dict, now: datetime) -> bool:
+    """A to-do still ahead: a form, an assignment / documents to submit, a test, an interview, an offer, or a message
+    that names you (a list you're on)."""
+    if it.get("category") in ("digest", "listing", "review", "apply", "reminder", "update") or it.get("needs_review"):
+        return False
+    d = it.get("details") or {}
+    if not (it.get("category") in ACTION_CATEGORIES or task_of(it) in ACTION_TASKS or d.get("kind") in ("test", "test_rooms", "interview")
+            or it.get("pdf_status") == "yes"):
+        return False
+    t = _dt(it.get("due_at") or it.get("event_at"))
+    return bool(t and t > now)
 
 
 def in_chat(it: dict) -> bool:
@@ -161,8 +190,14 @@ def guard(items: list[dict], previous: dict, store, now: datetime, paused: bool 
     held = set(store.get_state("held_ids") or [])
     if not posted:                      # first run with the guard: everything already visible counts as posted
         posted = {post_key(p) for p in previous.values() if p.get("level") != "hidden" and not p.get("dismissed")}
-    for it in items:                    # held back before: still held back
+    rescued = set()
+    for it in items:                    # held back before: still held back, unless it's a future to-do never shown
         if it["id"] in silenced:
+            if not paused and it.get("level") != "hidden" and not it.get("dismissed") and actionable(it, now) \
+                    and post_key(it) not in posted:
+                silenced.discard(it["id"])
+                rescued.add(it["id"])
+                continue
             _hide(it, (previous.get(it["id"]) or {}).get("details", {}).get("hidden_because") or "not posted")
     report = {"paused": 0, "silent": 0, "past": 0, "backfill": 0, "posted": 0, "grouped": 0, "digest": 0}
     # a message the chat didn't show last run and would now show only as a past one: never posted
@@ -173,7 +208,8 @@ def guard(items: list[dict], previous: dict, store, now: datetime, paused: bool 
             silenced.add(it["id"])
             report["past"] += 1
     # new: what the chat would draw that it didn't before (a past message included: the page shows those too)
-    new = [it for it in items if (it["id"] not in previous or (it["id"] in held and not paused)) and in_chat(it)]
+    new = [it for it in items if (it["id"] not in previous or it["id"] in rescued or (it["id"] in held and not paused))
+           and in_chat(it)]
     keep = []
     for it in new:
         key = post_key(it)
@@ -183,7 +219,9 @@ def guard(items: list[dict], previous: dict, store, now: datetime, paused: bool 
             report["paused"] += 1
             continue
         held.discard(it["id"])
-        if silent:
+        # a future to-do you've never been shown: its card, whatever kind of run found it
+        first_sight = actionable(it, now) and key not in posted
+        if silent and not first_sight:
             _hide(it, f"found by a {silent[0]}: saved, not posted")
             silenced.add(it["id"])
             report["silent"] += 1
@@ -191,7 +229,7 @@ def guard(items: list[dict], previous: dict, store, now: datetime, paused: bool 
             _hide(it, "its time had already passed when Ping found it")
             silenced.add(it["id"])
             report["past"] += 1
-        elif it.get("category") not in ("digest", "listing") and _dt(chat_time(it)) and _dt(chat_time(it)) < now - BACKFILL:
+        elif not first_sight and it.get("category") not in ("digest", "listing") and _dt(chat_time(it)) and _dt(chat_time(it)) < now - BACKFILL:
             _hide(it, "an older message found again: saved, not posted")
             silenced.add(it["id"])
             report["backfill"] += 1
@@ -209,27 +247,35 @@ def guard(items: list[dict], previous: dict, store, now: datetime, paused: bool 
         keep.remove(it)
         report["digest"] += 1
     # more than CAP new messages: one grouped message instead
+    batch_id = f"batch:{now.strftime('%Y%m%dT%H%M')}"
     if len(keep) > CAP:
         for it in keep:
             _hide(it, "grouped into one message")
+            it.setdefault("details", {})["grouped_in"] = batch_id      # a reminder for it opens the grouped message
             silenced.add(it["id"])
+            posted.add(post_key(it))                                    # announced (in the grouped message)
         report["grouped"] = len(keep)
         cos = list(dict.fromkeys(it.get("company") or "Placement office" for it in keep))
-        items.append({"id": f"batch:{now.strftime('%Y%m%dT%H%M')}", "level": "show", "category": "update", "company": None,
+        items.append({"id": batch_id, "level": "show", "category": "update", "company": None,
                       # the items, never a bare count: "Zeta Global, ZS Associates +3 more — see Today"
                       "title": f"{', '.join(cos[:2])}" + (f" +{len(cos) - 2} more" if len(cos) > 2 else "") + " — see Today",
                       "due_at": None, "event_at": None, "notice_id": None, "role_ids": [], "pdf_status": None, "needs_review": False,
-                      "details": {"list": [{"head": None, "rows": [{"text": it.get("title") or "", "id": it["id"]} for it in keep]}],
+                      "details": {"posted_at": now.isoformat(),
+                                  "list": [{"head": None, "rows": [{"text": it.get("title") or "", "id": it["id"]} for it in keep]}],
                                   "grouped": [it["id"] for it in keep]}})
         keep = []
     for it in keep:
         posted.add(post_key(it))
+        # drawn when it's posted, at the bottom of the chat: never back-dated to its notice's or mail's time
+        it.setdefault("details", {})["posted_at"] = now.isoformat()
     # grouped messages made by earlier runs stay
     ids = {it["id"] for it in items}
     items.extend(p for k, p in previous.items() if k.startswith("batch:") and k not in ids)
     store.set_state("posted_keys", sorted(posted)[-5000:])
     store.set_state("silenced_ids", sorted(silenced)[-20000:])
     store.set_state("held_ids", sorted(held))
+    if rescued:
+        log(f"posting guard: {len(rescued)} future to-dos held back by earlier runs and never shown, posted now")
     log(f"posting guard: {len(new)} new, {len(keep)} posted; held back: " + ", ".join(f"{k} {v}" for k, v in report.items() if v)
         + (" (paused)" if paused else "") + (f" (silent: {', '.join(silent)})" if silent else ""))
     return items

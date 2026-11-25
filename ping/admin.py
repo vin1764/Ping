@@ -1924,36 +1924,139 @@ def followup_evals(secrets) -> int:
     return 0
 
 
+def _announce(store, its: list[dict]) -> None:
+    """The posting guard's record of these as announced: their keys posted, and not held back (ping/posting.py)."""
+    from . import posting
+    posted = set(store.get_state("posted_keys") or [])
+    silenced = set(store.get_state("silenced_ids") or [])
+    for it in its:
+        posted.add(posting.post_key(it))
+        silenced.discard(it["id"])
+    store.set_state("posted_keys", sorted(posted)[-5000:])
+    store.set_state("silenced_ids", sorted(silenced)[-20000:])
+
+
+def _pushed_before(store, iid: str) -> bool:
+    """A push already went out for this message (its run push, a repost, or a reminder that opens it)."""
+    from urllib.parse import quote
+    rows = store.select("push_queue", {"sent_at": "not.is.null", "select": "id,url,result"})
+    url = f"./#m-{quote(iid, safe='')}"
+    return any(r["id"] in (f"run:{iid}", f"repost:{iid}") or (r.get("url") == url and '"ok": 0' not in str(r.get("result")))
+               for r in rows)
+
+
 def repost_item(secrets) -> int:
-    """Writes to Ping's own feed only: posts one message again for you (the company input: its item id), at the bottom
-    of the chat (details.reposted_at, kept across rebuilds) and with a push. For a message you never saw."""
+    """Writes to Ping's own feed only: posts messages again for you (the company input: item ids, comma-separated), at
+    the bottom of the chat (details.reposted_at, kept across rebuilds), recorded as announced, each with a push unless
+    one already went out for it. For a message you never saw."""
     from . import push
-    iid = (os.environ.get("PING_COMPANY") or "").strip()
+    ids = [x.strip() for x in (os.environ.get("PING_COMPANY") or "").split(",") if x.strip()]
     store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
-    rows = store.select("items", {"id": f"eq.{iid}"})
-    if not rows:
-        say(f"no message {iid!r}")
-        return 1
-    it = rows[0]
-    now = datetime.now(timezone.utc)
-    details = {**(it.get("details") or {}), "reposted_at": now.isoformat()}
-    store._req("PATCH", "items", params={"id": f"eq.{iid}"}, json={"details": details, "dismissed": False},
-               headers={"Prefer": "return=minimal"})
     roles = {r["id"]: r for r in store.select("roles", REAL)}
-    note = push.compose([{**it, "details": details}], roles, now.astimezone(IST))
-    say(f"posted again: {it.get('title')!r}")
-    if note:
+    done = []
+    for iid in ids:
+        rows = store.select("items", {"id": f"eq.{iid}"})
+        if not rows:
+            say(f"no message {iid!r}")
+            continue
+        it = rows[0]
+        now = datetime.now(timezone.utc)
+        details = {**(it.get("details") or {}), "reposted_at": now.isoformat()}
+        store._req("PATCH", "items", params={"id": f"eq.{iid}"}, json={"details": details, "dismissed": False},
+                   headers={"Prefer": "return=minimal"})
+        done.append({**it, "details": details})
+        say(f"posted again at {now.astimezone(IST):%a %d %b %H:%M} IST: {it.get('title')!r}")
+        if _pushed_before(store, iid):
+            say("  push: not sent again (one already went out for this message)")
+            continue
+        note = push.compose([{**it, "details": details}], roles, now.astimezone(IST))
+        if not note:
+            say("  push: nothing to send (compose returned nothing)")
+            continue
         res = push.send(secrets.supabase_url, secrets.supabase_key, note)
-        say(f"push: {note.get('title')!r} -> {({k: res.get(k) for k in ('status', 'sent', 'devices', 'ok', 'why', 'error')})}")
+        say(f"  push: {note.get('title')!r} -> {({k: res.get(k) for k in ('status', 'sent', 'devices', 'ok', 'why', 'error')})}")
         if res.get("why") == "quiet hours":       # held back, not dropped: sent when your check window opens
             prof = (store.select("profile", {"id": "eq.1", "select": "check_from"}) or [{}])[0]
             at = push.window_start(now, prof.get("check_from"))
             store.upsert("push_queue", [{"id": f"repost:{iid}", "kind": "run", "title": note["title"], "body": note.get("body") or "",
                                          "url": note.get("url"), "tag": note.get("tag") or iid, "send_at": at.isoformat(),
                                          "sent_at": None, "result": None}])
-            say(f"push: quiet hours now; queued for {at.strftime('%a %d %b %H:%M')} IST, when your check window opens")
+            say(f"  push: quiet hours now; queued for {at.strftime('%a %d %b %H:%M')} IST, when your check window opens")
+    _announce(store, done)
+    return 0 if done else 1
+
+
+PAGE_ROWS = 1000      # what the page read of the items before 25 Nov (the database API's cap per request)
+
+
+def chat_gaps(secrets) -> int:
+    """Every open to-do (a form, an assignment, documents, a test, an interview, an offer, a list you're on) still ahead
+    that you were never shown in the chat: held back by the posting guard (a re-read, a backfill), or past the oldest
+    1,000 messages the page read before 25 Nov. The company input "post" posts them at the bottom of the chat, now:
+    up to 5 as their own cards, more as one grouped message; the ids given after "post:" (comma-separated) are left
+    out (posted on their own with repost-item). Without it, the list only."""
+    from . import posting
+    arg = (os.environ.get("PING_COMPANY") or "").strip()
+    post = arg.startswith("post")
+    skip = {x.strip() for x in arg.split(":", 1)[1].split(",")} if post and ":" in arg else set()
+    store = SupabaseStore(secrets.supabase_url, secrets.supabase_key)
+    now = datetime.now(timezone.utc)
+    items = store.select("items", REAL)
+    order = sorted(items, key=lambda i: (str(i.get("first_seen") or "~"), i["id"]))
+    seen_window = {i["id"] for i in order[:PAGE_ROWS]}
+    say(f"your messages: {len(items)}; the page read the oldest {PAGE_ROWS}, so {max(0, len(items) - PAGE_ROWS)} never reached it "
+        f"(newest first seen {order[-1].get('first_seen') if order else '-'}, the 1,000th {order[PAGE_ROWS - 1].get('first_seen') if len(order) >= PAGE_ROWS else '-'})")
+    silenced = set(store.get_state("silenced_ids") or [])
+    posted = set(store.get_state("posted_keys") or [])
+    # announced = drawn on the page (a chat card the page had) or in a grouped message
+    shown_keys = {posting.post_key(i) for i in items if i["id"] in seen_window and posting.in_chat(i)}
+    gaps, why = {}, {}
+    for it in items:
+        if it.get("dismissed") or not posting.actionable(it, now) or it["id"] in skip:
+            continue
+        held = it["id"] in silenced and it.get("level") == "hidden" and "grouped" not in str((it.get("details") or {}).get("hidden_because"))
+        unseen = it["id"] not in seen_window and posting.in_chat(it) and not (it.get("details") or {}).get("reposted_at")
+        if not (held or unseen):
+            continue
+        k = posting.post_key(it)
+        if k in shown_keys or (held and k in posted and not unseen):
+            continue
+        if k not in gaps or (gaps[k].get("level") == "hidden" and it.get("level") != "hidden"):
+            gaps[k], why[k] = it, "held back by the posting guard" if held else "past the page's first 1,000 messages"
+    rows = sorted(gaps.values(), key=lambda i: str(i.get("due_at") or i.get("event_at")))
+    say(f"open to-dos you were never shown: {len(rows)}")
+    for it in rows:
+        due = it.get("due_at") or it.get("event_at")
+        say(f"  {it['id']} | {it.get('company')} | {posting.task_of(it)} | due {due} | {why[posting.post_key(it)]} | {str(it.get('title'))[:90]!r}")
+    if not post or not rows:
+        return 0
+    iso = now.isoformat()
+    if len(rows) <= posting.CAP:
+        for it in rows:
+            d = {**(it.get("details") or {}), "reposted_at": iso}
+            store._req("PATCH", "items", params={"id": f"eq.{it['id']}"}, json={"details": d, "level": it.get("level") if it.get("level") != "hidden" else "show"},
+                       headers={"Prefer": "return=minimal"})
+        say(f"posted {len(rows)} cards at the bottom of the chat ({now.astimezone(IST):%a %d %b %H:%M} IST)")
     else:
-        say("push: nothing to send (compose returned nothing)")
+        bid = f"batch:{now.strftime('%Y%m%dT%H%M')}:gaps"
+        cos = list(dict.fromkeys(it.get("company") or "Placement office" for it in rows))
+        store.upsert("items", [{"id": bid, "level": "show", "category": "update", "company": None,
+                                "title": f"{', '.join(cos[:2])}" + (f" +{len(cos) - 2} more" if len(cos) > 2 else "") + " — still to do, see To do",
+                                "due_at": None, "event_at": None, "notice_id": None, "role_ids": [], "pdf_status": None, "needs_review": False,
+                                "details": {"posted_at": iso, "grouped": [it["id"] for it in rows],
+                                            "list": [{"head": None, "rows": [{"text": it.get("title") or "", "id": it["id"]} for it in rows]}]},
+                                "first_seen": iso, "sort_at": iso, "is_sample": False}])
+        for it in rows:
+            d = {**(it.get("details") or {}), "grouped_in": bid, "hidden_because": "grouped into one message"}
+            store._req("PATCH", "items", params={"id": f"eq.{it['id']}"}, json={"details": d, "level": "hidden"},
+                       headers={"Prefer": "return=minimal"})
+        silenced |= {it["id"] for it in rows}
+        store.set_state("silenced_ids", sorted(silenced)[-20000:])
+        say(f"posted one grouped message ({bid}) for {len(rows)} to-dos at the bottom of the chat")
+    if len(rows) <= posting.CAP:
+        _announce(store, rows)
+    else:                                   # announced in the grouped message; each stays held back as its own card
+        store.set_state("posted_keys", sorted(posted | {posting.post_key(it) for it in rows})[-5000:])
     return 0
 
 
@@ -2182,7 +2285,7 @@ def main() -> int:
     task = sys.argv[1] if len(sys.argv) > 1 else ""
     secrets = load_secrets(require_erp=False, require_store=True)
     tasks = {"apply-sql": apply_sql, "build-demo": build_demo,
-             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "ask-latency": ask_latency, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
+             "gemini-check": gemini_check, "chat-diagnose": chat_diagnose, "functions-check": functions_check, "chat-gaps": chat_gaps, "ask-latency": ask_latency, "ask-ping-page": ask_ping_page, "rearm-schedule": rearm_schedule, "ask-ping-evals": ask_ping_evals, "feedback-evals": feedback_evals, "relevance-evals": relevance_evals, "auth-config": auth_config, "auth-sessions": auth_sessions, "profile-snapshot": profile_snapshot, "profile-restore": profile_restore, "set-dashboard-password": set_dashboard_password, "end-reviewer-sessions": end_reviewer_sessions, "cleanup-demo": cleanup_demo, "demo-clock": demo_clock, "demo-refeed": demo_refeed, "jd-report": jd_report, "demo-jd": demo_jd, "push-setup": push_setup,
              "push-rotate": lambda sec: push_setup(sec, rotate=True), "push-check": push_check, "demo-mails": demo_mails, "mail-coverage": mail_coverage, "public-copy": public_copy, "schedule-setup": schedule_setup, "schedule-status": schedule_status, "log-scan": log_scan, "live-page": live_page, "prefs-report": prefs_report, "forms-report": forms_report, "notice-forms": notice_forms, "public-ci": public_ci, "live-providers": live_providers, "push-examples": push_examples, "jd-sources": jd_sources, "posted-report": posted_report, "mail-audit": mail_audit, "mail-peek": mail_peek, "company-report": company_report, "repost-item": repost_item, "followup-evals": followup_evals, "posting-cleanup": posting_cleanup, "restore-items": restore_items, "ask-evals-real": ask_evals_real, "chat-audit": chat_audit}
     if task not in tasks:
         say(f"unknown task {task!r}; choose from {', '.join(tasks)}")

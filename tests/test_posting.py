@@ -41,9 +41,23 @@ def test_the_same_message_under_new_ids_is_posted_once():
     assert sum(1 for it in out2 if "already posted" in (it["details"].get("hidden_because") or "")) == 4
 
 
-def test_re_reads_are_silent():
-    shown, out, _ = run([form(1, "2026-11-25T20:00:00+05:30")], silent=["re-scan"])
-    assert shown == [] and "re-scan" in out[0]["details"]["hidden_because"]
+def test_re_reads_are_silent_for_past_and_already_announced_but_a_new_future_todo_gets_its_card():
+    later = "2026-11-25T20:00:00+05:30"
+    # a future to-do you've never been shown, found by a re-scan: one card, drawn now (25 Nov: RISA Labs, BlueStone)
+    shown, out, store = run([form(1, later)], silent=["re-scan"])
+    assert [it["id"] for it in shown] == [form(1)["id"]] and out[0]["details"]["posted_at"] == NOW.isoformat()
+    # past: silent
+    shown, out, _ = run([form(2)], silent=["re-scan"])
+    assert shown == [] and out[0]["level"] == "hidden"
+    # already announced (same company, task, deadline and link under a new id): silent
+    prev = {**FIRST, form(1, later)["id"]: dict(form(1, later), details={**form(1, later)["details"], "posted_at": NOW.isoformat()})}
+    shown, out, _ = run([form(1, later), form(3, later)], prev, store, silent=["re-scan"])
+    assert shown == [] and "re-scan" in out[1]["details"]["hidden_because"]
+    # not a to-do (a notice update) found by a re-scan: silent
+    info = {"id": "notice:2026-2027:1799:0", "level": "show", "category": "update", "company": "Diageo", "title": "Diageo update",
+            "details": {"notice_time": "2026-11-24T22:00:00+05:30"}}
+    shown, out, _ = run([info], silent=["re-scan"])
+    assert shown == []
 
 
 def test_paused_holds_back_then_posts_once_posting_is_on():
@@ -117,11 +131,55 @@ def test_a_new_message_already_past_never_enters_the_history():
     assert not any(posting.in_chat(it) for it in out)
 
 
-def test_a_new_message_about_something_days_old_is_saved_not_posted():
+def test_a_new_message_about_something_days_old_is_saved_not_posted_unless_its_a_future_todo():
     later = "2026-11-28T20:00:00+05:30"
+    # a notice update days old, found again: saved, not posted
+    info = {"id": "notice:2026-2027:1798:0", "level": "show", "category": "update", "company": "Diageo", "title": "Diageo update",
+            "details": {"notice_time": "2026-11-20T10:00:00+05:30"}}
+    shown, out, _ = run([info])
+    assert shown == [] and "older message" in out[0]["details"]["hidden_because"]
+    # a form still open, from a notice days old, never shown: its card, at the bottom (posted now, not 20 Nov)
     old = dict(form(1, later), details={"notice_time": "2026-11-20T10:00:00+05:30", "todo": {"action": "fill_form", "link": "https://forms.gle/abc"}})
     shown, out, _ = run([old])
-    assert shown == [] and "older message" in out[0]["details"]["hidden_because"]
+    assert len(shown) == 1 and posting.chat_time(shown[0]) == NOW.isoformat()
+
+
+def test_a_future_todo_held_back_by_an_earlier_run_is_posted_on_the_next_one_and_only_once():
+    later = "2026-11-27T23:59:00+05:30"
+    a = dict(form(1, later, company="RISA Labs", link="https://forms.gle/risa"), details={"todo": {"action": "submit", "link": "https://forms.gle/risa"}, "notice_time": "2026-11-24T17:49:00+05:30"})
+    store = MemoryStore()
+    # the earlier, old-rule run held it back (a re-read): hidden, in silenced_ids
+    store.set_state("posted_keys", ["seed"])
+    store.set_state("silenced_ids", [a["id"]])
+    prev = {**FIRST, a["id"]: dict(a, level="hidden", details={**a["details"], "hidden_because": "found by a mail rules re-read: saved, not posted"})}
+    shown, out, store = run([a], prev, store)
+    got = next(it for it in out if it["id"] == a["id"])
+    assert got["level"] == "show" and got["details"]["posted_at"] == NOW.isoformat()
+    # the run after: it stays (not posted again, not hidden)
+    prev2 = {**FIRST, **{it["id"]: it for it in out}}
+    out2 = posting.guard([dict(a, details=dict(a["details"]))], prev2, store, NOW + timedelta(hours=1), log=lambda *_: None)
+    assert out2[0]["level"] == "show" and a["id"] not in (store.get_state("silenced_ids") or [])
+    # a past one held back stays held back
+    b = dict(form(2, "2026-11-20T20:00:00+05:30"), details={"todo": {"action": "fill_form", "link": "x"}})
+    store.set_state("silenced_ids", [b["id"]])
+    out3 = posting.guard([dict(b, details=dict(b["details"]))], {**FIRST, b["id"]: dict(b, level="hidden")}, store, NOW, log=lambda *_: None)
+    assert out3[0]["level"] == "hidden"
+
+
+def test_more_than_five_rescued_todos_are_one_grouped_message_and_their_reminders_open_it():
+    later = "2026-11-27T23:59:00+05:30"
+    many = [form(i, later, company=f"Co{i}", link=f"https://forms.gle/{i}") for i in range(7)]
+    store = MemoryStore()
+    store.set_state("posted_keys", ["seed"])
+    store.set_state("silenced_ids", [it["id"] for it in many])
+    prev = {**FIRST, **{it["id"]: dict(it, level="hidden") for it in many}}
+    shown, out, store = run(many, prev, store)
+    batch = [it for it in out if it["id"].startswith("batch:")]
+    assert len(batch) == 1 and all(it["details"].get("grouped_in") == batch[0]["id"] for it in out if it["id"] in {m["id"] for m in many})
+    # the next run doesn't post them one by one
+    out2 = posting.guard([dict(m, details=dict(m["details"])) for m in many], {**FIRST, **{it["id"]: it for it in out}}, store,
+                         NOW + timedelta(hours=1), log=lambda *_: None)
+    assert all(it["level"] == "hidden" for it in out2 if not it["id"].startswith("batch:"))
 
 
 def test_a_which_company_question_is_never_a_repeat():

@@ -299,3 +299,21 @@ Decisions:
 - The page answers fact questions itself (instant); a question the rules can't tie to a company ("elig?", "Which
   company?" answers) now goes to the function, where the model reads it first. Those take a function round trip
   (a few seconds) instead of an instant "Which company?"; everything the rules answer stays instant.
+
+## 25 Nov: RISA Labs and BlueStone assignments not in the chat
+
+- Main cause: the page read the items oldest first in one request, and the database's API returns at most 1,000 rows
+  a request whatever limit is asked. With more than 1,000 messages, the newest never reached the chat, To do or
+  Today: BlueStone's assignment (found 24 Nov 18:40, reposted 02:26 25 Nov) and RISA Labs' (found 25 Nov 06:07,
+  pushed then) were saved, live and "in the chat" on the server, and invisible on the page. The page now reads every
+  page of items, roles and forms (SupabaseSource.all).
+- Second cause, the posting guard: a re-scan, a re-read or a backfill kept everything it found silent, and an id held
+  back once stayed held back. Now only what's past or already announced stays silent: a future to-do you've never
+  been shown (form, assignment, documents, test, interview, offer, a list that names you) gets one card when it's
+  found, in any run, grouped above 5; one held back by an earlier run gets its card on the next run.
+- Every card is drawn when it's posted (details.posted_at, kept across rebuilds), at the bottom, never back-dated to
+  its notice's or mail's time; a run's bubble lists what it posted.
+- A reminder push opens a card: the message's own, the grouped message it's in, or the posted copy of it; without
+  one, the card is posted first; nothing is pushed for a message you hid. Silent runs queue reminders too.
+- Admin chat-gaps lists every open to-do you were never shown (held back, or past the page's first 1,000) and, with
+  "post", posts them at the bottom (grouped above 5); repost-item takes several ids and pushes only once per message.
